@@ -2463,8 +2463,11 @@ pub fn apply_smart_input(
         background_tokens.extend(expanded);
     }
 
+    let bg_len = background_tokens.len();
     let mut stream = background_tokens;
     stream.extend(user_tokens);
+
+    let mut priority_from_user = false;
 
     let mut blocked_weekdays = HashSet::new();
     let mut blocked_months = HashSet::new();
@@ -2475,6 +2478,7 @@ pub fn apply_smart_input(
 
     let mut i = 0;
     while i < stream.len() {
+        let is_bg = i < bg_len;
         let token = &stream[i];
         let mut consumed = 1;
         let token_lower = token.to_lowercase();
@@ -2519,7 +2523,7 @@ pub fn apply_smart_input(
                         }
                         has_recurrence = true;
                         consumed = 1 + 1 + extra_consumed;
-                    } else {
+                    } else if !is_bg {
                         summary_words.push(unescape(token));
                     }
                 } else {
@@ -2548,7 +2552,7 @@ pub fn apply_smart_input(
                         }
                         has_recurrence = true;
                         consumed = 2;
-                    } else {
+                    } else if !is_bg {
                         summary_words.push(unescape(token));
                     }
                 }
@@ -2567,7 +2571,7 @@ pub fn apply_smart_input(
                         consumed += 1;
                     }
                 }
-            } else {
+            } else if !is_bg {
                 summary_words.push(unescape(token));
             }
         } else if is_due_or_recur && matches!(exact, Some(&ExactToken::Unit(_))) {
@@ -2613,10 +2617,10 @@ pub fn apply_smart_input(
                 if !freq.is_empty() {
                     task.rrule = Some(format!("FREQ={};INTERVAL={}", freq, interval));
                     has_recurrence = true;
-                } else {
+                } else if !is_bg {
                     summary_words.push(unescape(token));
                 }
-            } else {
+            } else if !is_bg {
                 summary_words.push(unescape(token));
             }
         } else if has_recurrence && exact == Some(&ExactToken::Until) && i + 1 < stream.len() {
@@ -2635,7 +2639,7 @@ pub fn apply_smart_input(
                     task.rrule = Some(rr);
                 }
                 consumed = 2;
-            } else {
+            } else if !is_bg {
                 summary_words.push(unescape(token));
             }
         } else if has_recurrence && exact == Some(&ExactToken::Except) && i + 1 < stream.len() {
@@ -2687,7 +2691,7 @@ pub fn apply_smart_input(
                     consumed = 2;
                 }
             }
-            if !matched_any {
+            if !matched_any && !is_bg {
                 summary_words.push(unescape(token));
             }
         } else if pref == Some(PrefixToken::Reminder) {
@@ -2724,7 +2728,7 @@ pub fn apply_smart_input(
                     let target = now + Duration::minutes(mins as i64);
                     pending_alarms.push(PendingAlarm::Absolute(target.with_timezone(&Utc)));
                     consumed += 1 + extra;
-                } else {
+                } else if !is_bg {
                     summary_words.push(unescape(token));
                 }
             } else if is_next && i + consumed < stream.len() {
@@ -2777,10 +2781,10 @@ pub fn apply_smart_input(
                         ),
                     };
                     pending_alarms.push(PendingAlarm::Absolute(dt));
-                } else {
+                } else if !is_bg {
                     summary_words.push(unescape(token));
                 }
-            } else {
+            } else if !is_bg {
                 summary_words.push(unescape(token));
             }
         } else if pref == Some(PrefixToken::Done) {
@@ -2825,7 +2829,7 @@ pub fn apply_smart_input(
                     matched = true;
                 }
             }
-            if !matched {
+            if !matched && !is_bg {
                 summary_words.push(unescape(token));
             }
         } else if pref == Some(PrefixToken::Spent) {
@@ -2844,7 +2848,7 @@ pub fn apply_smart_input(
                     };
                     task.time_spent_seconds = (mins as u64) * 60;
                     consumed += extra;
-                } else {
+                } else if !is_bg {
                     summary_words.push(unescape(token));
                 }
             }
@@ -2852,32 +2856,85 @@ pub fn apply_smart_input(
             let is_triple = token.starts_with("@@@");
             let val = strip_quotes(token.trim_start_matches('@'));
             if val.is_empty() {
-                summary_words.push(unescape(token));
+                if !is_bg {
+                    summary_words.push(unescape(token));
+                }
             } else {
-                task.location = Some(val.clone());
-                if is_triple {
+                if is_bg {
+                    task.location = Some(val.clone());
+                } else {
+                    let loc_key = format!("@@{}", val);
+                    let mut is_alias_key = false;
+                    let mut search = loc_key.as_str();
+                    loop {
+                        if visited.contains(search) {
+                            is_alias_key = true;
+                            break;
+                        }
+                        if let Some(idx) = search.rfind(':') {
+                            if idx < 2 {
+                                break;
+                            }
+                            search = &search[..idx];
+                        } else {
+                            break;
+                        }
+                    }
+
+                    if !is_alias_key || task.location.is_none() {
+                        task.location = Some(val.clone());
+                    }
+                }
+
+                if is_triple && !is_bg {
                     summary_words.push(val);
                 }
             }
         } else if pref == Some(PrefixToken::Loc) {
             let val = strip_quotes(rem_original);
             if val.is_empty() {
-                summary_words.push(unescape(token));
+                if !is_bg {
+                    summary_words.push(unescape(token));
+                }
             } else {
-                task.location = Some(val);
+                if is_bg {
+                    task.location = Some(val);
+                } else {
+                    let loc_key = format!("@@{}", val);
+                    let mut is_alias_key = false;
+                    let mut search = loc_key.as_str();
+                    loop {
+                        if visited.contains(search) {
+                            is_alias_key = true;
+                            break;
+                        }
+                        if let Some(idx) = search.rfind(':') {
+                            if idx < 2 {
+                                break;
+                            }
+                            search = &search[..idx];
+                        } else {
+                            break;
+                        }
+                    }
+
+                    if !is_alias_key || task.location.is_none() {
+                        task.location = Some(val);
+                    }
+                }
             }
         } else if pref == Some(PrefixToken::Url) {
             let val = strip_quotes(rem_original);
             if !val.is_empty() {
                 task.url = Some(val);
-            } else {
+            } else if !is_bg {
                 summary_words.push(unescape(token));
             }
         } else if token.starts_with("[[") && token.ends_with("]]") {
             let inner = &token[2..token.len() - 2];
             if inner.starts_with("http://") || inner.starts_with("https://") {
                 task.url = Some(inner.to_string());
-            } else {
+            } else if !is_bg {
                 summary_words.push(unescape(token));
             }
         } else if token_lower == "+cal" {
@@ -2918,7 +2975,7 @@ pub fn apply_smart_input(
             if is_valid_geo(&raw_val) {
                 task.geo = Some(normalize_geo(strip_quotes(&raw_val)));
                 consumed = temp_consumed;
-            } else {
+            } else if !is_bg {
                 summary_words.push(unescape(token));
             }
         } else if pref == Some(PrefixToken::Desc) {
@@ -2939,14 +2996,21 @@ pub fn apply_smart_input(
                         task.categories.push(clean_cat);
                     }
                 }
-                if is_double {
+                if is_double && !is_bg {
                     summary_words.push(strip_quotes(cat_expr));
                 }
             }
         } else if token.starts_with('!') && token.len() > 1 {
             if let Ok(p) = token[1..].parse::<u8>() {
-                task.priority = p.min(9);
-            } else {
+                if is_bg {
+                    if !priority_from_user {
+                        task.priority = p.min(9);
+                    }
+                } else {
+                    task.priority = p.min(9);
+                    priority_from_user = true;
+                }
+            } else if !is_bg {
                 summary_words.push(unescape(token));
             }
         } else if token.starts_with('~') || pref == Some(PrefixToken::Duration) {
@@ -2972,7 +3036,7 @@ pub fn apply_smart_input(
                     task.estimated_duration = Some(mins);
                     task.estimated_duration_max = None;
                     consumed += extra;
-                } else {
+                } else if !is_bg {
                     summary_words.push(unescape(token));
                 }
             }
@@ -3117,7 +3181,7 @@ pub fn apply_smart_input(
                         }
                     }
                     consumed = temp_consumed;
-                } else {
+                } else if !is_bg {
                     summary_words.push(unescape(token));
                 }
             }
@@ -3125,7 +3189,7 @@ pub fn apply_smart_input(
             let val = strip_quotes(rem_original);
             if !val.is_empty() {
                 task.target_collection = Some(val);
-            } else {
+            } else if !is_bg {
                 summary_words.push(unescape(token));
             }
             consumed = 1;
@@ -3133,7 +3197,7 @@ pub fn apply_smart_input(
             let val = strip_quotes(rem_original);
             if !val.is_empty() {
                 task.dependencies.push(val);
-            } else {
+            } else if !is_bg {
                 summary_words.push(unescape(token));
             }
             consumed = 1;
@@ -3212,13 +3276,13 @@ pub fn apply_smart_input(
                             unit: interval_unit,
                         },
                     });
-                } else {
+                } else if !is_bg {
                     summary_words.push(unescape(token));
                 }
-            } else {
+            } else if !is_bg {
                 summary_words.push(unescape(token));
             }
-        } else {
+        } else if !is_bg {
             summary_words.push(unescape(token));
         }
         i += consumed;
