@@ -905,6 +905,13 @@ async fn main() -> Result<()> {
                 target_href = Some(resolve_collection_href(&ctx, &col_id).await);
             }
 
+            if target_href.as_deref() != Some(cfait::storage::LOCAL_TRASH_HREF) {
+                hidden.insert(cfait::storage::LOCAL_TRASH_HREF.to_string());
+            }
+            if target_href.as_deref() != Some("local://recovery") {
+                hidden.insert("local://recovery".to_string());
+            }
+
             let full_parent_uid = if let Some(partial) = parent_uid_arg {
                 match resolve_uid(&store, &partial) {
                     Some(uid) => Some(uid),
