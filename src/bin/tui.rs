@@ -569,6 +569,7 @@ async fn main() -> Result<()> {
             let mut clear_start = false;
             let mut clear_tags = false;
             let mut clear_loc = false;
+            let mut clear_deps = false;
             let mut no_wait = false;
             let mut wait = false;
             let mut i = 2;
@@ -649,6 +650,14 @@ async fn main() -> Result<()> {
                         clear_loc = true;
                     } else {
                         eprintln!("Error: --clear-loc not supported for append command");
+                        std::process::exit(1);
+                    }
+                    i += 1;
+                } else if args[i] == "--clear-deps" {
+                    if !is_append {
+                        clear_deps = true;
+                    } else {
+                        eprintln!("Error: --clear-deps not supported for append command");
                         std::process::exit(1);
                     }
                     i += 1;
@@ -747,6 +756,9 @@ async fn main() -> Result<()> {
                     };
                     let mut t = task_mut.clone();
                     t.apply_smart_input(&input_to_apply, &config.tag_aliases, def_time);
+                    if clear_deps {
+                        t.dependencies.clear();
+                    }
                     temp_task = Some(t);
                 }
                 if let Some(mut t) = temp_task {
@@ -804,6 +816,10 @@ async fn main() -> Result<()> {
                 }
                 if clear_loc && task_mut.location.is_some() {
                     task_mut.location = None;
+                    changed = true;
+                }
+                if clear_deps && !task_mut.dependencies.is_empty() {
+                    task_mut.dependencies.clear();
                     changed = true;
                 }
             }
