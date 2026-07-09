@@ -137,6 +137,41 @@ pub struct RustyClient {
 }
 
 impl RustyClient {
+    // Minimal standalone PEM parser for injecting client certs without large dependency chains
+    fn parse_pem(content: &str, tags: &[&str]) -> Vec<Vec<u8>> {
+        let mut results = Vec::new();
+        let mut in_block = false;
+        let mut b64 = String::new();
+        let mut current_tag = "";
+
+        for line in content.lines() {
+            let l = line.trim();
+            if !in_block {
+                for tag in tags {
+                    let start = format!("-----BEGIN {}-----", tag);
+                    if l == start {
+                        in_block = true;
+                        b64.clear();
+                        current_tag = *tag;
+                        break;
+                    }
+                }
+            } else {
+                let end = format!("-----END {}-----", current_tag);
+                if l == end {
+                    in_block = false;
+                    use base64::Engine;
+                    if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(&b64) {
+                        results.push(decoded);
+                    }
+                } else {
+                    b64.push_str(l);
+                }
+            }
+        }
+        results
+    }
+
     /// Construct a new client. If `url` is empty, this returns an "offline" client
     /// (client == None) which is used for local-only operations.
     pub fn new(
@@ -158,12 +193,64 @@ impl RustyClient {
             .parse()
             .map_err(|e: http::uri::InvalidUri| anyhow::anyhow!("Invalid URI: {}", e))?;
 
+        let config = crate::config::Config::load(ctx.as_ref()).unwrap_or_default();
+        let mut client_auth_cert = None;
+
+        if let (Some(cert_path), Some(key_path)) =
+            (&config.tls_client_cert_path, &config.tls_client_key_path)
+            && !cert_path.is_empty()
+            && !key_path.is_empty()
+        {
+            let cert_content = std::fs::read_to_string(cert_path)
+                .map_err(|e| anyhow::anyhow!("Failed to read client cert: {}", e))?;
+            let key_content = std::fs::read_to_string(key_path)
+                .map_err(|e| anyhow::anyhow!("Failed to read client key: {}", e))?;
+
+            let certs_der = Self::parse_pem(&cert_content, &["CERTIFICATE"]);
+            if certs_der.is_empty() {
+                return Err(anyhow::anyhow!(
+                    "No valid PEM CERTIFICATE found in {}",
+                    cert_path
+                ));
+            }
+            let certs: Vec<rustls::pki_types::CertificateDer<'static>> = certs_der
+                .into_iter()
+                .map(|b| rustls::pki_types::CertificateDer::from(b).into_owned())
+                .collect();
+
+            let mut keys_der = Self::parse_pem(&key_content, &["PRIVATE KEY"]);
+            let mut key_der = None;
+
+            if !keys_der.is_empty() {
+                key_der = Some(rustls::pki_types::PrivateKeyDer::Pkcs8(
+                    rustls::pki_types::PrivatePkcs8KeyDer::from(keys_der.remove(0)),
+                ));
+            } else {
+                keys_der = Self::parse_pem(&key_content, &["RSA PRIVATE KEY"]);
+                if !keys_der.is_empty() {
+                    key_der = Some(rustls::pki_types::PrivateKeyDer::Pkcs1(
+                        rustls::pki_types::PrivatePkcs1KeyDer::from(keys_der.remove(0)),
+                    ));
+                } else {
+                    keys_der = Self::parse_pem(&key_content, &["EC PRIVATE KEY"]);
+                    if !keys_der.is_empty() {
+                        key_der = Some(rustls::pki_types::PrivateKeyDer::Sec1(
+                            rustls::pki_types::PrivateSec1KeyDer::from(keys_der.remove(0)),
+                        ));
+                    }
+                }
+            }
+
+            let key = key_der
+                .ok_or_else(|| anyhow::anyhow!("No valid PEM PRIVATE KEY found in {}", key_path))?;
+            client_auth_cert = Some((certs, key));
+        }
+
         let tls_config_builder = rustls::ClientConfig::builder();
-        let tls_config = if insecure {
+        let builder_with_roots = if insecure {
             tls_config_builder
                 .dangerous()
                 .with_custom_certificate_verifier(Arc::new(NoVerifier))
-                .with_no_client_auth()
         } else {
             #[cfg(not(target_os = "android"))]
             {
@@ -173,19 +260,23 @@ impl RustyClient {
                 if root_store.is_empty() {
                     return Err(anyhow::anyhow!(rust_i18n::t!("error_no_certs").to_string()));
                 }
-                tls_config_builder
-                    .with_root_certificates(root_store)
-                    .with_no_client_auth()
+                tls_config_builder.with_root_certificates(root_store)
             }
 
             #[cfg(target_os = "android")]
             {
                 let mut root_store = rustls::RootCertStore::empty();
                 root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-                tls_config_builder
-                    .with_root_certificates(root_store)
-                    .with_no_client_auth()
+                tls_config_builder.with_root_certificates(root_store)
             }
+        };
+
+        let tls_config = if let Some((certs, key)) = client_auth_cert {
+            builder_with_roots
+                .with_client_auth_cert(certs, key)
+                .map_err(|e| anyhow::anyhow!("Failed to set client auth cert: {}", e))?
+        } else {
+            builder_with_roots.with_no_client_auth()
         };
 
         let https_connector = HttpsConnectorBuilder::new()

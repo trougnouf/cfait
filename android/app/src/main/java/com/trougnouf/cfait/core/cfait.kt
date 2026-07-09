@@ -4202,6 +4202,8 @@ data class MobileConfig(
     var `url`: kotlin.String,
     var `username`: kotlin.String,
     var `password`: kotlin.String,
+    var `tlsClientCertPath`: kotlin.String?,
+    var `tlsClientKeyPath`: kotlin.String?,
     var `defaultCalendar`: kotlin.String?,
     var `allowInsecure`: kotlin.Boolean,
     var `hideCompleted`: kotlin.Boolean,
@@ -4251,6 +4253,8 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
@@ -4292,6 +4296,8 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
             FfiConverterString.allocationSize(value.`url`) +
                 FfiConverterString.allocationSize(value.`username`) +
                 FfiConverterString.allocationSize(value.`password`) +
+                FfiConverterOptionalString.allocationSize(value.`tlsClientCertPath`) +
+                FfiConverterOptionalString.allocationSize(value.`tlsClientKeyPath`) +
                 FfiConverterOptionalString.allocationSize(value.`defaultCalendar`) +
                 FfiConverterBoolean.allocationSize(value.`allowInsecure`) +
                 FfiConverterBoolean.allocationSize(value.`hideCompleted`) +
@@ -4336,6 +4342,8 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
         FfiConverterString.write(value.`url`, buf)
         FfiConverterString.write(value.`username`, buf)
         FfiConverterString.write(value.`password`, buf)
+        FfiConverterOptionalString.write(value.`tlsClientCertPath`, buf)
+        FfiConverterOptionalString.write(value.`tlsClientKeyPath`, buf)
         FfiConverterOptionalString.write(value.`defaultCalendar`, buf)
         FfiConverterBoolean.write(value.`allowInsecure`, buf)
         FfiConverterBoolean.write(value.`hideCompleted`, buf)

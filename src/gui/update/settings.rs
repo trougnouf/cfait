@@ -62,6 +62,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.ob_url = config.url.clone();
             app.ob_user = config.username.clone();
             app.ob_pass = config.password.clone();
+            app.ob_tls_client_cert_path = config.tls_client_cert_path.clone().unwrap_or_default();
+            app.ob_tls_client_key_path = config.tls_client_key_path.clone().unwrap_or_default();
             app.ob_default_cal = config.default_calendar.clone();
             app.urgent_days = config.urgent_days_horizon;
             app.urgent_prio = config.urgent_priority_threshold;
@@ -280,6 +282,14 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.ob_insecure = val;
             Task::none()
         }
+        Message::SetTlsClientCertPath(val) => {
+            app.ob_tls_client_cert_path = val;
+            Task::none()
+        }
+        Message::SetTlsClientKeyPath(val) => {
+            app.ob_tls_client_key_path = val;
+            Task::none()
+        }
         Message::ThemeChanged(theme) => {
             app.current_theme = theme;
             save_config(app);
@@ -335,6 +345,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.hide_fully_completed_tags = cfg.hide_fully_completed_tags;
             app.hide_aliases_in_sidebar = cfg.hide_aliases_in_sidebar;
             app.ob_insecure = cfg.allow_insecure_certs;
+            app.ob_tls_client_cert_path = cfg.tls_client_cert_path.clone().unwrap_or_default();
+            app.ob_tls_client_key_path = cfg.tls_client_key_path.clone().unwrap_or_default();
             app.hidden_calendars = cfg.hidden_calendars.iter().cloned().collect();
             app.tag_aliases = cfg.tag_aliases.clone();
             app.sort_cutoff_days = cfg.sort_cutoff_days;

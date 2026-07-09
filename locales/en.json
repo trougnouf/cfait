@@ -668,6 +668,8 @@
     "view_details": "View details",
     "tui_warning_save_config": "Warning: could not save config file: %{error}",
     "tui_welcome_no_config": "Welcome to Cfait (TUI). No configuration file found.",
+    "tls_client_cert_path": "TLS client certificate (PEM path)",
+    "tls_client_key_path": "TLS client private key (PEM path)",
     "tui_yanked_help": "%{yanked_label} '%{summary}' — b:Block c:Child l:Link (Esc:Clear)",
     "unblock_remove_dependency": "Unblock (remove dependency)",
     "uncategorized": "Uncategorized",

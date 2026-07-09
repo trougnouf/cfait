@@ -188,6 +188,8 @@ pub struct GuiApp {
     pub ob_default_cal: Option<String>,
     pub ob_sort_days_input: String,
     pub ob_insecure: bool,
+    pub ob_tls_client_cert_path: String,
+    pub ob_tls_client_key_path: String,
     /// If true, the config file exists but is invalid. We must block overwrites.
     pub config_was_corrupted: bool,
 
@@ -485,6 +487,8 @@ impl Default for GuiApp {
             ob_password_visible: false,
             ob_default_cal: None,
             ob_insecure: false,
+            ob_tls_client_cert_path: String::new(),
+            ob_tls_client_key_path: String::new(),
             config_was_corrupted: false,
 
             local_cals_editing: vec![],

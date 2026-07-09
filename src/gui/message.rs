@@ -33,6 +33,8 @@ pub enum Message {
     ObPassChanged(String),
     ToggleObPasswordVisibility,
     ObInsecureToggled(bool),
+    SetTlsClientCertPath(String),
+    SetTlsClientKeyPath(String),
     ToggleCalendarVisibility(String, bool),
     ToggleCalendarDisabled(String, bool),
     ObDefaultCalChanged(String),

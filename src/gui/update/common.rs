@@ -132,6 +132,16 @@ pub fn save_config(app: &mut GuiApp) -> Config {
     cfg.url = app.ob_url.clone();
     cfg.username = app.ob_user.clone();
     cfg.password = app.ob_pass.clone();
+    cfg.tls_client_cert_path = if app.ob_tls_client_cert_path.trim().is_empty() {
+        None
+    } else {
+        Some(app.ob_tls_client_cert_path.trim().to_string())
+    };
+    cfg.tls_client_key_path = if app.ob_tls_client_key_path.trim().is_empty() {
+        None
+    } else {
+        Some(app.ob_tls_client_key_path.trim().to_string())
+    };
     cfg.default_calendar = app.ob_default_cal.clone();
     cfg.allow_insecure_certs = app.ob_insecure;
     cfg.hidden_calendars = app.hidden_calendars.iter().cloned().collect();

@@ -375,6 +375,26 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                     .label(rust_i18n::t!("sort_standard_by_priority_label"))
                     .on_toggle(Message::ToggleSortStandardByPriority),
                 Space::new().height(10),
+                text(rust_i18n::t!("server_connection")).size(16),
+                row![
+                    text(rust_i18n::t!("tls_client_cert_path")).width(Length::Fixed(200.0)),
+                    text_input("", &app.ob_tls_client_cert_path)
+                        .on_input(Message::SetTlsClientCertPath)
+                        .width(Length::Fill)
+                        .padding(5)
+                ]
+                .spacing(10)
+                .align_y(iced::Alignment::Center),
+                row![
+                    text(rust_i18n::t!("tls_client_key_path")).width(Length::Fixed(200.0)),
+                    text_input("", &app.ob_tls_client_key_path)
+                        .on_input(Message::SetTlsClientKeyPath)
+                        .width(Length::Fill)
+                        .padding(5)
+                ]
+                .spacing(10)
+                .align_y(iced::Alignment::Center),
+                Space::new().height(10),
                 text(rust_i18n::t!("settings_sort_behavior")).size(16),
                 row![
                     text(rust_i18n::t!("sorting_preset_label")).width(Length::Fixed(200.0)),

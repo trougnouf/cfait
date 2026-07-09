@@ -390,6 +390,8 @@ pub struct MobileConfig {
     pub url: String,
     pub username: String,
     pub password: String,
+    pub tls_client_cert_path: Option<String>,
+    pub tls_client_key_path: Option<String>,
     pub default_calendar: Option<String>,
     pub allow_insecure: bool,
     pub hide_completed: bool,
@@ -890,6 +892,8 @@ impl CfaitMobile {
             url: c.url,
             username: c.username,
             password: c.password,
+            tls_client_cert_path: c.tls_client_cert_path,
+            tls_client_key_path: c.tls_client_key_path,
             default_calendar: c.default_calendar,
             allow_insecure: c.allow_insecure_certs,
             hide_completed: c.hide_completed,
@@ -1043,6 +1047,8 @@ impl CfaitMobile {
         let old_c = c.clone();
         c.url = config.url;
         apply_mobile_credentials_update(&mut c, &config.username, &config.password);
+        c.tls_client_cert_path = config.tls_client_cert_path;
+        c.tls_client_key_path = config.tls_client_key_path;
         c.allow_insecure_certs = config.allow_insecure;
         c.hide_completed = config.hide_completed;
         c.hide_aliases_in_sidebar = config.hide_aliases_in_sidebar;

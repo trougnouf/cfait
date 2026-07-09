@@ -49,6 +49,9 @@ fun AdvancedSettingsScreen(
     var quickFilterTerm by remember { mutableStateOf("is:ready") }
     var quickFilterIcon by remember { mutableStateOf("f0fa9") }
 
+    var tlsClientCertPath by remember { mutableStateOf("") }
+    var tlsClientKeyPath by remember { mutableStateOf("") }
+
     var sortStandardByPriority by remember { mutableStateOf(false) }
     var sortDays by remember { mutableStateOf("30") }
     var urgentDays by remember { mutableStateOf("1") }
@@ -68,6 +71,9 @@ fun AdvancedSettingsScreen(
             showQuickFilter = cfg.showQuickFilter
             quickFilterTerm = cfg.quickFilterTerm
             quickFilterIcon = cfg.quickFilterIcon
+
+            tlsClientCertPath = cfg.tlsClientCertPath ?: ""
+            tlsClientKeyPath = cfg.tlsClientKeyPath ?: ""
 
             sortStandardByPriority = cfg.sortStandardByPriority
             sortDays = cfg.sortCutoffDays?.toString() ?: ""
@@ -94,6 +100,9 @@ fun AdvancedSettingsScreen(
                 showQuickFilter = showQuickFilter,
                 quickFilterTerm = quickFilterTerm,
                 quickFilterIcon = quickFilterIcon,
+
+                tlsClientCertPath = tlsClientCertPath.takeIf { it.isNotBlank() },
+                tlsClientKeyPath = tlsClientKeyPath.takeIf { it.isNotBlank() },
 
                 sortStandardByPriority = sortStandardByPriority,
                 sortCutoffDays = sortDays.toUIntOrNull(),
@@ -169,6 +178,30 @@ fun AdvancedSettingsScreen(
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.tab_auto_hide), style = MaterialTheme.typography.bodyMedium)
             }
+            HorizontalDivider(Modifier.padding(vertical = 16.dp))
+
+            // Server Connection Additions (mTLS)
+            Text(
+                stringResource(R.string.server_connection),
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+            OutlinedTextField(
+                value = tlsClientCertPath,
+                onValueChange = { tlsClientCertPath = it },
+                label = { Text(stringResource(R.string.tls_client_cert_path)) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = tlsClientKeyPath,
+                onValueChange = { tlsClientKeyPath = it },
+                label = { Text(stringResource(R.string.tls_client_key_path)) },
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                singleLine = true
+            )
             HorizontalDivider(Modifier.padding(vertical = 16.dp))
 
             // Sorting Rules

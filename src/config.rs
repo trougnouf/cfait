@@ -637,6 +637,11 @@ pub struct Config {
     #[serde(skip_serializing, default)]
     pub password: String,
 
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tls_client_cert_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tls_client_key_path: Option<String>,
+
     #[serde(default)]
     pub allow_insecure_certs: bool,
     #[serde(default)]
@@ -863,6 +868,8 @@ impl Default for Config {
             url: String::new(),
             username: String::new(),
             password: String::new(),
+            tls_client_cert_path: None,
+            tls_client_key_path: None,
             default_calendar: None,
             enable_local_mode: true,
             allow_insecure_certs: false,
@@ -1213,6 +1220,14 @@ impl Config {
             if trimmed.starts_with("url =") {
                 out.push_str("# URL: The full address to your CalDAV server endpoint.\n");
                 out.push_str(line);
+            } else if trimmed.starts_with("tls_client_cert_path =") {
+                out.push_str(line);
+                out.push_str(
+                    " # String (Optional): Path to PEM-encoded client certificate for mTLS.",
+                );
+            } else if trimmed.starts_with("tls_client_key_path =") {
+                out.push_str(line);
+                out.push_str(" # String (Optional): Path to PEM-encoded private key for mTLS.");
             } else if trimmed.starts_with("allow_insecure_certs =") {
                 out.push_str(line);
                 out.push_str(

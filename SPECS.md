@@ -291,6 +291,7 @@ All persistent state and settings live here. Unrecognized TOML keys must not be 
 
 **Connection & Sync:**
 *   `url`, `username`: CalDAV credentials. *(Password vaulted in OS Keyring).*
+*   `tls_client_cert_path`, `tls_client_key_path`: Strings (Optional). Paths to PEM-encoded certificate and private key for mTLS.
 *   `allow_insecure_certs`: Boolean.
 *   `sync_settings`: Boolean. Enables the `cfait-global-settings-v1` hidden VTODO sync.
 *   `auto_refresh_interval_mins`: Integer. Daemon sync loop interval.

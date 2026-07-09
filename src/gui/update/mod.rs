@@ -48,6 +48,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ToggleObPasswordVisibility
         | Message::ObDefaultCalChanged(_)
         | Message::ObInsecureToggled(_)
+        | Message::SetTlsClientCertPath(_)
+        | Message::SetTlsClientKeyPath(_)
         | Message::ObSubmit
         | Message::OpenSettings
         | Message::CancelSettings
