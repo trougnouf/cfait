@@ -262,6 +262,25 @@ pub fn scroll_to_selected(app: &GuiApp, focus: bool) -> Task<Message> {
                     let content_h = max_y - min_y;
                     let viewport_h = (app.current_window_size.height - 180.0).max(100.0);
 
+                    // If the item is fully visible in the viewport, do not snap the scrollable.
+                    // This prevents the view from jumping when clicking or navigating to a visible task.
+                    let viewport_top = 80.0;
+                    let viewport_bottom = app.current_window_size.height - 100.0;
+                    let top_visible = rect.y >= viewport_top && rect.y <= viewport_bottom;
+                    let bottom_visible = (rect.y + rect.height) >= viewport_top
+                        && (rect.y + rect.height) <= viewport_bottom;
+                    let spans_viewport =
+                        rect.y <= viewport_top && (rect.y + rect.height) >= viewport_bottom;
+                    let is_visible = top_visible || bottom_visible || spans_viewport;
+
+                    if is_visible {
+                        if focus {
+                            return operation::focus(id);
+                        } else {
+                            return Task::none();
+                        }
+                    }
+
                     // Item center relative to content top (min_y)
                     let item_center_rel = (rect.y - min_y) + rect.height / 2.0;
 
