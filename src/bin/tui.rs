@@ -755,10 +755,12 @@ async fn main() -> Result<()> {
                         clean_input
                     };
                     let mut t = task_mut.clone();
-                    t.apply_smart_input(&input_to_apply, &config.tag_aliases, def_time);
+
                     if clear_deps {
                         t.dependencies.clear();
                     }
+
+                    t.apply_smart_input(&input_to_apply, &config.tag_aliases, def_time);
                     temp_task = Some(t);
                 }
                 if let Some(mut t) = temp_task {
@@ -818,7 +820,7 @@ async fn main() -> Result<()> {
                     task_mut.location = None;
                     changed = true;
                 }
-                if clear_deps && !task_mut.dependencies.is_empty() {
+                if clear_deps && input.trim().is_empty() && !task_mut.dependencies.is_empty() {
                     task_mut.dependencies.clear();
                     changed = true;
                 }
