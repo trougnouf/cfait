@@ -56,6 +56,7 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
     let p_desc = get_first("parser_desc");
     let p_goal = get_first("parser_goal");
     let p_url = get_first("parser_url");
+    let p_dep = get_first("parser_dep");
 
     let e_today = get_first("parser_today");
     let e_tomorrow = get_first("parser_tomorrow");
@@ -222,6 +223,11 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
         HelpSection {
             title: rust_i18n::t!("metadata").to_string(),
             items: vec![
+                HelpItem {
+                    keys: format!("{p_dep}uid / text"),
+                    desc: rust_i18n::t!("help_metadata_dependency").to_string(),
+                    example: format!("{p_dep}\"{}\" 1", rust_i18n::t!("example_phase_2")),
+                },
                 HelpItem {
                     keys: format!("{p_url} or [[ ]]"),
                     desc: rust_i18n::t!("help_metadata_attach_link").to_string(),
