@@ -481,8 +481,8 @@ async fn main() -> Result<()> {
                 return Ok(());
             }
 
+            let temp_store = build_store_cli(&ctx).await;
             let full_parent_uid = if let Some(partial) = parent_uid_arg {
-                let temp_store = build_store_cli(&ctx).await;
                 match resolve_uid(&temp_store, &partial) {
                     Some(uid) => Some(uid),
                     None => std::process::exit(1),
@@ -492,6 +492,11 @@ async fn main() -> Result<()> {
             };
 
             let mut task = Task::new(&clean_input, &config.tag_aliases, def_time);
+            if let Err(e) = temp_store.resolve_dependencies(&mut task) {
+                eprintln!("{}", e);
+                std::process::exit(1);
+            }
+
             if let Some(d) = desc_text {
                 task.description = d;
             }
@@ -728,6 +733,7 @@ async fn main() -> Result<()> {
                     let _ = config.save_with_credentials(ctx.as_ref());
                 }
 
+                let mut temp_task = None;
                 if let Some((task_mut, _)) = store.get_task_mut(&full_uid) {
                     let input_to_apply = if is_append {
                         let mut existing = task_mut.to_smart_string();
@@ -739,8 +745,19 @@ async fn main() -> Result<()> {
                     } else {
                         clean_input
                     };
-                    task_mut.apply_smart_input(&input_to_apply, &config.tag_aliases, def_time);
-                    changed = true;
+                    let mut t = task_mut.clone();
+                    t.apply_smart_input(&input_to_apply, &config.tag_aliases, def_time);
+                    temp_task = Some(t);
+                }
+                if let Some(mut t) = temp_task {
+                    if let Err(e) = store.resolve_dependencies(&mut t) {
+                        eprintln!("{}", e);
+                        std::process::exit(1);
+                    }
+                    if let Some((task_mut, _)) = store.get_task_mut(&full_uid) {
+                        *task_mut = t;
+                        changed = true;
+                    }
                 }
             }
 

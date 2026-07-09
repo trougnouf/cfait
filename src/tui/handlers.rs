@@ -558,6 +558,12 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
             chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
 
         let mut parent = Task::new(&clean_input, &state.tag_aliases, def_time);
+
+        if let Err(e) = state.store.resolve_dependencies(&mut parent) {
+            state.message = e;
+            return;
+        }
+
         if parent.summary.trim().is_empty() && !clean_input.trim().is_empty() {
             parent.summary = clean_input.clone();
         }
@@ -612,6 +618,10 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
         for ext in extracted {
             let mut sub = Task::new(&ext.raw_text, &state.tag_aliases, def_time);
             sub.uid = ext.uid;
+            if let Err(e) = state.store.resolve_dependencies(&mut sub) {
+                state.message = e;
+                return;
+            }
             if !ext.description.is_empty() {
                 if sub.description.is_empty() {
                     sub.description = ext.description;
@@ -704,6 +714,10 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
             for ext in extracted {
                 let mut sub = Task::new(&ext.raw_text, &state.tag_aliases, def_time);
                 sub.uid = ext.uid;
+                if let Err(e) = state.store.resolve_dependencies(&mut sub) {
+                    state.message = e;
+                    return;
+                }
                 if !ext.description.is_empty() {
                     if sub.description.is_empty() {
                         sub.description = ext.description;
@@ -1155,6 +1169,11 @@ pub async fn handle_key_event(
 
                     let mut task = Task::new(&clean_input, &state.tag_aliases, def_time);
 
+                    if let Err(e) = state.store.resolve_dependencies(&mut task) {
+                        state.message = e;
+                        return None;
+                    }
+
                     if task.summary.trim().is_empty() && task.description.trim().is_empty() {
                         if !clean_input.trim().is_empty() {
                             task.summary = clean_input.clone();
@@ -1267,6 +1286,12 @@ pub async fn handle_key_event(
                     let def_time =
                         NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
                     t.apply_smart_input(&clean_input, &state.tag_aliases, def_time);
+
+                    if let Err(e) = state.store.resolve_dependencies(&mut t) {
+                        state.message = e;
+                        return None;
+                    }
+
                     if let Some(target) = t.target_collection.take() {
                         t.calendar_href = crate::model::resolve_collection(
                             &target,

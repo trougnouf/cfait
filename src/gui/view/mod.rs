@@ -1723,7 +1723,38 @@ fn view_main_content(app: &GuiApp, show_logo: bool, is_expanded: bool) -> Elemen
     }
 
     let input_area = view_input_area(app);
-    let mut main_col = column![header_drag_area, export_ui, input_area];
+    let mut main_col = column![header_drag_area, export_ui];
+
+    if let Some(err) = &app.error_msg {
+        let error_content = row![
+            text(err)
+                .style(|theme: &Theme| text::Style {
+                    color: Some(theme.extended_palette().background.base.text)
+                })
+                .size(14)
+                .width(Length::Fill),
+            iced::widget::button(
+                icon::icon(icon::CROSS)
+                    .size(14)
+                    .color(app.theme().extended_palette().background.base.text)
+            )
+            .style(iced::widget::button::text)
+            .padding(2)
+            .on_press(Message::DismissError)
+        ]
+        .align_y(iced::Alignment::Center);
+        main_col = main_col.push(
+            container(error_content)
+                .width(Length::Fill)
+                .padding(5)
+                .style(|_| container::Style {
+                    background: Some(Color::from_rgb(0.8, 0.2, 0.2).into()),
+                    ..Default::default()
+                }),
+        );
+    }
+
+    main_col = main_col.push(input_area);
 
     if !is_expanded
         && let Some(uid) = &app.yanked_uid
@@ -1902,35 +1933,6 @@ fn view_main_content(app: &GuiApp, show_logo: bool, is_expanded: bool) -> Elemen
                 }),
             );
         }
-    }
-
-    if !is_expanded && let Some(err) = &app.error_msg {
-        let error_content = row![
-            text(err)
-                .style(|theme: &Theme| text::Style {
-                    color: Some(theme.extended_palette().background.base.text)
-                })
-                .size(14)
-                .width(Length::Fill),
-            iced::widget::button(
-                icon::icon(icon::CROSS)
-                    .size(14)
-                    .color(app.theme().extended_palette().background.base.text)
-            )
-            .style(iced::widget::button::text)
-            .padding(2)
-            .on_press(Message::DismissError)
-        ]
-        .align_y(iced::Alignment::Center);
-        main_col = main_col.push(
-            container(error_content)
-                .width(Length::Fill)
-                .padding(5)
-                .style(|_| container::Style {
-                    background: Some(Color::from_rgb(0.8, 0.2, 0.2).into()),
-                    ..Default::default()
-                }),
-        );
     }
 
     // We use a hasher to create a stable, `Copy`-able u64 key for the keyed_column

@@ -1348,6 +1348,12 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
             for ext in extracted_subtasks {
                 let mut sub = TodoTask::new(&ext.raw_text, &app.tag_aliases, config_time);
                 sub.uid = ext.uid;
+
+                if let Err(e) = app.store.resolve_dependencies(&mut sub) {
+                    app.error_msg = Some(e);
+                    return Task::none();
+                }
+
                 if !ext.description.is_empty() {
                     if sub.description.is_empty() {
                         sub.description = ext.description;
@@ -1464,6 +1470,12 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
             for ext in extracted_subtasks {
                 let mut sub = TodoTask::new(&ext.raw_text, &app.tag_aliases, config_time);
                 sub.uid = ext.uid;
+
+                if let Err(e) = app.store.resolve_dependencies(&mut sub) {
+                    app.error_msg = Some(e);
+                    return Task::none();
+                }
+
                 if !ext.description.is_empty() {
                     if sub.description.is_empty() {
                         sub.description = ext.description;

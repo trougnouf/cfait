@@ -2099,6 +2099,13 @@ impl CfaitMobile {
         }
         let def_time = NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
         let mut task = Task::new(&clean_input, &config.tag_aliases, def_time);
+
+        let store = self.controller.store.lock().await;
+        if let Err(e) = store.resolve_dependencies(&mut task) {
+            return Err(MobileError::from(e));
+        }
+        drop(store);
+
         if task.summary.trim().is_empty() {
             return Ok("".to_string());
         }
@@ -2197,6 +2204,13 @@ impl CfaitMobile {
             crate::model::extractor::extract_markdown_tasks(&description);
 
         let mut task = Task::new(&clean_input, &config.tag_aliases, def_time);
+
+        let store = self.controller.store.lock().await;
+        if let Err(e) = store.resolve_dependencies(&mut task) {
+            return Err(MobileError::from(e));
+        }
+        drop(store);
+
         if task.summary.trim().is_empty() && cleaned_desc.is_empty() {
             return Ok("".to_string());
         }
@@ -2221,6 +2235,13 @@ impl CfaitMobile {
         for ext in extracted_subtasks {
             let mut sub = Task::new(&ext.raw_text, &config.tag_aliases, def_time);
             sub.uid = ext.uid.clone();
+
+            let store = self.controller.store.lock().await;
+            if let Err(e) = store.resolve_dependencies(&mut sub) {
+                return Err(MobileError::from(e));
+            }
+            drop(store);
+
             if !ext.description.is_empty() {
                 if sub.description.is_empty() {
                     sub.description = ext.description;

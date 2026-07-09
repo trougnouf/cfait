@@ -159,6 +159,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                             .ok();
                     let mut new_task = crate::model::Task::new(&title, &app.tag_aliases, def_time);
 
+                    if let Err(e) = app.store.resolve_dependencies(&mut new_task) {
+                        app.error_msg = Some(e);
+                        return Task::none();
+                    }
+
                     let target_href = app
                         .active_cal_href
                         .clone()
