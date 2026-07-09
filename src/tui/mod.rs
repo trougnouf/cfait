@@ -23,6 +23,7 @@ use crossterm::{
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 use rpassword::prompt_password;
+use std::collections::HashSet;
 use std::{
     env,
     io::{self, Write},
@@ -208,7 +209,6 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
         snooze_long_mins,
         expanded_tags,
         expanded_locations,
-        expanded_done_groups,
         theme,
     ) = (
         cfg.url,
@@ -232,7 +232,6 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
         cfg.snooze_long_mins,
         cfg.expanded_tags,
         cfg.expanded_locations,
-        cfg.expanded_done_groups,
         cfg.theme,
     );
 
@@ -263,7 +262,7 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
     app_state.snooze_long_mins = snooze_long_mins;
     app_state.expanded_tags = expanded_tags.into_iter().collect();
     app_state.expanded_locations = expanded_locations.into_iter().collect();
-    app_state.expanded_done_groups = expanded_done_groups.into_iter().collect();
+    app_state.expanded_done_groups = HashSet::new();
     app_state.theme = theme;
 
     // --- START ALARM ACTOR ---

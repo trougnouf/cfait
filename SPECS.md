@@ -154,7 +154,7 @@ When completing a recurring task:
 
 ### 4.3. Virtualization & Truncation (Completed Groups)
 *   If completed subtasks exceed `max_done_subtasks` (or roots exceed `max_done_roots`), the Model injects a **Virtual Expand/Collapse Row** into the flattened task list.
-*   Selecting this virtual row toggles visibility of the hidden completed items. State is saved in `expanded_done_groups`.
+*   Selecting this virtual row toggles visibility of the hidden completed items. State is transient (in-memory only).
 *   **Tree Navigation & Expansion (Tags, Locations, Tasks)**
     *   Tags and Locations automatically expand transiently to reveal their active selection, returning to their configured collapsed state when unselected.
         *   **Search Context & Tree Filtering:** When searching, the task tree is filtered to show exact matches alongside their full ancestry and descendants.
@@ -333,7 +333,7 @@ All persistent state and settings live here. Unrecognized TOML keys must not be 
 **Quick Filters & State:**
 *   `quick_filter_term`, `quick_filter_icon`, `show_quick_filter`: Quick filter button settings.
 *   `hidden_calendars`, `disabled_calendars`: Arrays of HREFs.
-*   `expanded_tags`, `expanded_locations`, `expanded_done_groups`: Arrays mapping visual tree expansion states.
+*   `expanded_tags`, `expanded_locations`: Arrays mapping visual tree expansion states.
 *   `tag_aliases`: HashMap of Alias Key -> Array of Tags/Locations.
 *   `goals`: HashMap of Goal Key -> Goal Object.
 *   `collection_order`: Array of HREFs defining the custom display order of collections.

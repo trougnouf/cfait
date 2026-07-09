@@ -2806,21 +2806,11 @@ pub async fn handle_key_event(
                             TaskListItem::ExpandGroup(key, _) => {
                                 state.expanded_done_groups.insert(key.clone());
                                 state.refresh_filtered_view();
-                                if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
-                                    cfg.expanded_done_groups =
-                                        state.expanded_done_groups.iter().cloned().collect();
-                                    let _ = cfg.save(state.ctx.as_ref());
-                                }
                                 return None;
                             }
                             TaskListItem::CollapseGroup(key, _) => {
                                 state.expanded_done_groups.remove(key);
                                 state.refresh_filtered_view();
-                                if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
-                                    cfg.expanded_done_groups =
-                                        state.expanded_done_groups.iter().cloned().collect();
-                                    let _ = cfg.save(state.ctx.as_ref());
-                                }
                                 return None;
                             }
                             TaskListItem::Task(_) => {

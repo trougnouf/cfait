@@ -300,13 +300,17 @@ pub fn organize_hierarchy(
         let is_expanded = context.expanded_groups.contains(&effective_key);
 
         if is_expanded {
+            context
+                .result
+                .push(TaskListItem::CollapseGroup(effective_key.clone(), depth));
             for task in done {
                 append_task_and_children(&task, context, depth);
             }
+        } else if done.len() > limit {
             context
                 .result
-                .push(TaskListItem::CollapseGroup(effective_key, depth));
-        } else if done.len() > limit {
+                .push(TaskListItem::ExpandGroup(effective_key.clone(), depth));
+
             let count_to_show = limit.saturating_sub(1);
             let mut iter = done.into_iter();
 
@@ -318,9 +322,6 @@ pub fn organize_hierarchy(
             for task in iter {
                 mark_tree_as_visited(&task, context);
             }
-            context
-                .result
-                .push(TaskListItem::ExpandGroup(effective_key, depth));
         } else {
             for task in done {
                 append_task_and_children(&task, context, depth);
@@ -373,13 +374,17 @@ pub fn organize_hierarchy(
             if !done.is_empty() {
                 let is_expanded = context.expanded_groups.contains(&task.uid);
                 if is_expanded {
-                    for child in done {
-                        append_task_and_children(&child, context, depth + 1);
-                    }
                     context
                         .result
                         .push(TaskListItem::CollapseGroup(task.uid.clone(), depth + 1));
+                    for child in done {
+                        append_task_and_children(&child, context, depth + 1);
+                    }
                 } else if done.len() > context.max_done_subtasks {
+                    context
+                        .result
+                        .push(TaskListItem::ExpandGroup(task.uid.clone(), depth + 1));
+
                     let show = context.max_done_subtasks.saturating_sub(1);
                     let mut iter = done.into_iter();
                     for _ in 0..show {
@@ -390,9 +395,6 @@ pub fn organize_hierarchy(
                     for c in iter {
                         mark_tree_as_visited(&c, context);
                     }
-                    context
-                        .result
-                        .push(TaskListItem::ExpandGroup(task.uid.clone(), depth + 1));
                 } else {
                     for child in done {
                         append_task_and_children(&child, context, depth + 1);

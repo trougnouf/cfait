@@ -280,9 +280,16 @@ pub fn view_task_row<'a>(
             };
             let indent = Space::new().width(Length::Fixed(indent_size as f32));
             let btn = button(
-                icon::icon(icon::ARROW_EXPAND_DOWN)
-                    .size(16)
-                    .color(Color::from_rgb(0.5, 0.5, 0.8)),
+                row![
+                    icon::icon(icon::ARROW_EXPAND_DOWN)
+                        .size(16)
+                        .color(Color::from_rgb(0.5, 0.5, 0.8)),
+                    text("Expand completed tasks")
+                        .size(12)
+                        .color(Color::from_rgb(0.5, 0.5, 0.8))
+                ]
+                .spacing(8)
+                .align_y(iced::Alignment::Center),
             )
             .style(iced::widget::button::text)
             .width(Length::Fill)
@@ -297,9 +304,16 @@ pub fn view_task_row<'a>(
             };
             let indent = Space::new().width(Length::Fixed(indent_size as f32));
             let btn = button(
-                icon::icon(icon::ARROW_EXPAND_UP)
-                    .size(16)
-                    .color(Color::from_rgb(0.5, 0.5, 0.8)),
+                row![
+                    icon::icon(icon::ARROW_EXPAND_UP)
+                        .size(16)
+                        .color(Color::from_rgb(0.5, 0.5, 0.8)),
+                    text("Collapse completed tasks")
+                        .size(12)
+                        .color(Color::from_rgb(0.5, 0.5, 0.8))
+                ]
+                .spacing(8)
+                .align_y(iced::Alignment::Center),
             )
             .style(iced::widget::button::text)
             .width(Length::Fill)

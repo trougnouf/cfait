@@ -97,8 +97,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             app.session.expanded_tags = config.expanded_tags.clone();
             app.session.expanded_locations = config.expanded_locations.clone();
-            app.session.expanded_done_groups = config.expanded_done_groups.clone();
-
             app.pinned_actions = config.pinned_actions.clone();
             app.log_level = config.log_level;
 
@@ -212,8 +210,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             app.session.expanded_tags = config.expanded_tags.clone();
             app.session.expanded_locations = config.expanded_locations.clone();
-            app.session.expanded_done_groups = config.expanded_done_groups.clone();
-
             app.pinned_actions = config.pinned_actions.clone();
 
             app.ob_sort_days_input = match config.sort_cutoff_days {

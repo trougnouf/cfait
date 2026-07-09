@@ -185,7 +185,6 @@ pub fn save_config(app: &mut GuiApp) -> Config {
 
     cfg.expanded_tags = app.session.expanded_tags.clone();
     cfg.expanded_locations = app.session.expanded_locations.clone();
-    cfg.expanded_done_groups = app.session.expanded_done_groups.clone();
 
     // BUMP TIMESTAMP IF CHANGED
     let old_timestamp = cfg.settings_updated_at;

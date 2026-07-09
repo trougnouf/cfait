@@ -769,8 +769,6 @@ pub struct Config {
     pub expanded_tags: Vec<String>,
     #[serde(default)]
     pub expanded_locations: Vec<String>,
-    #[serde(default)]
-    pub expanded_done_groups: Vec<String>,
 
     #[serde(default = "default_true")]
     pub sync_settings: bool,
@@ -917,7 +915,6 @@ impl Default for Config {
             log_level: default_log_level(),
             expanded_tags: Vec::new(),
             expanded_locations: Vec::new(),
-            expanded_done_groups: Vec::new(),
             sync_settings: true,
             settings_updated_at: 0,
             goals: HashMap::new(),

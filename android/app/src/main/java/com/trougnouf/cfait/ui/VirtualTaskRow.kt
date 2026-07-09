@@ -2,7 +2,7 @@
 package com.trougnouf.cfait.ui
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -21,7 +21,7 @@ import com.trougnouf.cfait.core.MobileTask
  * A simple row used to render the lightweight virtual tasks injected by the Rust core
  * (expand / collapse placeholders for truncated completed/cancelled groups).
  *
- * The row renders a single Nerd Font glyph and is clickable to toggle the group state.
+ * The row renders an icon with descriptive text and is clickable to toggle the group state.
  */
 @Composable
 fun VirtualTaskRow(task: MobileTask, onClick: () -> Unit) {
@@ -39,19 +39,25 @@ fun VirtualTaskRow(task: MobileTask, onClick: () -> Unit) {
         String(Character.toChars(collapseCodepoint))
     }
 
-    Box(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 12.dp + startPadding, end = 12.dp)
             .clickable(onClick = onClick)
             .padding(vertical = 8.dp),
-        contentAlignment = Alignment.Center
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = iconStr,
             fontFamily = NerdFont,
             fontSize = 20.sp,
             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+        )
+        Text(
+            text = if (task.virtualType == "expand") "Expand completed tasks" else "Collapse completed tasks",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+            modifier = Modifier.padding(start = 8.dp)
         )
     }
 }

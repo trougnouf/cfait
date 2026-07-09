@@ -802,7 +802,6 @@ impl CfaitMobile {
         let session = crate::model::SessionState {
             expanded_tags: config.expanded_tags,
             expanded_locations: config.expanded_locations,
-            expanded_done_groups: config.expanded_done_groups,
             ..Default::default()
         };
 
@@ -954,7 +953,7 @@ impl CfaitMobile {
             show_task_goals_in_sidebar: c.show_task_goals_in_sidebar,
             expanded_tags: c.expanded_tags,
             expanded_locations: c.expanded_locations,
-            expanded_done_groups: c.expanded_done_groups,
+            expanded_done_groups: Vec::new(),
         }
     }
 
@@ -1110,7 +1109,6 @@ impl CfaitMobile {
 
         c.expanded_tags = config.expanded_tags;
         c.expanded_locations = config.expanded_locations;
-        c.expanded_done_groups = config.expanded_done_groups;
 
         c.update_sync_timestamp_if_changed(&old_c);
 
@@ -1949,7 +1947,6 @@ impl CfaitMobile {
         let mut config_to_save = config.clone();
         config_to_save.expanded_tags = session.expanded_tags.clone();
         config_to_save.expanded_locations = session.expanded_locations.clone();
-        config_to_save.expanded_done_groups = session.expanded_done_groups.clone();
         let _ = config_to_save.save(self.ctx.as_ref());
 
         let actions = store.apply_task_intent(&intent, &config);
