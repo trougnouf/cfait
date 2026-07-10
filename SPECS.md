@@ -73,6 +73,7 @@ Evaluated instantly during text input. Supported across all clients.
 | `@after` | Relative recurrence (shifts from completion). | `@after 1w`, `@after 2mo` |
 | `until` | End date for recurrence. | `@daily until 2025-12-31` |
 | `except` | Exclusion dates (`EXDATE`). | `@daily except sat,sun` |
+| `cal:` or `col:` | Assign task to a specific collection/calendar. | `cal:Personal`, `col:"Work Projects"` |
 | `+cal` / `-cal` | Force/prevent companion Calendar Event. | `+cal` |
 | `+pin` / `-pin` | Pin task to the top of the list. | `+pin` |
 | `goal:` | Goal tracking target. | `goal:5/w`, `goal:2h/daily`, `goal:weekly` |
@@ -98,6 +99,7 @@ Users can also use the "Edit Tree" action (or `Ctrl+E`) to edit an entire existi
     *   `[-]` or `[~]` maps to `Cancelled`.
 *   **Sequential Dependencies:** Numbered lists (`1. [ ]`, `2. [ ]`) create `DEPENDS-ON` blocking relationships. If multiple tasks share the same number at the same indentation level (e.g., two `3. [ ]` tasks), they are extracted as parallel steps that both depend on the previous step (`2. [ ]`). The next step (`4. [ ]`) will automatically depend on *both* parallel tasks.
 *   **Cross-Tree Dependencies:** Dependencies that break standard linear sequence are appended to the task string as wiki-links (e.g. `dep:[[Install foundation]]`). The backend resolves these via fuzzy-matching against task summaries.
+*   **Cross-Collection Subtasks:** Subtasks belonging to a different collection than the root task append a collection token (e.g., `cal:CollectionName`) to preserve their location during round-trip editing.
 *   **Round-Trip UIDs:** Extracted tasks append a metadata tag (e.g., `<!-- uid:abc-123 -->`) to their summary. When the tree is re-edited and saved, this tag allows Cfait to diff the text and update existing database entities rather than creating duplicates.
 
 ### 2.4. Inline Markdown Formatting

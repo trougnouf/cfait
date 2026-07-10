@@ -530,7 +530,7 @@ pub fn serialize_task_tree(store: &crate::store::TaskStore, root_uid: &str) -> S
         depth: usize,
         out: &mut String,
         prefix: &str,
-        parent_href: &str,
+        root_href: &str,
     ) {
         let status_box = match task.status {
             crate::model::TaskStatus::NeedsAction => {
@@ -545,7 +545,7 @@ pub fn serialize_task_tree(store: &crate::store::TaskStore, root_uid: &str) -> S
             crate::model::TaskStatus::Cancelled => "[-]",
         };
         let mut smart_string = task.to_smart_string();
-        if task.calendar_href != parent_href {
+        if task.calendar_href != root_href {
             smart_string.push_str(&format!(
                 " cal:{}",
                 crate::model::parser::quote_value(&task.calendar_href)
@@ -621,14 +621,7 @@ pub fn serialize_task_tree(store: &crate::store::TaskStore, root_uid: &str) -> S
             }
 
             for (child, prefix) in children.iter().zip(prefixes.iter()) {
-                serialize_node(
-                    child,
-                    children_map,
-                    depth + 1,
-                    out,
-                    prefix,
-                    &task.calendar_href,
-                );
+                serialize_node(child, children_map, depth + 1, out, prefix, root_href);
             }
         }
     }
