@@ -240,13 +240,24 @@ pub fn organize_hierarchy(
     let mut result = Vec::new();
     let mut visited_keys = HashSet::new();
 
+    let effective_max_done_roots = if options.search_active {
+        usize::MAX
+    } else {
+        options.max_done_roots
+    };
+    let effective_max_done_subtasks = if options.search_active {
+        usize::MAX
+    } else {
+        options.max_done_subtasks
+    };
+
     let mut context = HierarchyContext {
         children_map: &children_map,
         result: &mut result,
         visited_keys: &mut visited_keys,
         expanded_groups: options.expanded_groups,
         search_active: options.search_active,
-        max_done_subtasks: options.max_done_subtasks,
+        max_done_subtasks: effective_max_done_subtasks,
         search_collapsed_tasks: options.search_collapsed_tasks,
         focused_task_uid: options.focused_task_uid,
     };
@@ -300,17 +311,13 @@ pub fn organize_hierarchy(
         let is_expanded = context.expanded_groups.contains(&effective_key);
 
         if is_expanded {
-            context
-                .result
-                .push(TaskListItem::CollapseGroup(effective_key.clone(), depth));
             for task in done {
                 append_task_and_children(&task, context, depth);
             }
-        } else if done.len() > limit {
             context
                 .result
-                .push(TaskListItem::ExpandGroup(effective_key.clone(), depth));
-
+                .push(TaskListItem::CollapseGroup(effective_key.clone(), depth));
+        } else if done.len() > limit {
             let count_to_show = limit.saturating_sub(1);
             let mut iter = done.into_iter();
 
@@ -319,6 +326,10 @@ pub fn organize_hierarchy(
                     append_task_and_children(&task, context, depth);
                 }
             }
+            context
+                .result
+                .push(TaskListItem::ExpandGroup(effective_key.clone(), depth));
+
             for task in iter {
                 mark_tree_as_visited(&task, context);
             }
@@ -374,17 +385,13 @@ pub fn organize_hierarchy(
             if !done.is_empty() {
                 let is_expanded = context.expanded_groups.contains(&task.uid);
                 if is_expanded {
-                    context
-                        .result
-                        .push(TaskListItem::CollapseGroup(task.uid.clone(), depth + 1));
                     for child in done {
                         append_task_and_children(&child, context, depth + 1);
                     }
-                } else if done.len() > context.max_done_subtasks {
                     context
                         .result
-                        .push(TaskListItem::ExpandGroup(task.uid.clone(), depth + 1));
-
+                        .push(TaskListItem::CollapseGroup(task.uid.clone(), depth + 1));
+                } else if done.len() > context.max_done_subtasks {
                     let show = context.max_done_subtasks.saturating_sub(1);
                     let mut iter = done.into_iter();
                     for _ in 0..show {
@@ -392,6 +399,10 @@ pub fn organize_hierarchy(
                             append_task_and_children(&c, context, depth + 1);
                         }
                     }
+                    context
+                        .result
+                        .push(TaskListItem::ExpandGroup(task.uid.clone(), depth + 1));
+
                     for c in iter {
                         mark_tree_as_visited(&c, context);
                     }
@@ -407,7 +418,7 @@ pub fn organize_hierarchy(
     process_group(
         roots,
         "".to_string(),
-        options.max_done_roots,
+        effective_max_done_roots,
         true,
         &mut context,
         0,
@@ -436,7 +447,7 @@ pub fn organize_hierarchy(
         process_group(
             unvisited,
             "".to_string(),
-            options.max_done_roots,
+            effective_max_done_roots,
             true,
             &mut context,
             0,
