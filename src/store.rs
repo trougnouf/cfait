@@ -870,18 +870,32 @@ impl TaskStore {
     }
 
     pub fn resolve_dependencies(&self, task: &mut Task) -> Result<(), String> {
-        let mut resolved = Vec::new();
+        let mut resolved_deps = Vec::new();
         for dep in &task.dependencies {
             if dep.len() == 36 && uuid::Uuid::parse_str(dep).is_ok() {
-                resolved.push(dep.clone());
+                resolved_deps.push(dep.clone());
                 continue;
             }
             let uid = self.resolve_dependency_ref(dep)?;
-            resolved.push(uid);
+            resolved_deps.push(uid);
         }
-        resolved.sort();
-        resolved.dedup();
-        task.dependencies = resolved;
+        resolved_deps.sort();
+        resolved_deps.dedup();
+        task.dependencies = resolved_deps;
+
+        let mut resolved_rels = Vec::new();
+        for rel in &task.related_to {
+            if rel.len() == 36 && uuid::Uuid::parse_str(rel).is_ok() {
+                resolved_rels.push(rel.clone());
+                continue;
+            }
+            let uid = self.resolve_dependency_ref(rel)?;
+            resolved_rels.push(uid);
+        }
+        resolved_rels.sort();
+        resolved_rels.dedup();
+        task.related_to = resolved_rels;
+
         Ok(())
     }
 

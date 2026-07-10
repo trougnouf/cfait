@@ -6248,6 +6248,7 @@ enum class MobileSyntaxType {
     COLLECTION,
     WIKI_LINK,
     DEPENDENCY,
+    RELATION,
     ;
 
     companion object

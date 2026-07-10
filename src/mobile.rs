@@ -115,6 +115,7 @@ pub enum MobileSyntaxType {
     Collection,
     WikiLink,
     Dependency,
+    Relation,
 }
 
 impl From<SyntaxType> for MobileSyntaxType {
@@ -140,6 +141,7 @@ impl From<SyntaxType> for MobileSyntaxType {
             SyntaxType::Collection => MobileSyntaxType::Collection,
             SyntaxType::WikiLink => MobileSyntaxType::WikiLink,
             SyntaxType::Dependency => MobileSyntaxType::Dependency,
+            SyntaxType::Relation => MobileSyntaxType::Relation,
         }
     }
 }

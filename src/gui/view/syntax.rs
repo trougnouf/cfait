@@ -117,6 +117,13 @@ impl Highlighter for SmartInputHighlighter {
                             ..Default::default()
                         }),
                     },
+                    SyntaxType::Relation => highlighter::Format {
+                        color: Some(Color::from_rgb(0.4, 0.6, 0.9)), // Soft Blue
+                        font: Some(Font {
+                            weight: iced::font::Weight::Bold,
+                            ..Default::default()
+                        }),
+                    },
                     SyntaxType::Geo => highlighter::Format {
                         color: Some(Color::from_rgb(0.5, 0.5, 0.5)),
                         font: None,
@@ -687,6 +694,13 @@ impl Highlighter for MarkdownHighlighter {
                     },
                     crate::model::parser::SyntaxType::Dependency => highlighter::Format {
                         color: Some(Color::from_rgb(0.9, 0.6, 0.2)),
+                        font: Some(Font {
+                            weight: iced::font::Weight::Bold,
+                            ..Default::default()
+                        }),
+                    },
+                    crate::model::parser::SyntaxType::Relation => highlighter::Format {
+                        color: Some(Color::from_rgb(0.4, 0.6, 0.9)), // Soft Blue
                         font: Some(Font {
                             weight: iced::font::Weight::Bold,
                             ..Default::default()

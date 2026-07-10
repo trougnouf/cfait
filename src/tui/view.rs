@@ -1654,6 +1654,9 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         SyntaxType::Dependency => Style::default()
                             .fg(Color::Rgb(229, 152, 52))
                             .add_modifier(Modifier::BOLD), // Orange for dep:
+                        SyntaxType::Relation => Style::default()
+                            .fg(Color::LightBlue)
+                            .add_modifier(Modifier::BOLD),
                     };
                     input_spans.push(Span::styled(text, style));
                 }

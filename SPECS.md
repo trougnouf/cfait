@@ -63,6 +63,7 @@ Evaluated instantly during text input. Supported across all clients.
 | `@@` or `loc:`| Location. | `@@office` |
 | `url:` / `[[ ]]`| Attach URL or Wiki-link. | `url:https://example.com`, `[[Master plan]]`, `[[Master plan|Alias]]` |
 | `dep:` or `depends:`| Set dependency (blocks the task). Supports short UIDs or fuzzy matching by summary. | `dep:"Install foundation"`, `dep:abc1234` |
+| `rel:` or `related:`| Set related task (sibling). Supports short UIDs or fuzzy matching by summary. | `rel:"Master plan"`, `rel:abc1234` |
 | `geo:` | Geo-coordinates. | `geo:50.1,4.2`, `geo:here` (Mobile: Fetches GPS) |
 | `desc:` | Append text to the description. | `desc:"Buy milk"` or `desc:{...}` |
 | `rem:` | Reminder / Alarm. | `rem:10m`, `rem:in 1h`, `rem:8pm`, `rem:next friday` |
