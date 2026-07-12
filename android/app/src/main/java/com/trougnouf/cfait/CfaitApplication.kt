@@ -34,6 +34,12 @@ class CfaitApplication : Application() {
                 val sw = java.io.StringWriter()
                 exception.printStackTrace(java.io.PrintWriter(sw))
                 crashFile.appendText(sw.toString())
+
+                // Also grab the system logcat in case of native/JNI issues
+                try {
+                    val logcatFile = java.io.File(cacheDir, "logcat_crash.txt")
+                    Runtime.getRuntime().exec("logcat -d -f ${logcatFile.absolutePath}").waitFor()
+                } catch (e: Exception) {}
             } catch (e: Exception) {
                 // Ignore errors during crash handling
             }

@@ -593,21 +593,27 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
     let smart = t.to_smart_string();
     let status_str = format!("{:?}", t.status);
 
-    let blocked_by_names = t
-        .dependencies
-        .iter()
-        .filter_map(|uid| store.get_summary(uid))
-        .collect();
+    let mut blocked_by_names = Vec::new();
+    let mut blocked_by_uids = Vec::new();
+    for dep_uid in &t.dependencies {
+        if let Some(summary) = store.get_summary(dep_uid) {
+            blocked_by_names.push(summary);
+            blocked_by_uids.push(dep_uid.clone());
+        }
+    }
 
     let blocking_pairs = store.get_tasks_blocking(&t.uid);
     let (blocking_uids, blocking_names): (Vec<String>, Vec<String>) =
         blocking_pairs.into_iter().unzip();
 
-    let related_to_names = t
-        .related_to
-        .iter()
-        .filter_map(|uid| store.get_summary(uid))
-        .collect();
+    let mut related_to_names = Vec::new();
+    let mut related_to_uids = Vec::new();
+    for rel_uid in &t.related_to {
+        if let Some(summary) = store.get_summary(rel_uid) {
+            related_to_names.push(summary);
+            related_to_uids.push(rel_uid.clone());
+        }
+    }
 
     let (due_iso, due_allday) = match &t.due {
         Some(DateType::AllDay(d)) => (Some(d.format("%Y-%m-%d").to_string()), true),
@@ -702,10 +708,10 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
         is_blocked: t.is_blocked,
         status_string: status_str,
         blocked_by_names,
-        blocked_by_uids: t.dependencies.clone(),
+        blocked_by_uids,
         blocking_uids,
         blocking_names,
-        related_to_uids: t.related_to.clone(),
+        related_to_uids,
         related_to_names,
         is_paused: t.is_paused(),
         has_subtasks: t.has_subtasks,
