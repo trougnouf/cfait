@@ -714,6 +714,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 && let Some(idx) = app.find_task_index_by_uid(uid)
             {
                 let task = app.get_task_at_index(idx).unwrap();
+                if task.is_note {
+                    return Task::none();
+                }
                 return crate::gui::update::tasks::handle(
                     app,
                     Message::ToggleTask(idx, !task.status.is_done()),

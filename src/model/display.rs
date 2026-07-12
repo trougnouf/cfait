@@ -277,6 +277,10 @@ impl TaskDisplay for Task {
             s.push_str(" +pin");
         }
 
+        if self.is_note {
+            s.push_str(" note:");
+        }
+
         if let Some(goal) = &self.goal {
             let type_str = if goal.goal_type == crate::config::GoalType::Duration {
                 crate::model::parser::format_duration_compact(goal.target)

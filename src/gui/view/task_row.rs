@@ -349,6 +349,11 @@ pub fn view_task_row<'a>(
             let visible_tags = &task.visible_categories;
             let visible_location = &task.visible_location;
 
+            let mut font_size = 20;
+            if task.is_note {
+                font_size = if task.parent_uid.is_none() { 22 } else { 20 };
+            }
+
             let is_paused = task.is_paused();
 
             let has_active_alarm = task.alarms.iter().any(|a| a.acknowledged.is_none());
@@ -800,7 +805,15 @@ pub fn view_task_row<'a>(
             let summary_spans = parse_inline_markdown(&task.summary, title_color, is_strikethrough);
 
             let summary_text: Element<'a, Message> = rich_text(summary_spans)
-                .size(20)
+                .size(font_size)
+                .font(if task.is_note {
+                    iced::Font {
+                        weight: iced::font::Weight::Bold,
+                        ..Default::default()
+                    }
+                } else {
+                    iced::Font::DEFAULT
+                })
                 .width(Length::Fill)
                 .on_link_click(|target: String| {
                     if target.starts_with("http://") || target.starts_with("https://") {
@@ -1281,59 +1294,71 @@ pub fn view_task_row<'a>(
                 custom_border_color = Color::from_rgba(r, g, b, dim_factor);
             }
 
-            let status_btn = button(
-                container(if icon_char != ' ' {
-                    icon::icon(icon_char)
-                        .size(12)
-                        .color(theme.extended_palette().background.base.text)
-                } else {
-                    text("").size(12)
-                })
-                .width(Length::Fill)
-                .height(Length::Fill)
+            let status_btn_element: Element<'a, Message> = if task.is_note {
+                container(text("•").size(18).color(Color {
+                    a: dim_factor,
+                    ..theme.extended_palette().background.weak.text
+                }))
+                .width(Length::Fixed(24.0))
+                .height(Length::Fixed(24.0))
                 .align_x(iced::alignment::Horizontal::Center)
-                .align_y(iced::alignment::Vertical::Center),
-            )
-            .width(Length::Fixed(24.0))
-            .height(Length::Fixed(24.0))
-            .padding(0)
-            .on_press(Message::ToggleTask(index, true))
-            .style(move |_, status| {
-                let base_active = button::Style {
-                    background: Some(iced::Background::Color(bg_color)),
-                    text_color: Color::WHITE,
-                    border: iced::Border {
-                        color: custom_border_color,
-                        width: 1.0,
-                        radius: 4.0.into(),
-                    },
-                    ..button::Style::default()
-                };
-                match status {
-                    iced::widget::button::Status::Hovered => button::Style {
+                .align_y(iced::alignment::Vertical::Center)
+                .into()
+            } else {
+                let status_btn = button(
+                    container(if icon_char != ' ' {
+                        icon::icon(icon_char)
+                            .size(12)
+                            .color(theme.extended_palette().background.base.text)
+                    } else {
+                        text("").size(12)
+                    })
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .align_x(iced::alignment::Horizontal::Center)
+                    .align_y(iced::alignment::Vertical::Center),
+                )
+                .width(Length::Fixed(24.0))
+                .height(Length::Fixed(24.0))
+                .padding(0)
+                .on_press(Message::ToggleTask(index, true))
+                .style(move |_, status| {
+                    let base_active = button::Style {
+                        background: Some(iced::Background::Color(bg_color)),
+                        text_color: Color::WHITE,
                         border: iced::Border {
-                            color: if icon_char == ' ' {
-                                custom_border_color
-                            } else {
-                                Color::WHITE
-                            },
+                            color: custom_border_color,
                             width: 1.0,
                             radius: 4.0.into(),
                         },
-                        ..base_active
-                    },
-                    _ => base_active,
-                }
-            });
+                        ..button::Style::default()
+                    };
+                    match status {
+                        iced::widget::button::Status::Hovered => button::Style {
+                            border: iced::Border {
+                                color: if icon_char == ' ' {
+                                    custom_border_color
+                                } else {
+                                    Color::WHITE
+                                },
+                                width: 1.0,
+                                radius: 4.0.into(),
+                            },
+                            ..base_active
+                        },
+                        _ => base_active,
+                    }
+                });
 
-            let status_btn_element: Element<'a, Message> = tooltip(
-                status_btn,
-                text(rust_i18n::t!("tooltip_toggle_space")).size(12),
-                tooltip::Position::Top,
-            )
-            .style(tooltip_style)
-            .delay(Duration::from_millis(700))
-            .into();
+                tooltip(
+                    status_btn,
+                    text(rust_i18n::t!("tooltip_toggle_space")).size(12),
+                    tooltip::Position::Top,
+                )
+                .style(tooltip_style)
+                .delay(Duration::from_millis(700))
+                .into()
+            };
 
             let row_main = row![
                 indent,

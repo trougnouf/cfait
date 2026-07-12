@@ -31,6 +31,18 @@ pub fn is_action_available(
     task: &crate::model::Task,
     app: &GuiApp,
 ) -> bool {
+    if task.is_note
+        && matches!(
+            action,
+            crate::config::TaskAction::ToggleTimer
+                | crate::config::TaskAction::StopTimer
+                | crate::config::TaskAction::AddSession
+                | crate::config::TaskAction::CompleteAndShift
+        )
+    {
+        return false;
+    }
+
     let is_done_or_cancelled =
         task.status.is_done() || task.status == crate::model::TaskStatus::Cancelled;
     let is_paused = task.is_paused();

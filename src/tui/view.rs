@@ -761,6 +761,16 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     let full_symbol = t.checkbox_symbol();
                     let inner_char = full_symbol.trim_start_matches('[').trim_end_matches(']');
 
+                    let (prefix_bracket_l, prefix_inner, prefix_bracket_r) = if t.is_note {
+                        (Span::raw(""), Span::styled("•", base_style), Span::raw(" "))
+                    } else {
+                        (
+                            Span::styled("[", bracket_style),
+                            Span::styled(inner_char, base_style),
+                            Span::styled("]", bracket_style),
+                        )
+                    };
+
                     // Date / duration / recurrence
                     let is_future_start = t.is_future_start;
 
@@ -851,15 +861,13 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         Span::raw("")
                     };
 
-                    let prefix_bracket_l = Span::styled("[", bracket_style);
-                    let prefix_inner = Span::styled(inner_char, base_style);
-                    let prefix_bracket_r = Span::styled("]", bracket_style);
                     let prefix_blocked = Span::raw(if is_blocked { " [B] " } else { " " });
 
+                    let checkbox_width = if t.is_note { 2 } else { 3 };
                     let prefix_width = (if state.active_cal_href.is_some() {
-                        t.depth * 2 + 6
+                        t.depth * 2 + checkbox_width + 3
                     } else {
-                        6
+                        checkbox_width + 3
                     }) + if t.has_visible_subtasks && t.collapsed {
                         3
                     } else {
@@ -1656,6 +1664,9 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                             .add_modifier(Modifier::BOLD), // Orange for dep:
                         SyntaxType::Relation => Style::default()
                             .fg(Color::LightBlue)
+                            .add_modifier(Modifier::BOLD),
+                        SyntaxType::Note => Style::default()
+                            .fg(Color::Rgb(128, 128, 128))
                             .add_modifier(Modifier::BOLD),
                     };
                     input_spans.push(Span::styled(text, style));

@@ -58,15 +58,16 @@ impl Interval {
         use chrono::{Datelike, NaiveDate, NaiveTime};
         let local_now = now.with_timezone(&chrono::Local).date_naive();
 
+        let amount_i32 = self.amount.max(1) as i32;
+        let amount_i64 = self.amount.max(1) as i64;
+
         let reference_date = match self.unit {
-            IntervalUnit::Days => {
-                local_now + chrono::Duration::days((offset * self.amount as i32) as i64)
-            }
+            IntervalUnit::Days => local_now + chrono::Duration::days(offset as i64 * amount_i64),
             IntervalUnit::Weeks => {
-                local_now + chrono::Duration::days((offset * self.amount as i32 * 7) as i64)
+                local_now + chrono::Duration::days(offset as i64 * amount_i64 * 7)
             }
             IntervalUnit::Months => {
-                let mut m = local_now.month0() as i32 + offset * self.amount as i32;
+                let mut m = local_now.month0() as i32 + offset * amount_i32;
                 let mut y = local_now.year();
                 while m < 0 {
                     m += 12;
@@ -79,7 +80,7 @@ impl Interval {
                 NaiveDate::from_ymd_opt(y, (m as u32) + 1, 1).unwrap_or(local_now)
             }
             IntervalUnit::Years => {
-                NaiveDate::from_ymd_opt(local_now.year() + offset * self.amount as i32, 1, 1)
+                NaiveDate::from_ymd_opt(local_now.year() + offset * amount_i32, 1, 1)
                     .unwrap_or(local_now)
             }
         };
@@ -88,7 +89,7 @@ impl Interval {
             IntervalUnit::Days => {
                 let epoch_days =
                     (reference_date - NaiveDate::from_ymd_opt(1970, 1, 1).unwrap()).num_days();
-                let cycle = (epoch_days / self.amount as i64) * self.amount as i64;
+                let cycle = (epoch_days / amount_i64) * amount_i64;
                 NaiveDate::from_ymd_opt(1970, 1, 1).unwrap() + chrono::Duration::days(cycle)
             }
             IntervalUnit::Weeks => {
@@ -99,33 +100,33 @@ impl Interval {
                 } else {
                     (days_since - 6) / 7
                 };
-                let cycle = (weeks / self.amount as i64) * self.amount as i64;
+                let cycle = (weeks / amount_i64) * amount_i64;
                 NaiveDate::from_ymd_opt(1970, 1, 5).unwrap() + chrono::Duration::days(cycle * 7)
             }
             IntervalUnit::Months => {
                 let months = (reference_date.year() - 1970) * 12 + reference_date.month0() as i32;
-                let cycle = (months / self.amount as i32) * self.amount as i32;
+                let cycle = (months / amount_i32) * amount_i32;
                 let y = 1970 + cycle / 12;
                 let m = (cycle % 12) as u32 + 1;
                 NaiveDate::from_ymd_opt(y, m, 1).unwrap()
             }
             IntervalUnit::Years => {
                 let years = reference_date.year() - 1970;
-                let cycle = (years / self.amount as i32) * self.amount as i32;
+                let cycle = (years / amount_i32) * amount_i32;
                 NaiveDate::from_ymd_opt(1970 + cycle, 1, 1).unwrap()
             }
         };
 
         let end_date = match self.unit {
-            IntervalUnit::Days => start_date + chrono::Duration::days(self.amount as i64),
-            IntervalUnit::Weeks => start_date + chrono::Duration::days((self.amount * 7) as i64),
+            IntervalUnit::Days => start_date + chrono::Duration::days(amount_i64),
+            IntervalUnit::Weeks => start_date + chrono::Duration::days(amount_i64 * 7),
             IntervalUnit::Months => {
-                let m = start_date.month0() + self.amount;
+                let m = start_date.month0() + self.amount.max(1);
                 let y = start_date.year() + (m / 12) as i32;
                 NaiveDate::from_ymd_opt(y, (m % 12) + 1, 1).unwrap()
             }
             IntervalUnit::Years => {
-                NaiveDate::from_ymd_opt(start_date.year() + self.amount as i32, 1, 1).unwrap()
+                NaiveDate::from_ymd_opt(start_date.year() + amount_i32, 1, 1).unwrap()
             }
         };
 

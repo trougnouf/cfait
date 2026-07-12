@@ -48,6 +48,7 @@ const HANDLED_KEYS: &[&str] = &[
     "X-CFAIT-FUZZY-DUE",
     "X-CFAIT-COLLAPSED",
     "X-CFAIT-PINNED",
+    "X-CFAIT-KIND",
 ];
 
 pub struct IcsAdapter;
@@ -308,6 +309,9 @@ impl IcsAdapter {
         }
         if task.pinned {
             todo.add_property("X-CFAIT-PINNED", "TRUE");
+        }
+        if task.is_note {
+            todo.add_property("X-CFAIT-KIND", "NOTE");
         }
 
         if let Some(goal) = &task.goal {
@@ -621,6 +625,10 @@ impl IcsAdapter {
 
         let pinned = get_prop("X-CFAIT-PINNED")
             .map(|v| v.trim().to_uppercase() == "TRUE")
+            .unwrap_or(false);
+
+        let is_note = get_prop("X-CFAIT-KIND")
+            .map(|v| v.trim().to_uppercase() == "NOTE")
             .unwrap_or(false);
 
         let mut goal = None;
@@ -1079,6 +1087,7 @@ impl IcsAdapter {
             geo,
             collapsed,
             pinned,
+            is_note,
             time_spent_seconds,
             last_started_at,
             sessions: manual_sessions, // Use manual parsing result

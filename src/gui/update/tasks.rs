@@ -279,6 +279,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 && let Some(idx) = app.find_task_index_by_uid(&uid)
                 && let Some(t) = app.get_task_at_index(idx)
             {
+                if t.is_note {
+                    return Task::none();
+                }
                 let intent = if t.rrule.is_some() {
                     AppIntent::ToggleTaskShift { uid: uid.clone() }
                 } else if t.has_subtasks {
@@ -1394,6 +1397,7 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
                 if let Some(pc) = ext.percent_complete {
                     sub.percent_complete = Some(pc);
                 }
+                sub.is_note = ext.is_note;
 
                 app.store.add_task(sub.clone());
                 actions.push(crate::journal::Action::Create(sub));
@@ -1525,6 +1529,7 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
                 if let Some(pc) = ext.percent_complete {
                     sub.percent_complete = Some(pc);
                 }
+                sub.is_note = ext.is_note;
 
                 tasks_to_create.push(sub);
             }

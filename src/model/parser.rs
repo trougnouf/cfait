@@ -81,6 +81,7 @@ pub enum PrefixToken {
     Collection,
     Dependency,
     Rel,
+    Note,
 }
 
 pub struct ParserLexicon {
@@ -310,6 +311,7 @@ impl ParserLexicon {
         add_prefix("parser_collection", "col:", PrefixToken::Collection);
         add_prefix("parser_dep", "dep:,depends:", PrefixToken::Dependency);
         add_prefix("parser_rel", "rel:,related:", PrefixToken::Rel);
+        add_prefix("parser_note", "note:,is:note", PrefixToken::Note);
 
         // Merge logic: Localized translations unconditionally overwrite English canonicals.
         // This ensures e.g., French "mar" (Mardi) overwrites English "mar" (March).
@@ -396,6 +398,7 @@ pub enum SyntaxType {
     Collection, // cal:, col:
     Dependency, // dep:, depends:
     Relation,   // rel:, related:
+    Note,
 }
 
 #[derive(Debug)]
@@ -1165,6 +1168,9 @@ pub fn tokenize_smart_input(input: &str, is_search_query: bool) -> Vec<SyntaxTok
                 matched_kind = Some(SyntaxType::Calendar);
             } else if word_lower == "+pin" || word_lower == "-pin" {
                 matched_kind = Some(SyntaxType::Pin);
+            } else if pref == Some(PrefixToken::Note) {
+                matched_kind = Some(SyntaxType::Note);
+                words_consumed = 1;
             } else if pref == Some(PrefixToken::Geo) {
                 let mut temp_consumed = 1;
                 let mut raw_val = rem_original.to_string();
@@ -2443,6 +2449,7 @@ pub fn apply_smart_input(
     task.geo = None;
     task.create_event = None;
     task.goal = None;
+    task.is_note = false;
     task.categories.clear();
     task.alarms.clear();
     task.exdates.clear();
@@ -3213,6 +3220,9 @@ pub fn apply_smart_input(
             } else if !is_bg {
                 summary_words.push(unescape(token));
             }
+            consumed = 1;
+        } else if pref == Some(PrefixToken::Note) {
+            task.is_note = true;
             consumed = 1;
         } else if pref == Some(PrefixToken::Goal) {
             let val = rem;

@@ -664,6 +664,7 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
             if let Some(pc) = ext.percent_complete {
                 sub.percent_complete = Some(pc);
             }
+            sub.is_note = ext.is_note;
 
             state.store.add_task(sub.clone());
             tokio::spawn({
@@ -758,6 +759,7 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
                 if let Some(pc) = ext.percent_complete {
                     sub.percent_complete = Some(pc);
                 }
+                sub.is_note = ext.is_note;
 
                 state.store.add_task(sub.clone());
                 actions.push(crate::journal::Action::Create(sub));
@@ -1911,7 +1913,7 @@ pub async fn handle_key_event(
                 let is_shift = key.modifiers.contains(KeyModifiers::SHIFT);
                 if state.active_focus == Focus::Main {
                     if let Some(view_task) = state.get_selected_task() {
-                        if view_task.etag == "pending_refresh" {
+                        if view_task.etag == "pending_refresh" || view_task.is_note {
                             return None;
                         }
                         let uid = view_task.uid.clone();

@@ -1490,6 +1490,7 @@ impl TaskStore {
                 new_task.calendar_href = final_href.clone();
                 resolved_hrefs.insert(task_uid.clone(), final_href);
 
+                new_task.is_note = ext.is_note;
                 new_task.percent_complete = ext.percent_complete;
 
                 tasks_to_create.push(new_task);
@@ -3317,6 +3318,7 @@ mod tests {
             geo: None,
             collapsed,
             pinned: false,
+            is_note: false,
             time_spent_seconds: 0,
             last_started_at: None,
             sessions: vec![],

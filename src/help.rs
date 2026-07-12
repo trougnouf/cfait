@@ -58,6 +58,7 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
     let p_url = get_first("parser_url");
     let p_dep = get_first("parser_dep");
     let p_rel = get_first("parser_rel");
+    let p_note = get_first("parser_note");
 
     let e_today = get_first("parser_today");
     let e_tomorrow = get_first("parser_tomorrow");
@@ -322,6 +323,11 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                     keys: "\\#text".to_string(),
                     desc: rust_i18n::t!("help_org_escape_special").to_string(),
                     example: "\\#not-a-tag".to_string(),
+                },
+                HelpItem {
+                    keys: p_note.to_string(),
+                    desc: rust_i18n::t!("help_metadata_note").to_string(),
+                    example: format!("{} {}", p_note, rust_i18n::t!("example_pantry")),
                 },
                 HelpItem {
                     keys: format!("{p_done}date"),

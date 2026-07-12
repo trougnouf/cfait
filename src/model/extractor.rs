@@ -13,6 +13,7 @@ pub struct ExtractedTask {
     pub description: String,
     pub status: crate::model::TaskStatus,
     pub percent_complete: Option<u8>,
+    pub is_note: bool,
 }
 
 fn parse_checkbox(s: &str) -> Option<(crate::model::TaskStatus, Option<u8>, &str)> {
@@ -136,10 +137,7 @@ pub fn has_extractable_subtasks(input: &str) -> bool {
         }
 
         if rest.starts_with("- ") || rest.starts_with("* ") || rest.starts_with("+ ") {
-            let after_marker = &rest[2..];
-            if parse_checkbox(after_marker).is_some() {
-                return true;
-            }
+            return true;
         } else {
             let mut digit_bytes = 0;
             for c in rest.chars() {
@@ -150,10 +148,7 @@ pub fn has_extractable_subtasks(input: &str) -> bool {
                 }
             }
             if digit_bytes > 0 && rest[digit_bytes..].starts_with(". ") {
-                let after_marker = &rest[digit_bytes + 2..];
-                if parse_checkbox(after_marker).is_some() {
-                    return true;
-                }
+                return true;
             }
         }
     }
@@ -218,25 +213,30 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
         let mut parsed_num = 0;
         let mut parsed_status = crate::model::TaskStatus::NeedsAction;
         let mut parsed_pc = None;
+        let mut is_note = false;
         let mut raw_text = "";
         let mut header_depth = 0;
 
         if let Some(stripped) = rest.strip_prefix("# ") {
             is_task = true;
+            is_note = true;
             header_depth = 1;
             raw_text = stripped;
         } else if let Some(stripped) = rest.strip_prefix("## ") {
             is_task = true;
+            is_note = true;
             header_depth = 2;
             raw_text = stripped;
         } else if let Some(stripped) = rest.strip_prefix("### ") {
             is_task = true;
+            is_note = true;
             header_depth = 3;
             raw_text = stripped;
         }
 
         if is_task {
             if let Some((status, pc, r)) = parse_checkbox(raw_text) {
+                is_note = false; // Header with a checkbox overrides is_note
                 parsed_status = status;
                 parsed_pc = pc;
                 raw_text = r;
@@ -245,9 +245,14 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
             let after_marker = &rest[2..];
             if let Some((status, pc, r)) = parse_checkbox(after_marker) {
                 is_task = true;
+                is_note = false;
                 parsed_status = status;
                 parsed_pc = pc;
                 raw_text = r;
+            } else {
+                is_task = true;
+                is_note = true;
+                raw_text = after_marker;
             }
         } else {
             // Check for numbered lists (e.g., "1. [ ] ")
@@ -264,10 +269,17 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
                 if let Some((status, pc, r)) = parse_checkbox(after_marker) {
                     is_task = true;
                     is_numbered = true;
+                    is_note = false;
                     parsed_num = rest[..digit_bytes].parse::<usize>().unwrap_or(1);
                     parsed_status = status;
                     parsed_pc = pc;
                     raw_text = r;
+                } else {
+                    is_task = true;
+                    is_numbered = true;
+                    is_note = true;
+                    parsed_num = rest[..digit_bytes].parse::<usize>().unwrap_or(1);
+                    raw_text = after_marker;
                 }
             }
         }
@@ -365,6 +377,7 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
                 description: String::new(),
                 status: parsed_status,
                 percent_complete: parsed_pc,
+                is_note,
             });
             active_task_idx = Some(new_idx);
         } else {
@@ -532,17 +545,20 @@ pub fn serialize_task_tree(store: &crate::store::TaskStore, root_uid: &str) -> S
         prefix: &str,
         root_href: &str,
     ) {
-        let status_box = match task.status {
-            crate::model::TaskStatus::NeedsAction => {
-                if task.is_paused() {
-                    "[/]"
-                } else {
-                    "[ ]"
+        let status_str = if task.is_note {
+            String::new()
+        } else {
+            format!(
+                "{} ",
+                match task.status {
+                    crate::model::TaskStatus::NeedsAction => {
+                        if task.is_paused() { "[/]" } else { "[ ]" }
+                    }
+                    crate::model::TaskStatus::InProcess => "[>]",
+                    crate::model::TaskStatus::Completed => "[x]",
+                    crate::model::TaskStatus::Cancelled => "[-]",
                 }
-            }
-            crate::model::TaskStatus::InProcess => "[>]",
-            crate::model::TaskStatus::Completed => "[x]",
-            crate::model::TaskStatus::Cancelled => "[-]",
+            )
         };
         let mut smart_string = task.to_smart_string();
         if task.calendar_href != root_href {
@@ -567,8 +583,14 @@ pub fn serialize_task_tree(store: &crate::store::TaskStore, root_uid: &str) -> S
         }
 
         out.push_str(&format!(
-            "{}{} {} {}{} {}\n",
-            indent, prefix, status_box, smart_string, dep_str, uid_tag
+            "{}{}{}{}{}{} {}\n",
+            indent,
+            prefix,
+            if prefix.ends_with(' ') { "" } else { " " },
+            status_str,
+            smart_string,
+            dep_str,
+            uid_tag
         ));
 
         if !task.description.is_empty() {

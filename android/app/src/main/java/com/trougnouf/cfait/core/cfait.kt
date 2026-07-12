@@ -749,6 +749,8 @@ internal object IntegrityCheckingUniffiLib {
         uniffiCheckApiChecksums(this)
     }
 
+    external fun uniffi_cfait_checksum_func_init_panic_hook(): Int
+
     external fun uniffi_cfait_checksum_func_init_tokio_runtime(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_add_alias(): Int
@@ -1353,6 +1355,11 @@ internal object UniffiLib {
         `uid`: RustBuffer.ByValue,
     ): Long
 
+    external fun uniffi_cfait_fn_func_init_panic_hook(
+        `cacheDir`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
     external fun uniffi_cfait_fn_func_init_tokio_runtime(uniffi_out_err: UniffiRustCallStatus): Unit
 
     external fun ffi_cfait_rustbuffer_alloc(
@@ -1569,6 +1576,9 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
+    if (lib.uniffi_cfait_checksum_func_init_panic_hook() != 8521) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_cfait_checksum_func_init_tokio_runtime() != 54401) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -4879,6 +4889,7 @@ data class MobileTask(
     var `visibleCategories`: List<kotlin.String>,
     var `visibleLocation`: kotlin.String?,
     var `isSearchContext`: kotlin.Boolean,
+    var `isNote`: kotlin.Boolean,
 ) {
     companion object
 }
@@ -4945,6 +4956,7 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
             FfiConverterSequenceString.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
         )
 
     override fun allocationSize(value: MobileTask) =
@@ -5004,7 +5016,8 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
                 FfiConverterOptionalString.allocationSize(value.`rruleHistoryStat`) +
                 FfiConverterSequenceString.allocationSize(value.`visibleCategories`) +
                 FfiConverterOptionalString.allocationSize(value.`visibleLocation`) +
-                FfiConverterBoolean.allocationSize(value.`isSearchContext`)
+                FfiConverterBoolean.allocationSize(value.`isSearchContext`) +
+                FfiConverterBoolean.allocationSize(value.`isNote`)
         )
 
     override fun write(
@@ -5067,6 +5080,7 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
         FfiConverterSequenceString.write(value.`visibleCategories`, buf)
         FfiConverterOptionalString.write(value.`visibleLocation`, buf)
         FfiConverterBoolean.write(value.`isSearchContext`, buf)
+        FfiConverterBoolean.write(value.`isNote`, buf)
     }
 }
 
@@ -6249,6 +6263,7 @@ enum class MobileSyntaxType {
     WIKI_LINK,
     DEPENDENCY,
     RELATION,
+    NOTE,
     ;
 
     companion object
@@ -6908,6 +6923,11 @@ public object FfiConverterMapStringSequenceString : FfiConverterRustBuffer<Map<k
         }
     }
 }
+
+fun `initPanicHook`(`cacheDir`: kotlin.String) =
+    uniffiRustCall { _status ->
+        UniffiLib.uniffi_cfait_fn_func_init_panic_hook(FfiConverterString.lower(`cacheDir`), _status)
+    }
 
 @Throws(MobileException::class)
 fun `initTokioRuntime`() =

@@ -79,6 +79,36 @@ impl std::error::Error for MobileError {}
 static TOKIO_RUNTIME: OnceLock<Runtime> = OnceLock::new();
 
 #[uniffi::export]
+pub fn init_panic_hook(cache_dir: String) {
+    let cache_path = std::path::PathBuf::from(cache_dir);
+    std::panic::set_hook(Box::new(move |info| {
+        let msg = match info.payload().downcast_ref::<&'static str>() {
+            Some(s) => *s,
+            None => match info.payload().downcast_ref::<String>() {
+                Some(s) => &s[..],
+                None => "Box<dyn Any>",
+            },
+        };
+        let location = info
+            .location()
+            .map(|loc| format!("{}:{}", loc.file(), loc.line()))
+            .unwrap_or_else(|| "unknown".to_string());
+
+        log::error!("RUST PANIC: '{}' at {}", msg, location);
+
+        let panic_file = cache_path.join("cfait_rust_panic.txt");
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&panic_file)
+        {
+            use std::io::Write;
+            let _ = writeln!(f, "RUST PANIC: '{}' at {}", msg, location);
+        }
+    }));
+}
+
+#[uniffi::export]
 pub fn init_tokio_runtime() -> Result<(), MobileError> {
     if TOKIO_RUNTIME.get().is_none() {
         let runtime = Runtime::new().map_err(|e| MobileError::from(e.to_string()))?;
@@ -116,6 +146,7 @@ pub enum MobileSyntaxType {
     WikiLink,
     Dependency,
     Relation,
+    Note,
 }
 
 impl From<SyntaxType> for MobileSyntaxType {
@@ -142,6 +173,7 @@ impl From<SyntaxType> for MobileSyntaxType {
             SyntaxType::WikiLink => MobileSyntaxType::WikiLink,
             SyntaxType::Dependency => MobileSyntaxType::Dependency,
             SyntaxType::Relation => MobileSyntaxType::Relation,
+            SyntaxType::Note => MobileSyntaxType::Note,
         }
     }
 }
@@ -231,6 +263,7 @@ pub struct MobileTask {
     pub visible_categories: Vec<String>,
     pub visible_location: Option<String>,
     pub is_search_context: bool,
+    pub is_note: bool,
 }
 
 impl MobileTask {
@@ -292,6 +325,7 @@ impl MobileTask {
             visible_categories: vec![],
             visible_location: None,
             is_search_context: false,
+            is_note: false,
         }
     }
 }
@@ -746,6 +780,7 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
         visible_categories: t.visible_categories.clone(),
         visible_location: t.visible_location.clone(),
         is_search_context: t.is_search_context,
+        is_note: t.is_note,
     }
 }
 
@@ -2448,6 +2483,7 @@ impl CfaitMobile {
             if let Some(pc) = ext.percent_complete {
                 sub.percent_complete = Some(pc);
             }
+            sub.is_note = ext.is_note;
 
             store.add_task(sub.clone());
             actions.push(crate::journal::Action::Create(sub));

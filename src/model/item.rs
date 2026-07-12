@@ -307,6 +307,9 @@ pub struct Task {
     /// When `true`, task is pinned to the top of the list, overriding normal sorting.
     #[serde(default)]
     pub pinned: bool,
+    /// When `true`, task acts as a structural note or header (hides checkbox).
+    #[serde(default)]
+    pub is_note: bool,
 
     // Time-tracking fields:
     // - `time_spent_seconds` accumulates committed seconds of work for this task.
@@ -638,6 +641,7 @@ impl Task {
             geo: None,
             collapsed: false,
             pinned: false,
+            is_note: false,
             time_spent_seconds: 0,
             last_started_at: None,
             sessions: Vec::new(),

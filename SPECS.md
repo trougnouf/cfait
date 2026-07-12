@@ -65,6 +65,7 @@ Evaluated instantly during text input. Supported across all clients.
 | `dep:` or `depends:`| Set dependency (blocks the task). Supports short UIDs or fuzzy matching by summary. | `dep:"Install foundation"`, `dep:abc1234` |
 | `rel:` or `related:`| Set related task (sibling). Supports short UIDs or fuzzy matching by summary. | `rel:"Master plan"`, `rel:abc1234` |
 | `geo:` | Geo-coordinates. | `geo:50.1,4.2`, `geo:here` (Mobile: Fetches GPS) |
+| `note:` or `is:note` | Mark task as a note/header (hides checkbox). | `note:` |
 | `desc:` | Append text to the description. | `desc:"Buy milk"` or `desc:{...}` |
 | `rem:` | Reminder / Alarm. | `rem:10m`, `rem:in 1h`, `rem:8pm`, `rem:next friday` |
 | `done:` | Mark completed / Set percentage. | `done:now`, `done:yesterday`, `done:50%` |
@@ -91,7 +92,7 @@ Users can define reusable shortcuts that expand into multiple tags, locations, o
 If a task's description contains Markdown lists or Headers, Cfait automatically extracts them into distinct child tasks whenever the task is saved. 
 Users can also use the "Edit Tree" action (or `Ctrl+E`) to edit an entire existing task tree as a single Markdown document.
 *   **Hierarchy:** Tasks nest based on indentation level (for lists) or header depth (`#`, `##`, `###`).
-*   **Parallel Tasks:** Unnumbered lists (`- [ ]`) and Headers create independent sibling tasks. Supported checkbox states are:
+*   **Parallel Tasks & Notes:** Unnumbered lists (`- [ ]`) create independent sibling actionable tasks. If a line is a header (`## Pantry`) or a plain bullet (`- eggs`), it is extracted as a "Note" task (`is_note = true`). Notes act as structural elements, hiding their checkboxes in the UI while retaining hierarchy mapping. Supported checkbox states are:
     *   `[ ]` maps to `NeedsAction` (Pending / Unstarted).
     *   `[/]` or `[<]` maps to `NeedsAction` with `percent_complete` at 50% (Paused).
     *   `[>]` or `[▶]` maps to `InProcess` (Timer running).
