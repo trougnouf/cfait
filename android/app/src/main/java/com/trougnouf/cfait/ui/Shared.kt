@@ -235,9 +235,9 @@ fun parseInlineMarkdown(textStr: String, baseColor: androidx.compose.ui.graphics
  */
 fun resolvePluralMap(rawString: String, count: Int): String {
     if (rawString.trim().startsWith("{") && rawString.trim().endsWith("}")) {
-        val oneMatch = Regex("""one=(.*?)(?:, \w+=|}$)""").find(rawString)
-        val otherMatch = Regex("""other=(.*?)(?:, \w+=|}$)""").find(rawString)
-        val zeroMatch = Regex("""zero=(.*?)(?:, \w+=|}$)""").find(rawString)
+        val oneMatch = Regex("""one=(.*?)(?:, \w+=|\})""").find(rawString)
+        val otherMatch = Regex("""other=(.*?)(?:, \w+=|\})""").find(rawString)
+        val zeroMatch = Regex("""zero=(.*?)(?:, \w+=|\})""").find(rawString)
 
         return when (count) {
             0 -> zeroMatch?.groupValues?.get(1) ?: otherMatch?.groupValues?.get(1) ?: rawString

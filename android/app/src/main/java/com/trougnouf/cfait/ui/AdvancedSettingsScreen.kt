@@ -479,13 +479,6 @@ fun AdvancedSettingsScreen(
                         try {
                             debugIsError = false
                             debugStatus = exportExporting
-                            
-                            // Dump logcat before zipping
-                            try {
-                                val logcatFile = java.io.File(context.cacheDir, "logcat.txt")
-                                Runtime.getRuntime().exec("logcat -d -f ${logcatFile.absolutePath}").waitFor()
-                            } catch (e: Exception) {}
-
                             val zipPath = api.createDebugExport()
                             val sourceFile = File(zipPath)
                             val destFile = File(context.cacheDir, "cfait_debug_export.zip")
