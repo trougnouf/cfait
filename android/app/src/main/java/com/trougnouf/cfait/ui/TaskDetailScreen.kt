@@ -832,6 +832,7 @@ fun TaskDetailScreen(
                 label = { Text(stringResource(R.string.description_label)) },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 150.dp),
                 textStyle = TextStyle(textAlign = androidx.compose.ui.text.style.TextAlign.Start),
+                visualTransformation = remember(isDark) { MarkdownTransformation(isDark) },
             )
 
             if (task!!.createdDateIso != null || task!!.lastModifiedDateIso != null) {

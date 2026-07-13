@@ -1917,7 +1917,8 @@ fun HomeScreen(
                                                 )
                                             },
                                             modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 250.dp),
-                                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp)
+                                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp),
+                                            visualTransformation = remember(isDark) { MarkdownTransformation(isDark) },
                                         )
                                         Spacer(Modifier.height(8.dp))
                                     }

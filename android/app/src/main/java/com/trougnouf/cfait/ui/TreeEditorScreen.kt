@@ -37,6 +37,7 @@ fun TreeEditorScreen(
     var markdownText by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(true) }
     var isSaving by remember { mutableStateOf(false) }
+    val isDark = isSystemInDarkTheme()
 
     LaunchedEffect(uid) {
         scope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -108,6 +109,9 @@ fun TreeEditorScreen(
                     .padding(padding)
                     .padding(16.dp),
                 textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp),
+                visualTransformation = remember(isDark) {
+                    com.trougnouf.cfait.ui.MarkdownTransformation(isDark)
+                },
                 keyboardOptions = KeyboardOptions.Default.copy(
                     keyboardType = KeyboardType.Text,
                     imeAction = ImeAction.None

@@ -746,6 +746,62 @@ fun formatIsoToLocal(isoString: String): String {
     }
 }
 
+class MarkdownTransformation(val isDark: Boolean) : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        val raw = text.text
+        val builder = AnnotatedString.Builder(raw)
+
+        val headerColor = Color(0xFFFF9800) // Orange
+        val linkColor = Color(0xFF33B5E5) // Cyan
+        val dimColor = Color(0x80808080) // Gray
+        val checkboxColor = Color(0xFF66BB6A) // Greenish
+        val codeColor = Color(0xFFCC9966) // Brown/Orange
+
+        var lineStart = 0
+        val lines = raw.split('\n')
+        for (line in lines) {
+            val lineEnd = lineStart + line.length
+            val trimmed = line.trimStart()
+
+            if (trimmed.startsWith("#")) {
+                builder.addStyle(SpanStyle(color = headerColor, fontWeight = FontWeight.Bold), lineStart, lineEnd)
+            } else if (trimmed.startsWith("- [") || trimmed.startsWith("* [") || trimmed.startsWith("+ [") || Regex("^\\d+\\.\\s*\[").containsMatchIn(trimmed)) {
+                val cbStart = line.indexOf('[')
+                if (cbStart != -1 && cbStart + 2 < line.length && line[cbStart + 2] == ']') {
+                    builder.addStyle(SpanStyle(color = checkboxColor), lineStart + cbStart, lineStart + cbStart + 3)
+                }
+            }
+
+            lineStart = lineEnd + 1
+        }
+
+        try {
+            val inlinePatterns = listOf(
+                Pair(Regex("<!-- uid:.*?-->"), SpanStyle(color = dimColor, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)),
+                Pair(Regex("\\[\\[.*?\\]\\]"), SpanStyle(color = linkColor, fontWeight = FontWeight.Bold)),
+                Pair(Regex("\\[.*?\\]\(.*?\)"), SpanStyle(color = linkColor, fontWeight = FontWeight.Bold)),
+                Pair(Regex("https?://[^\\s)\\]]+"), SpanStyle(color = linkColor, fontWeight = FontWeight.Bold)),
+                Pair(Regex("\\*\\*.*?\\*\\*"), SpanStyle(fontWeight = FontWeight.Bold)),
+                Pair(Regex("__.*?__"), SpanStyle(fontWeight = FontWeight.Bold)),
+                Pair(Regex("~~.*?~~"), SpanStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough)),
+                Pair(Regex("(?<!\\*)\\*(?!\\*).*?(?<!\\*)\\*(?!\\*)"), SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)),
+                Pair(Regex("(?<!_)_(?!_).*?(?<!_)_(?!_)"), SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)),
+                Pair(Regex("`.*?`"), SpanStyle(color = codeColor, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace))
+            )
+
+            for ((regex, style) in inlinePatterns) {
+                regex.findAll(raw).forEach { match ->
+                    builder.addStyle(style, match.range.first, match.range.last + 1)
+                }
+            }
+        } catch (e: Exception) {
+            // Ignore regex bounds errors to guarantee the text field never crashes
+        }
+
+        return TransformedText(builder.toAnnotatedString(), OffsetMapping.Identity)
+    }
+}
+
 class SmartSyntaxTransformation(
     val api: CfaitMobile,
     val isDark: Boolean,
