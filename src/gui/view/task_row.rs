@@ -1936,10 +1936,13 @@ pub fn view_task_row<'a>(
             }
 
             let col_content = if is_expanded && has_content_to_show {
-                let desc_row = row![
+                let desc_row = container(row![
                     Space::new().width(Length::Fixed(indent_size as f32 + 30.0)),
                     details_col
-                ];
+                ]).padding(iced::Padding {
+                    bottom: 5.0,
+                    ..Default::default()
+                });
 
                 column![task_button, desc_row].spacing(5)
             } else {
@@ -1985,15 +1988,9 @@ pub fn view_task_row<'a>(
                 .on_right_press(Message::OpenContextMenu(task.uid.clone(), true))
                 .into();
 
-            focusable(
-                container(container_content).padding(if is_expanded && has_content_to_show {
-                    5
-                } else {
-                    0
-                }),
-            )
-            .id(row_id)
-            .into()
+            focusable(container_content)
+                .id(row_id)
+                .into()
         }
     }
 }
