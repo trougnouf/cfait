@@ -2058,7 +2058,12 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     .add_modifier(Modifier::BOLD),
             )));
             lines.push(Line::from(
-                rust_i18n::t!("about_version", version = env!("CARGO_PKG_VERSION")).to_string(),
+                rust_i18n::t!(
+                    "about_version",
+                    version = env!("CARGO_PKG_VERSION"),
+                    commit = env!("GIT_COMMIT_HASH")
+                )
+                .to_string(),
             ));
             lines.push(Line::from(rust_i18n::t!("about_license").to_string()));
             lines.push(Line::from(""));

@@ -3,7 +3,7 @@
     "about_license": "Licence GPL-3.0",
     "about_repository": "Dépôt : %{url}",
     "about_title": "Cfait",
-    "about_version": "Version %{version}",
+    "about_version": "Version %{version} (%{commit})",
     "action_complete_and_shift": "Terminer & décaler",
     "action_open_locations": "Ouvrir les localisations (GPX)",
     "action_pin": "Épingler la tâche",

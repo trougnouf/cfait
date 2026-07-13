@@ -3,7 +3,7 @@
     "about_license": "Лицензия GPL-3.0",
     "about_repository": "Репозиторий: %{url}",
     "about_title": "Cfait",
-    "about_version": "Версия %{version}",
+    "about_version": "Версия %{version} (%{commit})",
     "action_open_locations": "Открытые локации (GPX)",
     "actions": "Действия",
     "active_alarm": "Активное напоминание",

@@ -3,7 +3,7 @@
     "about_license": "Licencia GPL-3.0",
     "about_repository": "Repositorio: %{url}",
     "about_title": "Cfait",
-    "about_version": "Versión %{version}",
+    "about_version": "Versión %{version} (%{commit})",
     "action_complete_and_shift": "Horario completo y de turnos",
     "action_complete_tree": "Árbol completo",
     "action_open_locations": "Ubicaciones disponibles (GPX)",

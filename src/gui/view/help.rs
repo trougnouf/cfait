@@ -226,7 +226,12 @@ pub fn view_help<'a>(tab: HelpTab, app: &'a GuiApp) -> Element<'a, Message> {
                         color: Some(COL_MUTED)
                     }),
                 text(
-                    rust_i18n::t!("about_version", version = env!("CARGO_PKG_VERSION")).to_string()
+                    rust_i18n::t!(
+                        "about_version",
+                        version = env!("CARGO_PKG_VERSION"),
+                        commit = env!("GIT_COMMIT_HASH")
+                    )
+                    .to_string()
                 )
                 .size(14)
                 .style(|_: &Theme| text::Style {

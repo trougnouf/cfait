@@ -3,7 +3,7 @@
     "about_license": "Licence GPL-3.0",
     "about_repository": "Repozitář: %{url}",
     "about_title": "Cfait",
-    "about_version": "Verze %{version}",
+    "about_version": "Verze %{version} (%{commit})",
     "action_open_locations": "Otevřít pozice (GPX)",
     "actions": "Akce",
     "active_alarm": "Aktivní upozornění",

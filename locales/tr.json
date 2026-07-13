@@ -3,7 +3,7 @@
     "about_license": "GPL-3.0 lisansı",
     "about_repository": "Kaynak kod: %{url}",
     "about_title": "Cfait",
-    "about_version": "Sürüm: %{version}",
+    "about_version": "Sürüm: %{version} (%{commit})",
     "action_complete_and_shift": "Tamamla ve programda ilerlet",
     "action_open_locations": "Konuma bak (GPX)",
     "action_pin": "Görevi sabitle",
