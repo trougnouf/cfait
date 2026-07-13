@@ -1935,6 +1935,14 @@ impl TaskStore {
         if task.manual_block {
             return true;
         }
+        // Check for legacy 'blocked' category
+        if task
+            .categories
+            .iter()
+            .any(|c| c.eq_ignore_ascii_case("blocked"))
+        {
+            return true;
+        }
         if task.dependencies.is_empty() {
             return false;
         }

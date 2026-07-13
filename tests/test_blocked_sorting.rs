@@ -347,7 +347,7 @@ fn test_blocked_tag_is_recognized() {
     let mut store = TaskStore::new(ctx);
     let aliases = HashMap::new();
 
-    let mut task = Task::new("Task #blocked", &aliases, None);
+    let mut task = Task::new("Task", &aliases, None);
     task.categories.push("blocked".to_string());
     // Must add to store for is_blocked check (needs index for dependency checks)
     task.calendar_href = "cal1".to_string();

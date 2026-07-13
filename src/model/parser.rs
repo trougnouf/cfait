@@ -3021,7 +3021,12 @@ pub fn apply_smart_input(
                 for cat in expanded_cats {
                     let clean_cat = strip_quotes(&cat);
                     if !clean_cat.is_empty() && !task.categories.contains(&clean_cat) {
-                        task.categories.push(clean_cat);
+                        // MIGRATION: Convert legacy `#blocked` tags into the native property
+                        if clean_cat.eq_ignore_ascii_case("blocked") {
+                            task.manual_block = true;
+                        } else {
+                            task.categories.push(clean_cat);
+                        }
                     }
                 }
                 if is_double && !is_bg {
