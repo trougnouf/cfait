@@ -1003,13 +1003,9 @@ pub fn tokenize_smart_input(input: &str, is_search_query: bool) -> Vec<SyntaxTok
 
                 if is_next && i + 1 < words.len() {
                     let next_str = words[i + 1].2.as_str();
-                    let is_weekday = parse_weekday_code_with_lex(next_str, lex).is_some();
-                    let is_unit = lex
-                        .exact
-                        .get(&next_str.to_lowercase())
-                        .map(|t| matches!(t, ExactToken::Unit(_)))
-                        .unwrap_or(false);
-                    if is_unit || is_weekday {
+                    if parse_next_date_with_lex(next_str, lex).is_some()
+                        || parse_day_of_month(next_str, lex).is_some()
+                    {
                         matched_kind = Some(if is_start {
                             SyntaxType::StartDate
                         } else {
@@ -1045,7 +1041,7 @@ pub fn tokenize_smart_input(input: &str, is_search_query: bool) -> Vec<SyntaxTok
                     }
                 } else {
                     if parse_smart_date_with_lex(clean_word, lex).is_some()
-                        || parse_weekday_code_with_lex(clean_word, lex).is_some()
+                        || parse_next_date_with_lex(clean_word, lex).is_some()
                         || is_time_format(clean_word)
                     {
                         matched_kind = Some(if is_start {
@@ -1124,12 +1120,9 @@ pub fn tokenize_smart_input(input: &str, is_search_query: bool) -> Vec<SyntaxTok
 
                 if let Some(next_idx) = find_next_token(i + words_consumed + offset) {
                     let next_word = &words[next_idx].2;
-                    let is_unit = lex
-                        .exact
-                        .get(&next_word.to_lowercase())
-                        .map(|t| matches!(t, ExactToken::Unit(_)))
-                        .unwrap_or(false);
-                    if parse_weekday_code_with_lex(next_word, lex).is_some() || is_unit {
+                    if parse_next_date_with_lex(next_word, lex).is_some()
+                        || parse_day_of_month(next_word, lex).is_some()
+                    {
                         words_consumed = next_idx - i + 1;
 
                         if let Some(time_idx) = find_next_token(next_idx + 1)
@@ -2167,6 +2160,7 @@ pub fn parse_next_date_with_lex(unit: &str, lex: &ParserLexicon) -> Option<Naive
 
     if let Some(ExactToken::Unit(u)) = lex.exact.get(&lower) {
         match u {
+            LexiconUnit::Days => return Some(now + Duration::days(1)),
             LexiconUnit::Weeks => return Some(now + Duration::days(7)),
             LexiconUnit::Months => return Some(now + Duration::days(30)),
             LexiconUnit::Years => return Some(now + Duration::days(365)),
@@ -2186,6 +2180,52 @@ pub fn parse_next_date_with_lex(unit: &str, lex: &ParserLexicon) -> Option<Naive
             _ => return None,
         };
         return next_weekday(now, target);
+    }
+    None
+}
+
+pub fn parse_day_of_month(val: &str, lex: &ParserLexicon) -> Option<NaiveDate> {
+    let now = Local::now().date_naive();
+    let lower = val.to_lowercase();
+    let day_opt = if let Some(ExactToken::Number(n)) = lex.exact.get(&lower) {
+        Some(*n)
+    } else {
+        let mut idx = lower.len();
+        for (i, c) in lower.char_indices().rev() {
+            if c.is_alphabetic() {
+                idx = i;
+            } else {
+                break;
+            }
+        }
+        lower[..idx].parse::<u32>().ok()
+    };
+
+    if let Some(day) = day_opt
+        && (1..=31).contains(&day)
+    {
+        let current_day = now.day();
+        let mut target_month = now.month();
+        let mut target_year = now.year();
+
+        if current_day >= day {
+            target_month += 1;
+            if target_month > 12 {
+                target_month = 1;
+                target_year += 1;
+            }
+        }
+
+        for _ in 0..12 {
+            if let Some(d) = NaiveDate::from_ymd_opt(target_year, target_month, day) {
+                return Some(d);
+            }
+            target_month += 1;
+            if target_month > 12 {
+                target_month = 1;
+                target_year += 1;
+            }
+        }
     }
     None
 }
@@ -2770,7 +2810,9 @@ pub fn apply_smart_input(
                 }
             } else if is_next && i + consumed < stream.len() {
                 let next_str = &stream[i + consumed];
-                if let Some(target_date) = parse_next_date_with_lex(next_str, lex) {
+                if let Some(target_date) = parse_next_date_with_lex(next_str, lex)
+                    .or_else(|| parse_day_of_month(next_str, lex))
+                {
                     consumed += 1;
                     let mut time = default_reminder_time
                         .unwrap_or_else(|| NaiveTime::from_hms_opt(9, 0, 0).unwrap());
@@ -3105,7 +3147,9 @@ pub fn apply_smart_input(
 
             if is_next && i + 1 < stream.len() {
                 let next_str = &stream[i + 1];
-                if let Some(d) = parse_next_date_with_lex(next_str, lex) {
+                if let Some(d) = parse_next_date_with_lex(next_str, lex)
+                    .or_else(|| parse_day_of_month(next_str, lex))
+                {
                     let mut temp_consumed = 2;
                     let (dt, dt_end) = finalize_date_token(
                         DateType::AllDay(d),

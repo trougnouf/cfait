@@ -57,8 +57,8 @@ Evaluated instantly during text input. Supported across all clients.
 | Token | Meaning | Example |
 | :--- | :--- | :--- |
 | `!1` .. `!9` | Priority (1 is highest/most urgent). | `!1` |
-| `@` or `due:` | Due date. | `@now`, `@tomorrow`, `@2025-12-31`, `@fri 2pm` |
-| `^` or `start:` | Start date. | `^next week` |
+| `@` or `due:` | Due date. | `@now`, `@tomorrow`, `@2025-12-31`, `@fri 2pm`, `@next 8` |
+| `^` or `start:` | Start date. | `^next week`, `^next 15` |
 | `^@` | Sets *both* Start and Due dates. | `^@tomorrow 9am` |
 | `~` or `est:` | Estimated duration (supports ranges). | `~30m`, `~1h-2h` |
 | `#` | Tag/Category (Supports brace expansion). | `#work`, `#project{sub1,sub2}` |

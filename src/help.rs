@@ -164,6 +164,11 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                     example: format!("{p_due}friday, {p_due}fri, {p_due}mon"),
                 },
                 HelpItem {
+                    keys: rust_i18n::t!("help_key_next_day").to_string(),
+                    desc: rust_i18n::t!("help_timeline_next_day").to_string(),
+                    example: format!("{p_due}next 8, {p_start}next 15"),
+                },
+                HelpItem {
                     keys: rust_i18n::t!("help_key_dates").to_string(),
                     desc: rust_i18n::t!("help_timeline_dates_desc").to_string(),
                     example: format!("{p_due}2025-10-31, {p_due}2026-05, {p_due}2027"),
