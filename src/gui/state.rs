@@ -118,6 +118,7 @@ pub struct GuiApp {
     pub cached_goals_progress: HashMap<String, (u32, Vec<f32>)>,
     pub cached_task_goals: Vec<(String, String, crate::config::Goal, u32, Vec<f32>)>,
     pub sidebar_is_hidden: bool,
+    pub sort_collections_by_size: bool,
     pub ob_quick_filter_term_input: String,
     pub ob_quick_filter_icon_input: String,
 
@@ -273,7 +274,27 @@ pub struct GuiApp {
 impl GuiApp {
     pub fn sort_calendars(&mut self) {
         let order = self.core_config.collection_order.clone();
+        let sort_by_size = self.sort_collections_by_size;
+        let mut sizes = HashMap::new();
+        if sort_by_size {
+            for cal in &self.calendars {
+                let count = self
+                    .store
+                    .calendars
+                    .get(&cal.href)
+                    .map(|m| m.len())
+                    .unwrap_or(0);
+                sizes.insert(cal.href.clone(), count);
+            }
+        }
         self.calendars.sort_by(|a, b| {
+            if sort_by_size {
+                let count_a = sizes.get(&a.href).unwrap_or(&0);
+                let count_b = sizes.get(&b.href).unwrap_or(&0);
+                if count_a != count_b {
+                    return count_b.cmp(count_a);
+                }
+            }
             crate::model::compare_calendars(&a.href, &a.name, &b.href, &b.name, &order)
         });
     }
@@ -429,6 +450,7 @@ impl Default for GuiApp {
             cached_goals_progress: HashMap::new(),
             cached_task_goals: Vec::new(),
             sidebar_is_hidden: false,
+            sort_collections_by_size: true,
             ob_quick_filter_term_input: "is:ready".to_string(),
             ob_quick_filter_icon_input: "f0fa9".to_string(),
 

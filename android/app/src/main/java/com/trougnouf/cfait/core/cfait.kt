@@ -4246,6 +4246,7 @@ data class MobileConfig(
     var `sessionsCountAsCompletions`: kotlin.Boolean,
     var `showGoalsTab`: kotlin.Boolean,
     var `showTaskGoalsInSidebar`: kotlin.Boolean,
+    var `sortCollectionsBySize`: kotlin.Boolean,
     var `expandedTags`: List<kotlin.String>,
     var `expandedLocations`: List<kotlin.String>,
     var `expandedDoneGroups`: List<kotlin.String>,
@@ -4296,6 +4297,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterSequenceString.read(buf),
@@ -4340,6 +4342,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
                 FfiConverterBoolean.allocationSize(value.`sessionsCountAsCompletions`) +
                 FfiConverterBoolean.allocationSize(value.`showGoalsTab`) +
                 FfiConverterBoolean.allocationSize(value.`showTaskGoalsInSidebar`) +
+                FfiConverterBoolean.allocationSize(value.`sortCollectionsBySize`) +
                 FfiConverterSequenceString.allocationSize(value.`expandedTags`) +
                 FfiConverterSequenceString.allocationSize(value.`expandedLocations`) +
                 FfiConverterSequenceString.allocationSize(value.`expandedDoneGroups`)
@@ -4386,6 +4389,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
         FfiConverterBoolean.write(value.`sessionsCountAsCompletions`, buf)
         FfiConverterBoolean.write(value.`showGoalsTab`, buf)
         FfiConverterBoolean.write(value.`showTaskGoalsInSidebar`, buf)
+        FfiConverterBoolean.write(value.`sortCollectionsBySize`, buf)
         FfiConverterSequenceString.write(value.`expandedTags`, buf)
         FfiConverterSequenceString.write(value.`expandedLocations`, buf)
         FfiConverterSequenceString.write(value.`expandedDoneGroups`, buf)

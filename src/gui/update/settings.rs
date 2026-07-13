@@ -56,6 +56,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.sidebar_mode = crate::gui::state::SidebarMode::Calendars;
             }
             app.sidebar_is_hidden = config.sidebar_is_hidden;
+            app.sort_collections_by_size = config.sort_collections_by_size;
             app.ob_quick_filter_term_input = config.quick_filter_term.clone();
             app.ob_quick_filter_icon_input = config.quick_filter_icon.clone();
 
@@ -190,6 +191,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.sidebar_mode = crate::gui::state::SidebarMode::Calendars;
             }
             app.sidebar_is_hidden = config.sidebar_is_hidden;
+            app.sort_collections_by_size = config.sort_collections_by_size;
 
             app.urgent_days = config.urgent_days_horizon;
             app.urgent_prio = config.urgent_priority_threshold;
@@ -904,6 +906,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::SetShowTaskGoalsInSidebar(val) => {
             app.core_config.show_task_goals_in_sidebar = val;
             save_config(app);
+            crate::gui::update::common::refresh_filtered_tasks(app);
+            Task::none()
+        }
+        Message::SetSortCollectionsBySize(val) => {
+            app.sort_collections_by_size = val;
+            save_config(app);
+            app.sort_calendars();
             crate::gui::update::common::refresh_filtered_tasks(app);
             Task::none()
         }

@@ -96,6 +96,7 @@ fun SettingsScreen(
     var sessionsCountAsCompletions by remember { mutableStateOf(false) }
     var showGoalsTab by remember { mutableStateOf(true) }
     var showTaskGoalsInSidebar by remember { mutableStateOf(true) }
+    var sortCollectionsBySize by remember { mutableStateOf(true) }
 
     // State maintained purely for saving without overwriting backend values
     var deleteEventsOnCompletion by remember { mutableStateOf(false) }
@@ -219,6 +220,7 @@ fun SettingsScreen(
         sessionsCountAsCompletions = cfg.sessionsCountAsCompletions
         showGoalsTab = cfg.showGoalsTab
         showTaskGoalsInSidebar = cfg.showTaskGoalsInSidebar
+        sortCollectionsBySize = cfg.sortCollectionsBySize
 
         if (isInitialLoad) {
             initialCreateEventsState = cfg.createEventsForTasks
@@ -279,7 +281,8 @@ fun SettingsScreen(
             defaultDurationGoalMins = defaultDurationGoalMins.toUIntOrNull() ?: 60u,
             sessionsCountAsCompletions = sessionsCountAsCompletions,
             showGoalsTab = showGoalsTab,
-            showTaskGoalsInSidebar = showTaskGoalsInSidebar
+            showTaskGoalsInSidebar = showTaskGoalsInSidebar,
+            sortCollectionsBySize = sortCollectionsBySize
         )
         api.saveConfig(newCfg)
     }
@@ -780,12 +783,20 @@ fun SettingsScreen(
                     modifier = Modifier.padding(bottom = 8.dp),
                     color = MaterialTheme.colorScheme.primary,
                 )
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
+                    Checkbox(
+                        checked = sortCollectionsBySize,
+                        onCheckedChange = { sortCollectionsBySize = it; saveToDisk() }
+                    )
+                    Text(stringResource(R.string.sort_collections_by_size))
+                }
             }
             items(allCalendars, key = { it.href }) { cal ->
                 CollectionEditor(
                     cal = cal,
                     isLocal = cal.isLocal,
                     isEnabled = !disabledSet.contains(cal.href),
+                    showMoveButtons = !sortCollectionsBySize,
                     onToggleEnabled = { enabled ->
                         val newSet = disabledSet.toMutableSet()
                         if (enabled) newSet.remove(cal.href) else newSet.add(cal.href)
@@ -1215,6 +1226,7 @@ fun CollectionEditor(
     cal: MobileCalendar,
     isLocal: Boolean,
     isEnabled: Boolean,
+    showMoveButtons: Boolean,
     onToggleEnabled: (Boolean) -> Unit,
     onUpdate: (String, String?) -> Unit,
     onDelete: () -> Unit,
@@ -1240,11 +1252,13 @@ fun CollectionEditor(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                IconButton(onClick = onMoveUp, modifier = Modifier.size(24.dp)) {
-                    NfIcon(NfIcons.ARROW_UP, 16.sp)
-                }
-                IconButton(onClick = onMoveDown, modifier = Modifier.size(24.dp)) {
-                    NfIcon(NfIcons.ARROW_DOWN, 16.sp)
+                if (showMoveButtons) {
+                    IconButton(onClick = onMoveUp, modifier = Modifier.size(24.dp)) {
+                        NfIcon(NfIcons.ARROW_UP, 16.sp)
+                    }
+                    IconButton(onClick = onMoveDown, modifier = Modifier.size(24.dp)) {
+                        NfIcon(NfIcons.ARROW_DOWN, 16.sp)
+                    }
                 }
                 Checkbox(
                     checked = isEnabled,

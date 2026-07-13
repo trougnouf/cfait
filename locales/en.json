@@ -400,6 +400,7 @@
     "hide_fully_completed_tags": "Hide tags containing only completed tasks",
     "hide_aliases_in_sidebar": "Hide shorthand aliases in the sidebar",
     "hide_aliases_in_sidebar_tooltip": "If enabled, alias keys without subtags are hidden from the sidebar, so you only see their destination folders.",
+    "sort_collections_by_size": "Sort collections by size (most tasks first)",
     "implicit_goal_duration": "Implicit goal duration (mins) for completions",
     "implicit_goal_duration_explain": "When checking off a task without tracking time, this many minutes are added to duration goals (unless task has an estimate).",
     "sessions_count_as_completions": "Time sessions count as goal completions",

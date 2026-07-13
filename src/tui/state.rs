@@ -303,7 +303,37 @@ impl AppState {
             .collect()
     }
 
+    pub fn sort_calendars(&mut self) {
+        let config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
+        let order = config.collection_order.clone();
+        let sort_by_size = config.sort_collections_by_size;
+        let mut sizes = std::collections::HashMap::new();
+        if sort_by_size {
+            for cal in &self.calendars {
+                let count = self
+                    .store
+                    .calendars
+                    .get(&cal.href)
+                    .map(|m| m.len())
+                    .unwrap_or(0);
+                sizes.insert(cal.href.clone(), count);
+            }
+        }
+        self.calendars.sort_by(|a, b| {
+            if sort_by_size {
+                let count_a = sizes.get(&a.href).unwrap_or(&0);
+                let count_b = sizes.get(&b.href).unwrap_or(&0);
+                if count_a != count_b {
+                    return count_b.cmp(count_a);
+                }
+            }
+            crate::model::compare_calendars(&a.href, &a.name, &b.href, &b.name, &order)
+        });
+    }
+
     pub fn refresh_filtered_view(&mut self) {
+        self.sort_calendars();
+
         let search_term = if self.mode == InputMode::Searching {
             &self.input_buffer
         } else {

@@ -780,6 +780,9 @@ pub struct Config {
     pub window_width: f32,
     #[serde(default = "default_window_height")]
     pub window_height: f32,
+
+    #[serde(default = "default_true")]
+    pub sort_collections_by_size: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
@@ -850,6 +853,8 @@ pub struct SyncableConfig {
     pub show_goals_tab: bool,
     #[serde(default = "default_true")]
     pub show_task_goals_in_sidebar: bool,
+    #[serde(default = "default_true")]
+    pub sort_collections_by_size: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -921,6 +926,7 @@ impl Default for Config {
             goals: HashMap::new(),
             window_width: default_window_width(),
             window_height: default_window_height(),
+            sort_collections_by_size: true,
         }
     }
 }
@@ -961,6 +967,7 @@ impl Config {
             show_quick_filter: self.show_quick_filter,
             show_goals_tab: self.show_goals_tab,
             show_task_goals_in_sidebar: self.show_task_goals_in_sidebar,
+            sort_collections_by_size: self.sort_collections_by_size,
         }
     }
 
@@ -998,6 +1005,7 @@ impl Config {
         self.show_quick_filter = sync.show_quick_filter;
         self.show_goals_tab = sync.show_goals_tab;
         self.show_task_goals_in_sidebar = sync.show_task_goals_in_sidebar;
+        self.sort_collections_by_size = sync.sort_collections_by_size;
     }
 
     pub fn update_sync_timestamp_if_changed(&mut self, old: &Config) {
@@ -1356,6 +1364,11 @@ impl Config {
             } else if trimmed.starts_with("hidden_calendars =") {
                 out.push_str("# List of calendar HREFs currently toggled 'off' in the sidebar.\n");
                 out.push_str(line);
+            } else if trimmed.starts_with("sort_collections_by_size =") {
+                out.push_str(line);
+                out.push_str(
+                    " # Boolean: Automatically sort collections from most to least tasks.",
+                );
             } else if trimmed.starts_with("expanded_tags =") {
                 out.push_str("\n# --- UI Memory State ---\n");
                 out.push_str("# Arrays remembering which tree folders are currently expanded.\n");

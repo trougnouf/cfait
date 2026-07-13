@@ -914,7 +914,16 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
     };
 
     let collections_ui: Element<_> = if is_settings {
-        let mut col = column![text(rust_i18n::t!("manage_collections")).size(20)].spacing(10);
+        let mut col = column![
+            text(rust_i18n::t!("manage_collections")).size(20),
+            row![
+                checkbox::<Message, iced::Theme, iced::Renderer>(app.sort_collections_by_size)
+                    .label(rust_i18n::t!("sort_collections_by_size"))
+                    .on_toggle(Message::SetSortCollectionsBySize),
+            ]
+            .align_y(iced::Alignment::Center)
+        ]
+        .spacing(10);
 
         let mut ordered_cals = Vec::new();
         for cal in &app.calendars {
@@ -1002,14 +1011,24 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                     color_btn.into()
                 };
 
-            let up_btn = button(icon::icon(icon::ARROW_EXPAND_UP).size(14))
-                .style(button::text)
-                .padding(5)
-                .on_press(Message::MoveCalendar(cal_href.clone(), -1));
-            let down_btn = button(icon::icon(icon::ARROW_EXPAND_DOWN).size(14))
-                .style(button::text)
-                .padding(5)
-                .on_press(Message::MoveCalendar(cal_href.clone(), 1));
+            let up_btn: Element<_> = if app.sort_collections_by_size {
+                Space::new().width(Length::Fixed(24.0)).into()
+            } else {
+                button(icon::icon(icon::ARROW_EXPAND_UP).size(14))
+                    .style(button::text)
+                    .padding(5)
+                    .on_press(Message::MoveCalendar(cal_href.clone(), -1))
+                    .into()
+            };
+            let down_btn: Element<_> = if app.sort_collections_by_size {
+                Space::new().width(Length::Fixed(24.0)).into()
+            } else {
+                button(icon::icon(icon::ARROW_EXPAND_DOWN).size(14))
+                    .style(button::text)
+                    .padding(5)
+                    .on_press(Message::MoveCalendar(cal_href.clone(), 1))
+                    .into()
+            };
 
             let (export_btn, import_btn): (Element<_>, Element<_>) = if is_local {
                 (

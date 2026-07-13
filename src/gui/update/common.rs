@@ -41,6 +41,8 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
     // Clear focus bounds before rebuilding the list.
     clear_focus_bounds();
 
+    app.sort_calendars();
+
     let config = &app.core_config;
 
     // Sync specific Iced state to SessionState
@@ -180,6 +182,7 @@ pub fn save_config(app: &mut GuiApp) -> Config {
     cfg.show_quick_filter = app.show_quick_filter;
     cfg.show_goals_tab = app.show_goals_tab;
     cfg.sidebar_is_hidden = app.sidebar_is_hidden;
+    cfg.sort_collections_by_size = app.sort_collections_by_size;
     cfg.log_level = app.log_level;
     cfg.sync_settings = app.sync_settings;
 

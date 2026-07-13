@@ -460,6 +460,7 @@ pub struct MobileConfig {
     pub sessions_count_as_completions: bool,
     pub show_goals_tab: bool,
     pub show_task_goals_in_sidebar: bool,
+    pub sort_collections_by_size: bool,
     pub expanded_tags: Vec<String>,
     pub expanded_locations: Vec<String>,
     pub expanded_done_groups: Vec<String>,
@@ -1002,6 +1003,7 @@ impl CfaitMobile {
             sessions_count_as_completions: c.sessions_count_as_completions,
             show_goals_tab: c.show_goals_tab,
             show_task_goals_in_sidebar: c.show_task_goals_in_sidebar,
+            sort_collections_by_size: c.sort_collections_by_size,
             expanded_tags: c.expanded_tags,
             expanded_locations: c.expanded_locations,
             expanded_done_groups: Vec::new(),
@@ -1157,6 +1159,7 @@ impl CfaitMobile {
         c.default_duration_goal_mins = config.default_duration_goal_mins;
         c.sessions_count_as_completions = config.sessions_count_as_completions;
         c.show_goals_tab = config.show_goals_tab;
+        c.sort_collections_by_size = config.sort_collections_by_size;
 
         c.expanded_tags = config.expanded_tags;
         c.expanded_locations = config.expanded_locations;
@@ -1235,8 +1238,25 @@ impl CfaitMobile {
             }
         }
 
+        let sort_by_size = config.sort_collections_by_size;
+        let mut sizes = std::collections::HashMap::new();
+        if sort_by_size {
+            let store = self.controller.store.blocking_lock();
+            for cal in &result {
+                let count = store.calendars.get(&cal.href).map(|m| m.len()).unwrap_or(0);
+                sizes.insert(cal.href.clone(), count);
+            }
+        }
+
         let order = config.collection_order.clone();
         result.sort_by(|a, b| {
+            if sort_by_size {
+                let count_a = sizes.get(&a.href).unwrap_or(&0);
+                let count_b = sizes.get(&b.href).unwrap_or(&0);
+                if count_a != count_b {
+                    return count_b.cmp(count_a);
+                }
+            }
             crate::model::compare_calendars(&a.href, &a.name, &b.href, &b.name, &order)
         });
 

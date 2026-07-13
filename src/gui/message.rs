@@ -262,6 +262,7 @@ pub enum Message {
     SetQuickFilterIcon(String),
     SetShowGoalsTab(bool),
     SetShowTaskGoalsInSidebar(bool),
+    SetSortCollectionsBySize(bool),
 
     // --- Context Menu ---
     OpenContextMenu(String, bool),

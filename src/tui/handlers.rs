@@ -840,12 +840,7 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
             if !state.local_mode_enabled {
                 cals.retain(|c| !c.href.starts_with("local://"));
             }
-            let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
-            let order = config.collection_order.clone();
-            cals.sort_by(|a, b| {
-                crate::model::compare_calendars(&a.href, &a.name, &b.href, &b.name, &order)
-            });
-            state.calendars = cals;
+            state.calendars = cals; // let refresh_filtered_view handle sorting
 
             if let Some(def) = default_cal
                 && let Some(found) = state
