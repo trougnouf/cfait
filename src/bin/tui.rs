@@ -121,6 +121,58 @@ fn resolve_uid(store: &TaskStore, partial: &str) -> Option<String> {
     }
 }
 
+fn run_editor_cli(
+    initial_content: &str,
+    config: &cfait::config::Config,
+) -> Result<Option<String>, String> {
+    let mut editor_cmd = None;
+    if !config.description_editor.is_empty() && config.description_editor != "builtin" {
+        editor_cmd = Some(config.description_editor.clone());
+    } else {
+        if let Ok(v) = std::env::var("VISUAL")
+            && !v.is_empty()
+        {
+            editor_cmd = Some(v);
+        }
+        if editor_cmd.is_none()
+            && let Ok(e) = std::env::var("EDITOR")
+            && !e.is_empty()
+        {
+            editor_cmd = Some(e);
+        }
+    }
+
+    let cmd = editor_cmd.unwrap_or_else(|| "nano".to_string());
+
+    let uuid = uuid::Uuid::new_v4();
+    let path = std::env::temp_dir().join(format!("cfait_edit_{}.md", uuid));
+    if std::fs::write(&path, initial_content.as_bytes()).is_err() {
+        return Err("Failed to create temp file for external editor.".to_string());
+    }
+
+    #[cfg(target_os = "windows")]
+    let status = std::process::Command::new("cmd")
+        .arg("/C")
+        .arg(format!("{} \"{}\"", cmd, path.display()))
+        .status();
+
+    #[cfg(not(target_os = "windows"))]
+    let status = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(format!("{} \"{}\"", cmd, path.display()))
+        .status();
+
+    let success = status.map(|s| s.success()).unwrap_or(false);
+
+    if success && let Ok(new_content) = std::fs::read_to_string(&path) {
+        let _ = std::fs::remove_file(&path);
+        return Ok(Some(new_content));
+    }
+
+    let _ = std::fs::remove_file(&path);
+    Err(format!("Editor '{}' failed or was aborted.", cmd))
+}
+
 // Helper to determine if we should skip waiting based on args and background presence
 fn get_sync_strategy(
     no_wait_flag: bool,
@@ -568,7 +620,7 @@ async fn main() -> Result<()> {
             }
             return Ok(());
         }
-        "edit" | "append" => {
+        "replace" | "append" => {
             let is_append = command == "append";
             let mut col_href = None;
             let mut desc_text = None;
@@ -684,7 +736,7 @@ async fn main() -> Result<()> {
                 } else {
                     eprintln!(
                         "{}",
-                        rust_i18n::t!("cli_usage_edit", binary_name = binary_name)
+                        rust_i18n::t!("cli_usage_replace", binary_name = binary_name)
                     );
                 }
                 std::process::exit(1);
@@ -884,6 +936,221 @@ async fn main() -> Result<()> {
                     "{}",
                     rust_i18n::t!("task_no_changes_made", uid = partial_uid)
                 );
+            }
+            return Ok(());
+        }
+        "edit" => {
+            let mut no_wait = false;
+            let mut wait = false;
+            let mut use_tree = false;
+            let mut partial_uid = String::new();
+
+            let mut i = 2;
+            while i < args.len() {
+                if args[i] == "--no-wait" || args[i] == "-n" {
+                    no_wait = true;
+                } else if args[i] == "--wait" || args[i] == "-w" {
+                    wait = true;
+                } else if args[i] == "--tree" || args[i] == "-t" {
+                    use_tree = true;
+                } else if partial_uid.is_empty() {
+                    partial_uid = args[i].clone();
+                }
+                i += 1;
+            }
+            if partial_uid.is_empty() {
+                eprintln!("{}", rust_i18n::t!("error_missing_uid"));
+                std::process::exit(1);
+            }
+
+            let mut store = build_store_cli(&ctx).await;
+            let full_uid = match resolve_uid(&store, &partial_uid) {
+                Some(uid) => uid,
+                None => std::process::exit(1),
+            };
+
+            let config =
+                cfait::config::Config::load_with_credentials(ctx.as_ref()).unwrap_or_default();
+            let def_time =
+                chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
+
+            let initial_content = if use_tree {
+                cfait::model::extractor::serialize_task_tree(&store, &full_uid)
+            } else {
+                let task = store.get_task_ref(&full_uid).unwrap();
+                let mut content = task.to_smart_string();
+                if !task.description.is_empty() {
+                    content.push_str("\n\n");
+                    content.push_str(&task.description);
+                }
+                content
+            };
+
+            let new_content = match run_editor_cli(&initial_content, &config) {
+                Ok(Some(c)) => c,
+                Ok(None) => {
+                    println!("No changes made.");
+                    return Ok(());
+                }
+                Err(e) => {
+                    eprintln!("Error running editor: {}", e);
+                    std::process::exit(1);
+                }
+            };
+
+            if new_content.trim() == initial_content.trim() {
+                println!("No changes made.");
+                return Ok(());
+            }
+
+            let mut actions = Vec::new();
+
+            if use_tree {
+                let mut cals =
+                    cfait::cache::Cache::load_calendars(ctx.as_ref()).unwrap_or_default();
+                if let Ok(locals) = cfait::storage::LocalCalendarRegistry::load(ctx.as_ref()) {
+                    cals.extend(locals);
+                }
+                match store.sync_tree_from_markdown(
+                    &full_uid,
+                    &new_content,
+                    &config.tag_aliases,
+                    def_time,
+                    config.trash_retention_days,
+                    &cals,
+                ) {
+                    Ok(acts) => {
+                        actions.extend(acts);
+                    }
+                    Err(e) => {
+                        eprintln!("Error syncing tree: {}", e);
+                        std::process::exit(1);
+                    }
+                }
+            } else {
+                // Parse single task
+                let (first_line, rest) = new_content.split_once('\n').unwrap_or((&new_content, ""));
+                let smart_input = first_line.trim();
+                let description = rest.trim();
+
+                let (clean_desc, extracted) =
+                    cfait::model::extractor::extract_markdown_tasks(description);
+
+                let mut task = store.get_task_ref(&full_uid).unwrap().clone();
+                task.description = clean_desc.to_string();
+                task.apply_smart_input(smart_input, &config.tag_aliases, def_time);
+
+                if let Err(e) = store.resolve_dependencies(&mut task) {
+                    eprintln!("Error resolving dependencies: {}", e);
+                    std::process::exit(1);
+                }
+
+                task.sequence += 1;
+                actions.push(cfait::journal::Action::Update(task.clone()));
+                store.update_or_add_task(task.clone());
+
+                let mut resolved_props = std::collections::HashMap::new();
+                resolved_props.insert(
+                    full_uid.clone(),
+                    (
+                        task.categories.clone(),
+                        task.location.clone(),
+                        task.priority,
+                    ),
+                );
+
+                for ext in extracted {
+                    let mut sub =
+                        cfait::model::Task::new(&ext.raw_text, &config.tag_aliases, def_time);
+                    sub.uid = ext.uid;
+                    let p_uid_str = ext.parent_uid.clone().unwrap_or_else(|| full_uid.clone());
+                    if let Some((p_cats, p_loc, p_prio)) = resolved_props.get(&p_uid_str) {
+                        sub.inherit_properties(p_cats, p_loc, *p_prio);
+                    }
+                    resolved_props.insert(
+                        sub.uid.clone(),
+                        (sub.categories.clone(), sub.location.clone(), sub.priority),
+                    );
+
+                    if let Err(e) = store.resolve_dependencies(&mut sub) {
+                        eprintln!("Error resolving dependencies for subtask: {}", e);
+                        std::process::exit(1);
+                    }
+                    if !ext.description.is_empty() {
+                        if sub.description.is_empty() {
+                            sub.description = ext.description;
+                        } else {
+                            sub.description
+                                .push_str(&format!("\n\n{}", ext.description));
+                        }
+                    }
+
+                    let smart_status = sub.status;
+                    sub.status = ext.status;
+                    match ext.status {
+                        cfait::model::TaskStatus::Completed => {
+                            if sub.completion_date().is_none() {
+                                sub.set_completion_date(Some(chrono::Utc::now()));
+                            }
+                        }
+                        cfait::model::TaskStatus::Cancelled => {
+                            if sub.completion_date().is_none() {
+                                sub.set_completion_date(Some(chrono::Utc::now()));
+                            }
+                        }
+                        cfait::model::TaskStatus::InProcess => {
+                            if sub.last_started_at.is_none() {
+                                sub.last_started_at = Some(chrono::Utc::now().timestamp());
+                            }
+                        }
+                        cfait::model::TaskStatus::NeedsAction => {
+                            if smart_status == cfait::model::TaskStatus::Completed {
+                                sub.status = cfait::model::TaskStatus::Completed;
+                            }
+                        }
+                    }
+
+                    sub.parent_uid = Some(p_uid_str);
+                    sub.dependencies = ext.dependencies;
+                    sub.calendar_href = task.calendar_href.clone();
+                    sub.percent_complete = ext.percent_complete;
+                    sub.is_note = ext.is_note;
+                    store.add_task(sub.clone());
+                    actions.push(cfait::journal::Action::Create(sub));
+                }
+            }
+
+            if !actions.is_empty() {
+                let store_arc = Arc::new(tokio::sync::Mutex::new(store));
+                let client_arc = Arc::new(tokio::sync::Mutex::new(None));
+                let controller =
+                    cfait::controller::TaskController::new(store_arc, client_arc, ctx.clone());
+
+                controller
+                    .persist_changes(actions)
+                    .await
+                    .map_err(|e| anyhow::anyhow!(e))?;
+                println!(
+                    "{}",
+                    rust_i18n::t!("task_updated_successfully", uid = partial_uid)
+                );
+
+                let (effective_no_wait, is_auto) = get_sync_strategy(no_wait, wait, &ctx);
+
+                if !effective_no_wait {
+                    if let Err(e) = maybe_sync(ctx.clone()).await {
+                        eprintln!(
+                            "{}",
+                            rust_i18n::t!("warning_background_sync_failed", error = e.to_string())
+                        );
+                    }
+                } else if is_auto {
+                    println!("{}", rust_i18n::t!("cli_action_queued_auto"));
+                } else {
+                    println!("{}", rust_i18n::t!("cli_action_queued"));
+                }
+            } else {
+                println!("No actions generated.");
             }
             return Ok(());
         }

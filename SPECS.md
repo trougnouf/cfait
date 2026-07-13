@@ -278,8 +278,9 @@ Used for headless automation, scripting, and piping. Operates directly on the `T
 *Note on `<uid>` arguments:* Any CLI command accepting a `<uid>` also accepts partial UIDs, exact titles, partial summaries, or wiki-links (e.g. `[[My Task]]`). If a match is ambiguous, the CLI will output the matching options and exit.
 
 *   `cfait add <task...>`: Smart input task creation. Flags: `-c <href>`, `--desc <text>`, `-p <uid>` (set parent), `-n` (queue to journal, don't wait for network sync).
-*   `cfait append <uid> <task...>`: **(Use this to modify tasks safely)** Appends smart syntax tokens (tags, dates, deps, etc.) or text to an existing task without overwriting its title. Flags: `--desc <text>` (appends to existing description), `-n` (no wait).
-*   `cfait edit <uid> <task...>`: **⚠️ OVERWRITES** the entire task summary and metadata. You must provide the full new title. Flags: `--clear-due`, `--clear-start`, `--clear-tags`, `--clear-loc`, `--clear-deps`, `-p <uid>`, `--clear-parent`, `--desc <text>` (overwrites description).
+*   `cfait append <uid> <task...>`: Appends smart syntax tokens (tags, dates, deps, etc.) or text to an existing task. Flags: `--desc <text>` (appends to existing description), `-n` (no wait).
+*   `cfait edit <uid> [--tree]`: Opens an external editor (`$VISUAL`/`$EDITOR`) to edit the task's properties. Pass `--tree` to edit the entire task tree as a single Markdown document.
+*   `cfait replace <uid> <task...>`: Replaces the entire task summary and metadata. To safely add tags or dates without losing the title, use `append`. Flags: `--clear-due`, `--clear-start`, `--clear-tags`, `--clear-loc`, `--clear-deps`, `-p <uid>`, `--clear-parent`, `--desc <text>` (overwrites description).
 *   `cfait list [--all] [--json] [-c <id>] [-p <uid>]`: Outputs task tree (use `-p` to focus on a specific sub-tree).
 *   `cfait search <query> [--all] [--json] [-c <id>] [-p <uid>]`: Searches and outputs tasks within a specific sub-tree.
 *   `cfait view <uid> [--json]`: Outputs detailed task info.

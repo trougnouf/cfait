@@ -134,12 +134,16 @@ pub fn print_help(binary_name: &str) {
             rust_i18n::t!("cli_desc_add").to_string(),
         );
         print_cmd(
+            &format!("{} edit <uid> [--tree] [-n] [-w]", binary_name),
+            rust_i18n::t!("cli_desc_edit").to_string(),
+        );
+        print_cmd(
             &format!(
-                "{} edit <uid> <{}> [-c <id>] [--desc <text>] [-p <uid>] [--clear-parent] [--clear-due] [--clear-start] [--clear-tags] [--clear-loc] [--clear-deps] [-n] [-w]",
+                "{} replace <uid> <{}> [-c <id>] [--desc <text>] [-p <uid>] [--clear-parent] [--clear-due] [--clear-start] [--clear-tags] [--clear-loc] [--clear-deps] [-n] [-w]",
                 binary_name,
                 rust_i18n::t!("cli_task_placeholder")
             ),
-            rust_i18n::t!("cli_desc_edit").to_string(),
+            rust_i18n::t!("cli_desc_replace").to_string(),
         );
         print_cmd(
             &format!(
