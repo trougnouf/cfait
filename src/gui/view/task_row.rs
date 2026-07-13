@@ -1939,7 +1939,8 @@ pub fn view_task_row<'a>(
                 let desc_row = container(row![
                     Space::new().width(Length::Fixed(indent_size as f32 + 30.0)),
                     details_col
-                ]).padding(iced::Padding {
+                ])
+                .padding(iced::Padding {
                     bottom: 5.0,
                     ..Default::default()
                 });
@@ -1988,9 +1989,7 @@ pub fn view_task_row<'a>(
                 .on_right_press(Message::OpenContextMenu(task.uid.clone(), true))
                 .into();
 
-            focusable(container_content)
-                .id(row_id)
-                .into()
+            focusable(container_content).id(row_id).into()
         }
     }
 }
