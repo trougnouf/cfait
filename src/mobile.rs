@@ -1203,8 +1203,16 @@ impl CfaitMobile {
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let disabled_set: HashSet<String> = config.disabled_calendars.iter().cloned().collect();
         let mut result = Vec::new();
+
+        // Load all disk data BEFORE acquiring the store lock
+        let locals = LocalCalendarRegistry::load(self.ctx.as_ref()).unwrap_or_default();
+        let cals = crate::cache::Cache::load_calendars(self.ctx.as_ref()).unwrap_or_default();
+
+        // Now acquire the store lock once
         let store = self.controller.store.blocking_lock();
-        if let Ok(locals) = LocalCalendarRegistry::load(self.ctx.as_ref()) {
+        
+        // Process locals - need lock to check if trash/recovery are empty
+        if !locals.is_empty() {
             for loc in locals {
                 if loc.href == crate::storage::LOCAL_TRASH_HREF || loc.href == "local://recovery" {
                     if let Some(map) = store.calendars.get(&loc.href) {
@@ -1225,7 +1233,9 @@ impl CfaitMobile {
                 });
             }
         }
-        if let Ok(cals) = crate::cache::Cache::load_calendars(self.ctx.as_ref()) {
+        
+        // Process remote calendars - no need to check store for these
+        if !cals.is_empty() {
             for c in cals {
                 if c.href.starts_with("local://") {
                     continue;
@@ -1241,15 +1251,16 @@ impl CfaitMobile {
             }
         }
 
+        // Collect sizes while still holding the lock
         let sort_by_size = config.sort_collections_by_size;
         let mut sizes = std::collections::HashMap::new();
         if sort_by_size {
-            let store = self.controller.store.blocking_lock();
             for cal in &result {
                 let count = store.calendars.get(&cal.href).map(|m| m.len()).unwrap_or(0);
                 sizes.insert(cal.href.clone(), count);
             }
         }
+        drop(store);
 
         let order = config.collection_order.clone();
         result.sort_by(|a, b| {
@@ -1344,8 +1355,9 @@ impl CfaitMobile {
     }
 
     pub fn load_from_cache(&self) {
-        let mut store = self.controller.store.blocking_lock();
-        store.clear();
+        // Load all disk data BEFORE acquiring the store lock
+        let mut loaded_calendars = Vec::new();
+        
         if let Ok(locals) = LocalCalendarRegistry::load(self.ctx.as_ref()) {
             for loc in locals {
                 match LocalStorage::load_for_href(self.ctx.as_ref(), &loc.href) {
@@ -1355,7 +1367,7 @@ impl CfaitMobile {
                             &mut tasks,
                             &loc.href,
                         );
-                        store.insert(loc.href, tasks);
+                        loaded_calendars.push((loc.href, tasks));
                     }
                     Err(e) => {
                         #[cfg(target_os = "android")]
@@ -1377,10 +1389,18 @@ impl CfaitMobile {
                         &mut tasks,
                         &cal.href,
                     );
-                    store.insert(cal.href, tasks);
+                    loaded_calendars.push((cal.href, tasks));
                 }
             }
         }
+        
+        // Now acquire the store lock and insert all loaded data
+        let mut store = self.controller.store.blocking_lock();
+        store.clear();
+        for (href, tasks) in loaded_calendars {
+            store.insert(href, tasks);
+        }
+        
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let index = AlarmIndex::rebuild_from_tasks(
             &store.calendars,
@@ -1831,6 +1851,14 @@ impl CfaitMobile {
     }
 
     pub async fn get_view_tasks(&self, options: MobileFilterOptions) -> MobileViewData {
+        // Acquire session lock first to match the order in dispatch()
+        let session = self.session.lock().await;
+        let search_collapsed_set: HashSet<String> =
+            session.search_collapsed_tasks.iter().cloned().collect();
+        let focused_task_uid = session.focused_task_uid.clone();
+        drop(session);
+
+        // Then acquire store lock
         let store = self.controller.store.lock().await;
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let mut hidden: HashSet<String> = config.hidden_calendars.into_iter().collect();
@@ -1840,12 +1868,6 @@ impl CfaitMobile {
         let expanded_tags_set: HashSet<String> = options.expanded_tags.into_iter().collect();
         let expanded_locations_set: HashSet<String> =
             options.expanded_locations.into_iter().collect();
-
-        let session = self.session.lock().await;
-        let search_collapsed_set: HashSet<String> =
-            session.search_collapsed_tasks.iter().cloned().collect();
-        let focused_task_uid = session.focused_task_uid.clone();
-        drop(session);
 
         let cutoff_date = config
             .sort_cutoff_days

@@ -165,21 +165,32 @@ impl TaskController {
         }
 
         let settings_uid = "cfait-global-settings-v1";
-        let mut store = self.store.lock().await;
-        let mut existing_task = store.get_task_ref(settings_uid).cloned();
-
+        
+        // Load from disk cache first to get the freshest settings task
         // The background worker uses an isolated TaskStore which might be stale.
-        // We must check the disk Cache to guarantee we see settings freshly downloaded by the GUI.
+        let mut existing_task_from_disk = None;
         if let Ok(cals) = crate::cache::Cache::load_calendars(self.ctx.as_ref()) {
             for cal in cals {
                 if let Ok((tasks, _)) = crate::cache::Cache::load(self.ctx.as_ref(), &cal.href)
                     && let Some(t) = tasks.into_iter().find(|t| t.uid == settings_uid)
-                    && (existing_task.is_none()
-                        || existing_task.as_ref().unwrap().etag != t.etag
-                        || existing_task.as_ref().unwrap().sequence < t.sequence)
                 {
-                    existing_task = Some(t);
+                    existing_task_from_disk = Some(t);
+                    break;
                 }
+            }
+        }
+        
+        // Now acquire the store lock to check in-memory state
+        let mut store = self.store.lock().await;
+        let mut existing_task = store.get_task_ref(settings_uid).cloned();
+        
+        // Prefer the disk version if it's newer
+        if let Some(ref disk_task) = existing_task_from_disk {
+            if existing_task.is_none()
+                || existing_task.as_ref().unwrap().etag != disk_task.etag
+                || existing_task.as_ref().unwrap().sequence < disk_task.sequence
+            {
+                existing_task = existing_task_from_disk;
             }
         }
 
@@ -215,6 +226,11 @@ impl TaskController {
                         }
                         let _ = config.save(self.ctx.as_ref());
 
+                        // Drop the store lock before applying aliases (which may need to load from disk)
+                        drop(store);
+                        
+                        // Re-acquire the lock for alias application and task updates
+                        let mut store = self.store.lock().await;
                         let mut modified_tasks = Vec::new();
                         for (key, values) in &remote_payload.config.tag_aliases {
                             modified_tasks.extend(store.apply_alias_retroactively(key, values));
@@ -285,6 +301,9 @@ impl TaskController {
                 }
             }
             None => {
+                // Drop the store lock before loading from disk
+                drop(store);
+                
                 // Task doesn't exist, deploy local settings upstream
                 if config.settings_updated_at == 0 {
                     config.settings_updated_at = chrono::Utc::now().timestamp();
@@ -328,6 +347,8 @@ impl TaskController {
                 new_task.categories.push("cfait-internal".to_string());
                 new_task.calendar_href = target_href;
 
+                // Re-acquire the lock to add the task to the store
+                let mut store = self.store.lock().await;
                 store.add_task(new_task.clone());
                 drop(store);
                 let _ = self.persist_changes(vec![Action::Create(new_task)]).await;
