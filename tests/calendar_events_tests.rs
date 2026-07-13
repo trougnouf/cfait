@@ -192,3 +192,111 @@ fn test_event_generation_with_exdates() {
         "VEVENT missing EXDATE (Calendar apps will incorrectly show the canceled event!)"
     );
 }
+
+#[test]
+fn test_event_generation_month_split() {
+    let mut task = parse("Monthly project");
+    task.dtstart = Some(DateType::Month(2025, 2));
+    task.due = Some(DateType::Month(2025, 2));
+
+    let result = task.to_event_ics();
+    // Month should be split into first and last day boundary events
+    assert_eq!(
+        result.len(),
+        1,
+        "Month with same start/due should create one event spanning the month boundaries"
+    );
+
+    let (suffix, ics) = &result[0];
+    assert_eq!(suffix, "");
+    // Should have DTSTART on Feb 1 and DTEND on Mar 1 (exclusive)
+    assert!(ics.contains("DTSTART;VALUE=DATE:20250201"));
+    assert!(ics.contains("DTEND;VALUE=DATE:20250301"));
+}
+
+#[test]
+fn test_event_generation_year_split() {
+    let mut task = parse("Yearly project");
+    task.dtstart = Some(DateType::Year(2025));
+    task.due = Some(DateType::Year(2025));
+
+    let result = task.to_event_ics();
+    // Year should be split into first and last day boundary events
+    assert_eq!(
+        result.len(),
+        1,
+        "Year with same start/due should create one event spanning the year boundaries"
+    );
+
+    let (suffix, ics) = &result[0];
+    assert_eq!(suffix, "");
+    // Should have DTSTART on Jan 1 and DTEND on Jan 1 next year (exclusive)
+    assert!(ics.contains("DTSTART;VALUE=DATE:20250101"));
+    assert!(ics.contains("DTEND;VALUE=DATE:20260101"));
+}
+
+#[test]
+fn test_event_generation_month_due_only() {
+    let mut task = parse("Monthly deadline");
+    task.due = Some(DateType::Month(2025, 6));
+
+    let result = task.to_event_ics();
+    assert!(
+        !result.is_empty(),
+        "Month due-only task should generate an event"
+    );
+
+    let (suffix, ics) = &result[0];
+    assert_eq!(suffix, "");
+    // Should span the entire month
+    assert!(ics.contains("DTSTART;VALUE=DATE:20250601"));
+    assert!(ics.contains("DTEND;VALUE=DATE:20250701"));
+}
+
+#[test]
+fn test_event_generation_year_start_only() {
+    let mut task = parse("Yearly start");
+    task.dtstart = Some(DateType::Year(2025));
+
+    let result = task.to_event_ics();
+    assert!(
+        !result.is_empty(),
+        "Year start-only task should generate an event"
+    );
+
+    let (suffix, ics) = &result[0];
+    assert_eq!(suffix, "");
+    // Should span the entire year
+    assert!(ics.contains("DTSTART;VALUE=DATE:20250101"));
+    assert!(ics.contains("DTEND;VALUE=DATE:20260101"));
+}
+
+#[test]
+fn test_event_generation_month_start_due_different() {
+    let mut task = parse("Cross-month project");
+    task.dtstart = Some(DateType::Month(2025, 1));
+    task.due = Some(DateType::Month(2025, 3));
+
+    let result = task.to_event_ics();
+    // Different months > 1 day apart should split into -start and -due events
+    assert_eq!(
+        result.len(),
+        2,
+        "Different Month start/due should split into -start and -due events"
+    );
+
+    let start_event = result.iter().find(|(s, _)| s == "-start").unwrap();
+    assert!(
+        start_event
+            .1
+            .contains("SUMMARY:Cross-month project (start)")
+    );
+    assert!(start_event.1.contains("DTSTART;VALUE=DATE:20250101"));
+    // For AllDay events, DTEND is exclusive (next day)
+    assert!(start_event.1.contains("DTEND;VALUE=DATE:20250201"));
+
+    let due_event = result.iter().find(|(s, _)| s == "-due").unwrap();
+    assert!(due_event.1.contains("SUMMARY:Cross-month project (due)"));
+    assert!(due_event.1.contains("DTSTART;VALUE=DATE:20250301"));
+    assert!(due_event.1.contains("DTEND;VALUE=DATE:20250401"));
+}
