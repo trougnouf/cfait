@@ -254,13 +254,18 @@ impl RustyClient {
         } else {
             #[cfg(not(target_os = "android"))]
             {
-                let mut root_store = rustls::RootCertStore::empty();
-                let result = rustls_native_certs::load_native_certs();
-                root_store.add_parsable_certificates(result.certs);
+                static ROOT_STORE: std::sync::OnceLock<rustls::RootCertStore> = std::sync::OnceLock::new();
+                let root_store = ROOT_STORE.get_or_init(|| {
+                    let mut store = rustls::RootCertStore::empty();
+                    let result = rustls_native_certs::load_native_certs();
+                    store.add_parsable_certificates(result.certs);
+                    store
+                });
+                
                 if root_store.is_empty() {
                     return Err(anyhow::anyhow!(rust_i18n::t!("error_no_certs").to_string()));
                 }
-                tls_config_builder.with_root_certificates(root_store)
+                tls_config_builder.with_root_certificates(root_store.clone())
             }
 
             #[cfg(target_os = "android")]

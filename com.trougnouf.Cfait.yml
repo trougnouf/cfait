@@ -13,8 +13,8 @@ finish-args:
   - --share=network
   - --device=dri
   - --talk-name=org.freedesktop.Notifications
-  - --talk-name=org.freedesktop.portal.Notifications
-  - --talk-name=org.freedesktop.portal.Secret
+  - --talk-name=org.freedesktop.portal.Notifications # this line is probably not needed
+  - --talk-name=org.freedesktop.portal.Secret # this line is probably not needed
 
 modules:
   - name: cfait

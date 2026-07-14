@@ -14,6 +14,9 @@ use iced::Task;
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {
         Message::Refresh => {
+            if app.loading {
+                return Task::none();
+            }
             app.loading = true;
             app.error_msg = None;
 
@@ -23,6 +26,33 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 return Task::perform(connect_and_fetch_wrapper(app.ctx.clone(), cfg), |res| {
                     Message::Loaded(res.map_err(|e| e.to_string()))
                 });
+            } else {
+                app.calendars = crate::cache::Cache::load_calendars(app.ctx.as_ref()).unwrap_or_default();
+                if let Ok(locals) = crate::storage::LocalCalendarRegistry::load(app.ctx.as_ref()) {
+                    for loc in locals {
+                        if !app.calendars.iter().any(|c| c.href == loc.href) {
+                            app.calendars.push(loc);
+                        }
+                    }
+                }
+                app.sort_calendars();
+
+                app.store.clear();
+                for cal in &app.calendars {
+                    if cal.href.starts_with("local://") {
+                        if let Ok(mut tasks) = crate::storage::LocalStorage::load_for_href(app.ctx.as_ref(), &cal.href) {
+                            crate::journal::Journal::apply_to_tasks(app.ctx.as_ref(), &mut tasks, &cal.href);
+                            app.store.insert(cal.href.clone(), tasks);
+                        }
+                    } else if let Ok((mut tasks, _)) = crate::cache::Cache::load(app.ctx.as_ref(), &cal.href) {
+                        crate::journal::Journal::apply_to_tasks(app.ctx.as_ref(), &mut tasks, &cal.href);
+                        app.store.insert(cal.href.clone(), tasks);
+                    }
+                }
+
+                crate::gui::update::common::update_journal_state(app);
+                refresh_filtered_tasks(app);
+                app.loading = false;
             }
             Task::none()
         }
