@@ -488,6 +488,12 @@ pub struct MobileHelpCategoryData {
     pub sections: Vec<MobileHelpSection>,
 }
 
+#[derive(uniffi::Record)]
+pub struct MobileVersionInfo {
+    pub version: String,
+    pub commit: String,
+}
+
 #[uniffi::export]
 impl CfaitMobile {
     pub fn get_help_data(&self) -> Vec<MobileHelpCategoryData> {
@@ -517,6 +523,13 @@ impl CfaitMobile {
                 sections: vec![],
             },
         ]
+    }
+
+    pub fn get_version_info(&self) -> MobileVersionInfo {
+        MobileVersionInfo {
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            commit: env!("GIT_COMMIT_HASH").to_string(),
+        }
     }
 
     pub fn get_syntax_help(&self) -> Vec<MobileHelpSection> {

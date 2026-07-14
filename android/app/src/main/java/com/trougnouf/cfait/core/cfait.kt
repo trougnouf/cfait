@@ -881,6 +881,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_tasks_related_to(): Int
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_get_version_info(): Int
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_view_tasks(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_has_any_tasks(): Int
@@ -1183,6 +1185,11 @@ internal object UniffiLib {
         `ptr`: Long,
         `uid`: RustBuffer.ByValue,
     ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_get_version_info(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
 
     external fun uniffi_cfait_fn_method_cfaitmobile_get_view_tasks(
         `ptr`: Long,
@@ -1746,6 +1753,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_tasks_related_to() != 37777) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_version_info() != 23909) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_view_tasks() != 11383) {
@@ -2520,6 +2530,8 @@ public interface CfaitMobileInterface {
     fun `getTaskTreeMarkdown`(`uid`: kotlin.String): kotlin.String
 
     suspend fun `getTasksRelatedTo`(`uid`: kotlin.String): List<MobileRelatedTask>
+
+    fun `getVersionInfo`(): MobileVersionInfo
 
     suspend fun `getViewTasks`(`options`: MobileFilterOptions): MobileViewData
 
@@ -3452,6 +3464,18 @@ open class CfaitMobile :
             { FfiConverterSequenceTypeMobileRelatedTask.lift(it) },
             // Error FFI converter
             UniffiNullRustCallStatusErrorHandler,
+        )
+
+    override fun `getVersionInfo`(): MobileVersionInfo =
+        FfiConverterTypeMobileVersionInfo.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_version_info(
+                        it,
+                        _status,
+                    )
+                }
+            },
         )
 
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
@@ -5146,6 +5170,38 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
         FfiConverterOptionalString.write(value.`visibleLocation`, buf)
         FfiConverterBoolean.write(value.`isSearchContext`, buf)
         FfiConverterBoolean.write(value.`isNote`, buf)
+    }
+}
+
+data class MobileVersionInfo(
+    var `version`: kotlin.String,
+    var `commit`: kotlin.String,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMobileVersionInfo : FfiConverterRustBuffer<MobileVersionInfo> {
+    override fun read(buf: ByteBuffer): MobileVersionInfo =
+        MobileVersionInfo(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+
+    override fun allocationSize(value: MobileVersionInfo) =
+        (
+            FfiConverterString.allocationSize(value.`version`) +
+                FfiConverterString.allocationSize(value.`commit`)
+        )
+
+    override fun write(
+        value: MobileVersionInfo,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`version`, buf)
+        FfiConverterString.write(value.`commit`, buf)
     }
 }
 

@@ -78,7 +78,7 @@ fun HelpScreen(api: CfaitMobile, onBack: () -> Unit) {
 
                 if (pageData.category == HelpTab.ABOUT) {
                     // Custom Kotlin About Screen UI
-                    AboutTabContent()
+                    AboutTabContent(api)
                 } else {
                     // Dynamic Rust-backed Documentation
                     LazyColumn(
@@ -152,7 +152,7 @@ fun HelpRow(item: com.trougnouf.cfait.core.MobileHelpItem) {
 }
 
 @Composable
-fun AboutTabContent() {
+fun AboutTabContent(api: CfaitMobile) {
     val context = LocalContext.current
     fun openUrl(url: String) {
         try {
@@ -161,6 +161,8 @@ fun AboutTabContent() {
         } catch (e: Exception) {
         }
     }
+
+    val versionInfo = remember { api.getVersionInfo() }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -199,7 +201,7 @@ fun AboutTabContent() {
         }
         item {
             Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("${stringResource(R.string.app_name)} v${BuildConfig.VERSION_NAME} • GPL3", color = Color.Gray)
+                Text(stringResource(R.string.about_version, versionInfo.version, versionInfo.commit) + " • GPL3", color = Color.Gray)
                 Text("Trougnouf (Benoit Brummer)", color = Color.Gray)
                 Text(
                     "https://codeberg.org/trougnouf/cfait",
