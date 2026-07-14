@@ -187,7 +187,6 @@ impl TaskController {
         // Prefer the disk version if it's newer
         if let Some(ref disk_task) = existing_task_from_disk
             && (existing_task.is_none()
-                || existing_task.as_ref().unwrap().etag != disk_task.etag
                 || existing_task.as_ref().unwrap().sequence < disk_task.sequence)
         {
             existing_task = existing_task_from_disk;
@@ -280,6 +279,7 @@ impl TaskController {
                         store.update_or_add_task(task.clone());
                         drop(store);
                         let _ = self.persist_changes(vec![Action::Update(task)]).await;
+                        return Ok(true);
                     }
                 } else {
                     // Invalid JSON in task, overwrite with local
@@ -297,6 +297,7 @@ impl TaskController {
                     store.update_or_add_task(task.clone());
                     drop(store);
                     let _ = self.persist_changes(vec![Action::Update(task)]).await;
+                    return Ok(true);
                 }
             }
             None => {
@@ -351,6 +352,7 @@ impl TaskController {
                 store.add_task(new_task.clone());
                 drop(store);
                 let _ = self.persist_changes(vec![Action::Create(new_task)]).await;
+                return Ok(true);
             }
         }
         Ok(config_changed)
@@ -365,7 +367,7 @@ impl TaskController {
 
         let client_opt = self.client.lock().await.clone();
 
-        let (warns, actual_synced) = if let Some(client) = client_opt {
+        let (warns, actual_synced) = if let Some(ref client) = client_opt {
             match client.sync_journal().await {
                 Ok((w, s)) => {
                     let mut st = self.store.lock().await;
@@ -414,8 +416,27 @@ impl TaskController {
 
         // 2. Run settings synchronization AGAIN so we instantly pick up any remote changes
         // downloaded during the sync_journal pass.
+        let q_len_before = Journal::load(self.ctx.as_ref()).queue.len();
+
         if self.sync_settings().await.unwrap_or(false) {
             config_changed = true;
+        }
+
+        let q_len_after = Journal::load(self.ctx.as_ref()).queue.len();
+        if q_len_after > q_len_before {
+            // sync_settings pushed a new action (likely Action::Update for the settings task).
+            // We must flush the journal again immediately so it doesn't get stuck!
+            if let Some(client) = client_opt
+                && let Ok((_w, s)) = client.sync_journal().await
+            {
+                let mut st = self.store.lock().await;
+                for sync_task in &s {
+                    if let Some((existing, _)) = st.get_task_mut(&sync_task.uid) {
+                        existing.etag = sync_task.etag.clone();
+                        existing.href = sync_task.href.clone();
+                    }
+                }
+            }
         }
 
         Ok((warns, actual_synced, config_changed))

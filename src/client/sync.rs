@@ -44,6 +44,7 @@ enum StepOutcome {
     ReplaceWith(Vec<Action>),
     Discard,
     RecoveryNeeded(String),
+    ServerWins(Box<Task>),
 }
 
 struct StepResult {
@@ -290,6 +291,18 @@ impl RustyClient {
             }
             Err(WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED))
             | Err(WebDavError::PreconditionFailed(_)) => {
+                if task.uid == "cfait-global-settings-v1"
+                    && let Some(server_task) = self.fetch_remote_task(&path).await
+                {
+                    return Ok(
+                        StepResult::new(StepOutcome::ServerWins(Box::new(server_task)))
+                            .with_warning(
+                            "Settings conflict resolved by adopting server version temporarily."
+                                .to_string(),
+                        ),
+                    );
+                }
+
                 if let Some((resolution, msg)) = self.attempt_conflict_resolution(task).await {
                     Ok(
                         StepResult::new(StepOutcome::RetryWith(Box::new(resolution)))
@@ -572,6 +585,7 @@ impl RustyClient {
             let mut new_etag_to_propagate: Option<String> = None;
             let mut new_href_to_propagate: Option<(String, String)> = None;
             let mut path_for_refresh: Option<String> = None;
+            let mut synced_task: Option<Task> = None;
 
             let test_forced_err: Option<anyhow::Error> = {
                 #[cfg(any(test, feature = "test_hooks"))]
@@ -648,6 +662,10 @@ impl RustyClient {
                             replaced_actions = Some(acts);
                         }
                         StepOutcome::Discard => {}
+                        StepOutcome::ServerWins(t) => {
+                            new_etag_to_propagate = Some(t.etag.clone());
+                            synced_task = Some(*t);
+                        }
                         StepOutcome::RecoveryNeeded(msg) => {
                             let recovered_task = match &next_action {
                                 Action::Create(t) => Some(t.clone()),
@@ -702,12 +720,14 @@ impl RustyClient {
                         new_etag_to_propagate = Some(fetched);
                     }
 
-                    let mut synced_task = match &next_action {
-                        Action::Create(t) | Action::Update(t) | Action::Move(t, _) => {
-                            Some(t.clone())
-                        }
-                        Action::Delete(_) => None,
-                    };
+                    if synced_task.is_none() {
+                        synced_task = match &next_action {
+                            Action::Create(t) | Action::Update(t) | Action::Move(t, _) => {
+                                Some(t.clone())
+                            }
+                            Action::Delete(_) => None,
+                        };
+                    }
 
                     // 3. Pop the item from the disk queue and propagate metadata
                     Journal::modify(self.ctx.as_ref(), |queue| {
