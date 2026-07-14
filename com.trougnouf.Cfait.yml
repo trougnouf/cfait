@@ -12,6 +12,8 @@ finish-args:
   - --socket=wayland
   - --share=network
   - --device=dri
+  - --talk-name=org.freedesktop.portal.Notifications
+  - --talk-name=org.freedesktop.portal.Secret
 
 modules:
   - name: cfait
