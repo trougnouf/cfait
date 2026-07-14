@@ -181,6 +181,7 @@
     "error_cannot_delete_default_calendar": "无法删除默认日历",
     "error_cannot_depend_on_self": "不能依赖自身！",
     "error_cannot_export_offline": "离线或正在连接时无法导出。",
+    "error_cannot_import_to_system_calendar": "无法导入到系统日历（回收站/恢复）。",
     "error_cannot_relate_to_self": "不能与自身建立关联！",
     "error_client_not_connected": "客户端未连接",
     "error_could_not_read_file": "错误：无法读取文件",
@@ -379,7 +380,6 @@
     "import_failed": "导入失败：%{error}",
     "import_failed_read_text": "无法将文件作为文本读取：%{error}",
     "import_failed_to_parse": "无法解析 ICS 文件：%{error}",
-    "error_cannot_import_to_system_calendar": "无法导入到系统日历（回收站/恢复）。",
     "import_file_name": "文件：%{file}",
     "import_success": {
         "one": "已成功导入 1 个任务",

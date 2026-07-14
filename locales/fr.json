@@ -177,6 +177,7 @@
     "error_cannot_delete_default_calendar": "Impossible de supprimer le calendrier par défaut",
     "error_cannot_depend_on_self": "Ne peut pas dépendre d'elle-même !",
     "error_cannot_export_offline": "Impossible d'exporter en mode hors ligne ou en cours de connexion.",
+    "error_cannot_import_to_system_calendar": "Impossible d'importer vers un calendrier système (corbeille/récupération).",
     "error_cannot_relate_to_self": "Ne peut pas être liée à elle-même !",
     "error_client_not_connected": "Client non connecté",
     "error_could_not_read_file": "Erreur : impossible de lire le fichier",
@@ -370,7 +371,6 @@
     "import_failed": "Échec de l'importation : %{error}",
     "import_failed_read_text": "Échec de lecture du fichier en tant que texte : %{error}",
     "import_failed_to_parse": "Échec de l'analyse du fichier ICS : %{error}",
-    "error_cannot_import_to_system_calendar": "Impossible d'importer vers un calendrier système (corbeille/récupération).",
     "import_file_name": "Fichier : %{file}",
     "import_success": {
         "one": "Importation réussie de 1 tâche",
