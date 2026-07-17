@@ -1,40 +1,40 @@
-<b>Take control of your TODO list.</b>
+<b>Nắm quyền kiểm soát danh sách việc làm của bạn.</b>
 <br><br>
-Cfait is designed for speed and stability using Rust, it puts you in control of your data with a local-first approach that syncs seamlessly across your devices.
+Cfait được thiết kế để đạt tốc độ và sự ổn định cao bằng ngôn ngữ Rust, nó đưa bạn quyền kiểm soát thông tin của bạn với phương pháp ưu tiên nội bộ nhằm dễ dàng đồng bộ dữ liệu khắp các thiết bị của bạn.
 <br><br>
-<b>Why Cfait?</b>
+<b>Tại sao chọn Cfait?</b>
 <ul>
-  <li><b>Open Source & Cross-Platform:</b> Use Cfait on Android, Linux, and Windows. Your tasks adhere to open standards (CalDAV and iCalendar), not walled gardens.</li>
-  <li><b>Syncs Everywhere:</b> Fully compatible with Nextcloud, iCloud, Radicale, Xandikos, and other standard CalDAV servers.</li>
-  <li><b>Offline First:</b> Optimistic UI updates mean you never wait for a server response. Use the persistent "Local" calendar for offline tasks and migrate them to a server later.</li>
-  <li><b>Smart Input:</b> Add tasks naturally. Typing "Buy cat food !1 @tomorrow @@grocery_store ~15m" automatically sets the priority, due date, location and duration.</li>
+  <li><b>Mở nguồn & Đa nền tảng:</b> Sử dụng Cfait trên Android, Linux, và Windows. Việc làm của bạn tuân thủ các tiêu chuẩn mở (CalDAV and iCalendar), chứ không phải là khu vường có tường bao quanh.</li>
+  <li><b>Đồng bộ hoá mọi nơi:</b> Hoàn toàn tương thích với Nextcloud, iCloud, Radicale, Xandikos, và những máy chủ CalDAV tiêu chuẩn khác.</li>
+  <li><b>Ưu tiên chế độ ngoại tuyến:</b> Cặp nhật giao diện lạc quan nghĩa rằng bạn không bao giờ đợi máy chủ phản hồi. Sử dụng lịch "Local" lưu trữ vĩnh viễn cho việc làm ngoại tuyến và di chuyển chúng lên máy chủ sau.</li>
+  <li><b>Đầu vào thông minh:</b> Tạo việc làm một cách tự nhiên. Nhập "Mua đồ ăn cho mèo !1 @tomorrow @@grocery_store ~15m" tự động đặt ưu tiên, ngày hạn, nơi chốn và thời gian.</li>
 </ul>
 <br>
-<b>Productivity Features</b>
+<b>Tính năng năng suất</b>
 <ul>
-  <li><b>GTD Workflow:</b> Mark tasks as Needs Action, In Process (&gt;), Cancelled (x), or Done.</li>
-  <li><b>Hierarchy:</b> Create sub-tasks, promote children, and organize nested lists.</li>
-  <li><b>Dependencies:</b> Link tasks using "Blocked-by" or "Child-of" logic (RFC 9253).</li>
-  <li><b>Tags & Aliases:</b> Organize with hierarchical tags (e.g., #work:backend). Create inline aliases (e.g., #shed:=#home_improvement and @home_improvement:=@@home) for rapid filing.</li>
-  <li><b>Sane Sorting:</b> Tasks are sorted by Status &gt; Start Date &gt; Due Date &gt; Priority.</li>
+  <li><b>Quy trình làm việc GTD:</b> Đánh dấu việc làm là Needs Action, In Process (&gt;), Cancelled (x), hoặc Done.</li>
+  <li><b>Hệ thống cấp bậc:</b> Tạo việc làm nhỏ, thăng chức chúng, và sắp xếp các danh sách lồng nhau.</li>
+  <li><b>Phụ thuộc:</b> Gắn việc làm với nhau sử dụng logic "Blocked-by" hoặc "Child-of" (RFC 9253).</li>
+  <li><b>Thẻ & Biệt danh:</b> Sắp xếp với thẻ cấp bậc (e.g., #work:backend). Tạo biệt danh (e.g., #shed:=#home_improvement and @home_improvement:=@@home) để nhanh chóng tạo nên danh sách.</li>
+  <li><b>Phân loại hợp lý:</b> Việc làm được phân loại bằng Status &gt; Start Date &gt; Due Date &gt; Priority.</li>
 </ul>
 <br>
-<b>Smart Syntax Guide</b>
+<b>Hướng dẫn sử dụng Smart Syntax</b>
 <br>
-When adding or editing a task, use these shortcuts:
+Khi thêm hoặc chỉnh sửa một việc làm, hãy sử dụng những lối tắt:
 <ul>
-  <li><b>!1 to !9:</b> Set Priority (1 is Critical, 9 is Low).</li>
-  <li><b>@date:</b> Set Due Date (e.g., @tomorrow, @2025-12-31, @2w, @in two weeks).</li>
-  <li><b>^date:</b> Set Start Date (hides task until date).</li>
-  <li><b>~duration:</b> Estimate time (e.g., ~30m, ~2h).</li>
-  <li><b>@every X:</b> Set Recurrence (e.g., @daily, @every 2 weeks).</li>
-  <li><b>@@loc:</b> Set Location (e.g., @@home, @@"hardware store").</li>
-  <li><b>url:http://perdu.com:</b> Attach a URL.</li>
+  <li><b>!1 to !9:</b> Đặt ưu tiên (1 is Nghiêm trọng, 9 is Thấp).</li>
+  <li><b>@date:</b> Đặt ngày đến hạn (e.g., @tomorrow, @2025-12-31, @2w, @in two weeks).</li>
+  <li><b>^date:</b> Đặt ngày bắt đầu (ẩn việc làm đến ngày bắt đầu).</li>
+  <li><b>~duration:</b> Xấp xỉ thời gian (e.g., ~30m, ~2h).</li>
+  <li><b>@every X:</b> Đặt lịch nhắc hẹn (e.g., @daily, @every 2 weeks).</li>
+  <li><b>@@loc:</b> Đặt nơi chốn (e.g., @@home, @@"hardware store").</li>
+  <li><b>url:http://perdu.com:</b> Gắn đường liên kết.</li>
 </ul>
 <br>
-<b>Advanced Search</b>
+<b>Tìm kiếm nâng cao</b>
 <br>
-Find exactly what you need with powerful filters:
+Tìm kiếm ngay thứ bạn muốn với những bộ lọc mạnh mẽ:
 <ul>
   <li><b>is:active</b> / <b>is:done:</b> Filter by status.</li>
   <li><b>~&lt;30m:</b> Find tasks taking less than 30 minutes.</li>
@@ -43,16 +43,16 @@ Find exactly what you need with powerful filters:
   <li><b>@@home:</b> Find tasks at a specific location.</li>
 </ul>
 <br>
-<b>Support the Developer</b>
+<b>Ủng hộ nhà phát triển</b>
 <br>
-If you enjoy using Cfait, please consider supporting its developer:
+Nếu bạn thích sử dụng Cfait, hãy cân nhắc ủng hộ nhà phát triển:
 <ul>
   <li>💳 <b>Liberapay:</b> https://liberapay.com/trougnouf</li>
-  <li>🏦₿ Other payment details are available within the app's "Help & About" screen or on the project website.</li>
+  <li>🏦₿ Những thông tin thanh toán khác có sẵn trong phần "Hỗ trợ & Thông tin khác" của ứng dụng hoặc trên trang dự án.</li>
 </ul>
 <br>
-<b>Community & Source</b>
+<b>Cộng đồng & Mã nguồn</b>
 <br>
-Cfait is developed by Benoit Brummer (Trougnouf) and released under the GPL3 License.
+Cfait được phát triển bởi Benoit Brummer (Trougnouf) và phát hành theo GPL3 License.
 <br><br>
-Source code, desktop versions, and issue tracking available at: https://codeberg.org/trougnouf/cfait
+Mã nguồn, phiên bản desktop, và theo dõi vấn đề có sẵn tại: https://codeberg.org/trougnouf/cfait
