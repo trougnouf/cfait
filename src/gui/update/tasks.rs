@@ -1202,9 +1202,13 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
     {
         let tag = clean_input.trim().trim_start_matches('#').to_string();
         if !tag.is_empty() && !text_to_submit.contains(":=") {
+            let tags =
+                crate::model::parser::resolve_selection_aliases(&tag, false, &app.tag_aliases);
             app.sidebar_mode = SidebarMode::Categories;
             app.session.selected_categories.clear();
-            app.session.selected_categories.push(tag);
+            for t in tags {
+                app.session.selected_categories.push(t);
+            }
             app.input_value = text_editor::Content::new();
             refresh_filtered_tasks(app);
 
@@ -1234,9 +1238,13 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
                 .trim_start_matches("loc:"),
         );
         if !loc.is_empty() {
+            let locs =
+                crate::model::parser::resolve_selection_aliases(&loc, true, &app.tag_aliases);
             app.sidebar_mode = SidebarMode::Locations;
             app.session.selected_locations.clear();
-            app.session.selected_locations.push(loc);
+            for l in locs {
+                app.session.selected_locations.push(l);
+            }
             app.input_value = text_editor::Content::new();
             refresh_filtered_tasks(app);
 

@@ -705,6 +705,39 @@ pub fn extract_inline_goals(input: &str) -> (String, HashMap<String, crate::conf
     (cleaned_words.join(" "), new_goals)
 }
 
+pub fn resolve_selection_aliases(
+    selection: &str,
+    is_location: bool,
+    aliases: &HashMap<String, Vec<String>>,
+) -> Vec<String> {
+    let mut results = Vec::new();
+    let alias_key = if is_location {
+        format!("@@{}", selection)
+    } else {
+        format!("#{}", selection)
+    };
+
+    if let Some(targets) = aliases.get(&alias_key) {
+        for target in targets {
+            if is_location {
+                if let Some(stripped) = target.strip_prefix("@@") {
+                    results.push(strip_quotes(stripped));
+                } else if let Some(stripped) = target.strip_prefix("loc:") {
+                    results.push(strip_quotes(stripped));
+                }
+            } else {
+                if let Some(stripped) = target.strip_prefix('#') {
+                    results.push(strip_quotes(stripped));
+                }
+            }
+        }
+    }
+    if results.is_empty() {
+        results.push(selection.to_string());
+    }
+    results
+}
+
 pub fn is_valid_geo(val: &str) -> bool {
     let stripped = strip_quotes(val);
     let s = stripped.trim();

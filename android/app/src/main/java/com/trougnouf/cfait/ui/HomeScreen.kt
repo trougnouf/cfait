@@ -437,13 +437,13 @@ fun HomeScreen(
 
         if (text.startsWith("#") && !text.contains(" ") && !isAliasDef) {
             val tag = text.removePrefix("#")
-            filterTags = setOf(tag)
+            filterTags = api.resolveSelectionAliases(tag, false).toSet()
             sidebarTab = 1
             newTaskText = ""
             updateTaskList()
         } else if ((text.startsWith("@@") || text.startsWith("loc:")) && !text.contains(" ") && !isAliasDef) {
             val loc = if (text.startsWith("@@")) text.removePrefix("@@") else text.removePrefix("loc:")
-            filterLocations = setOf(loc.replace("\"", ""))
+            filterLocations = api.resolveSelectionAliases(loc.replace("\"", ""), true).toSet()
             sidebarTab = 2
             newTaskText = ""
             updateTaskList()
@@ -1417,10 +1417,10 @@ fun HomeScreen(
                                             .fillMaxWidth()
                                             .clickable {
                                                 if (isTag) {
-                                                    filterTags = setOf(goal.key.removePrefix("#"))
+                                                    filterTags = api.resolveSelectionAliases(goal.key.removePrefix("#"), false).toSet()
                                                     scope.launch { drawerState.close() }
                                                 } else if (goal.key.startsWith("@@")) {
-                                                    filterLocations = setOf(goal.key.removePrefix("@@"))
+                                                    filterLocations = api.resolveSelectionAliases(goal.key.removePrefix("@@"), true).toSet()
                                                     scope.launch { drawerState.close() }
                                                 } else if (isTask) {
                                                     scope.launch {

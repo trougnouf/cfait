@@ -1212,7 +1212,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::JumpToTag(tag) => {
             app.sidebar_mode = SidebarMode::Categories;
             app.session.selected_categories.clear();
-            app.session.selected_categories.push(tag.clone());
+
+            let tags =
+                crate::model::parser::resolve_selection_aliases(&tag, false, &app.tag_aliases);
+            for t in &tags {
+                app.session.selected_categories.push(t.clone());
+            }
 
             app.search_value = iced::widget::text_editor::Content::new();
             app.session.search_term.clear();
@@ -1221,7 +1226,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             // Auto-scroll logic is kept for JumpTo...
             let all_cats = &app.cached_categories;
-            if let Some(index) = all_cats.iter().position(|item| item.full_key == tag) {
+            let scroll_target = tags.first().unwrap_or(&tag);
+            if let Some(index) = all_cats
+                .iter()
+                .position(|item| item.full_key == *scroll_target)
+            {
                 let total = all_cats.len();
                 if total > 1 {
                     let y_offset = index as f32 / (total - 1) as f32;
@@ -1240,7 +1249,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::JumpToLocation(loc) => {
             app.sidebar_mode = SidebarMode::Locations;
             app.session.selected_locations.clear();
-            app.session.selected_locations.push(loc.clone());
+
+            let locs =
+                crate::model::parser::resolve_selection_aliases(&loc, true, &app.tag_aliases);
+            for l in &locs {
+                app.session.selected_locations.push(l.clone());
+            }
 
             app.search_value = iced::widget::text_editor::Content::new();
             app.session.search_term.clear();
@@ -1248,7 +1262,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             refresh_filtered_tasks(app);
 
             let all_locs = &app.cached_locations;
-            if let Some(index) = all_locs.iter().position(|item| item.full_key == loc) {
+            let scroll_target = locs.first().unwrap_or(&loc);
+            if let Some(index) = all_locs
+                .iter()
+                .position(|item| item.full_key == *scroll_target)
+            {
                 let total = all_locs.len();
                 if total > 1 {
                     let y_offset = index as f32 / (total - 1) as f32;

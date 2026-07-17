@@ -1598,9 +1598,16 @@ pub async fn handle_key_event(
             KeyCode::Enter => {
                 if state.input_buffer.starts_with('#') && !state.input_buffer.contains(' ') {
                     let tag = state.input_buffer.trim_start_matches('#').to_string();
+                    let tags = crate::model::parser::resolve_selection_aliases(
+                        &tag,
+                        false,
+                        &state.tag_aliases,
+                    );
                     state.sidebar_mode = SidebarMode::Categories;
                     state.selected_categories.clear();
-                    state.selected_categories.insert(tag);
+                    for t in tags {
+                        state.selected_categories.insert(t);
+                    }
                     state.active_search_query.clear();
                     state.search_collapsed_tasks.clear();
                 } else if (state.input_buffer.starts_with("@@")
@@ -1613,10 +1620,17 @@ pub async fn handle_key_event(
                         state.input_buffer.trim_start_matches("loc:")
                     };
                     let loc = crate::model::parser::strip_quotes(raw);
+                    let locs = crate::model::parser::resolve_selection_aliases(
+                        &loc,
+                        true,
+                        &state.tag_aliases,
+                    );
 
                     state.sidebar_mode = SidebarMode::Locations;
                     state.selected_locations.clear();
-                    state.selected_locations.insert(loc);
+                    for l in locs {
+                        state.selected_locations.insert(l);
+                    }
                     state.active_search_query.clear();
                     state.search_collapsed_tasks.clear();
                 } else {
@@ -2790,15 +2804,27 @@ pub async fn handle_key_event(
                                     if key.starts_with('#') {
                                         state.sidebar_mode = SidebarMode::Categories;
                                         state.selected_categories.clear();
-                                        state
-                                            .selected_categories
-                                            .insert(key.trim_start_matches('#').to_string());
+                                        let tag = key.trim_start_matches('#').to_string();
+                                        let tags = crate::model::parser::resolve_selection_aliases(
+                                            &tag,
+                                            false,
+                                            &state.tag_aliases,
+                                        );
+                                        for t in tags {
+                                            state.selected_categories.insert(t);
+                                        }
                                     } else if key.starts_with("@@") {
                                         state.sidebar_mode = SidebarMode::Locations;
                                         state.selected_locations.clear();
-                                        state
-                                            .selected_locations
-                                            .insert(key.trim_start_matches("@@").to_string());
+                                        let loc = key.trim_start_matches("@@").to_string();
+                                        let locs = crate::model::parser::resolve_selection_aliases(
+                                            &loc,
+                                            true,
+                                            &state.tag_aliases,
+                                        );
+                                        for l in locs {
+                                            state.selected_locations.insert(l);
+                                        }
                                     }
                                     state.refresh_filtered_view();
                                 } else {
@@ -2919,15 +2945,27 @@ pub async fn handle_key_event(
                                 if key.starts_with('#') {
                                     state.sidebar_mode = SidebarMode::Categories;
                                     state.selected_categories.clear();
-                                    state
-                                        .selected_categories
-                                        .insert(key.trim_start_matches('#').to_string());
+                                    let tag = key.trim_start_matches('#').to_string();
+                                    let tags = crate::model::parser::resolve_selection_aliases(
+                                        &tag,
+                                        false,
+                                        &state.tag_aliases,
+                                    );
+                                    for t in tags {
+                                        state.selected_categories.insert(t);
+                                    }
                                 } else if key.starts_with("@@") {
                                     state.sidebar_mode = SidebarMode::Locations;
                                     state.selected_locations.clear();
-                                    state
-                                        .selected_locations
-                                        .insert(key.trim_start_matches("@@").to_string());
+                                    let loc = key.trim_start_matches("@@").to_string();
+                                    let locs = crate::model::parser::resolve_selection_aliases(
+                                        &loc,
+                                        true,
+                                        &state.tag_aliases,
+                                    );
+                                    for l in locs {
+                                        state.selected_locations.insert(l);
+                                    }
                                 }
                                 state.refresh_filtered_view();
                             }

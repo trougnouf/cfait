@@ -915,6 +915,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_remove_related_to(): Int
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_resolve_selection_aliases(): Int
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_save_config(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_set_calendar_visibility(): Int
@@ -1286,6 +1288,13 @@ internal object UniffiLib {
         `taskUid`: RustBuffer.ByValue,
         `relatedUid`: RustBuffer.ByValue,
     ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_resolve_selection_aliases(
+        `ptr`: Long,
+        `selection`: RustBuffer.ByValue,
+        `isLocation`: Byte,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
 
     external fun uniffi_cfait_fn_method_cfaitmobile_save_config(
         `ptr`: Long,
@@ -1804,6 +1813,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_remove_related_to() != 592) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_resolve_selection_aliases() != 37748) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_save_config() != 10046) {
@@ -2589,6 +2601,11 @@ public interface CfaitMobileInterface {
         `taskUid`: kotlin.String,
         `relatedUid`: kotlin.String,
     )
+
+    fun `resolveSelectionAliases`(
+        `selection`: kotlin.String,
+        `isLocation`: kotlin.Boolean,
+    ): List<kotlin.String>
 
     fun `saveConfig`(`config`: MobileConfig)
 
@@ -3740,6 +3757,23 @@ open class CfaitMobile :
         // Error FFI converter
         MobileException.ErrorHandler,
     )
+
+    override fun `resolveSelectionAliases`(
+        `selection`: kotlin.String,
+        `isLocation`: kotlin.Boolean,
+    ): List<kotlin.String> =
+        FfiConverterSequenceString.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_resolve_selection_aliases(
+                        it,
+                        FfiConverterString.lower(`selection`),
+                        FfiConverterBoolean.lower(`isLocation`),
+                        _status,
+                    )
+                }
+            },
+        )
 
     @Throws(MobileException::class)
     override fun `saveConfig`(`config`: MobileConfig) =

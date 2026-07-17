@@ -557,6 +557,15 @@ impl CfaitMobile {
             .collect()
     }
 
+    pub fn resolve_selection_aliases(&self, selection: String, is_location: bool) -> Vec<String> {
+        let config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
+        crate::model::parser::resolve_selection_aliases(
+            &selection,
+            is_location,
+            &config.tag_aliases,
+        )
+    }
+
     pub fn log_message(&self, level: String, tag: String, message: String) {
         match level.to_uppercase().as_str() {
             "ERROR" => log::error!("[{}] {}", tag, message),
