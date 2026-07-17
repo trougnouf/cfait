@@ -3274,7 +3274,13 @@ impl TaskStore {
                 actions.extend(new_tasks.into_iter().map(JournalAction::Create));
             }
             AppIntent::RemoveParent { uid } => {
-                if let Ok(updated) = self.set_parent(uid, None) {
+                let new_parent = self
+                    .get_task_ref(uid)
+                    .and_then(|t| t.parent_uid.as_ref())
+                    .and_then(|p_uid| self.get_task_ref(p_uid))
+                    .and_then(|p| p.parent_uid.clone());
+
+                if let Ok(updated) = self.set_parent(uid, new_parent) {
                     actions.push(JournalAction::Update(updated));
                 }
             }

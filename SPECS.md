@@ -258,7 +258,7 @@ Tasks tagged with `is:permanent` act as endless trackers. When checked off (Comp
 *   **Tree/Relationships:** 
     *   `z`: Fold/Unfold tree.
     *   `>` / `.` : Demote (Indent / Make child of previous).
-    *   `<` / `,` : Promote (Outdent / Remove parent).
+    *   `<` / `,` : Promote (Outdent / Move one level up).
     *   `L` : Open relationship browser.
 *   **App Actions:** 
     *   `/`: Focus search.

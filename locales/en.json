@@ -516,7 +516,7 @@
     "priority_cutoff_days": "Priority cutoff (days):",
     "priority_le": "Priority <= (!):",
     "priority_rules": "Priority rules:",
-    "promote_remove_parent": "Promote (remove parent)",
+    "promote_remove_parent": "Promote (move one level up)",
     "quick_filter_icon": "Icon (nerdfonts code)",
     "quick_filter_search_term": "Search term",
     "quick_filter_show_button": "Show quick filter button",
