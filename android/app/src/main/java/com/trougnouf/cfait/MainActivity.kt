@@ -582,7 +582,7 @@ fun CfaitNavHost(
                     onBack = { navController.popBackStack() },
                     onSaveComplete = {
                         refreshLists()
-                        navController.popBackStack()
+                        navController.popBackStack("home", inclusive = false)
                     }
                 )
             }

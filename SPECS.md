@@ -93,7 +93,7 @@ Users can define reusable shortcuts that expand into multiple tags, locations, o
 
 ### 2.3. Markdown Subtask Extraction & Round-Trip Editing
 If a task's description contains Markdown lists or Headers, Cfait automatically extracts them into distinct child tasks whenever the task is saved. 
-Users can also use the "Edit Tree" action (or `Ctrl+E`) to edit an entire existing task tree as a single Markdown document.
+Users can also use the "Edit Tree" action (or `Ctrl+E`) to edit an entire existing task tree—including the root task's summary, metadata, and subtasks—as a single unified Markdown document.
 *   **Hierarchy:** Tasks nest based on indentation level (for lists) or header depth (`#`, `##`, `###`).
 *   **Parallel Tasks & Notes:** Unnumbered lists (`- [ ]`) create independent sibling actionable tasks. If a line is a header (`## Pantry`) or a plain bullet (`- eggs`), it is extracted as a "Note" task (`is_note = true`). Notes act as structural elements, hiding their checkboxes in the UI while retaining hierarchy mapping. Supported checkbox states are:
     *   `[ ]` maps to `NeedsAction` (Pending / Unstarted).

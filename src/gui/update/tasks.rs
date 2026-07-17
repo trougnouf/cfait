@@ -187,11 +187,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             let task = handle_submit(app);
 
             if let Some(uid) = to_tree {
+                if let Some(idx) = app.find_task_index_by_uid(&uid) {
+                    return Task::batch(vec![task, handle(app, Message::EditTaskStart(idx))]);
+                }
+            } else if let Some(uid) = to_desc {
                 return Task::batch(vec![task, handle(app, Message::EditTaskTree(uid))]);
-            } else if let Some(uid) = to_desc
-                && let Some(idx) = app.find_task_index_by_uid(&uid)
-            {
-                return Task::batch(vec![task, handle(app, Message::EditTaskStart(idx))]);
             }
             task
         }
@@ -221,13 +221,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
         Message::EditTaskTree(uid) => {
             if let Some(idx) = app.find_task_index_by_uid(&uid) {
-                let data = app
-                    .get_task_at_index(idx)
-                    .map(|t| (t.uid.clone(), t.to_smart_string()));
-                if let Some((task_uid, task_summary)) = data {
-                    app.input_value = text_editor::Content::with_text(&task_summary);
-                    app.input_value
-                        .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
+                let data = app.get_task_at_index(idx).map(|t| t.uid.clone());
+                if let Some(task_uid) = data {
+                    // For tree editing, we don't use the top input field for the summary anymore.
+                    // The entire tree (including root) is edited in the description field.
+                    app.input_value = text_editor::Content::new();
 
                     let tree_md =
                         crate::model::extractor::serialize_task_tree(&app.store, &task_uid);
@@ -240,7 +238,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         *focus = Focus::AddTaskInput;
                     }
 
-                    return iced::widget::operation::focus(iced::widget::Id::new("main_input"));
+                    return iced::widget::operation::focus(iced::widget::Id::new(
+                        "description_input",
+                    ));
                 }
             }
             Task::none()
@@ -1135,7 +1135,7 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
     let raw_text = app.input_value.text();
     let text_to_submit = raw_text.trim().to_string();
 
-    if text_to_submit.is_empty() {
+    if text_to_submit.is_empty() && app.editing_tree_uid.is_none() {
         app.input_value = text_editor::Content::new();
         return Task::none();
     }
@@ -1174,11 +1174,12 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
     }
 
     let trimmed = clean_input.trim();
-    if trimmed.is_empty()
-        || (!trimmed.contains(' ')
-            && (trimmed.contains(":=") || trimmed.to_lowercase().starts_with("loc:")))
-            && app.editing_uid.is_none()
-            && app.editing_tree_uid.is_none()
+    let is_alias_only = !trimmed.contains(' ')
+        && (trimmed.contains(":=") || trimmed.to_lowercase().starts_with("loc:"));
+
+    if (trimmed.is_empty() || is_alias_only)
+        && app.editing_uid.is_none()
+        && app.editing_tree_uid.is_none()
     {
         app.input_value = text_editor::Content::new();
         refresh_filtered_tasks(app);
@@ -1276,23 +1277,7 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
             }
         };
 
-        if let Some(task_ref) = app.store.get_task_ref(tree_uid) {
-            let mut task = task_ref.clone();
-            task.apply_smart_input(&clean_input, &app.tag_aliases, config_time);
-            if let Err(e) = app.store.resolve_dependencies(&mut task) {
-                app.error_msg = Some(e);
-                return Task::none();
-            }
-            if let Some(target) = task.target_collection.take() {
-                task.calendar_href =
-                    crate::model::resolve_collection(&target, &app.calendars, &task.calendar_href);
-            }
-            task.sequence += 1;
-            app.store.update_or_add_task(task.clone());
-            actions.push(crate::journal::Action::Update(task.clone()));
-            app.selected_uid = Some(task.uid.clone());
-        }
-
+        app.selected_uid = Some(tree_uid.clone());
         app.input_value = text_editor::Content::new();
         app.description_value = text_editor::Content::new();
         app.editing_tree_uid = None;

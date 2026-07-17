@@ -80,7 +80,7 @@ fn get_available_actions(state: &AppState, task: &Task) -> Vec<crate::config::Ta
             TaskAction::CompleteAndShift => {
                 task.rrule.is_some() && !is_done_or_cancelled && !task.is_relative_recurrence()
             }
-            TaskAction::EditTree => task.has_subtasks,
+            TaskAction::EditTree => true,
             TaskAction::TogglePin => true,
             TaskAction::Promote => task.parent_uid.is_some(),
             TaskAction::Yank => state.yanked_uid.is_none(),
@@ -1418,14 +1418,6 @@ pub async fn handle_key_event(
                 } else {
                     return None;
                 };
-
-                // Check has_subtasks before converting TO tree
-                if !was_tree
-                    && let Some(t) = state.store.get_task_ref(&uid)
-                    && !t.has_subtasks
-                {
-                    return None; // Prevent switching to tree if no subtasks
-                }
 
                 // Save current state
                 save_description(state, action_tx);

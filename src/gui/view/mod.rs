@@ -79,7 +79,7 @@ pub fn is_action_available(
         crate::config::TaskAction::CompleteAndShift => {
             task.rrule.is_some() && !is_done_or_cancelled && !task.is_relative_recurrence()
         }
-        crate::config::TaskAction::EditTree => task.has_subtasks,
+        crate::config::TaskAction::EditTree => true,
         crate::config::TaskAction::TogglePin => true,
         crate::config::TaskAction::Promote => task.parent_uid.is_some(),
         crate::config::TaskAction::Yank => app.yanked_uid.is_none(),
@@ -2037,7 +2037,9 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
     )
     .style(tooltip_style);
 
-    let title_row = if is_expanded {
+    let title_row = if app.editing_tree_uid.is_some() {
+        row![]
+    } else if is_expanded {
         row![container(input_title).width(Length::Fill)].align_y(iced::Alignment::Center)
     } else {
         row![container(input_title).width(Length::Fill), expand_tooltip]
@@ -2133,15 +2135,6 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
             rust_i18n::t!("editing").into_owned()
         };
 
-        let has_tree = if let Some(uid) = &app.editing_uid {
-            app.store
-                .get_task_ref(uid)
-                .map(|t| t.has_subtasks)
-                .unwrap_or(false)
-        } else {
-            false
-        };
-
         let switch_btn = if !app.creating_with_desc {
             let (icon_char, label) = if app.editing_tree_uid.is_some() {
                 (
@@ -2152,7 +2145,7 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
                         rust_i18n::t!("description_label")
                     ),
                 )
-            } else if has_tree {
+            } else {
                 (
                     icon::EDIT_TREE,
                     format!(
@@ -2161,8 +2154,6 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
                         rust_i18n::t!("edit_tree_title")
                     ),
                 )
-            } else {
-                ('\0', String::new())
             };
 
             if icon_char != '\0' {
@@ -2201,10 +2192,17 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
             .align_y(iced::Alignment::Center)
             .spacing(10);
 
-        column![top_bar, title_row, desc_container]
-            .spacing(10)
-            .height(Length::Shrink)
-            .into()
+        if app.editing_tree_uid.is_some() {
+            column![top_bar, desc_container]
+                .spacing(10)
+                .height(Length::Shrink)
+                .into()
+        } else {
+            column![top_bar, title_row, desc_container]
+                .spacing(10)
+                .height(Length::Shrink)
+                .into()
+        }
     } else {
         column![title_row].spacing(5).into()
     };

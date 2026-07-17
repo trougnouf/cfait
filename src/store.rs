@@ -1363,9 +1363,15 @@ impl TaskStore {
             return Ok(actions);
         };
 
+        let root_in_extracted = extracted
+            .iter()
+            .any(|ext| ext.parsed_existing_uid.as_deref() == Some(root_uid) || ext.uid == root_uid);
+
         let mut root_clone = self.get_task_ref(root_uid).unwrap().clone();
-        root_clone.description = clean_desc;
-        root_clone.sequence += 1;
+        if !root_in_extracted {
+            root_clone.description = clean_desc;
+            root_clone.sequence += 1;
+        }
 
         let mut active_uids = std::collections::HashSet::new();
         let mut tasks_to_update = Vec::new();
@@ -1537,7 +1543,9 @@ impl TaskStore {
         }
 
         // --- Validate dependencies atomically before mutating the store ---
-        self.resolve_dependencies(&mut root_clone)?;
+        if !root_in_extracted {
+            self.resolve_dependencies(&mut root_clone)?;
+        }
         for t in &mut tasks_to_update {
             self.resolve_dependencies(t)?;
         }
@@ -1546,8 +1554,10 @@ impl TaskStore {
         }
 
         // --- All safe, apply to store ---
-        actions.push(crate::journal::Action::Update(root_clone.clone()));
-        self.update_or_add_task(root_clone);
+        if !root_in_extracted {
+            actions.push(crate::journal::Action::Update(root_clone.clone()));
+            self.update_or_add_task(root_clone);
+        }
 
         for t in tasks_to_update {
             actions.push(crate::journal::Action::Update(t.clone()));

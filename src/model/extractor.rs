@@ -531,12 +531,6 @@ pub fn serialize_task_tree(store: &crate::store::TaskStore, root_uid: &str) -> S
         *list = result;
     }
 
-    if !root.description.is_empty() {
-        out.push_str(&root.description);
-        out.push('\n');
-        out.push('\n');
-    }
-
     fn serialize_node(
         task: &crate::model::Task,
         children_map: &std::collections::HashMap<String, Vec<&crate::model::Task>>,
@@ -563,7 +557,7 @@ pub fn serialize_task_tree(store: &crate::store::TaskStore, root_uid: &str) -> S
         let mut smart_string = task.to_smart_string();
         if task.is_note {
             if smart_string.starts_with("- ") || smart_string.starts_with("* ") {
-                smart_string = smart_string[2..].to_string();
+                smart_string = smart_string[2..].trim_start().to_string();
             } else if smart_string == "-" || smart_string == "*" {
                 smart_string = String::new();
             }
@@ -576,7 +570,7 @@ pub fn serialize_task_tree(store: &crate::store::TaskStore, root_uid: &str) -> S
         }
 
         let uid_tag = format!("<!-- uid:{} -->", task.uid);
-        let indent = "    ".repeat(depth - 1);
+        let indent = "    ".repeat(depth);
 
         // Output short UID dependencies to guarantee they are never ambiguous upon re-parsing
         let mut dep_str = String::new();
@@ -655,60 +649,7 @@ pub fn serialize_task_tree(store: &crate::store::TaskStore, root_uid: &str) -> S
         }
     }
 
-    if let Some(children) = children_map.get(root_uid) {
-        let mut prefixes = Vec::new();
-        let mut current_number = 1;
-        let mut uses_number_prev = false;
-
-        for i in 0..children.len() {
-            let child = children[i];
-            let mut uses_number = false;
-            if i > 0 {
-                let prev_child = children[i - 1];
-                if child.dependencies.contains(&prev_child.uid) {
-                    current_number += 1;
-                    uses_number = true;
-                } else if prev_child.dependencies == child.dependencies && uses_number_prev {
-                    uses_number = true;
-                } else {
-                    current_number = 1;
-                    let has_successor = children
-                        .iter()
-                        .skip(i + 1)
-                        .any(|c| c.dependencies.contains(&child.uid));
-                    if has_successor {
-                        uses_number = true;
-                    }
-                }
-            } else {
-                let has_successor = children
-                    .iter()
-                    .skip(1)
-                    .any(|c| c.dependencies.contains(&child.uid));
-                if has_successor {
-                    uses_number = true;
-                }
-            }
-
-            uses_number_prev = uses_number;
-            if uses_number {
-                prefixes.push(format!("{}.", current_number));
-            } else {
-                prefixes.push("-".to_string());
-            }
-        }
-
-        for (child, prefix) in children.iter().zip(prefixes.iter()) {
-            serialize_node(
-                child,
-                &children_map,
-                1,
-                &mut out,
-                prefix,
-                &root.calendar_href,
-            );
-        }
-    }
+    serialize_node(root, &children_map, 0, &mut out, "-", &root.calendar_href);
 
     out.trim_end().to_string()
 }
