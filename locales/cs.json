@@ -165,6 +165,7 @@
     "error_cannot_delete_default_calendar": "Nelze smazat výchozí kalendář",
     "error_cannot_depend_on_self": "Nelze záviset na sobě samém!",
     "error_cannot_export_offline": "Nelze exportovat v offline režimu nebo při připojování.",
+    "error_cannot_import_to_system_calendar": "Nelze importovat do systémového kalendáře (koš/obnova).",
     "error_cannot_relate_to_self": "Nelze vztahovat k sobě samému!",
     "error_client_not_connected": "Klient není připojen",
     "error_could_not_read_file": "Chyba: nelze přečíst soubor",
@@ -291,7 +292,6 @@
     "import_failed": "Import selhal: %{error}",
     "import_failed_read_text": "Nepodařilo se přečíst soubor jako text: %{error}",
     "import_failed_to_parse": "Nepodařilo se zpracovat soubor ICS: %{error}",
-    "error_cannot_import_to_system_calendar": "Nelze importovat do systémového kalendáře (koš/obnova).",
     "import_file_name": "Soubor: %{file}",
     "import_success": {
         "one": "Úspěšně importován 1 úkol",
