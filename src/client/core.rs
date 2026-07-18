@@ -500,36 +500,129 @@ impl RustyClient {
             .first()
             .ok_or_else(|| anyhow::anyhow!(rust_i18n::t!("error_no_home_set").to_string()))?;
 
-        let cals_resp = client.request(FindCalendars::new(home_url.path())).await?;
+        let body = r#"<?xml version="1.0" encoding="utf-8" ?>
+<D:propfind xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav" xmlns:IC="http://apple.com/ns/ical/">
+  <D:prop>
+    <D:resourcetype/>
+    <D:displayname/>
+    <IC:calendar-color/>
+    <C:supported-calendar-component-set/>
+    <D:current-user-privilege-set/>
+  </D:prop>
+</D:propfind>"#;
 
+        let req = http::Request::builder()
+            .method("PROPFIND")
+            .uri(client.webdav_client.relative_uri(home_url.path())?)
+            .header("Content-Type", "application/xml; charset=utf-8")
+            .header("Depth", "1")
+            .body(body.to_string())?;
+
+        let (parts, body_bytes) = client.webdav_client.request_raw(req).await?;
+
+        if !parts.status.is_success() && parts.status != http::StatusCode::MULTI_STATUS {
+            return Err(anyhow::anyhow!(
+                "PROPFIND failed with status: {}",
+                parts.status
+            ));
+        }
+
+        let xml_str = std::str::from_utf8(&body_bytes)?;
+        let doc = roxmltree::Document::parse(xml_str)?;
         let mut calendars = Vec::new();
-        for col in cals_resp.calendars {
-            let name = client
-                .request(GetProperty::new(&col.href, &names::DISPLAY_NAME))
-                .await
-                .ok()
-                .and_then(|r| r.value)
-                .unwrap_or_else(|| col.href.clone());
 
-            let color = client
-                .request(GetProperty::new(&col.href, &APPLE_COLOR))
-                .await
-                .ok()
-                .and_then(|r| r.value);
+        for response in doc
+            .descendants()
+            .filter(|n| n.tag_name().name().eq_ignore_ascii_case("response"))
+        {
+            let mut is_calendar = false;
+            let mut href = String::new();
+            let mut displayname = None;
+            let mut color = None;
+            let mut comps = Vec::new();
+            let mut can_write = false;
+            let mut has_privilege_set = false;
 
-            let (comps, can_write) = self
-                .get_supported_components(&col.href)
-                .await
-                .unwrap_or_else(|_| (Vec::new(), true));
+            for child in response.children() {
+                let name = child.tag_name().name();
+                if name.eq_ignore_ascii_case("href") {
+                    href = child.text().unwrap_or("").to_string();
+                } else if name.eq_ignore_ascii_case("propstat") {
+                    for propstat_child in child.children() {
+                        if propstat_child
+                            .tag_name()
+                            .name()
+                            .eq_ignore_ascii_case("prop")
+                        {
+                            for prop in propstat_child.children() {
+                                let prop_name = prop.tag_name().name();
+                                if prop_name.eq_ignore_ascii_case("resourcetype") {
+                                    for rt_child in prop.children() {
+                                        if rt_child
+                                            .tag_name()
+                                            .name()
+                                            .eq_ignore_ascii_case("calendar")
+                                        {
+                                            is_calendar = true;
+                                        }
+                                    }
+                                } else if prop_name.eq_ignore_ascii_case("displayname") {
+                                    displayname = prop.text().map(|s| s.to_string());
+                                } else if prop_name.eq_ignore_ascii_case("calendar-color") {
+                                    color = prop.text().map(|s| s.to_string());
+                                } else if prop_name
+                                    .eq_ignore_ascii_case("supported-calendar-component-set")
+                                {
+                                    for comp in prop.children() {
+                                        if comp.tag_name().name().eq_ignore_ascii_case("comp")
+                                            && let Some(comp_name) = comp.attribute("name")
+                                        {
+                                            comps.push(comp_name.to_uppercase());
+                                        }
+                                    }
+                                } else if prop_name
+                                    .eq_ignore_ascii_case("current-user-privilege-set")
+                                {
+                                    has_privilege_set = true;
+                                    for priv_node in prop.children() {
+                                        if priv_node
+                                            .tag_name()
+                                            .name()
+                                            .eq_ignore_ascii_case("privilege")
+                                        {
+                                            for priv_child in priv_node.children() {
+                                                let priv_name = priv_child.tag_name().name();
+                                                if priv_name.eq_ignore_ascii_case("write")
+                                                    || priv_name
+                                                        .eq_ignore_ascii_case("write-content")
+                                                    || priv_name.eq_ignore_ascii_case("bind")
+                                                    || priv_name.eq_ignore_ascii_case("all")
+                                                {
+                                                    can_write = true;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
-            if can_write && comps.iter().any(|c| c.eq_ignore_ascii_case("VTODO")) {
+            if !has_privilege_set {
+                can_write = true;
+            }
+
+            if is_calendar && can_write && comps.iter().any(|c| c.eq_ignore_ascii_case("VTODO")) {
                 calendars.push(CalendarListEntry {
-                    name,
-                    href: col.href,
+                    name: displayname.unwrap_or_else(|| href.clone()),
+                    href,
                     color,
                 });
             }
         }
+
         Ok(calendars)
     }
 
