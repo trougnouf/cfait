@@ -538,6 +538,7 @@ pub fn serialize_task_tree(store: &crate::store::TaskStore, root_uid: &str) -> S
         out: &mut String,
         prefix: &str,
         root_href: &str,
+        store: &crate::store::TaskStore,
     ) {
         let status_str = if task.is_note {
             String::new()
@@ -572,16 +573,40 @@ pub fn serialize_task_tree(store: &crate::store::TaskStore, root_uid: &str) -> S
         let uid_tag = format!("<!-- uid:{} -->", task.uid);
         let indent = "    ".repeat(depth);
 
-        // Output short UID dependencies to guarantee they are never ambiguous upon re-parsing
+        // Output short UID dependencies and relations to guarantee they are never ambiguous upon re-parsing
         let mut dep_str = String::new();
-        for dep_uid in &task.dependencies {
-            let short_uid = if dep_uid.len() >= 8 {
-                &dep_uid[..8]
-            } else {
-                dep_uid
-            };
-            dep_str.push_str(&format!(" dep:{}", short_uid));
-        }
+
+        let process_relations = |uids: &[String], prefix: &str, out: &mut String| {
+            for uid in uids {
+                // Skip trashed/recovered/missing references so they self-heal (disappear) on save
+                if let Some(target_task) = store.get_task_ref(uid) {
+                    if target_task.calendar_href == crate::storage::LOCAL_TRASH_HREF
+                        || target_task.calendar_href == "local://recovery"
+                    {
+                        continue;
+                    }
+                } else {
+                    // Task is completely missing (hard-deleted). Skip to self-heal.
+                    continue;
+                }
+
+                // Only truncate if it is actually a valid UUID. If another client injected a raw string,
+                // quote it so it can be cleanly resolved upon re-parsing.
+                let display_val = if uid.len() == 36 && uuid::Uuid::parse_str(uid).is_ok() {
+                    &uid[..8]
+                } else {
+                    uid
+                };
+                out.push_str(&format!(
+                    " {}:{}",
+                    prefix,
+                    crate::model::parser::quote_value(display_val)
+                ));
+            }
+        };
+
+        process_relations(&task.dependencies, "dep", &mut dep_str);
+        process_relations(&task.related_to, "rel", &mut dep_str);
 
         out.push_str(&format!(
             "{}{}{}{}{}{} {}\n",
@@ -644,12 +669,28 @@ pub fn serialize_task_tree(store: &crate::store::TaskStore, root_uid: &str) -> S
             }
 
             for (child, prefix) in children.iter().zip(prefixes.iter()) {
-                serialize_node(child, children_map, depth + 1, out, prefix, root_href);
+                serialize_node(
+                    child,
+                    children_map,
+                    depth + 1,
+                    out,
+                    prefix,
+                    root_href,
+                    store,
+                );
             }
         }
     }
 
-    serialize_node(root, &children_map, 0, &mut out, "-", &root.calendar_href);
+    serialize_node(
+        root,
+        &children_map,
+        0,
+        &mut out,
+        "-",
+        &root.calendar_href,
+        store,
+    );
 
     out.trim_end().to_string()
 }

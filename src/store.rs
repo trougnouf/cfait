@@ -827,21 +827,24 @@ impl TaskStore {
         let mut partial_matches = Vec::new();
 
         for (href, map) in &self.calendars {
-            // Ignore trashed or recovered tasks when fuzzy matching by title/partial UID
-            if href == crate::storage::LOCAL_TRASH_HREF || href == "local://recovery" {
-                continue;
-            }
+            let is_system = href == crate::storage::LOCAL_TRASH_HREF || href == "local://recovery";
+
             for (uid, task) in map {
+                // UID prefix matches ALWAYS search all calendars (including trash/recovery)
+                // so we can resolve legacy dangling references and clean them up
                 if uid.starts_with(clean_ref) {
                     exact_uid_match = Some(uid.clone());
                     exact_uid_count += 1;
                 }
-                if task.summary.to_lowercase() == lower_ref {
-                    exact_sum_match = Some(uid.clone());
-                    exact_sum_count += 1;
-                }
-                if task.summary.to_lowercase().contains(&lower_ref) {
-                    partial_matches.push((uid.clone(), task.summary.clone()));
+
+                if !is_system {
+                    if task.summary.to_lowercase() == lower_ref {
+                        exact_sum_match = Some(uid.clone());
+                        exact_sum_count += 1;
+                    }
+                    if task.summary.to_lowercase().contains(&lower_ref) {
+                        partial_matches.push((uid.clone(), task.summary.clone()));
+                    }
                 }
             }
         }
@@ -880,11 +883,20 @@ impl TaskStore {
     pub fn resolve_dependencies(&self, task: &mut Task) -> Result<(), String> {
         let mut resolved_deps = Vec::new();
         for dep in &task.dependencies {
-            if dep.len() == 36 && uuid::Uuid::parse_str(dep).is_ok() {
-                resolved_deps.push(dep.clone());
+            let uid = if dep.len() == 36 && uuid::Uuid::parse_str(dep).is_ok() {
+                dep.clone()
+            } else {
+                self.resolve_dependency_ref(dep)?
+            };
+
+            // Auto-heal: Strip out dependencies that point to trashed/recovered tasks
+            if let Some(t) = self.get_task_ref(&uid)
+                && (t.calendar_href == crate::storage::LOCAL_TRASH_HREF
+                    || t.calendar_href == "local://recovery")
+            {
                 continue;
             }
-            let uid = self.resolve_dependency_ref(dep)?;
+
             resolved_deps.push(uid);
         }
         resolved_deps.sort();
@@ -893,11 +905,20 @@ impl TaskStore {
 
         let mut resolved_rels = Vec::new();
         for rel in &task.related_to {
-            if rel.len() == 36 && uuid::Uuid::parse_str(rel).is_ok() {
-                resolved_rels.push(rel.clone());
+            let uid = if rel.len() == 36 && uuid::Uuid::parse_str(rel).is_ok() {
+                rel.clone()
+            } else {
+                self.resolve_dependency_ref(rel)?
+            };
+
+            // Auto-heal: Strip out relations that point to trashed/recovered tasks
+            if let Some(t) = self.get_task_ref(&uid)
+                && (t.calendar_href == crate::storage::LOCAL_TRASH_HREF
+                    || t.calendar_href == "local://recovery")
+            {
                 continue;
             }
-            let uid = self.resolve_dependency_ref(rel)?;
+
             resolved_rels.push(uid);
         }
         resolved_rels.sort();
@@ -3129,6 +3150,53 @@ impl TaskStore {
         self.children_index.keys().cloned().collect()
     }
 
+    /// Removes all relationships (parent, dependencies, related_to) pointing to `target_uid`
+    /// from other tasks in the store. Returns the journal actions for the updated tasks.
+    pub fn cleanup_references(&mut self, target_uid: &str) -> Vec<crate::journal::Action> {
+        let mut actions = Vec::new();
+        let mut to_update = Vec::new();
+
+        if let Some(blocked) = self.blocking_index.get(target_uid) {
+            to_update.extend(blocked.iter().cloned());
+        }
+        if let Some(related) = self.related_from_index.get(target_uid) {
+            to_update.extend(related.iter().cloned());
+        }
+        if let Some(children) = self.children_index.get(target_uid) {
+            to_update.extend(children.iter().cloned());
+        }
+
+        to_update.sort();
+        to_update.dedup();
+
+        for uid in to_update {
+            if let Some(task_ref) = self.get_task_ref(&uid) {
+                let mut task = task_ref.clone();
+                let mut changed = false;
+
+                if let Some(pos) = task.dependencies.iter().position(|d| d == target_uid) {
+                    task.dependencies.remove(pos);
+                    changed = true;
+                }
+                if let Some(pos) = task.related_to.iter().position(|r| r == target_uid) {
+                    task.related_to.remove(pos);
+                    changed = true;
+                }
+                if task.parent_uid.as_deref() == Some(target_uid) {
+                    task.parent_uid = None;
+                    changed = true;
+                }
+
+                if changed {
+                    task.sequence += 1;
+                    actions.push(crate::journal::Action::Update(task.clone()));
+                    self.update_or_add_task(task);
+                }
+            }
+        }
+        actions
+    }
+
     /// Applies a Task-related AppIntent to the in-memory store and returns the list of
     /// persistence Actions that should be written to the journal/server.
     /// This method ignores Session-related intents (like SetSearchTerm).
@@ -3192,6 +3260,9 @@ impl TaskStore {
                 }
             }
             AppIntent::DeleteTask { uid } => {
+                let cleanup_actions = self.cleanup_references(uid);
+                actions.extend(cleanup_actions);
+
                 if let Some((deleted, trashed_opt)) =
                     self.soft_delete_task(uid, config.trash_retention_days)
                 {
@@ -3202,6 +3273,14 @@ impl TaskStore {
                 }
             }
             AppIntent::DeleteTaskTree { uid } => {
+                let uids = self.get_descendant_uids(uid);
+                let mut all_uids = uids;
+                all_uids.push(uid.clone());
+
+                for u in &all_uids {
+                    actions.extend(self.cleanup_references(u));
+                }
+
                 let pairs = self.soft_delete_task_tree(uid, config.trash_retention_days);
                 for (deleted, trashed_opt) in pairs {
                     actions.push(JournalAction::Delete(deleted));

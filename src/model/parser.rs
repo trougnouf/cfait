@@ -2549,6 +2549,8 @@ pub fn apply_smart_input(
     task.categories.clear();
     task.alarms.clear();
     task.exdates.clear();
+    task.dependencies.clear();
+    task.related_to.clear();
     task.percent_complete = None;
 
     let mut explicit_note_flag: Option<bool> = None;
