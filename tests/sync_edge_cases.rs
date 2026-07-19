@@ -91,9 +91,10 @@ async fn test_sync_ignores_companion_events_to_prevent_multiget_spam() {
     let url = server.url();
     let cal_path = "/cal/";
 
-    // 1. Mock the PROPFIND listing returning ONE valid task and ONE companion event
+    // 1. Mock the REPORT (calendar-query for VTODO) listing returning ONE valid task
+    // Note: The evt- companion event should be filtered out by the VTODO filter
     let mock_list = server
-        .mock("PROPFIND", cal_path)
+        .mock("REPORT", cal_path)
         .match_header("depth", "1")
         .with_status(207)
         .with_body(r#"
@@ -101,10 +102,6 @@ async fn test_sync_ignores_companion_events_to_prevent_multiget_spam() {
                 <d:response>
                     <d:href>/cal/valid-task.ics</d:href>
                     <d:propstat><d:prop><d:getetag>"1"</d:getetag></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat>
-                </d:response>
-                <d:response>
-                    <d:href>/cal/evt-valid-task-start.ics</d:href>
-                    <d:propstat><d:prop><d:getetag>"2"</d:getetag></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat>
                 </d:response>
             </d:multistatus>
         "#)

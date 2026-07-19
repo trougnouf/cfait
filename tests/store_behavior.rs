@@ -749,7 +749,8 @@ async fn test_companion_events_batching() {
     task1.calendar_href = format!("{}/cal/", url);
     task1.href = format!("{}/cal/t1.ics", url);
 
-    let _mock_report = server
+    // First call to delete_all_companion_events should find no events
+    let _mock_report_empty = server
         .mock("REPORT", "/cal/")
         .with_status(207)
         .with_body(r#"<d:multistatus xmlns:d="DAV:"></d:multistatus>"#)
@@ -761,6 +762,14 @@ async fn test_companion_events_batching() {
         .await
         .unwrap();
     assert_eq!(count, 0);
+
+    // Second call to sync_multiple_companion_events should find 3 legacy events
+    let _mock_report_legacy = server
+        .mock("REPORT", "/cal/")
+        .with_status(207)
+        .with_body(r#"<d:multistatus xmlns:d="DAV:"><d:response><d:href>/cal/evt-t1-reminder.ics</d:href><d:propstat><d:prop><d:getetag>"abc123"</d:getetag></d:prop></d:propstat></d:response><d:response><d:href>/cal/evt-t1-deadline.ics</d:href><d:propstat><d:prop><d:getetag>"abc123"</d:getetag></d:prop></d:propstat></d:response><d:response><d:href>/cal/evt-t1-session.ics</d:href><d:propstat><d:prop><d:getetag>"abc123"</d:getetag></d:prop></d:propstat></d:response></d:multistatus>"#)
+        .create_async()
+        .await;
 
     let count = client
         .sync_multiple_companion_events(&[task1], true, false)

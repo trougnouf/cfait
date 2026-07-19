@@ -755,20 +755,16 @@ impl RustyClient {
         }
     }
 
-    pub async fn get_companion_events(
-        &self,
-        calendar_href: &str,
-        task_uid: Option<&str>,
-    ) -> anyhow::Result<Vec<String>> {
+    pub async fn get_companion_events(&self, calendar_href: &str) -> anyhow::Result<Vec<String>> {
         let client = self
             .client
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Offline"))?;
         let path = strip_host(calendar_href);
 
-        let body = if let Some(uid) = task_uid {
-            format!(
-                r#"<?xml version="1.0" encoding="utf-8" ?>
+        // Filter strictly by the standard UID property to avoid downloading the entire calendar,
+        // while bypassing full-db scans caused by custom X- properties.
+        let body = r#"<?xml version="1.0" encoding="utf-8" ?>
 <C:calendar-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
   <D:prop>
     <D:getetag/>
@@ -776,33 +772,14 @@ impl RustyClient {
   <C:filter>
     <C:comp-filter name="VCALENDAR">
       <C:comp-filter name="VEVENT">
-        <C:prop-filter name="X-CFAIT-TASK-UID">
-          <C:text-match collation="i;ascii-casemap">{}</C:text-match>
-        </C:prop-filter>
-      </C:comp-filter>
-    </C:comp-filter>
-  </C:filter>
-</C:calendar-query>"#,
-                xml_escape(uid)
-            )
-        } else {
-            r#"<?xml version="1.0" encoding="utf-8" ?>
-<C:calendar-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
-  <D:prop>
-    <D:getetag/>
-  </D:prop>
-  <C:filter>
-    <C:comp-filter name="VCALENDAR">
-      <C:comp-filter name="VEVENT">
-        <C:prop-filter name="X-CFAIT-TASK-UID">
-          <C:is-defined/>
+        <C:prop-filter name="UID">
+          <C:text-match match-type="starts-with" collation="i;ascii-casemap">evt-</C:text-match>
         </C:prop-filter>
       </C:comp-filter>
     </C:comp-filter>
   </C:filter>
 </C:calendar-query>"#
-                .to_string()
-        };
+            .to_string();
 
         let base = client.base_url();
         let scheme = base.scheme_str().unwrap_or("https");
@@ -829,20 +806,14 @@ impl RustyClient {
             .await
             .map_err(|e| anyhow::anyhow!("REPORT failed: {:?}", e))?;
 
-        // Fallback: Strict CalDAV servers might reject REPORT with custom X-properties with 403 or 400.
+        // Fallback: If the server rejects the REPORT, gracefully scan the directory structure
         if !parts.status.is_success() && parts.status != StatusCode::MULTI_STATUS {
             let list_resp = client.request(ListResources::new(&path)).await?;
             let mut hrefs = Vec::new();
             for res in list_resp.resources {
                 let filename = res.href.split('/').next_back().unwrap_or("");
                 if filename.starts_with("evt-") && filename.ends_with(".ics") {
-                    if let Some(uid) = task_uid {
-                        if filename.starts_with(&format!("evt-{}", uid)) {
-                            hrefs.push(res.href);
-                        }
-                    } else {
-                        hrefs.push(res.href);
-                    }
+                    hrefs.push(res.href);
                 }
             }
             return Ok(hrefs);
@@ -1047,7 +1018,7 @@ impl RustyClient {
 
         for (cal_path, cal_tasks) in by_calendar {
             let existing_hrefs = self
-                .get_companion_events(&cal_path, None)
+                .get_companion_events(&cal_path)
                 .await
                 .unwrap_or_default();
 
@@ -1151,7 +1122,7 @@ impl RustyClient {
             .ok_or_else(|| anyhow::anyhow!("Offline"))?;
         let path = strip_host(calendar_href);
 
-        let hrefs = self.get_companion_events(&path, None).await?;
+        let hrefs = self.get_companion_events(&path).await?;
         let count = hrefs.len();
 
         if count == 0 {
@@ -1169,6 +1140,98 @@ impl RustyClient {
         while stream.next().await.is_some() {}
 
         Ok(count)
+    }
+
+    async fn get_vtodo_etags(
+        &self,
+        calendar_href: &str,
+    ) -> anyhow::Result<HashMap<String, String>> {
+        let client = self
+            .client
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Offline"))?;
+        let path = strip_host(calendar_href);
+        let body = r#"<?xml version="1.0" encoding="utf-8" ?>
+<C:calendar-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:prop>
+    <D:getetag/>
+  </D:prop>
+  <C:filter>
+    <C:comp-filter name="VCALENDAR">
+      <C:comp-filter name="VTODO"/>
+    </C:comp-filter>
+  </C:filter>
+</C:calendar-query>"#
+            .to_string();
+
+        let base = client.base_url();
+        let scheme = base.scheme_str().unwrap_or("https");
+        let authority = base.authority().map(|a| a.as_str()).unwrap_or("");
+        let clean_path = if path.starts_with('/') {
+            path.clone()
+        } else {
+            format!("/{}", path)
+        };
+        let absolute_destination = format!("{}://{}{}", scheme, authority, clean_path);
+
+        let req = Request::builder()
+            .method("REPORT")
+            .uri(absolute_destination)
+            .header("Content-Type", "application/xml; charset=utf-8")
+            .header("Depth", "1")
+            .body(body)
+            .map_err(|e| anyhow::anyhow!("Request build failed: {}", e))?;
+
+        let (parts, body_bytes) = client
+            .webdav_client
+            .request_raw(req)
+            .await
+            .map_err(|e| anyhow::anyhow!("REPORT failed: {:?}", e))?;
+        let mut results = HashMap::new();
+
+        if !parts.status.is_success() && parts.status != StatusCode::MULTI_STATUS {
+            let list_resp = client.request(ListResources::new(&path)).await?;
+            for res in list_resp.resources {
+                if !res.href.ends_with(".ics") {
+                    continue;
+                }
+                let filename = res.href.split('/').next_back().unwrap_or("");
+                if filename.starts_with("evt-") && filename.len() >= 40 {
+                    continue;
+                }
+                if let Some(etag) = res.etag {
+                    results.insert(res.href, etag);
+                }
+            }
+            return Ok(results);
+        }
+
+        let xml_str = std::str::from_utf8(&body_bytes).unwrap_or("");
+        if let Ok(doc) = roxmltree::Document::parse(xml_str) {
+            for response in doc
+                .descendants()
+                .filter(|n| n.tag_name().name().eq_ignore_ascii_case("response"))
+            {
+                let mut href = String::new();
+                let mut etag = String::new();
+                for child in response.descendants() {
+                    let name = child.tag_name().name();
+                    if name.eq_ignore_ascii_case("href") {
+                        if let Some(text) = child.text() {
+                            href = text.to_string();
+                        }
+                    } else if name.eq_ignore_ascii_case("getetag")
+                        && let Some(text) = child.text()
+                    {
+                        etag = text.to_string();
+                    }
+                }
+                if !href.is_empty() && !etag.is_empty() && href.ends_with(".ics") {
+                    results.insert(href, etag);
+                }
+            }
+        }
+        Ok(results)
     }
 
     pub(crate) async fn fetch_remote_task(&self, task_href: &str) -> Option<Task> {
@@ -1287,10 +1350,8 @@ impl RustyClient {
             }
 
             // Otherwise, enumerate & multiget as needed
-            let list_resp = client
-                .request(ListResources::new(&path_href))
-                .await
-                .map_err(|e| anyhow::anyhow!("PROPFIND: {:?}", e))?;
+            // Use targeted calendar-query to exclude VEVENTs and fetch only VTODO ETags
+            let vtodo_etags = self.get_vtodo_etags(&path_href).await?;
 
             let mut cache_map: HashMap<String, Task> = HashMap::new();
             for t in cached_tasks {
@@ -1305,22 +1366,11 @@ impl RustyClient {
             fn clean_etag(e: &str) -> String {
                 e.trim_start_matches("W/").trim_matches('"').to_string()
             }
-            // Map from stripped href to raw ETag from PROPFIND response
+            // Map from stripped href to raw ETag from REPORT response
             let mut href_to_raw_etag: HashMap<String, String> = HashMap::new();
 
-            for resource in list_resp.resources {
-                if !resource.href.ends_with(".ics") {
-                    continue;
-                }
-
-                let res_href_stripped = strip_host(&resource.href);
-
-                // --- FIX 1: Ignore VEVENT companions during Task sync to stop Multiget spam ---
-                let filename = res_href_stripped.split('/').next_back().unwrap_or("");
-                if filename.starts_with("evt-") && filename.len() >= 40 {
-                    continue;
-                }
-                // ------------------------------------------------------------------------------
+            for (raw_href, raw_etag) in vtodo_etags {
+                let res_href_stripped = strip_host(&raw_href);
 
                 let should_skip = if let Some(cached) = cache_map.get(&res_href_stripped) {
                     pending_deletions.contains(&cached.uid)
@@ -1334,12 +1384,10 @@ impl RustyClient {
                 }
 
                 server_hrefs.insert(res_href_stripped.clone());
-                let remote_etag = resource.etag;
+                let remote_etag = Some(raw_etag.clone());
 
                 // Store RAW ETag for later use in calendar-multiget
-                if let Some(ref etag) = remote_etag {
-                    href_to_raw_etag.insert(res_href_stripped.clone(), etag.clone());
-                }
+                href_to_raw_etag.insert(res_href_stripped.clone(), raw_etag);
 
                 let remote_etag_cleaned = remote_etag.as_deref().map(clean_etag);
 
