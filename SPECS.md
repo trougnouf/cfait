@@ -227,7 +227,7 @@ Tasks tagged with `is:permanent` act as endless trackers. When checked off (Comp
 ### 5.3. Mobile Interface (Android)
 *Powered by Jetpack Compose. Touch-optimized.*
 *   **Layout:** 
-    *   *Top Bar:* Search toggle, Quick Filter, Random Jump, Settings.
+    *   *Top Bar:* Random Jump, Quick Filter, Search toggle, Refresh/Sync, Settings.
     *   *Tabs:* Desktop "Sidebar" is translated into horizontal `HorizontalPager` tabs. Pull-to-refresh triggers manual sync.
     *   *Navigation Drawer:* Swipe from the left edge to switch between Calendars, Tags, Locations, Goals view modes. (Swipe logic uses custom pointer interception to avoid conflicting with tab paging).
 *   **Task List Rendering:** `LazyColumn`. Real-time relative duration formatting via coroutines (`liveDurationMins`). Real-time syntax highlighting in input via `VisualTransformation`.
