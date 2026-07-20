@@ -169,12 +169,12 @@ When completing a recurring task:
 *   Selecting this virtual row toggles visibility of the hidden completed items. State is transient (in-memory only).
 *   **Tree Navigation & Expansion (Tags, Locations, Tasks)**
     *   Tags and Locations automatically expand transiently to reveal their active selection, returning to their configured collapsed state when unselected.
-        *   **Search Context & Tree Filtering:** When searching, the task tree is filtered to show exact matches alongside their full ancestry and descendants.
-            *   *Direct Matches:* Tasks that explicitly match the query.
-            *   *Descendants:* All subtasks of a direct match are fully visible and treated as matches.
-            *   *Ancestors (Context):* Parent tasks all the way to the root are included to provide structural context, but are visually dimmed.
+        *   **Search & Filter Context:** When searching or filtering by tags/locations, the task tree is filtered to show exact matches alongside their full ancestry and descendants.
+            *   *Direct Matches:* Tasks that explicitly match the active filters.
+            *   *Descendants:* All subtasks of a direct match are fully visible and treated as matches (inheriting the parent's context).
+            *   *Ancestors (Context):* Parent tasks all the way to the root are included to provide structural context, but are visually dimmed (`is_search_context = true`).
             *   *Unrelated Siblings:* Branches without any matches are completely hidden.
-        *   During searches, all matching tasks are automatically expanded. Users can manually collapse them, but this state is overridden on new searches.
+        *   During active searches or filtering, all matching task trees are automatically expanded. Users can manually collapse them, but this state is overridden on new queries.
 
 ### 4.4. Companion Events (Calendar Integration)
 If `create_events_for_tasks` is enabled or `+cal` is used:
