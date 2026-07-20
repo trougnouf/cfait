@@ -791,95 +791,101 @@ fun SettingsScreen(
                     Text(stringResource(R.string.sort_collections_by_size))
                 }
             }
-            items(allCalendars, key = { it.href }) { cal ->
-                CollectionEditor(
-                    cal = cal,
-                    isLocal = cal.isLocal,
-                    isEnabled = !disabledSet.contains(cal.href),
-                    showMoveButtons = !sortCollectionsBySize,
-                    onToggleEnabled = { enabled ->
-                        val newSet = disabledSet.toMutableSet()
-                        if (enabled) newSet.remove(cal.href) else newSet.add(cal.href)
-                        disabledSet = newSet
-                        saveToDisk()
-                    },
-                    onUpdate = { name, color ->
-                        scope.launch {
-                            try {
-                                if (cal.isLocal) {
-                                    api.updateLocalCalendar(cal.href, name, color)
-                                } else {
-                                    api.updateRemoteCalendar(cal.href, name, color)
-                                    com.trougnouf.cfait.ui.triggerBackgroundSync(context, api)
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    allCalendars.forEach { cal ->
+                        key(cal.href) {
+                            CollectionEditor(
+                                cal = cal,
+                                isLocal = cal.isLocal,
+                                isEnabled = !disabledSet.contains(cal.href),
+                                showMoveButtons = !sortCollectionsBySize,
+                                onToggleEnabled = { enabled ->
+                                    val newSet = disabledSet.toMutableSet()
+                                    if (enabled) newSet.remove(cal.href) else newSet.add(cal.href)
+                                    disabledSet = newSet
+                                    saveToDisk()
+                                },
+                                onUpdate = { name, color ->
+                                    scope.launch {
+                                        try {
+                                            if (cal.isLocal) {
+                                                api.updateLocalCalendar(cal.href, name, color)
+                                            } else {
+                                                api.updateRemoteCalendar(cal.href, name, color)
+                                                com.trougnouf.cfait.ui.triggerBackgroundSync(context, api)
+                                            }
+                                            status = context.getString(R.string.collection_updated)
+                                            reload()
+                                        } catch (e: Exception) {
+                                            if (e is kotlinx.coroutines.CancellationException) throw e
+                                            status = context.getString(R.string.error_general, e.message ?: "")
+                                        }
+                                    }
+                                },
+                                onDelete = {
+                                    if (cal.isLocal) {
+                                        scope.launch {
+                                            try {
+                                                api.deleteLocalCalendar(cal.href)
+                                                reload()
+                                            } catch (e: Exception) {
+                                                if (e is kotlinx.coroutines.CancellationException) throw e
+                                                status = context.getString(R.string.error_general, e.message ?: "")
+                                            }
+                                        }
+                                    }
+                                },
+                                onExport = {
+                                    if (cal.isLocal) {
+                                        try {
+                                            val icsContent = api.exportLocalIcs(cal.href)
+                                            val calId = cal.href.removePrefix("local://")
+                                            val file = File(context.cacheDir, "cfait_${calId}.ics")
+                                            file.writeText(icsContent)
+                                            val uri = FileProvider.getUriForFile(
+                                                context,
+                                                "${context.packageName}.fileprovider",
+                                                file
+                                            )
+                                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                                type = "text/calendar"
+                                                putExtra(Intent.EXTRA_STREAM, uri)
+                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            }
+                                            val shareIntent = Intent.createChooser(intent, "Export ${cal.name}")
+                                            context.startActivity(shareIntent)
+                                        } catch (e: Exception) {
+                                            status = context.getString(R.string.export_error, e.message ?: "")
+                                        }
+                                    }
+                                },
+                                onImport = {
+                                    if (cal.isLocal) {
+                                        importTargetHref = cal.href
+                                        importLauncher.launch("*/*")
+                                    }
+                                },
+                                onMoveUp = {
+                                    scope.launch {
+                                        try {
+                                            api.moveCalendar(cal.href, -1)
+                                            reload()
+                                        } catch (e: Exception) {}
+                                    }
+                                },
+                                onMoveDown = {
+                                    scope.launch {
+                                        try {
+                                            api.moveCalendar(cal.href, 1)
+                                            reload()
+                                        } catch (e: Exception) {}
+                                    }
                                 }
-                                status = context.getString(R.string.collection_updated)
-                                reload()
-                            } catch (e: Exception) {
-                                if (e is kotlinx.coroutines.CancellationException) throw e
-                                status = context.getString(R.string.error_general, e.message ?: "")
-                            }
-                        }
-                    },
-                    onDelete = {
-                        if (cal.isLocal) {
-                            scope.launch {
-                                try {
-                                    api.deleteLocalCalendar(cal.href)
-                                    reload()
-                                } catch (e: Exception) {
-                                    if (e is kotlinx.coroutines.CancellationException) throw e
-                                    status = context.getString(R.string.error_general, e.message ?: "")
-                                }
-                            }
-                        }
-                    },
-                    onExport = {
-                        if (cal.isLocal) {
-                            try {
-                                val icsContent = api.exportLocalIcs(cal.href)
-                                val calId = cal.href.removePrefix("local://")
-                                val file = File(context.cacheDir, "cfait_${calId}.ics")
-                                file.writeText(icsContent)
-                                val uri = FileProvider.getUriForFile(
-                                    context,
-                                    "${context.packageName}.fileprovider",
-                                    file
-                                )
-                                val intent = Intent(Intent.ACTION_SEND).apply {
-                                    type = "text/calendar"
-                                    putExtra(Intent.EXTRA_STREAM, uri)
-                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                }
-                                val shareIntent = Intent.createChooser(intent, "Export ${cal.name}")
-                                context.startActivity(shareIntent)
-                            } catch (e: Exception) {
-                                status = context.getString(R.string.export_error, e.message ?: "")
-                            }
-                        }
-                    },
-                    onImport = {
-                        if (cal.isLocal) {
-                            importTargetHref = cal.href
-                            importLauncher.launch("*/*")
-                        }
-                    },
-                    onMoveUp = {
-                        scope.launch {
-                            try {
-                                api.moveCalendar(cal.href, -1)
-                                reload()
-                            } catch (e: Exception) {}
-                        }
-                    },
-                    onMoveDown = {
-                        scope.launch {
-                            try {
-                                api.moveCalendar(cal.href, 1)
-                                reload()
-                            } catch (e: Exception) {}
+                            )
                         }
                     }
-                )
+                }
             }
             item {
                 Row(
@@ -1247,7 +1253,7 @@ fun CollectionEditor(
         ),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(vertical = 8.dp, horizontal = 12.dp)) {
+        Column(modifier = Modifier.padding(vertical = 4.dp, horizontal = 12.dp)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -1273,6 +1279,10 @@ fun CollectionEditor(
                     singleLine = true,
                     textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp)
                 )
+
+                if (isLocal) {
+                    NfIcon(NfIcons.CLOUD_OFFLINE, 18.sp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                }
 
                 val colorVal = cal.color?.let { parseHexColor(it) } ?: Color.Gray
                 Box(

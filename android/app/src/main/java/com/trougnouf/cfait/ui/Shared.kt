@@ -426,6 +426,7 @@ object NfIcons {
     val UNSYNCED = get(0xf0c2)
     val EXPORT = get(0xf093)
     val IMPORT = get(0xf019)
+    val CLOUD_OFFLINE = get(0xf4ad)
     val HELP = get(0xf0625)
     val BLOCKED = get(0xf479)
     val CHILD = get(0xf0a89)
