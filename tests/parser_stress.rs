@@ -236,7 +236,7 @@ fn test_case_insensitivity() {
     // Explicit keys
     assert_eq!(
         parse("URL:example.com").url,
-        Some("example.com".to_string())
+        Some("https://example.com".to_string())
     );
     assert_eq!(parse("LOC:Home").location, Some("Home".to_string()));
 }
@@ -312,7 +312,7 @@ fn test_kitchen_sink() {
     assert!(t.categories.contains(&"work".to_string()));
     assert!(t.categories.contains(&"urgent".to_string()));
     assert_eq!(t.location, Some("Office".to_string()));
-    assert_eq!(t.url, Some("github.com".to_string()));
+    assert_eq!(t.url, Some("https://github.com".to_string()));
     assert_eq!(t.description, "Check PR");
 }
 
