@@ -106,7 +106,10 @@ Users can also use the "Edit Tree" action (or `Ctrl+E`) to edit an entire existi
 *   **Sequential Dependencies:** Numbered lists (`1. [ ]`, `2. [ ]`) create `DEPENDS-ON` blocking relationships. If multiple tasks share the same number at the same indentation level (e.g., two `3. [ ]` tasks), they are extracted as parallel steps that both depend on the previous step (`2. [ ]`). The next step (`4. [ ]`) will automatically depend on *both* parallel tasks.
 *   **Cross-Tree Dependencies:** Dependencies that break standard linear sequence are appended to the task string as wiki-links (e.g. `dep:[[Install foundation]]`). The backend resolves these via fuzzy-matching against task summaries.
 *   **Cross-Collection Subtasks:** Subtasks belonging to a different collection than the root task append a collection token (e.g., `col:CollectionName`) to preserve their location during round-trip editing.
-*   **Round-Trip UIDs:** Extracted tasks append a metadata tag (e.g., `<!-- uid:abc-123 -->`) to their summary. When the tree is re-edited and saved, this tag allows Cfait to diff the text and update existing database entities rather than creating duplicates.
+*   **Round-Trip UIDs:** Serialized task trees append an inline HTML comment containing a unique identifier (e.g., `<!-- uid:abc-123 -->`) to the end of each task line.
+    *   **Updates:** To modify an existing task without changing its database identity, the UID comment must remain present on its corresponding line.
+    *   **Creations:** Any line without a valid UID comment is parsed as a new task, generating a new UUID.
+    *   **Deletions:** If a task's UID is omitted from the document, the task is considered deleted and is moved to the local trash.
 
 ### 2.4. Inline Markdown Formatting
 Cfait natively supports rendering basic inline Markdown across task summaries, descriptions, and the raw text editors.
