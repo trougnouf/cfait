@@ -17,6 +17,8 @@ jobs:
       image: local/arch-builder
       volumes:
         - cargo-registry:/usr/local/cargo/registry
+      env:
+        RUSTFLAGS: "-C debuginfo=0"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -110,6 +112,8 @@ jobs:
         - cargo-registry:/usr/local/cargo/registry
         - flatpak-builder-cache:/flatpak-cache
         - flatpak-user-dir:/home/builder/.local/share/flatpak
+      env:
+        RUSTFLAGS: "-C debuginfo=0"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -163,6 +167,8 @@ jobs:
       image: local/arch-builder
       volumes:
         - cargo-registry:/usr/local/cargo/registry
+      env:
+        RUSTFLAGS: "-C debuginfo=0"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
