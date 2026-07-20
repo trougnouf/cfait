@@ -38,7 +38,7 @@ name = "cfait"
 # --- COMMON (Core Logic) ---
 chrono = { version = "0.4", features = ["serde"] }
 icalendar = "0.17"
-uuid = { version = "1.23", features = ["v4"] }
+uuid = { version = "1.24", features = ["v4"] }
 tokio = { version = "1", features = ["full"] }
 camino = "1.2"
 libdav = { git = "https://git.sr.ht/~trougnouf/libdav", branch = "feature/generic-response-bodies" }
@@ -92,7 +92,7 @@ tui-markdown = { version = "0.3", optional = true }
 iced = { version = "0.14", features = ["tokio", "svg", "advanced", "image"], optional = true }
 iced_aw = { version = "0.14", features = ["color_picker"], optional = true }
 rfd = { version = "0.17", optional = true, default-features = false, features = ["xdg-portal"] }
-fastrand = "2.4"
+fastrand = "2.5"
 once_cell = "1.21"
 
 
@@ -117,7 +117,7 @@ ndk-context = "0.1"
 [dev-dependencies]
 mockito = "1.7" # For mocking the HTTP server
 tokio = { version = "1", features = ["full"] }
-uuid = { version = "1.23", features = ["v4"] }
+uuid = { version = "1.24", features = ["v4"] }
 serial_test = "3.5"
 uniffi_meta = "0.32"
 # Required to run the bindgen binary
