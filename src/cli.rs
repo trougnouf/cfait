@@ -139,9 +139,8 @@ pub fn print_help(binary_name: &str) {
         );
         print_cmd(
             &format!(
-                "{} replace <uid> <{}> [-c <id>] [--desc <text>] [-p <uid>] [--clear-parent] [--clear-due] [--clear-start] [--clear-tags] [--clear-loc] [--clear-deps] [-n] [-w]",
-                binary_name,
-                rust_i18n::t!("cli_task_placeholder")
+                "{} replace <uid> [<task...>] [-c <id>] [--desc <text>] [-p <uid>] [--clear-*] [--file <path>] [--tree] [-n] [-w]",
+                binary_name
             ),
             rust_i18n::t!("cli_desc_replace").to_string(),
         );

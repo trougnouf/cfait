@@ -121,6 +121,124 @@ fn resolve_uid(store: &TaskStore, partial: &str) -> Option<String> {
     }
 }
 
+async fn apply_markdown_update(
+    ctx: &Arc<dyn AppContext>,
+    store: &mut TaskStore,
+    config: &cfait::config::Config,
+    full_uid: &str,
+    new_content: &str,
+    use_tree: bool,
+) -> Result<Vec<cfait::journal::Action>, String> {
+    let def_time = chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
+    let mut actions = Vec::new();
+
+    if use_tree {
+        let mut cals = cfait::cache::Cache::load_calendars(ctx.as_ref()).unwrap_or_default();
+        if let Ok(locals) = cfait::storage::LocalCalendarRegistry::load(ctx.as_ref()) {
+            cals.extend(locals);
+        }
+        match store.sync_tree_from_markdown(
+            full_uid,
+            new_content,
+            &config.tag_aliases,
+            def_time,
+            config.trash_retention_days,
+            &cals,
+        ) {
+            Ok(acts) => {
+                actions.extend(acts);
+            }
+            Err(e) => return Err(e),
+        }
+    } else {
+        let (first_line, rest) = new_content.split_once('\n').unwrap_or((new_content, ""));
+        let smart_input = first_line.trim();
+        let description = rest.trim();
+
+        let (clean_desc, extracted) = cfait::model::extractor::extract_markdown_tasks(description);
+
+        let mut task = store.get_task_ref(full_uid).unwrap().clone();
+        task.description = clean_desc.to_string();
+        task.apply_smart_input(smart_input, &config.tag_aliases, def_time);
+
+        store.resolve_dependencies(&mut task)?;
+
+        task.sequence += 1;
+        actions.push(cfait::journal::Action::Update(task.clone()));
+        store.update_or_add_task(task.clone());
+
+        let mut resolved_props = std::collections::HashMap::new();
+        resolved_props.insert(
+            full_uid.to_string(),
+            (
+                task.categories.clone(),
+                task.location.clone(),
+                task.priority,
+            ),
+        );
+
+        for ext in extracted {
+            let mut sub = cfait::model::Task::new(&ext.raw_text, &config.tag_aliases, def_time);
+            sub.uid = ext.uid;
+            let p_uid_str = ext
+                .parent_uid
+                .clone()
+                .unwrap_or_else(|| full_uid.to_string());
+            if let Some((p_cats, p_loc, p_prio)) = resolved_props.get(&p_uid_str) {
+                sub.inherit_properties(p_cats, p_loc, *p_prio);
+            }
+            resolved_props.insert(
+                sub.uid.clone(),
+                (sub.categories.clone(), sub.location.clone(), sub.priority),
+            );
+
+            store.resolve_dependencies(&mut sub)?;
+            if !ext.description.is_empty() {
+                if sub.description.is_empty() {
+                    sub.description = ext.description;
+                } else {
+                    sub.description
+                        .push_str(&format!("\n\n{}", ext.description));
+                }
+            }
+
+            let smart_status = sub.status;
+            sub.status = ext.status;
+            match ext.status {
+                cfait::model::TaskStatus::Completed => {
+                    if sub.completion_date().is_none() {
+                        sub.set_completion_date(Some(chrono::Utc::now()));
+                    }
+                }
+                cfait::model::TaskStatus::Cancelled => {
+                    if sub.completion_date().is_none() {
+                        sub.set_completion_date(Some(chrono::Utc::now()));
+                    }
+                }
+                cfait::model::TaskStatus::InProcess => {
+                    if sub.last_started_at.is_none() {
+                        sub.last_started_at = Some(chrono::Utc::now().timestamp());
+                    }
+                }
+                cfait::model::TaskStatus::NeedsAction => {
+                    if smart_status == cfait::model::TaskStatus::Completed {
+                        sub.status = cfait::model::TaskStatus::Completed;
+                    }
+                }
+            }
+
+            sub.parent_uid = Some(p_uid_str);
+            sub.dependencies = ext.dependencies;
+            sub.calendar_href = task.calendar_href.clone();
+            sub.percent_complete = ext.percent_complete;
+            sub.is_note = ext.is_note;
+            store.add_task(sub.clone());
+            actions.push(cfait::journal::Action::Create(sub));
+        }
+    }
+    Ok(actions)
+}
+
 fn run_editor_cli(
     initial_content: &str,
     config: &cfait::config::Config,
@@ -633,6 +751,8 @@ async fn main() -> Result<()> {
             let mut clear_deps = false;
             let mut no_wait = false;
             let mut wait = false;
+            let mut use_tree = false;
+            let mut file_path = None;
             let mut i = 2;
             let mut task_args = Vec::new();
             while i < args.len() {
@@ -642,6 +762,17 @@ async fn main() -> Result<()> {
                 } else if args[i] == "--wait" || args[i] == "-w" {
                     wait = true;
                     i += 1;
+                } else if args[i] == "--tree" || args[i] == "-t" {
+                    use_tree = true;
+                    i += 1;
+                } else if args[i] == "--file" || args[i] == "-f" {
+                    if i + 1 < args.len() {
+                        file_path = Some(args[i + 1].clone());
+                        i += 2;
+                    } else {
+                        eprintln!("Error: Missing value for {}", args[i]);
+                        std::process::exit(1);
+                    }
                 } else if args[i] == "--collection" || args[i] == "-c" {
                     if is_append {
                         eprintln!("Error: --collection not supported for append command");
@@ -759,6 +890,77 @@ async fn main() -> Result<()> {
                 None => std::process::exit(1),
             };
 
+            let mut config =
+                cfait::config::Config::load_with_credentials(ctx.as_ref()).unwrap_or_default();
+
+            if let Some(path) = file_path {
+                if is_append {
+                    eprintln!("Error: --file is not supported for append command");
+                    std::process::exit(1);
+                }
+                let new_content = std::fs::read_to_string(&path).unwrap_or_else(|e| {
+                    eprintln!("Error reading file '{}': {}", path, e);
+                    std::process::exit(1);
+                });
+
+                let actions = match apply_markdown_update(
+                    &ctx,
+                    &mut store,
+                    &config,
+                    &full_uid,
+                    &new_content,
+                    use_tree,
+                )
+                .await
+                {
+                    Ok(acts) => acts,
+                    Err(e) => {
+                        eprintln!("Error applying markdown: {}", e);
+                        std::process::exit(1);
+                    }
+                };
+
+                if !actions.is_empty() {
+                    let store_arc = Arc::new(tokio::sync::Mutex::new(store));
+                    let client_arc = Arc::new(tokio::sync::Mutex::new(None));
+                    let controller =
+                        cfait::controller::TaskController::new(store_arc, client_arc, ctx.clone());
+
+                    controller
+                        .persist_changes(actions)
+                        .await
+                        .map_err(|e| anyhow::anyhow!(e))?;
+                    println!(
+                        "{}",
+                        rust_i18n::t!("task_updated_successfully", uid = partial_uid)
+                    );
+
+                    let (effective_no_wait, is_auto) = get_sync_strategy(no_wait, wait, &ctx);
+
+                    if !effective_no_wait {
+                        if let Err(e) = maybe_sync(ctx.clone()).await {
+                            eprintln!(
+                                "{}",
+                                rust_i18n::t!(
+                                    "warning_background_sync_failed",
+                                    error = e.to_string()
+                                )
+                            );
+                        }
+                    } else if is_auto {
+                        println!("{}", rust_i18n::t!("cli_action_queued_auto"));
+                    } else {
+                        println!("{}", rust_i18n::t!("cli_action_queued"));
+                    }
+                } else {
+                    println!(
+                        "{}",
+                        rust_i18n::t!("task_no_changes_made", uid = partial_uid)
+                    );
+                }
+                return Ok(());
+            }
+
             let full_parent_uid = if let Some(partial) = parent_uid_arg {
                 match resolve_uid(&store, &partial) {
                     Some(uid) => {
@@ -774,8 +976,6 @@ async fn main() -> Result<()> {
                 None
             };
 
-            let mut config =
-                cfait::config::Config::load_with_credentials(ctx.as_ref()).unwrap_or_default();
             let def_time =
                 chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
 
@@ -971,8 +1171,6 @@ async fn main() -> Result<()> {
 
             let config =
                 cfait::config::Config::load_with_credentials(ctx.as_ref()).unwrap_or_default();
-            let def_time =
-                chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
 
             let initial_content = if use_tree {
                 cfait::model::extractor::serialize_task_tree(&store, &full_uid)
@@ -1003,122 +1201,22 @@ async fn main() -> Result<()> {
                 return Ok(());
             }
 
-            let mut actions = Vec::new();
-
-            if use_tree {
-                let mut cals =
-                    cfait::cache::Cache::load_calendars(ctx.as_ref()).unwrap_or_default();
-                if let Ok(locals) = cfait::storage::LocalCalendarRegistry::load(ctx.as_ref()) {
-                    cals.extend(locals);
-                }
-                match store.sync_tree_from_markdown(
-                    &full_uid,
-                    &new_content,
-                    &config.tag_aliases,
-                    def_time,
-                    config.trash_retention_days,
-                    &cals,
-                ) {
-                    Ok(acts) => {
-                        actions.extend(acts);
-                    }
-                    Err(e) => {
-                        eprintln!("Error syncing tree: {}", e);
-                        std::process::exit(1);
-                    }
-                }
-            } else {
-                // Parse single task
-                let (first_line, rest) = new_content.split_once('\n').unwrap_or((&new_content, ""));
-                let smart_input = first_line.trim();
-                let description = rest.trim();
-
-                let (clean_desc, extracted) =
-                    cfait::model::extractor::extract_markdown_tasks(description);
-
-                let mut task = store.get_task_ref(&full_uid).unwrap().clone();
-                task.description = clean_desc.to_string();
-                task.apply_smart_input(smart_input, &config.tag_aliases, def_time);
-
-                if let Err(e) = store.resolve_dependencies(&mut task) {
-                    eprintln!("Error resolving dependencies: {}", e);
+            let actions = match apply_markdown_update(
+                &ctx,
+                &mut store,
+                &config,
+                &full_uid,
+                &new_content,
+                use_tree,
+            )
+            .await
+            {
+                Ok(acts) => acts,
+                Err(e) => {
+                    eprintln!("Error applying markdown: {}", e);
                     std::process::exit(1);
                 }
-
-                task.sequence += 1;
-                actions.push(cfait::journal::Action::Update(task.clone()));
-                store.update_or_add_task(task.clone());
-
-                let mut resolved_props = std::collections::HashMap::new();
-                resolved_props.insert(
-                    full_uid.clone(),
-                    (
-                        task.categories.clone(),
-                        task.location.clone(),
-                        task.priority,
-                    ),
-                );
-
-                for ext in extracted {
-                    let mut sub =
-                        cfait::model::Task::new(&ext.raw_text, &config.tag_aliases, def_time);
-                    sub.uid = ext.uid;
-                    let p_uid_str = ext.parent_uid.clone().unwrap_or_else(|| full_uid.clone());
-                    if let Some((p_cats, p_loc, p_prio)) = resolved_props.get(&p_uid_str) {
-                        sub.inherit_properties(p_cats, p_loc, *p_prio);
-                    }
-                    resolved_props.insert(
-                        sub.uid.clone(),
-                        (sub.categories.clone(), sub.location.clone(), sub.priority),
-                    );
-
-                    if let Err(e) = store.resolve_dependencies(&mut sub) {
-                        eprintln!("Error resolving dependencies for subtask: {}", e);
-                        std::process::exit(1);
-                    }
-                    if !ext.description.is_empty() {
-                        if sub.description.is_empty() {
-                            sub.description = ext.description;
-                        } else {
-                            sub.description
-                                .push_str(&format!("\n\n{}", ext.description));
-                        }
-                    }
-
-                    let smart_status = sub.status;
-                    sub.status = ext.status;
-                    match ext.status {
-                        cfait::model::TaskStatus::Completed => {
-                            if sub.completion_date().is_none() {
-                                sub.set_completion_date(Some(chrono::Utc::now()));
-                            }
-                        }
-                        cfait::model::TaskStatus::Cancelled => {
-                            if sub.completion_date().is_none() {
-                                sub.set_completion_date(Some(chrono::Utc::now()));
-                            }
-                        }
-                        cfait::model::TaskStatus::InProcess => {
-                            if sub.last_started_at.is_none() {
-                                sub.last_started_at = Some(chrono::Utc::now().timestamp());
-                            }
-                        }
-                        cfait::model::TaskStatus::NeedsAction => {
-                            if smart_status == cfait::model::TaskStatus::Completed {
-                                sub.status = cfait::model::TaskStatus::Completed;
-                            }
-                        }
-                    }
-
-                    sub.parent_uid = Some(p_uid_str);
-                    sub.dependencies = ext.dependencies;
-                    sub.calendar_href = task.calendar_href.clone();
-                    sub.percent_complete = ext.percent_complete;
-                    sub.is_note = ext.is_note;
-                    store.add_task(sub.clone());
-                    actions.push(cfait::journal::Action::Create(sub));
-                }
-            }
+            };
 
             if !actions.is_empty() {
                 let store_arc = Arc::new(tokio::sync::Mutex::new(store));

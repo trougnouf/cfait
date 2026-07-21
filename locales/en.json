@@ -72,7 +72,7 @@
     "cli_desc_daemon": "Run continuously in background and sync\nat the interval specified in settings.",
     "cli_desc_delete": "Delete a task by its UID.",
     "cli_desc_edit": "Open an external editor to edit a task's title and description.\nUse --tree to edit the entire task hierarchy.",
-    "cli_desc_replace": "Replace the entire task summary and metadata.\nTo safely add tags or dates without losing the title, use 'append'.",
+    "cli_desc_replace": "Replace the entire task summary and metadata.\nUse --file <path> to replace from a Markdown file.\nUse --tree to replace the entire task hierarchy from a file.",
     "cli_desc_tree": "View the task tree starting at UID in markdown format.",
     "cli_desc_append": "Safely APPEND smart syntax tokens (tags, dates, deps)\nor text to an existing task without overwriting.",
     "cli_usage_append": "Usage: %{binary_name} append <uid> <task...>",
