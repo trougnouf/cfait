@@ -198,7 +198,7 @@
     "error_empty_task_description": "",
     "error_failed_to_parse_time": "Saat formatını anlayamadım.",
     "error_fetch_failed": "Veri alma başarısız oldu: %{error}",
-    "error_format": "Format hatası: %{msg}",
+    "error_format": "Format hatası: %{error}",
     "error_general": "Hata: %{error}",
     "error_invalid_duration": "Geçersiz süre: \"%{val}\"",
     "error_invalid_tls": "Bağlantı başarısız oldu: Geçersiz TLS Sertifikası. %{error}",
