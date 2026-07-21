@@ -161,22 +161,23 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
     let mut cleaned_root_desc = String::new();
     let mut extracted: Vec<ExtractedTask> = Vec::new();
 
-    struct NumberedState {
-        current_number: usize,
-        current_uids: Vec<String>,
-        previous_uids: Vec<String>,
-    }
-
     #[derive(PartialEq, Clone, Copy, Debug)]
     enum StackItemKind {
         Heading(usize), // level 1, 2, 3...
         List(usize),    // indent in spaces
     }
 
+    #[derive(PartialEq, Clone, Copy, Debug)]
+    enum ItemKind {
+        NumberedTask(usize), // block_id
+        Other,
+    }
+
     // Stack stores (StackItemKind, task_uid, extracted_idx)
     let mut indent_stack: Vec<(StackItemKind, String, usize)> = Vec::new();
-    // Map stores indent_level -> NumberedState
-    let mut numbered_state_at_indent: HashMap<usize, NumberedState> = HashMap::new();
+    let mut item_kind_at_indent: HashMap<usize, ItemKind> = HashMap::new();
+    let mut next_block_id = 0;
+    let mut numbered_tasks: Vec<(usize, usize, usize)> = Vec::new(); // (block_id, parsed_num, extracted_idx)
 
     let mut active_task_idx: Option<usize> = None;
 
@@ -206,6 +207,8 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
             }
             continue;
         }
+
+        item_kind_at_indent.retain(|&k, _| k <= indent);
 
         // Check if it's a valid Markdown task list
         let mut is_task = false;
@@ -332,39 +335,23 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
 
             let parent_uid = indent_stack.last().map(|(_, id, _)| id.clone());
 
-            // Determine dependencies using the numbered state at THIS indentation level
-            let mut dependencies = Vec::new();
-            if is_numbered {
-                let state = numbered_state_at_indent
-                    .entry(indent)
-                    .or_insert(NumberedState {
-                        current_number: 0,
-                        current_uids: Vec::new(),
-                        previous_uids: Vec::new(),
-                    });
+            let new_idx = extracted.len();
 
-                if state.current_number == parsed_num {
-                    // Parallel task: depends on the same previous tasks
-                    dependencies = state.previous_uids.clone();
-                    state.current_uids.push(uid.clone());
-                } else if parsed_num > state.current_number {
-                    // Advancing to next step: depends on all parallel tasks of the previous step
-                    dependencies = state.current_uids.clone();
-                    state.previous_uids = state.current_uids.clone();
-                    state.current_number = parsed_num;
-                    state.current_uids = vec![uid.clone()];
-                } else {
-                    // Number went backwards (e.g., reset list). Treat as a new chain.
-                    state.previous_uids = Vec::new();
-                    state.current_number = parsed_num;
-                    state.current_uids = vec![uid.clone()];
-                }
+            if is_numbered {
+                let block_id = match item_kind_at_indent.get(&indent) {
+                    Some(ItemKind::NumberedTask(b)) => *b,
+                    _ => {
+                        let b = next_block_id;
+                        next_block_id += 1;
+                        b
+                    }
+                };
+                item_kind_at_indent.insert(indent, ItemKind::NumberedTask(block_id));
+                numbered_tasks.push((block_id, parsed_num, new_idx));
             } else {
-                // Breaking the numbered chain
-                numbered_state_at_indent.remove(&indent);
+                item_kind_at_indent.insert(indent, ItemKind::Other);
             }
 
-            let new_idx = extracted.len();
             // Push ourselves to the stack to become a potential parent for the next lines
             indent_stack.push((current_kind, uid.clone(), new_idx));
 
@@ -372,7 +359,7 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
                 uid,
                 parsed_existing_uid: parsed_uid,
                 parent_uid,
-                dependencies,
+                dependencies: Vec::new(),
                 raw_text: clean_text,
                 description: String::new(),
                 status: parsed_status,
@@ -382,6 +369,7 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
             active_task_idx = Some(new_idx);
         } else {
             // Not a task line.
+            item_kind_at_indent.insert(indent, ItemKind::Other);
 
             // Pop any List items from the stack that are at the same or deeper indentation
             // because text belonging to a List item MUST be indented more than the item itself.
@@ -415,6 +403,34 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
                 cleaned_root_desc.push_str(rest);
                 cleaned_root_desc.push('\n');
                 active_task_idx = None; // Update active_task_idx so empty lines go here
+            }
+        }
+    }
+
+    // Second pass: resolve out-of-order numbered dependencies
+    let mut blocks: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
+    for (b_id, p_num, e_idx) in numbered_tasks {
+        blocks.entry(b_id).or_default().push((p_num, e_idx));
+    }
+
+    for (_, list) in blocks {
+        let mut uids_by_num: HashMap<usize, Vec<String>> = HashMap::new();
+        for &(num, e_idx) in &list {
+            uids_by_num
+                .entry(num)
+                .or_default()
+                .push(extracted[e_idx].uid.clone());
+        }
+
+        let mut unique_nums: Vec<usize> = uids_by_num.keys().copied().collect();
+        unique_nums.sort_unstable();
+
+        for (num, e_idx) in list {
+            let prev_num = unique_nums.iter().rev().find(|&&n| n < num).copied();
+            if let Some(p_num) = prev_num {
+                if let Some(deps) = uids_by_num.get(&p_num) {
+                    extracted[e_idx].dependencies.extend(deps.iter().cloned());
+                }
             }
         }
     }

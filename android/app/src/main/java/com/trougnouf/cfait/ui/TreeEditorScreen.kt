@@ -107,10 +107,11 @@ fun TreeEditorScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
+                    .imePadding()
                     .padding(16.dp),
                 textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp),
                 visualTransformation = remember(isDark) {
-                    com.trougnouf.cfait.ui.MarkdownTransformation(isDark)
+                    com.trougnouf.cfait.ui.MarkdownTransformation(isDark, api)
                 },
                 keyboardOptions = KeyboardOptions.Default.copy(
                     keyboardType = KeyboardType.Text,

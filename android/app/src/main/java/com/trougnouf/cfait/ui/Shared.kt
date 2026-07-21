@@ -776,7 +776,40 @@ fun formatIsoToLocal(isoString: String): String {
     }
 }
 
-class MarkdownTransformation(val isDark: Boolean) : VisualTransformation {
+fun getSyntaxColor(kind: MobileSyntaxType, text: String, isDark: Boolean): Color? {
+    return when (kind) {
+        MobileSyntaxType.Priority -> {
+            val p = text.trimStart('!').toIntOrNull() ?: 0
+            getTaskTextColor(p, false, isDark)
+        }
+        MobileSyntaxType.DueDate -> Color(0xFF42A5F5)
+        MobileSyntaxType.StartDate -> Color(0xFF66BB6A)
+        MobileSyntaxType.Recurrence -> Color(0xFFAB47BC)
+        MobileSyntaxType.Duration -> Color(0xFF9E9E9E)
+        MobileSyntaxType.Tag -> {
+            val tagName = text.trimStart('#').replace("\"", "")
+            getTagColor(tagName, isDark)
+        }
+        MobileSyntaxType.Location -> Color(0xFFFFB300)
+        MobileSyntaxType.Url -> Color(0xFF4FC3F7)
+        MobileSyntaxType.Geo -> Color(0xFF757575)
+        MobileSyntaxType.Description -> Color(0xFF757575)
+        MobileSyntaxType.Reminder -> Color(0xFFFF7043)
+        MobileSyntaxType.Calendar -> Color(0xFFE91E63)
+        MobileSyntaxType.Filter -> Color(0xFF00BCD4)
+        MobileSyntaxType.Operator -> Color(0xFFFF4081)
+        MobileSyntaxType.Goal -> Color(0xFF00BFA5)
+        MobileSyntaxType.Collection -> Color(0xFFE57373)
+        MobileSyntaxType.WikiLink -> Color(0xFF4FC3F7)
+        MobileSyntaxType.Dependency -> Color(0xFFFF9800)
+        MobileSyntaxType.Relation -> Color(0xFF64B5F6)
+        MobileSyntaxType.Note -> Color(0xFF9E9E9E)
+        MobileSyntaxType.Pin -> Color(0xFFFF7043)
+        else -> null
+    }
+}
+
+class MarkdownTransformation(val isDark: Boolean, val api: CfaitMobile? = null) : VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText {
         val raw = text.text
         val builder = AnnotatedString.Builder(raw)
@@ -793,13 +826,44 @@ class MarkdownTransformation(val isDark: Boolean) : VisualTransformation {
             val lineEnd = lineStart + line.length
             val trimmed = line.trimStart()
 
+            var afterMarker = 0
+
             if (trimmed.startsWith("#")) {
                 builder.addStyle(SpanStyle(color = headerColor, fontWeight = FontWeight.Bold), lineStart, lineEnd)
+                afterMarker = line.length
             } else if (trimmed.startsWith("- [") || trimmed.startsWith("* [") || trimmed.startsWith("+ [") || Regex("""^\d+\.\s*\[""").containsMatchIn(trimmed)) {
                 val cbStart = line.indexOf('[')
                 if (cbStart != -1 && cbStart + 2 < line.length && line[cbStart + 2] == ']') {
                     builder.addStyle(SpanStyle(color = checkboxColor), lineStart + cbStart, lineStart + cbStart + 3)
+                    afterMarker = cbStart + 4
                 }
+            } else {
+                val indent = line.length - trimmed.length
+                if (trimmed.startsWith("- ") || trimmed.startsWith("* ") || trimmed.startsWith("+ ")) {
+                    afterMarker = indent + 2
+                } else {
+                    val match = Regex("""^\d+\.\s""").find(trimmed)
+                    if (match != null) {
+                        afterMarker = indent + match.value.length
+                    } else {
+                        afterMarker = indent
+                    }
+                }
+            }
+
+            if (api != null && afterMarker > 0 && afterMarker < line.length) {
+                val rest = line.substring(afterMarker)
+                try {
+                    val tokens = api.parseSmartString(rest, false)
+                    for (token in tokens) {
+                        if (token.kind == MobileSyntaxType.Text) continue
+                        val spanColor = getSyntaxColor(token.kind, rest.substring(token.start, token.end), isDark)
+                        if (spanColor != null) {
+                            val weight = if (token.kind == MobileSyntaxType.Priority || token.kind == MobileSyntaxType.Tag || token.kind == MobileSyntaxType.Calendar || token.kind == MobileSyntaxType.Operator) FontWeight.Bold else FontWeight.Normal
+                            builder.addStyle(SpanStyle(color = spanColor, fontWeight = weight), lineStart + afterMarker + token.start, lineStart + afterMarker + token.end)
+                        }
+                    }
+                } catch (e: Exception) {}
             }
 
             lineStart = lineEnd + 1
@@ -838,15 +902,6 @@ class SmartSyntaxTransformation(
     val isDark: Boolean,
     val isSearch: Boolean = false
 ) : VisualTransformation {
-    private val COLOR_DUE = Color(0xFF42A5F5)
-    private val COLOR_START = Color(0xFF66BB6A)
-    private val COLOR_RECUR = Color(0xFFAB47BC)
-    private val COLOR_DURATION = Color(0xFF9E9E9E)
-    private val COLOR_LOCATION = Color(0xFFFFB300)
-    private val COLOR_URL = Color(0xFF4FC3F7)
-    private val COLOR_META = Color(0xFF757575)
-    private val COLOR_REMINDER = Color(0xFFFF7043)
-
     override fun filter(text: AnnotatedString): TransformedText {
         val raw = text.text
         val builder = AnnotatedString.Builder(raw)
@@ -856,73 +911,10 @@ class SmartSyntaxTransformation(
 
             for (token in tokens) {
                 if (token.start >= raw.length || token.end > raw.length) continue
+                if (token.kind == MobileSyntaxType.Text) continue
 
-                val spanColor: Color? =
-                    when (token.kind) {
-                        MobileSyntaxType.PRIORITY -> {
-                            val sub = raw.substring(token.start, token.end)
-                            val p = sub.trimStart('!').toIntOrNull() ?: 0
-                            getTaskTextColor(p, false, isDark)
-                        }
-
-                        MobileSyntaxType.DUE_DATE -> {
-                            COLOR_DUE
-                        }
-
-                        MobileSyntaxType.START_DATE -> {
-                            COLOR_START
-                        }
-
-                        MobileSyntaxType.RECURRENCE -> {
-                            COLOR_RECUR
-                        }
-
-                        MobileSyntaxType.DURATION -> {
-                            COLOR_DURATION
-                        }
-
-                        MobileSyntaxType.TAG -> {
-                            val sub = raw.substring(token.start, token.end)
-                            val tagName = sub.trimStart('#').replace("\"", "")
-                            getTagColor(tagName, isDark)
-                        }
-
-                        MobileSyntaxType.LOCATION -> {
-                            COLOR_LOCATION
-                        }
-
-                        MobileSyntaxType.URL -> {
-                            COLOR_URL
-                        }
-
-                        MobileSyntaxType.GEO -> {
-                            COLOR_META
-                        }
-
-                        MobileSyntaxType.DESCRIPTION -> {
-                            COLOR_META
-                        }
-
-                        MobileSyntaxType.REMINDER -> {
-                            COLOR_REMINDER
-                        }
-
-                        MobileSyntaxType.CALENDAR -> {
-                            Color(0xFFE91E63) // Pink
-                        }
-
-                        MobileSyntaxType.FILTER -> {
-                            Color(0xFF00BCD4)
-                        }
-
-                        MobileSyntaxType.OPERATOR -> {
-                            Color(0xFFFF4081) // Pink/Magenta Accent
-                        }
-
-                        else -> {
-                            null
-                        }
-                    }
+                val sub = raw.substring(token.start, token.end)
+                val spanColor = getSyntaxColor(token.kind, sub, isDark)
 
                 if (spanColor != null) {
                     val weight =
