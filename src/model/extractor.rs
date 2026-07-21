@@ -427,10 +427,10 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
 
         for (num, e_idx) in list {
             let prev_num = unique_nums.iter().rev().find(|&&n| n < num).copied();
-            if let Some(p_num) = prev_num {
-                if let Some(deps) = uids_by_num.get(&p_num) {
-                    extracted[e_idx].dependencies.extend(deps.iter().cloned());
-                }
+            if let Some(p_num) = prev_num
+                && let Some(deps) = uids_by_num.get(&p_num)
+            {
+                extracted[e_idx].dependencies.extend(deps.iter().cloned());
             }
         }
     }
