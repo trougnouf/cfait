@@ -1478,10 +1478,13 @@ pub fn view_task_row<'a>(
 
                 if has_valid_parent {
                     let p_uid = task.parent_uid.as_ref().unwrap();
-                    let p_name = app
+                    let mut p_name = app
                         .store
                         .get_summary(p_uid)
                         .unwrap_or_else(|| rust_i18n::t!("unknown_parent").to_string());
+                    if p_name.chars().count() > 120 {
+                        p_name = format!("{}...", p_name.chars().take(117).collect::<String>());
+                    }
                     let remove_parent_btn = button(icon::icon(icon::CROSS).size(10))
                         .style(button::danger)
                         .padding(2)
@@ -1490,17 +1493,17 @@ pub fn view_task_row<'a>(
                         text(rust_i18n::t!("parent"))
                             .size(12)
                             .color(Color::from_rgb(0.4, 0.8, 0.4)),
-                        button(text(p_name).size(12).color(Color::from_rgb(0.7, 0.7, 0.7)))
-                            .style(button::text)
-                            .padding(0)
-                            .on_press(Message::JumpToTask(p_uid.clone())),
                         tooltip(
                             remove_parent_btn,
                             text(rust_i18n::t!("remove_parent")).size(12),
                             tooltip::Position::Top
                         )
                         .style(crate::gui::view::tooltip_style)
-                        .delay(Duration::from_millis(700))
+                        .delay(Duration::from_millis(700)),
+                        button(text(p_name).size(12).color(Color::from_rgb(0.7, 0.7, 0.7)))
+                            .style(button::text)
+                            .padding(0)
+                            .on_press(Message::JumpToTask(p_uid.clone())),
                     ]
                     .spacing(5)
                     .align_y(iced::Alignment::Center);
@@ -1514,10 +1517,13 @@ pub fn view_task_row<'a>(
                             .color(Color::from_rgb(0.8, 0.4, 0.4)),
                     );
                     for dep_uid in &task.dependencies {
-                        let name = app
+                        let mut name = app
                             .store
                             .get_summary(dep_uid)
                             .unwrap_or_else(|| rust_i18n::t!("unknown_task").to_string());
+                        if name.chars().count() > 120 {
+                            name = format!("{}...", name.chars().take(117).collect::<String>());
+                        }
                         let is_done = app.store.is_task_done(dep_uid).unwrap_or(false);
                         let check = if is_done { "[x]" } else { "[ ]" };
                         let remove_dep_btn = button(icon::icon(icon::CROSS).size(10))
@@ -1534,14 +1540,14 @@ pub fn view_task_row<'a>(
                         .on_press(Message::JumpToTask(dep_uid.clone()));
 
                         let dep_row = row![
-                            name_btn,
                             tooltip(
                                 remove_dep_btn,
                                 text(rust_i18n::t!("remove_dependency")).size(12),
                                 tooltip::Position::Top
                             )
                             .style(crate::gui::view::tooltip_style)
-                            .delay(Duration::from_millis(700))
+                            .delay(Duration::from_millis(700)),
+                            name_btn,
                         ]
                         .spacing(5)
                         .align_y(iced::Alignment::Center);
@@ -1559,6 +1565,9 @@ pub fn view_task_row<'a>(
                         let mut name = rust_i18n::t!("unknown_task").to_string();
                         if let Some(rel_task) = app.store.get_task_ref(related_uid) {
                             name = rel_task.summary.clone();
+                            if name.chars().count() > 120 {
+                                name = format!("{}...", name.chars().take(117).collect::<String>());
+                            }
                             if rel_task.status.is_done() {
                                 if let Some(comp_date) = rel_task.completion_date() {
                                     let local = comp_date.with_timezone(&chrono::Local);
@@ -1584,14 +1593,14 @@ pub fn view_task_row<'a>(
 
                         let related_row = row![
                             icon::icon(random_related_icon(&task.uid, related_uid)).size(12),
-                            name_btn,
                             tooltip(
                                 remove_related_btn,
                                 text(rust_i18n::t!("remove_relation")).size(12),
                                 tooltip::Position::Top
                             )
                             .style(crate::gui::view::tooltip_style)
-                            .delay(Duration::from_millis(700))
+                            .delay(Duration::from_millis(700)),
+                            name_btn,
                         ]
                         .spacing(5)
                         .align_y(iced::Alignment::Center);
@@ -1606,7 +1615,13 @@ pub fn view_task_row<'a>(
                             .size(12)
                             .color(Color::from_rgb(0.6, 0.4, 0.8)),
                     );
-                    for (blocked_uid, blocked_name) in blocking_tasks {
+                    for (blocked_uid, mut blocked_name) in blocking_tasks {
+                        if blocked_name.chars().count() > 120 {
+                            blocked_name = format!(
+                                "{}...",
+                                blocked_name.chars().take(117).collect::<String>()
+                            );
+                        }
                         let remove_block_btn = button(icon::icon(icon::UNLINK).size(10))
                             .style(button::danger)
                             .padding(2)
@@ -1628,14 +1643,14 @@ pub fn view_task_row<'a>(
                             icon::icon(icon::HAND_STOP)
                                 .size(12)
                                 .color(Color::from_rgb(0.5, 0.5, 0.5)),
-                            name_btn,
                             tooltip(
                                 remove_block_btn,
                                 text(rust_i18n::t!("unblock_remove_dependency")).size(12),
                                 tooltip::Position::Top
                             )
                             .style(crate::gui::view::tooltip_style)
-                            .delay(Duration::from_millis(700))
+                            .delay(Duration::from_millis(700)),
+                            name_btn,
                         ]
                         .spacing(5)
                         .align_y(iced::Alignment::Center);
@@ -1652,6 +1667,12 @@ pub fn view_task_row<'a>(
                             .color(Color::from_rgb(0.8, 0.6, 0.8)),
                     );
                     for (related_uid, mut related_name) in incoming_related {
+                        if related_name.chars().count() > 120 {
+                            related_name = format!(
+                                "{}...",
+                                related_name.chars().take(117).collect::<String>()
+                            );
+                        }
                         if let Some(rel_task) = app.store.get_task_ref(&related_uid)
                             && rel_task.status.is_done()
                         {
@@ -1684,14 +1705,14 @@ pub fn view_task_row<'a>(
 
                         let related_row = row![
                             icon::icon(random_related_icon(&task.uid, &related_uid)).size(12),
-                            name_btn,
                             tooltip(
                                 remove_related_btn,
                                 text(rust_i18n::t!("remove_relation")).size(12),
                                 tooltip::Position::Top
                             )
                             .style(crate::gui::view::tooltip_style)
-                            .delay(Duration::from_millis(700))
+                            .delay(Duration::from_millis(700)),
+                            name_btn,
                         ]
                         .spacing(5)
                         .align_y(iced::Alignment::Center);
