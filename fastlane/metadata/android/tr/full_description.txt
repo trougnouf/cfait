@@ -1,58 +1,58 @@
-<b>Yapılacaklar listenin dizginlerini ele geçir.</b>
+<b>Take control of your TODO list.</b>
 <br><br>
-Cfait, Rust kullanılarak hız ve kararlılık için tasarlandı; "Önce Yerelde" yaklaşımı ile cihazların arasında pürüzsüz bir eşitleme sağlar ve verilerinin kontrolünde SEN olursun.
+Cfait is designed for speed and stability using Rust, it puts you in control of your data with a local-first approach that syncs seamlessly across your devices.
 <br><br>
-<b>Neden Cfait?</b>
+<b>Why Cfait?</b>
 <ul>
-  <li><b>Açık Kaynak & Platformlar Arası Çalışır:</b> Cfait'i Android'de, Linux'ta ve Windows'ta kullanabilirsin. Görevlerin, başkalarının kapalı sistemleri yerine herkesin kullanabildiği açık standartlara (CalDAV'a ve iCalendar'a) uyar.</li>
-  <li><b>Her Yerde Eşitlenir:</b> NextCloud, iCloud, Radicale, Xandikos ve diğer standart CalDAV sunucularıyla tamamen uyumlu.</li>
-  <li><b>Önce Yerelde:</b> İyimser arayüz güncellemeleri kullanıyoruz. Bu da yaptığın bir işlem için sunucunun yanıt vermesini beklemezsin demek. Cihazındaki kalıcı "Yerel" takvimi kullanarak çevrimdışı görevler oluştur ve bunları istediğin zaman bir sunucuya taşı.</li>
-  <li><b>Akıllı Yazılar:</b> Yazarken görev detaylarını belirt, Cfait senin için alanları doldursun. Mesela, "Kedi maması al !1 @tomorrow @@market ~15m" yazarak <em>yarına kadar yapman</em> gereken, <em>yaklaşık 15 dakikanı</em> alacak <em>çok acil</em> bir görev oluşturabilirsin.</li>
+  <li><b>Open Source & Cross-Platform:</b> Use Cfait on Android, Linux, and Windows. Your tasks adhere to open standards (CalDAV and iCalendar), not walled gardens.</li>
+  <li><b>Syncs Everywhere:</b> Fully compatible with Nextcloud, iCloud, Radicale, Xandikos, and other standard CalDAV servers.</li>
+  <li><b>Offline First:</b> Optimistic UI updates mean you never wait for a server response. Use the persistent "Local" calendar for offline tasks and migrate them to a server later.</li>
+  <li><b>Smart Input:</b> Add tasks naturally. Typing "Buy cat food !1 @tomorrow @@grocery_store ~15m" automatically sets the priority, due date, location and duration.</li>
 </ul>
 <br>
-<b>Verimlilik Özellikleri</b>
+<b>Productivity Features</b>
 <ul>
-  <li><b>Bir Şeyleri Bitir'ci Stil:</b> Görevleri "Müdahele Lazım", "İşlemde" (&gt;), "Bitti" ya da "İptal Edildi" (x) olarak işaretleyebilirsin. Hatta bu durumları daha sonra filtrelerde kullanabilirsin.</li>
-  <li><b>Hiyerarşi:</b> Görev içinde görev açabilir, alt görevlerin yerlerini değiştirebilir, hatta iç içe görev listelerini düzenleyebilirsin.</li>
-  <li><b>Bağımlılıklar:</b> Cfait, görevleri RFC 9253 standardındaki alt görev (Child-Of) ve bekletme (Blocked-By) kurallarını kullanarak birbirine bağlar. Alt görevler, böl ve fethet taktiği ile görevlerini küçük parçalara bölebilmenizi ve bir görevin bütün alt görevleri bitince otomatik olarak o görevi de Bitti olarak işaretler. Bekletme özelliği ile de sana sadece yapabileceğin işler gözükür, kafan rahat eder. Sonuçta, bir maket yapmak istiyorsan, önce parçaları kargodan alman gerekir, değil mi?</li>
-  <li><b>Etiketler & Takma Adlar:</b> Hiyerarşik etiketler ile kendi düzeninizi oluşturun( #ödev içinde ders ayırımı yapmak için #ödev:tarih etiketi yapmak gibi), takma adlar ile de uzun etiketlerinizi daha kısa isimler ile girin ve görevlerinizi daha hızlı doldurun. (Mesela, #bakkal=#alışveriş ve #market=#alışveriş takma adları ile hızlıca alışveriş listesi oluşturabilirsin.)</li>
-  <li><b>Akıl Kârı Bir Sıralama:</b> Görevler önce durumuna göre, sonra başlama tarihine göre, sonra teslim tarihine göre ve en son önceliğe göre sıralanır. İstersen sıralama sırasını değiştirebilirsin, <em>sana kalmış.</em></li>
+  <li><b>GTD Workflow:</b> Mark tasks as Needs Action, In Process (&gt;), Cancelled (x), or Done.</li>
+  <li><b>Hierarchy:</b> Create sub-tasks, promote children, and organize nested lists.</li>
+  <li><b>Dependencies:</b> Link tasks using "Blocked-by" or "Child-of" logic (RFC 9253).</li>
+  <li><b>Tags & Aliases:</b> Organize with hierarchical tags (e.g., #work:backend). Create inline aliases (e.g., #shed:=#home_improvement and @home_improvement:=@@home) for rapid filing.</li>
+  <li><b>Sane Sorting:</b> Tasks are sorted by Status &gt; Start Date &gt; Due Date &gt; Priority.</li>
 </ul>
 <br>
-<b>Akıllı Söz Dizimi Rehberi</b>
+<b>Smart Syntax Guide</b>
 <br>
-Bir görev eklerken veya düzenlerken şu kısayolları kullanabilirsin:
+When adding or editing a task, use these shortcuts:
 <ul>
-  <li>Ünlem işareti ve 1'den 9'a kadar bir sayı, <b>!3</b> gibi: Görevin önceliğini belirtir. <b>1</b> en <b>acil</b>, <em>9</em> en <em>önemsiz</em> önceliktir. </li>
-  <li><b>@tarih:</b> Teslim tarihi belirtir. Tarihleri ingilizce kelimelerle veya Yıl-Ay-Gün şeklinde belirtebilirsin: <b>@tomorrow</b> (yarın), <b>@2025-12-31</b>, <b>@2w</b> veya <b>@in two weeks</b> gibi. </li>
-  <li><b>^tarih:</b> Başlangıç tarihini belirtir. Cfait başlangıç tarihi gelmemiş görevleri gizler, ancak istediğin zaman bunları yine görebilirsin.</li>
-  <li><b>~süre:</b> Tahmini süre belirtir. İngilizce son ekler kullanır. Örneğin, <b>~30m</b> ile "30 dakika", <b>~2h</b> ile "2 saat" yazabilirsin.</li>
-  <li><b>@every X:</b> Ne kadar sürede bir tekrarlanacağını belirtir. İngilizce zaman kelimeleri kullanır. Örneğin; <b>@daily</b> günlük tekrar, <b>@every 2 weeks</b> ise 2 haftada bir tekrarlama belirtir.</li>
-  <li><b>@@yer:</b> Yer belirtir. Örneğin evde yapacağın şeyler için <b>@@ev</b>, marketten alacağın şeyler için <b>@@market</b>, veya eve giderken yapabileceğin şeyler için <b>@@"yol üstü"</b> konumları yazabilirsin.</li>
-  <li><b>url:https://herhangi.bir.site:</b> Göreve bir site ekler. Buraya sayfanın tam linkini girersen, görevin yanındaki "URL'yi aç" tuşuyla sayfaya gidebilir ve görevine başlayabilirsin! </li>
+  <li><b>!1 to !9:</b> Set Priority (1 is Critical, 9 is Low).</li>
+  <li><b>@date:</b> Set Due Date (e.g., @tomorrow, @2025-12-31, @2w, @in two weeks).</li>
+  <li><b>^date:</b> Set Start Date (hides task until date).</li>
+  <li><b>~duration:</b> Estimate time (e.g., ~30m, ~2h).</li>
+  <li><b>@every X:</b> Set Recurrence (e.g., @daily, @every 2 weeks).</li>
+  <li><b>@@loc:</b> Set Location (e.g., @@home, @@"hardware store").</li>
+  <li><b>url:http://perdu.com:</b> Attach a URL.</li>
 </ul>
 <br>
-<b>Gelişmiş Arama</b>
+<b>Advanced Search</b>
 <br>
-Tam olarak aradığını bulman için sana şu filtreleri sunuyoruz:
+Find exactly what you need with powerful filters:
 <ul>
-  <li><b>is:<em>durum</em></b>: <b>is:active</b> (aktif olanlar), <b>is:done</b> (bitenler) gibi görev durumlarıyla filtrelemeni sağlar.</li>
-  <li><b>~&lt;30m:</b> 30 dakikadan az sürecek görevleri bulmanı sağlar.</li>
-  <li><b>!&lt;3:</b> 3. öncelikten daha acil görevleri bulmanı sağlar.</li>
-  <li><b>@&lt;today:</b> Teslim tarihi geçmiş görevleri bulmanı sağlar.</li>
-  <li><b>@@home:</b> Görevleri yere göre filtrelemeni sağlar.</li>
+  <li><b>is:active</b> / <b>is:done:</b> Filter by status.</li>
+  <li><b>~&lt;30m:</b> Find tasks taking less than 30 minutes.</li>
+  <li><b>!&lt;3:</b> Find high-priority tasks.</li>
+  <li><b>@&lt;today:</b> Find overdue tasks.</li>
+  <li><b>@@home:</b> Find tasks at a specific location.</li>
 </ul>
 <br>
-<b>Geliştiriciyi Destekle</b>
+<b>Support the Developer</b>
 <br>
-Cfait kullanmayı sevdiyseniz, lütfen geliştiricilerini desteklemeyi düşünün:
+If you enjoy using Cfait, please consider supporting its developer:
 <ul>
   <li>💳 <b>Liberapay:</b> https://liberapay.com/trougnouf</li>
-  <li>🏦₿ Diğer ödeme yöntemleri uygulamanın "Yardım ve Hakkında" ekranı ve proje web sitesinde mevcuttur.</li>
+  <li>🏦₿ Other payment details are available within the app's "Help & About" screen or on the project website.</li>
 </ul>
 <br>
-<b>Topluluk ve Açık Kaynak</b>
+<b>Community & Source</b>
 <br>
-Cfait Benoit Brummer (Trougnouf) tarafından geliştirildi ve GPL3 lisansı ile yayımlandı.
+Cfait is developed by Benoit Brummer (Trougnouf) and released under the GPL3 License.
 <br><br>
-Kaynak kod, bilgisayar sürümleri ve sorun takip sistemine şuradan erişebilirsiniz: https://git.disroot.org/trougnouf/cfait
+Source code, desktop versions, and issue tracking available at: https://git.disroot.org/trougnouf/cfait
