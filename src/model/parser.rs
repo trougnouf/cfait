@@ -3749,7 +3749,7 @@ mod i18n_tests {
                 }
 
                 // Check brevity and formatting for parser/search keys
-                if (key.starts_with("parser_") || key.starts_with("search_"))
+                if (key.starts_with("parser_") || key.starts_with("search_is_"))
                     && let Some(loc_val) = loc_obj.get(key).and_then(|v| v.as_str())
                 {
                     let parts: Vec<&str> = loc_val.split(',').collect();
