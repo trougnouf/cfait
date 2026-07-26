@@ -55,4 +55,4 @@ Si te gusta usar Cfait, considera apoyar a su desarrollador:
 <br>
 Cfait ha sido desarrollado por Benoit Brummer (Trougnouf) y se distribuye bajo la licencia GPL3.
 <br><br>
-El código fuente, las versiones de escritorio y el seguimiento de incidencias están disponibles en: https://codeberg.org/trougnouf/cfait
+El código fuente, las versiones de escritorio y el seguimiento de incidencias están disponibles en: https://git.disroot.org/trougnouf/cfait

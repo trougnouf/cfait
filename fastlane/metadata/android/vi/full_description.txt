@@ -55,4 +55,4 @@ Nếu bạn thích sử dụng Cfait, hãy cân nhắc ủng hộ nhà phát tri
 <br>
 Cfait được phát triển bởi Benoit Brummer (Trougnouf) và phát hành theo GPL3 License.
 <br><br>
-Mã nguồn, phiên bản desktop, và theo dõi vấn đề có sẵn tại: https://codeberg.org/trougnouf/cfait
+Mã nguồn, phiên bản desktop, và theo dõi vấn đề có sẵn tại: https://git.disroot.org/trougnouf/cfait

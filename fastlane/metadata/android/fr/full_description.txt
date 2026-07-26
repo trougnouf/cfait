@@ -84,4 +84,4 @@ Cfait est développé par Benoit Brummer (Trougnouf) et diffusé sous la licence
 
 <br><br>
 
-Le code source, les versions bureau, et la remontée d'anomalies sont disponibles à l'adresse : https://codeberg.org/trougnouf/cfait
+Le code source, les versions bureau, et la remontée d'anomalies sont disponibles à l'adresse : https://git.disroot.org/trougnouf/cfait

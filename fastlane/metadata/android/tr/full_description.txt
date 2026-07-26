@@ -55,4 +55,4 @@ Cfait kullanmayı sevdiyseniz, lütfen geliştiricilerini desteklemeyi düşün�
 <br>
 Cfait Benoit Brummer (Trougnouf) tarafından geliştirildi ve GPL3 lisansı ile yayımlandı.
 <br><br>
-Kaynak kod, bilgisayar sürümleri ve sorun takip sistemine şuradan erişebilirsiniz: https://codeberg.org/trougnouf/cfait
+Kaynak kod, bilgisayar sürümleri ve sorun takip sistemine şuradan erişebilirsiniz: https://git.disroot.org/trougnouf/cfait

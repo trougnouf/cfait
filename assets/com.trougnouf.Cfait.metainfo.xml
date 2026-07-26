@@ -62,8 +62,8 @@
   </branding>
 
   <url type="homepage">https://trougnouf.com</url>
-  <url type="bugtracker">https://codeberg.org/trougnouf/cfait/issues</url>
-  <url type="vcs-browser">https://codeberg.org/trougnouf/cfait</url>
+  <url type="bugtracker">https://git.disroot.org/trougnouf/cfait/issues</url>
+  <url type="vcs-browser">https://git.disroot.org/trougnouf/cfait</url>
   <url type="donation">https://liberapay.com/trougnouf</url>
 
   <content_rating type="oars-1.1" />

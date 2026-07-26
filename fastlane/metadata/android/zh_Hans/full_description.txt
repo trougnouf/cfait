@@ -55,4 +55,4 @@ Cfait 使用 Rust 语言编写，专为速度和稳定性而设计，采用本�
 <br>
 Cfait 由 Benoit Brummer（Trougnouf）开发，并根据 GPL3 许可发布。
 <br><br>
-源代码、桌面版本和问题跟踪请访问：https://codeberg.org/trougnouf/cfait
+源代码、桌面版本和问题跟踪请访问：https://git.disroot.org/trougnouf/cfait

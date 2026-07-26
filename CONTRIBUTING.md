@@ -63,7 +63,7 @@ cargo run --features mobile --bin uniffi-bindgen generate \
 
 ### ✅ Submitting a Pull Request
 
-**We strongly prefer Pull Requests on Codeberg:** [https://codeberg.org/trougnouf/cfait](https://codeberg.org/trougnouf/cfait)  
+**We strongly prefer Pull Requests on Codeberg:** [https://git.disroot.org/trougnouf/cfait](https://git.disroot.org/trougnouf/cfait)  
 *(Our CI pipeline resides on Codeberg. We accept PRs on GitHub, but it requires us to manually port them over).*
 
 Before submitting, please ensure your changes meet the following criteria:
@@ -82,8 +82,7 @@ Before submitting, please ensure your changes meet the following criteria:
 ### 🌟 Other ways to contribute
 
 Not a Rust developer? We still need your help!
-*   **Testing:** We offer "Rolling Releases" (Flatpak, APK, Windows `.exe`). Download the rolling release from the [Releases page](https://codeberg.org/trougnouf/cfait/releases) (or compile it yourself) to test the bleeding edge and report bugs.
+*   **Testing:** We offer "Rolling Releases" (Flatpak, APK, Windows `.exe`). Download the rolling release from the [Releases page](https://git.disroot.org/trougnouf/cfait/releases) (or compile it yourself) to test the bleeding edge and report bugs.
 *   **Localization:** Help translate the app on [Codeberg Translate](https://translate.codeberg.org/projects/cfait).
 *   **Documentation:** The documentation can always be improved. If something is missing and/or confusing then explain it better.
 *   **Ideas, design & UI:** Suggestions for improvements are always welcome in the issue tracker.
-

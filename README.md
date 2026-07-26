@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="https://codeberg.org/trougnouf/cfait/releases"><img src="https://codeberg.org/trougnouf/cfait/badges/release.svg" alt="Releases"></a>
+  <a href="https://git.disroot.org/trougnouf/cfait/releases"><img src="https://git.disroot.org/trougnouf/cfait/badges/release.svg" alt="Releases"></a>
   <a href="https://f-droid.org/packages/com.trougnouf.cfait/"><img src="https://img.shields.io/f-droid/v/com.trougnouf.cfait.svg" alt="F-Droid"></a>
   <!--<a href="https://git.disroot.org/trougnouf/cfait/actions"><img src="https://git.disroot.org/trougnouf/cfait/badges/workflows/test_roll.yml/badge.svg" alt="Test status"></a>-->
   <a href="https://git.disroot.org/trougnouf/cfait/src/branch/main/LICENSE"><img src="https://img.shields.io/badge/license-GPLv3-gray.svg" alt="License"></a>
@@ -31,7 +31,7 @@ If you *do* want to sync your tasks across devices, Cfait connects seamlessly to
 
 | Desktop (GUI & TUI) | Mobile (Android) |
 | :---: | :---: |
-| ![Cfait GUI Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.5.2_screenshot_(GUI).png)<br>The Graphical Interface in v0.5.2 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(GUI)))</small><br><br>![Cfait TUI Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.5.0_screenshot_(TUI).png)<br>The Terminal Interface in v0.5.0 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(TUI)))</small> | ![Cfait Android Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.5.2_screenshot_(Android).png)<br>The Android client in v0.5.2 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(Android)))</small> |
+| ![Cfait GUI Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v1.1.0_screenshot_(GUI).png)<br>The Graphical Interface in v0.5.2 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(GUI)))</small><br><br>![Cfait TUI Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.5.0_screenshot_(TUI).png)<br>The Terminal Interface in v0.5.0 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(TUI)))</small> | ![Cfait Android Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v1.1.0_screenshot_(Android).png)<br>The Android client in v0.5.2 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(Android)))</small> |
 
 ### 📖 Documentation & usage
 
@@ -47,10 +47,10 @@ We offer both **Stable** and **Rolling** releases. We highly encourage users to 
 
 *(Note: On our releases page, the "Rolling" tag stays pinned at the very top. To find the latest stable version, scroll past it and click "Downloads" on the numbered release).*
 
-* **🐧 Linux:** Available on [Flathub](https://flathub.org/apps/com.trougnouf.Cfait), the AUR (`yay -S cfait`), or via `.deb` / `.tar.gz` on our [Releases page](https://codeberg.org/trougnouf/cfait/releases).
+* **🐧 Linux:** Available on [Flathub](https://flathub.org/apps/com.trougnouf.Cfait), the AUR (`yay -S cfait`), or via `.deb` / `.tar.gz` on our [Releases page](https://git.disroot.org/trougnouf/cfait/releases).
 * **👺 FreeBSD:** Available in [Ports/Packages](https://www.freshports.org/deskutils/cfait/), install with `pkg install cfait`
 * **📱 Android:** Get it on [F-Droid](https://f-droid.org/packages/com.trougnouf.cfait/), [Google Play](https://play.google.com/store/apps/details?id=com.trougnouf.cfait), or download the APK.
-* **🪟 Windows:** Check the [Releases page](https://codeberg.org/trougnouf/cfait/releases) for binaries.
+* **🪟 Windows:** Check the [Releases page](https://git.disroot.org/trougnouf/cfait/releases) for binaries.
 * **🍎 MacOS:** Download pre-compiled binaries provided by Martin Stut on https://static.stut.de/cfait-macos/
 * **⚙️ Rust (Cargo):** `cargo install cfait` (TUI) or `cargo install cfait --features gui --bin cfait-gui` (GUI).
 

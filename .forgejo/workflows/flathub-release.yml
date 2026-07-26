@@ -25,7 +25,8 @@ jobs:
 
       - name: Install Generator Dependencies
         run: |
-          pip install aiohttp tomlkit
+          # python3-aiohttp and python3-tomlkit are pre-installed in the Docker image
+          python3 -c "import aiohttp, tomlkit" || { echo 'Python packages not found'; exit 1; }
 
       - name: Fetch Flatpak Cargo Generator
         run: |

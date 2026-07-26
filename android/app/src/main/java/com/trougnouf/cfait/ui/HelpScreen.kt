@@ -203,9 +203,9 @@ fun AboutTabContent(api: CfaitMobile) {
                 Text(stringResource(R.string.about_version, versionInfo.version, versionInfo.commit) + " • GPL3", color = Color.Gray)
                 Text("Trougnouf (Benoit Brummer)", color = Color.Gray)
                 Text(
-                    "https://codeberg.org/trougnouf/cfait",
+                    "https://git.disroot.org/trougnouf/cfait",
                     color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.clickable { openUrl("https://codeberg.org/trougnouf/cfait") })
+                    modifier = Modifier.clickable { openUrl("https://git.disroot.org/trougnouf/cfait") })
             }
         }
     }
