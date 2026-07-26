@@ -1,87 +1,58 @@
-<b>Prenez le contrôle de votre liste de tâches.</b>
-
+<b>Take control of your TODO list.</b>
 <br><br>
-
-Conçu pour allier rapidité et stabilité grâce à Rust, Cfait vous permet de garder le contrôle de vos données grâce à une approche privilégiant d'abord le stockage local, qui se synchronise harmonieusement sur tous vos appareils.
-
+Cfait is designed for speed and stability using Rust, it puts you in control of your data with a local-first approach that syncs seamlessly across your devices.
 <br><br>
-
-<b>Pourquoi Cfait ?</b>
-
+<b>Why Cfait?</b>
 <ul>
-  <li><b>Code source ouvert et multi-plateforme :</b> Utilisez Cfait sur Android, Linux, et Windows. Vos tâches respectent les standards ouverts (CalDAV and iCalendar), pas les écosystèmes fermés.</li>
-  <li><b>Se synchronise partout :</b> Entièrement compatible avec Nextcloud, iCloud, Radicale, Xandikos, et les autres serveurs utilisant le standard CalDAV.</li>
-  <li><b>Priorité au hors ligne :</b> Les mises-à-jour optimistes de l'interface signifient que vous n'attendez jamais la réponse du serveur. Utilisez le calendrier persistant "Local" pour les tâches hors ligne et migrez-les vers un serveur plus tard.</li>
-  <li><b>Saisie intelligente :</b> Ajoutez des tâches naturellement. Taper "Acheter nourriture pour le chat !1 @tomorrow @@epicerie ~15m" définit automatiquement la priorité, l'échéance, le lieu et la durée.</li>
+  <li><b>Open Source & Cross-Platform:</b> Use Cfait on Android, Linux, and Windows. Your tasks adhere to open standards (CalDAV and iCalendar), not walled gardens.</li>
+  <li><b>Syncs Everywhere:</b> Fully compatible with Nextcloud, iCloud, Radicale, Xandikos, and other standard CalDAV servers.</li>
+  <li><b>Offline First:</b> Optimistic UI updates mean you never wait for a server response. Use the persistent "Local" calendar for offline tasks and migrate them to a server later.</li>
+  <li><b>Smart Input:</b> Add tasks naturally. Typing "Buy cat food !1 @tomorrow @@grocery_store ~15m" automatically sets the priority, due date, location and duration.</li>
 </ul>
-
 <br>
-
-<b>Fonctionnalités pour la productivité</b>
-
+<b>Productivity Features</b>
 <ul>
-  <li><b>Méthode GTD :</b> Marquez les tâches comme Besoin d'Action, En Cours (>), Annulé (x), ou Traité.</li>
-  <li><b>Hiérarchie :</b> Créez des sous-tâches, promouvez des enfants, et organisez des listes imbriquées.</li>
-  <li><b>Dépendances :</b> Liez des tâches en utilisant la logique "Bloqué-par" ou "Enfant-de" (RFC 9253).</li>
-  <li><b>Tags et Alias :</b> Organisez avec des tags hiérarchiques (p.ex., #travail:dorsal). Créez des alias (p.ex., #remise:=#rénovation and #rénovation:=@@domicile) pour un classement rapide.</li>
-  <li><b>Classement intelligent :</b> Les tâches sont triées par Statut > Date de début > Échéance > Priorité.</li>
+  <li><b>GTD Workflow:</b> Mark tasks as Needs Action, In Process (&gt;), Cancelled (x), or Done.</li>
+  <li><b>Hierarchy:</b> Create sub-tasks, promote children, and organize nested lists.</li>
+  <li><b>Dependencies:</b> Link tasks using "Blocked-by" or "Child-of" logic (RFC 9253).</li>
+  <li><b>Tags & Aliases:</b> Organize with hierarchical tags (e.g., #work:backend). Create inline aliases (e.g., #shed:=#home_improvement and @home_improvement:=@@home) for rapid filing.</li>
+  <li><b>Sane Sorting:</b> Tasks are sorted by Status &gt; Start Date &gt; Due Date &gt; Priority.</li>
 </ul>
-
 <br>
-
-<b>Guide pour la syntaxe intelligente</b>
-
+<b>Smart Syntax Guide</b>
 <br>
-
-Lorsque vous ajoutez ou éditez une tâche, utilisez ces raccourcis :
-
+When adding or editing a task, use these shortcuts:
 <ul>
-  <li><b>!1 à !9 :</b> Définissez la priorité (1 pour Critique, 9 pour Basse).</li>
-  <li><b>@date :</b> Définissez l'échéance (en anglais, p.ex., @tomorrow, @2025-12-31, @2w, @in two weeks).</li>
-  <li><b>^date :</b> Définissez la date de début (cache la tâche jusqu'à la date).</li>
-  <li><b>~durée :</b> Estimez le temps (p.ex., ~30m, ~2h).</li>
-  <li><b>@every X :</b> Définissez la récurrence (en anglais, p.ex., @daily, @every 2 weeks).</li>
-  <li><b>@@loc :</b> Définissez le lieu (e.g., @@domicile, @@"magasin bricolage").</li>
-  <li><b>url:http://perdu.com :</b> Attachez un URL.</li>
+  <li><b>!1 to !9:</b> Set Priority (1 is Critical, 9 is Low).</li>
+  <li><b>@date:</b> Set Due Date (e.g., @tomorrow, @2025-12-31, @2w, @in two weeks).</li>
+  <li><b>^date:</b> Set Start Date (hides task until date).</li>
+  <li><b>~duration:</b> Estimate time (e.g., ~30m, ~2h).</li>
+  <li><b>@every X:</b> Set Recurrence (e.g., @daily, @every 2 weeks).</li>
+  <li><b>@@loc:</b> Set Location (e.g., @@home, @@"hardware store").</li>
+  <li><b>url:http://perdu.com:</b> Attach a URL.</li>
 </ul>
-
 <br>
-
-<b>Recherche avancée</b>
-
+<b>Advanced Search</b>
 <br>
-
-Trouvez exactement ce dont vous avez besoin avec des filtres puissants :
-
+Find exactly what you need with powerful filters:
 <ul>
-  <li><b>is:active / is:done :</b> Filtrez par statut.</li>
-  <li><b>~<30m :</b> Trouvez les tâches prenant moins de 30 minutes.</li>
-  <li><b>!<3 :</b> Trouvez les tâches de haute priorité.</li>
-  <li><b>@<today :</b> Trouvez les tâches en retard.</li>
-  <li><b>@@domicile :</b> Trouvez les tâches d'un lieu spécifique.</li>
+  <li><b>is:active</b> / <b>is:done:</b> Filter by status.</li>
+  <li><b>~&lt;30m:</b> Find tasks taking less than 30 minutes.</li>
+  <li><b>!&lt;3:</b> Find high-priority tasks.</li>
+  <li><b>@&lt;today:</b> Find overdue tasks.</li>
+  <li><b>@@home:</b> Find tasks at a specific location.</li>
 </ul>
-
 <br>
-
-<b>Soutenir le développeur</b>
-
+<b>Support the Developer</b>
 <br>
-
-Si vous appréciez Cfait, pensez à soutenir son développeur :
-
+If you enjoy using Cfait, please consider supporting its developer:
 <ul>
-  <li>💳 <b>Liberapay :</b> https://liberapay.com/trougnouf</li>
-  <li>🏦₿ D'autres informations relatives au paiement sont accessibles sur l'écran "Aide & à propos" ou sur le site web du projet.</li>
+  <li>💳 <b>Liberapay:</b> https://liberapay.com/trougnouf</li>
+  <li>🏦₿ Other payment details are available within the app's "Help & About" screen or on the project website.</li>
 </ul>
-
 <br>
-
-<b>Communauté & Source</b>
-
+<b>Community & Source</b>
 <br>
-
-Cfait est développé par Benoit Brummer (Trougnouf) et diffusé sous la licence GPL3.
-
+Cfait is developed by Benoit Brummer (Trougnouf) and released under the GPL3 License.
 <br><br>
-
-Le code source, les versions bureau, et la remontée d'anomalies sont disponibles à l'adresse : https://git.disroot.org/trougnouf/cfait
+Source code, desktop versions, and issue tracking available at: https://git.disroot.org/trougnouf/cfait
