@@ -83,7 +83,6 @@
     "cli_desc_import_default": "Importer dans la collection locale par défaut.",
     "cli_desc_import_specific": "Importer dans un calendrier local spécifique.",
     "cli_desc_list": "Lister les tâches (respecte les paramètres de visibilité).",
-    "cli_desc_move": "",
     "cli_desc_no_wait": "Mettre l'action en attente dans le journal local et quitter sans synchroniser.",
     "cli_desc_pause": "Mettre en pause le suivi du temps d'une tâche.",
     "cli_desc_replace": "Remplacer intégralement le résumé et les métadonnées de la tâche.\nUtilisez --file <chemin> pour remplacer depuis un fichier Markdown.\nUtilisez --tree pour remplacer toute la hiérarchie depuis un fichier.",
@@ -489,7 +488,6 @@
     "mode_create": "Créer",
     "move_failed": "Déplacement échoué : %{error}",
     "move_task_title": "Déplacer la tâche",
-    "move_task_tree": "",
     "move_to": "Déplacer vers :",
     "moving_task": "Déplacement de la tâche...",
     "name_label": "Nom",
@@ -740,7 +738,6 @@
     "tui_manage_sessions_title": "Gérer les sessions",
     "tui_mode_caldav": "[1] Se connecter à un serveur CalDAV (Radicale, Nextcloud, etc.)",
     "tui_mode_offline": "[2] Mode hors ligne (Tâches locales uniquement)",
-    "tui_move_toggle": "",
     "tui_older_sessions_hidden": {
         "one": "... et 1 de plus (Appuyez sur Maj+T pour gérer)",
         "other": "... et %{count} de plus (Appuyez sur Maj+T pour gérer)"
