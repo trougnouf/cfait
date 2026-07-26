@@ -78,6 +78,222 @@
   </requires>
 
   <releases>
+    <release version="1.1.0" date="2026-07-26">
+      <description>
+        <p>Features:</p>
+        <ul>
+          <li>(parser) Implement localized syntax parsing via cached lexicon ( https://codeberg.org/trougnouf/cfait/issues/83 )</li>
+          <li>(parser) Localized parser support for is:(some_status), translate built-in help, localize the syntax highlighter and filtering logic</li>
+          <li>Add wiki-link support and inline description previews</li>
+          <li>Add focus action (GUI+TUI)</li>
+          <li>Add round-trip markdown editing with header support and syntax highlighting (GUI)</li>
+          <li>Edit task tree</li>
+          <li>Edit task tree (TUI)</li>
+          <li>Col:/cal: prefixes, complete tree action, markdown table syntax</li>
+          <li>Add [&gt;]/[&lt;] paused checkbox support for markdown task tree editor</li>
+          <li>Tree extractor: support parallel tasks with same number in markdown lists</li>
+          <li>(core) Implement fuzzy wiki-link dependency resolution and markdown round-tripping</li>
+          <li>Add native markdown inline formatting (GUI, TUI)</li>
+          <li>Add native markdown link and bare URL rendering support</li>
+          <li>Hide markdown formatting marks in viewers (all clients), implement markdown formatting in Android</li>
+          <li>(android) Implement task focus and pinning, and fix search collapse state</li>
+          <li>(cli) Add --parent/-p flag to list and search commands for subtree focus</li>
+          <li>(cli) Add tree command and support task resolution by title</li>
+          <li>(cli) Append action</li>
+          <li>(android) Add edit task tree action (within edit task dialog)</li>
+          <li>Save and edit tree action from the edit dialog</li>
+          <li>Consolidate subtask extraction into standard description editing</li>
+          <li>Implement Kahn's algorithm for topological sorting of dependencies</li>
+          <li>Implement custom collection reordering ( https://github.com/trougnouf/cfait/issues/48 )</li>
+          <li>Implement path-based search filtering with dimmed ancestors</li>
+          <li>(gui) Remember window size ( https://github.com/trougnouf/cfait/issues/47 )</li>
+          <li>(gui) Double click title bar to toggle maximize ( https://github.com/trougnouf/cfait/issues/47 )</li>
+          <li>Support TLS client certificate ( https://github.com/trougnouf/cfait/issues/51 )</li>
+          <li>(cli) Add --clear-deps flag to the edit action</li>
+          <li>`rel:` syntax</li>
+          <li>(markdown) Show sub-task's collection when it differs from its parent</li>
+          <li>Prevent writes to system collections (trash/recovery)</li>
+          <li>(android) Add logcat dumps to crash handler and debug export, fix blocked_by/related_to mismatch</li>
+          <li>Add structural notes (without checkboxes). Android: fix panic/logcat capture</li>
+          <li>Inherit parent categories, location, and priority when creating subtasks ( https://codeberg.org/trougnouf/cfait/pulls/88 )</li>
+          <li>Implement is:* syntax for flags</li>
+          <li>(android) Markdown syntax highlighting</li>
+          <li>Sort collections by size (default:on) option</li>
+          <li>Ensure system collections are sorted below when sorting collections by size</li>
+          <li>(cli) Refactor edit to use external editor, rename edit to replace</li>
+          <li>Split whole month and year defined tasks' VEVENTs into two VEVENTs (first and last day)</li>
+          <li>Support `@next &lt;day of the month&gt;` syntax ( https://codeberg.org/trougnouf/cfait/issues/86 )</li>
+          <li>Include root task in task tree editor (single text field)</li>
+          <li>Add resolve_selection_aliases to fix alias expansion in search (reported by wunter8)</li>
+          <li>Promote moves one level up instead of systematically removing parent</li>
+          <li>(tools) Analyze_radicale_logs.py for data usage</li>
+          <li>Sync default_calendar and disabled_calendars globally, fix Android isolation behavior (reported by wunter8)</li>
+          <li>(markdown) Skip trashed sub-tasks</li>
+          <li>Move dates to end of smart string (Michael FR) and make date badges clickable)</li>
+          <li>Support custom URI schemes and auto-prepend https:// for schemeless URLs ( https://github.com/trougnouf/cfait/issues/60 )</li>
+          <li>Add smart syntax highlighting to markdown fields (Android) and support out-of-order numbered lists</li>
+          <li>(cli) Add replace --file flag to replace tasks and/or trees from markdown files</li>
+          <li>Allow comma-separated synonyms for search keywords ( @gallegonovato )</li>
+          <li>(i18n) Make parser accent-agnostic, sanitize locale tokens, and add placeholder CI tests</li>
+          <li>(markdown) Show human-friendly col: name</li>
+          <li>Add move task tree toggle (and CLI move action)</li>
+          <li>(filter) Hide note containers from is:ready view ( https://codeberg.org/trougnouf/cfait/issues/94 )</li>
+          <li>(sort) Notes inherit most actionable child rank ( https://codeberg.org/trougnouf/cfait/issues/94 )</li>
+          <li>(gui) Show linked tasks in the markdown editor</li>
+          <li>(android) Show linked tasks in the markdown editor</li>
+        </ul>
+        <p>Bug Fixes:</p>
+        <ul>
+          <li>(cli) Intercept --help and -h flags globally (reported by wunter8)</li>
+          <li>(localization) Complete SessionHighlighter date and goal interval unit lexicon support</li>
+          <li>(store) Use exact token matching for search status filter</li>
+          <li>(android) Prevent TopAppBar overflow for long translation strings ( https://codeberg.org/trougnouf/cfait/issues/85 )</li>
+          <li>(android) Propagate and display authentification failure errors to UI</li>
+          <li>Correct 403 error classification in sync</li>
+          <li>Ensure there are no alarms for trashed tasks (TUI and Android)</li>
+          <li>Unpaired quote lookahead, heading/list hierarchy, [/]/[&gt;] paused/running status mapping</li>
+          <li>Unambiguous deps with short UIDs, topological markdown sort, and move actions on collection change</li>
+          <li>Markdown highlighting in checkbox lines</li>
+          <li>Wiki link marker typo from "[[]" to "[["</li>
+          <li>(store) Ignore trash and recovery collections in fuzzy-matching</li>
+          <li>Re-quote CLI arguments with spaces for smart syntax parser</li>
+          <li>(store) Fix search when focused on a task</li>
+          <li>Resolve search duplication and orphaned results bug</li>
+          <li>Consolidate search expansion and task extraction parent tracking</li>
+          <li>(store) Only add ancestors to search results when focused</li>
+          <li>Prevent silent drop of wiki links and empty prefix values in parser</li>
+          <li>(android) Fix race condition by capturing state values before coroutine launches ( https://github.com/trougnouf/cfait/issues/46 )</li>
+          <li>(android) Fix duplicate key crash and virtual task UID collision ( https://github.com/trougnouf/cfait/issues/46 )</li>
+          <li>(cli) Don't auto-quote plain text args in shell_arg_to_smart_token</li>
+          <li>(cli) Hide trash and recovery calendars in list --all (reported by winter8)</li>
+          <li>(parser) Prevent location alias expansion from overwriting hierarchy (reported by wunter8)</li>
+          <li>(sync) Preserve task ETags and HREFs during journal compaction ( https://github.com/trougnouf/cfait/issues/56 )</li>
+          <li>(gui) Prevent auto-scroll when clicking on a task (makes it easier to double-click)</li>
+          <li>(gui) Show all tooltips with (truncated) task names ( https://github.com/trougnouf/cfait/issues/57 )</li>
+          <li>(deps) Validate dependencies and display errors globally across all clients</li>
+          <li>Make expanded_done_groups transient</li>
+          <li>(store) Move expand/collapse to bottom and bypass limits during search</li>
+          <li>(android) Restore expand/collapse rows</li>
+          <li>Prioritize active collections over system collections in duplicate UID resolution</li>
+          <li>Prevent data loss in task creation from premature UI clearing and silenced disk errors</li>
+          <li>Detach keyring blocking call to prevent background worker freeze</li>
+          <li>Use dedicated Tokia runtime for keyring to prevent D-Bus disconnection ( https://codeberg.org/trougnouf/cfait/issues/89 )</li>
+          <li>(android) Prevent ANR by moving disk I/O outside store locks and fixing lock order</li>
+          <li>Resolve sync alert loop for settings task conflicts</li>
+          <li>(gui) Prevent panic on multi-byte UTF-8 characters in markdown list markers</li>
+          <li>Resolve infinite sync loop and 412 conflicts from ETag mismatches (reported by Geoffrey Frogeye)</li>
+          <li>(android) Fix compilation issue</li>
+          <li>(help) Increase layout widths, add missing fr translations, reorder parser arrays</li>
+          <li>(locales) Spaces after commas, symbols first, correct placeholders</li>
+          <li>(gui) Truncate long task names and reorder remove link buttons in details view</li>
+          <li>Prevent unnecessary moves</li>
+          <li>(gui) Increase move task modal height to show toggle and cancel button</li>
+          <li>(android) Add null safety to move dialog remember blocks ( https://codeberg.org/trougnouf/cfait/issues/93 )</li>
+          <li>(gui) Increase channel buffer sizes ( https://github.com/trougnouf/cfait/issues/58 )</li>
+          <li>(i18n) Complete French help translation and reorder parser tokens</li>
+          <li>(android) Wrap help screen items vertically and localize hardcoded UI strings</li>
+          <li>(i18n) Remove spaces from parser tokens</li>
+          <li>(android) Fix Kotlin regex syntax errors in Markdown highlighting</li>
+          <li>(i18n) Remove spaces from parser tokens</li>
+        </ul>
+        <p>Other:</p>
+        <ul>
+          <li>O(N^2) markdown parsing performance with early termination and paragraph-by-paragraph rendering</li>
+          <li>Update README.md</li>
+        </ul>
+        <p>Refactor:</p>
+        <ul>
+          <li>Cache localized search terms in ParserLexicon and simplify session examples</li>
+          <li>(markdown) Resolve fuzzy wiki-links via dependency resolver and inherit collection on extraction</li>
+          <li>Use only `col:` instead of `cal:` and `col:` (less ambiguous with `+cal`)</li>
+          <li>Replace #permanent with is:permanent</li>
+          <li>(keyring) Force secret portal in flatpak to prevent keyutils fallback ( https://codeberg.org/trougnouf/cfait/issues/89 )</li>
+          <li>Unify task filtering for search, categories and locations (reported by wunter8)</li>
+          <li>Show `col:collection_name` under any task whose parent's collection differs instead of comparing to the root's collection</li>
+        </ul>
+        <p>Documentation:</p>
+        <ul>
+          <li>Update specs</li>
+          <li>(gui) Add missing keyboard shortcuts to action strings</li>
+          <li>(cli) Clarify edit / append</li>
+          <li>Clarify `is:ready` ( https://github.com/trougnouf/cfait/issues/55 ), document `dep:`</li>
+          <li>Display commit number along with version</li>
+          <li>(android) Display commit number along with version</li>
+          <li>(specs) Match listing to in-app order of icons</li>
+          <li>(specs) Clarify Round-trip UIDs</li>
+          <li>(i18n) French translation</li>
+          <li>(i18n) Fix locales issues</li>
+          <li>(tui) Add move toggle hint</li>
+        </ul>
+        <p>Performance:</p>
+        <ul>
+          <li>(search) Cache localized strings and lexicon lock</li>
+          <li>Optimize SessionHighlighter lock usage</li>
+          <li>Add fast-path optimizations for markdown parsing and dependency resolution</li>
+          <li>Add persistent children_index to TaskStore to eliminate O(N²) descendant lookups</li>
+          <li>Eliminate GUI bottlenecks - use widget::Id directly and remove responsive wrapper</li>
+          <li>Memoize tree location counts and effective states to eliminate O(N*Depth) lookups in GUI filter loop</li>
+          <li>Batch local storage operations by calendar href to eliminate save freeze</li>
+          <li>Cache TLS RootCertStore and debounce Refresh messages ( https://github.com/trougnouf/cfait/issues/58 )</li>
+          <li>Collapse N+1 calendar discovery queries into a single PROPFIND</li>
+          <li>Reduce data consumption by pushing local journal mutations before fetching remote tasks to prevent CTAG cache invalidation</li>
+          <li>Use unconditional PUT to eliminate double-uploads and 412 errors</li>
+          <li>Remove redundant DELETE fallback in bulk companion event sync</li>
+          <li>Use indexed UID and VTODO filters for efficient CalDAV sync</li>
+          <li>Add HTTP response decompression support</li>
+          <li>(store) Skip unchanged tasks in sync_tree_from_markdown, doc(i18n): show English syntax in the built-in help</li>
+        </ul>
+        <p>Styling:</p>
+        <ul>
+          <li>(gui) Set default window size to 1024x768</li>
+          <li>(gui) Distinct headers in the settings</li>
+          <li>(gui) Improve description editor fit</li>
+          <li>Display notes as colored blocks</li>
+          <li>(gui) Prevent checkboxes from shifting when focused</li>
+          <li>(android) Differentiate local collections in the settings screen (suggested by wunter8)</li>
+          <li>Dim up/down arrow in settings screens for collections that cannot move up/down (suggested by wunter8)</li>
+          <li>Differentiate tasks due today</li>
+        </ul>
+        <p>Testing:</p>
+        <ul>
+          <li>Recognize #blocked tag and legacy blocked category for task blocking</li>
+        </ul>
+        <p>Miscellaneous Tasks:</p>
+        <ul>
+          <li>(i18n) Fix Spanish parser_tomorrow typo</li>
+          <li>(gui) Move focus to the bottom of the context menu</li>
+          <li>(android) Regen bindings</li>
+          <li>Fix Android compilation error</li>
+          <li>Remove unused strings</li>
+          <li>Fix Android move collection feature, (all clients:) rm confirmation button when modifying collection color or sort order</li>
+          <li>Remove redundant message</li>
+          <li>Fix Android build</li>
+          <li>Update tests</li>
+          <li>Fix CLI order of operations for --clear-deps</li>
+          <li>(android) Escape closing brace in plural regex and remove dead logcat code</li>
+          <li>Fix Android compilation</li>
+          <li>GUI tooltip, config docs, Android sort_preset settings parity</li>
+          <li>Regenerate Android bindings</li>
+          <li>Update rust dependencies and rust version (1.96-&gt;1.97)</li>
+          <li>Remove unused strings</li>
+          <li>(flatpak) Add Notifications permission</li>
+          <li>Update uniffi.toml to new format</li>
+          <li>Handle legacy dependencies and self-heal dangling references</li>
+          <li>(android) Fix compilation issue</li>
+          <li>Correct bare URL end index calculation in Markdown parser</li>
+          <li>Fix tests</li>
+          <li>Update rust dependencies</li>
+          <li>Fix tests</li>
+          <li>Fix compilation errors</li>
+          <li>Fix GUI move task tree toggle</li>
+          <li>(android) Update dependencies</li>
+          <li>(android) Update dependencies (gradle)</li>
+          <li>(android) Bump compileSdk from 36 to 37</li>
+          <li>Fix Android build</li>
+          <li>Move main mirror and CI to disroot</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.9" date="2026-06-25">
       <description>
         <p>Features:</p>
