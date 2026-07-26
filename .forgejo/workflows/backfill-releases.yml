@@ -1,0 +1,136 @@
+name: Backfill Historical Android Releases
+
+on:
+  workflow_dispatch:
+
+jobs:
+  backfill:
+    runs-on: self-hosted-ubuntu
+    container:
+      image: local/ubuntu-builder
+      volumes:
+        - cargo-registry:/usr/local/cargo/registry
+        - gradle-cache:/root/.gradle
+    strategy:
+      matrix:
+        include:
+          - version: 0.4.5
+            commit: 5b2527db6d5c91b27de7d80f8506da2bdb7d07b6
+            platform: ""
+          - version: 0.4.6
+            commit: 20dee3e7fd9b449d0af73d871d9dc07918bb262d
+            platform: ""
+          - version: 0.4.7
+            commit: f42f162ee89feb7fbca1ccbb214b2a3f4ab79d85
+            platform: ""
+          - version: 0.4.8
+            commit: b9d839e1dee5d9cb0792fac97c1bb7ecb5244f21
+            platform: "28"
+          - version: 0.4.9
+            commit: f8e94eccb9f53bc635783df9ec4ccffe7ca1c658
+            platform: "28"
+          - version: 0.5.1
+            commit: bae9bc3f7768a476656ce4eed740099205356e70
+            platform: "28"
+          - version: 0.5.4
+            commit: 5cf4b908ac4ca14d74e9544f5e37153ec4c7bf32
+            platform: "28"
+          - version: 0.5.5
+            commit: 164452f77aaac26774c1efc756df1a58fb980561
+            platform: "28"
+          - version: 0.5.7
+            commit: 9413cccc5364c6fcae0a0d282bab2361ab400763
+            platform: "28"
+          - version: 0.5.8
+            commit: af210e170c137b1ce65e4d77a146cbbbc63ed12b
+            platform: "28"
+          - version: 0.5.9
+            commit: fdb6cef12b751d4876d9d500c5a373a060e41489
+            platform: "28"
+          - version: 1.0.1
+            commit: fa586beef8e0971f89a25463c54b1231d960c4f2
+            platform: "28"
+          - version: 1.0.2
+            commit: a2dcfefc40410eaf511ecbf68d071370fb028587
+            platform: "28"
+          - version: 1.0.4
+            commit: 490d8ce63066cdbd43263eb25b03743e2ddefd90
+            platform: "28"
+          - version: 1.0.5
+            commit: 4f0dd97022223d990f6d385a3804d00d626c3fbc
+            platform: "28"
+          - version: 1.0.7
+            commit: fd4f208858a801576084e894b1144db5164f4543
+            platform: "28"
+          - version: 1.0.8
+            commit: efc32150b5f6241de26f40965584b7d3cac70d4b
+            platform: "28"
+          - version: 1.0.9
+            commit: 72d58ce3d7621b298ad08792c93ecd9cbc4194c1
+            platform: "28"
+
+    steps:
+      - name: Checkout at specific commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.commit }}
+          fetch-depth: 0
+
+      - name: Set version env
+        run: |
+          echo "VERSION=v${{ matrix.version }}" >> $GITHUB_ENV
+          echo "RAW_VERSION=${{ matrix.version }}" >> $GITHUB_ENV
+          echo "PLATFORM=${{ matrix.platform }}" >> $GITHUB_ENV
+
+      - name: Restore Keystore
+        if: env.ANDROID_SIGNING_KEYSTORE_B64 != ''
+        run: echo "$ANDROID_SIGNING_KEYSTORE_B64" | base64 --decode > cfait-release.keystore
+
+      - name: Set Reproducible Timestamp
+        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> $GITHUB_ENV
+
+      - name: Install Rust targets
+        run: |
+          rustup default stable
+          rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
+
+      - name: Install cargo-ndk
+        run: cargo install --locked cargo-ndk@4.1.2
+
+      - name: Build Rust JNI Libs
+        env:
+          RUSTFLAGS: "--remap-path-prefix ${{ github.workspace }}=/c --remap-path-prefix /usr/local/cargo=/cargo -C link-arg=-Wl,--build-id=none"
+        run: |
+          cargo ndk \
+            -t aarch64-linux-android \
+            -t armv7-linux-androideabi \
+            -t x86_64-linux-android \
+            -o ./android/app/src/main/jniLibs \
+            ${PLATFORM:+--platform $PLATFORM} \
+            build --release --lib --features mobile
+
+      - name: Build APK
+        env:
+          KEYSTORE_FILE: "${{ github.workspace }}/cfait-release.keystore"
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Prepare APK
+        run: |
+          mkdir -p dist
+          find android/app/build/outputs/apk/release -name '*.apk' \
+            -exec cp {} "dist/cfait-android-v${{ matrix.version }}.apk" \;
+
+      - name: Upload to disroot
+        env:
+          TEA_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          tea login add --name disroot --url ${{ github.server_url }} --token $TEA_TOKEN
+          tea release delete --repo ${{ github.repository }} --confirm $VERSION || true
+          tea release create --repo ${{ github.repository }} --title $VERSION --tag $VERSION
+          tea release assets create --repo ${{ github.repository }} $VERSION "dist/cfait-android-v${{ matrix.version }}.apk"
