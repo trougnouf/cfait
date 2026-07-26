@@ -83,8 +83,7 @@ jobs:
           echo "PLATFORM=${{ matrix.platform }}" >> $GITHUB_ENV
 
       - name: Restore Keystore
-        if: env.ANDROID_SIGNING_KEYSTORE_B64 != ''
-        run: echo "$ANDROID_SIGNING_KEYSTORE_B64" | base64 --decode > cfait-release.keystore
+        run: echo "${{ secrets.ANDROID_SIGNING_KEYSTORE_B64 }}" | base64 --decode > cfait-release.keystore
 
       - name: Set Reproducible Timestamp
         run: echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> $GITHUB_ENV
