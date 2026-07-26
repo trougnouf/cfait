@@ -128,27 +128,9 @@ jobs:
       - name: Upload to disroot
         env:
           TEA_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-          API_URL: ${{ github.server_url }}/api/v1
         run: |
-          # Get existing release ID or create new one
-          RELEASE_ID=$(curl -s -H "Authorization: token $TEA_TOKEN" \
-            "$API_URL/repos/${{ github.repository }}/releases/tags/${{ env.VERSION }}" \
-            | jq -r '.id')
-          
-          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
-            # Create new release
-            RELEASE_ID=$(curl -s -X POST \
-              -H "Authorization: token $TEA_TOKEN" \
-              -H "Content-Type: application/json" \
-              -d "{\"tag_name\": \"${{ env.VERSION }}\", \"name\": \"${{ env.VERSION }}\"}" \
-              "$API_URL/repos/${{ github.repository }}/releases" \
-              | jq -r '.id')
-          fi
-          
-          # Upload APK asset
-          curl -s -X POST \
-            -H "Authorization: token $TEA_TOKEN" \
-            -H "Content-Type: multipart/form-data" \
-            -F "attachment=@dist/cfait-android-v${{ matrix.version }}.apk" \
-            -F "name=cfait-android-v${{ matrix.version }}.apk" \
-            "$API_URL/repos/${{ github.repository }}/releases/$RELEASE_ID/assets"
+          tea login add --name disroot --url ${{ github.server_url }} --token $TEA_TOKEN
+          tea release delete --repo ${{ github.repository }} --confirm ${{ env.VERSION }} || true
+          tea release create --repo ${{ github.repository }} --title ${{ env.VERSION }} --tag ${{ env.VERSION }}
+          cd dist
+          tea release assets create --repo ${{ github.repository }} ${{ env.VERSION }} cfait-android-v${{ matrix.version }}.apk
