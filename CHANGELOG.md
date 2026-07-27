@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.1.1] - 2026-07-27
+
+### 🐛 Bug Fixes
+
+- Fix ancestry chain for structural notes ( https://codeberg.org/trougnouf/cfait/issues/94 )
+- *(tui)* Make * key clear all filters consistently with GUI and help (reported by wunter8)
+- *(store)* Preserve tree structure with combined is:ready and search filters ( https://codeberg.org/trougnouf/cfait/issues/94 )
+- *(ci)* Move RUSTFLAGS to Build Rust JNI Libs step for reproducible Android builds on F-Droid
+- *(ci)* Exclude rolling tag from test_roll.yml triggers to prevent duplicate workflow runs
+
+### ⚙️ Miscellaneous Tasks
+
+- Backfill releases (for F-Droid CI)
+- Fix backfill-releases.yml
+- Fix backfill-releases.yml
+- *(ci)* Fix Android backfill releases
+- Remove backfill-release.yml
 ## [1.1.0] - 2026-07-26
 
 ### 🚀 Features
@@ -117,6 +134,7 @@
 - *(i18n)* Remove spaces from parser tokens
 - *(android)* Fix Kotlin regex syntax errors in Markdown highlighting
 - *(i18n)* Remove spaces from parser tokens
+- Add pre-installed python packages to ubuntu-builder Docker image and update remaining codeberg.org links to git.disroot.org, update GUI and Android screenshots
 
 ### 💼 Other
 
