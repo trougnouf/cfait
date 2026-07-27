@@ -6,6 +6,7 @@ on:
       - "master"
       - "**"
     tags:
+      - "!rolling"
       - "**"
   pull_request:
 
