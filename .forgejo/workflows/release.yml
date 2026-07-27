@@ -83,22 +83,22 @@ jobs:
         run: echo "${{ secrets.ANDROID_SIGNING_KEYSTORE_B64 }}" | base64 --decode > cfait-release.keystore
 
       - name: Build Rust JNI Libs
-        run:
-          |
-          export CARGO_HOME_PATH="${CARGO_HOME:-$HOME/.cargo}"
-          export CFLAGS="-ffile-prefix-map=${{ github.workspace }}=/c -ffile-prefix-map=$CARGO_HOME_PATH=/cargo"
-          export CXXFLAGS="-ffile-prefix-map=${{ github.workspace }}=/c -ffile-prefix-map=$CARGO_HOME_PATH=/cargo"
-          export RUSTFLAGS="--remap-path-prefix ${{ github.workspace }}=/c --remap-path-prefix $CARGO_HOME_PATH=/cargo -C link-arg=-Wl,--build-id=none"
-
-          echo "=== REPRODUCIBILITY DIAGNOSTICS ==="
-          echo "Workspace: ${{ github.workspace }}"
-          echo "Cargo Home: $CARGO_HOME_PATH"
-          echo "Rustc Version: $(rustc --version)"
-          echo "Cargo Version: $(cargo --version)"
-          echo "CFLAGS: $CFLAGS"
-          echo "CXXFLAGS: $CXXFLAGS"
-          echo "RUSTFLAGS: $RUSTFLAGS"
-          echo "===================================="
+        run: |
+          # F-Droid uses /home/vagrant/build/com.trougnouf.cfait and /home/vagrant/.cargo
+          # We replicate this environment to guarantee identical C/C++ absolute paths
+          # since CMake (used by aws-lc-sys) ignores cargo-ndk's CFLAGS.
+          
+          mkdir -p /home/vagrant/build/com.trougnouf.cfait
+          cp -a ${{ github.workspace }}/. /home/vagrant/build/com.trougnouf.cfait/
+          
+          export REAL_CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
+          mkdir -p /home/vagrant
+          ln -s "$REAL_CARGO_HOME" /home/vagrant/.cargo
+          
+          cd /home/vagrant/build/com.trougnouf.cfait
+          export CARGO_HOME=/home/vagrant/.cargo
+          export RUSTFLAGS="--remap-path-prefix $(pwd)=/c --remap-path-prefix $CARGO_HOME=/cargo -C link-arg=-Wl,--build-id=none"
+          
           cargo ndk \
             -t aarch64-linux-android \
             -t armv7-linux-androideabi \
@@ -106,6 +106,9 @@ jobs:
             -o ./android/app/src/main/jniLibs \
             --platform 28 \
             build --release --lib --features mobile
+            
+          # Copy the built libraries back to the original workspace so Gradle can package them
+          cp -a ./android/app/src/main/jniLibs ${{ github.workspace }}/android/app/src/main/
 
       - name: Build Android Artifacts (AAB & APK)
         if: startsWith(github.ref, 'refs/tags/')
