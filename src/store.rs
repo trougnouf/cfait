@@ -2686,6 +2686,19 @@ impl TaskStore {
                         .entry(p.clone())
                         .or_insert_with(Vec::new)
                         .push(t.uid.clone());
+                }
+            }
+            for t in &all_allowed_refs {
+                if let Some(fs) = &focus_set
+                    && !fs.contains(&t.uid)
+                {
+                    continue;
+                }
+                if t.uid == "cfait-global-settings-v1" || t.summary.starts_with("⚙ Cfait Settings")
+                {
+                    continue;
+                }
+                if let Some(p) = &t.parent_uid {
                     parent_map.insert(t.uid.clone(), p.clone());
                 }
             }
@@ -2733,8 +2746,9 @@ impl TaskStore {
                 }
             }
 
-            let filtered_refs = base_refs
-                .into_iter()
+            let filtered_refs: Vec<&Task> = all_allowed_refs
+                .iter()
+                .copied()
                 .filter(|t| direct_matches.contains(&t.uid) || context_matches.contains(&t.uid))
                 .collect();
 
