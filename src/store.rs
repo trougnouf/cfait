@@ -2512,7 +2512,8 @@ impl TaskStore {
         let run_pipeline = |ignore_categories: bool,
                             ignore_locations: bool|
          -> (Vec<&Task>, HashSet<String>) {
-            let base_refs: Vec<&Task> = all_allowed_refs
+            // Pre-filter to strip out irrelevant system tasks and respect the focus boundary once
+            let scoped_refs: Vec<&Task> = all_allowed_refs
                 .iter()
                 .copied()
                 .filter(|t| {
@@ -2521,13 +2522,19 @@ impl TaskStore {
                     {
                         return false;
                     }
-
                     if t.uid == "cfait-global-settings-v1"
                         || t.summary.starts_with("⚙ Cfait Settings")
                     {
                         return false;
                     }
+                    true
+                })
+                .collect();
 
+            let base_refs: Vec<&Task> = scoped_refs
+                .iter()
+                .copied()
+                .filter(|t| {
                     // Status-based filtering
                     if !has_status_filter && t.status.is_done() && options.hide_completed_global {
                         return false;
@@ -2680,55 +2687,31 @@ impl TaskStore {
 
             let mut children_map = HashMap::new();
             let mut parent_map = HashMap::new();
-            for t in &base_refs {
+
+            for t in &scoped_refs {
                 if let Some(p) = &t.parent_uid {
                     children_map
                         .entry(p.clone())
                         .or_insert_with(Vec::new)
                         .push(t.uid.clone());
-                }
-            }
-            for t in &all_allowed_refs {
-                if let Some(fs) = &focus_set
-                    && !fs.contains(&t.uid)
-                {
-                    continue;
-                }
-                if t.uid == "cfait-global-settings-v1" || t.summary.starts_with("⚙ Cfait Settings")
-                {
-                    continue;
-                }
-                if let Some(p) = &t.parent_uid {
                     parent_map.insert(t.uid.clone(), p.clone());
                 }
             }
 
-            let mut direct_matches = HashSet::new();
-            let mut context_matches = HashSet::new();
-            let mut expand_queue = Vec::new();
+            let mut direct_matches_initial = HashSet::new();
 
-            for t in &base_refs {
-                // Always include the focused root so the tree has an anchor
+            for t in &scoped_refs {
                 if Some(t.uid.as_str()) == options.focused_task_uid {
-                    direct_matches.insert(t.uid.clone());
+                    direct_matches_initial.insert(t.uid.clone());
                 }
 
                 if is_match(t) {
-                    direct_matches.insert(t.uid.clone());
-                    expand_queue.push(t.uid.clone());
-
-                    // Always add all ancestors to preserve tree structure when searched/filtered
-                    let mut curr = t.uid.clone();
-                    while let Some(p) = parent_map.get(&curr) {
-                        if !context_matches.insert(p.clone()) {
-                            break; // Already visited this path up
-                        }
-                        curr = p.clone();
-                    }
+                    direct_matches_initial.insert(t.uid.clone());
                 }
             }
 
             let mut expanded = HashSet::new();
+            let mut expand_queue: Vec<String> = direct_matches_initial.iter().cloned().collect();
             let mut idx = 0;
             while idx < expand_queue.len() {
                 let curr = expand_queue[idx].clone();
@@ -2740,19 +2723,38 @@ impl TaskStore {
 
                 if let Some(children) = children_map.get(&curr) {
                     for child in children {
-                        direct_matches.insert(child.clone());
                         expand_queue.push(child.clone());
                     }
                 }
             }
 
-            let filtered_refs: Vec<&Task> = all_allowed_refs
+            let mut valid_direct_matches = HashSet::new();
+            for t in &base_refs {
+                if expanded.contains(&t.uid) {
+                    valid_direct_matches.insert(t.uid.clone());
+                }
+            }
+
+            let mut context_matches = HashSet::new();
+            for uid in &valid_direct_matches {
+                let mut curr = uid.clone();
+                while let Some(p) = parent_map.get(&curr) {
+                    if !context_matches.insert(p.clone()) {
+                        break;
+                    }
+                    curr = p.clone();
+                }
+            }
+
+            let filtered_refs: Vec<&Task> = scoped_refs
                 .iter()
                 .copied()
-                .filter(|t| direct_matches.contains(&t.uid) || context_matches.contains(&t.uid))
+                .filter(|t| {
+                    valid_direct_matches.contains(&t.uid) || context_matches.contains(&t.uid)
+                })
                 .collect();
 
-            (filtered_refs, direct_matches)
+            (filtered_refs, expanded)
         };
 
         // Execution of pipelines:
