@@ -2732,7 +2732,22 @@ pub async fn handle_key_event(
                     }
                 }
             }
-            KeyCode::Char('*') if state.active_focus == Focus::Sidebar => {
+            KeyCode::Char('*') => {
+                let mut needs_refresh = false;
+
+                if !state.active_search_query.is_empty() {
+                    state.active_search_query.clear();
+                    state.search_collapsed_tasks.clear();
+                    needs_refresh = true;
+                }
+
+                if state.focused_task_uid.is_some() {
+                    let intent = AppIntent::FocusTaskTree { uid: None };
+                    let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
+                    let _ = state.apply_task_intent(&intent, &config);
+                    needs_refresh = true;
+                }
+
                 match state.sidebar_mode {
                     SidebarMode::Calendars => {
                         let are_all_visible = state
@@ -2748,6 +2763,7 @@ pub async fn handle_key_event(
                             for cal in &state.calendars {
                                 if state.active_cal_href.as_ref() != Some(&cal.href) {
                                     state.hidden_calendars.insert(cal.href.clone());
+                                    needs_refresh = true;
                                 }
                             }
                         } else {
@@ -2756,16 +2772,27 @@ pub async fn handle_key_event(
                             if state.active_cal_href.as_deref() != Some("local://trash") {
                                 state.hidden_calendars.insert("local://trash".to_string());
                             }
+                            needs_refresh = true;
                             let _ = action_tx.send(Action::Refresh).await;
                         }
                     }
                     SidebarMode::Categories => {
-                        state.selected_categories.clear();
+                        if !state.selected_categories.is_empty() {
+                            state.selected_categories.clear();
+                            needs_refresh = true;
+                        }
                     }
                     SidebarMode::Locations => {
-                        state.selected_locations.clear();
+                        if !state.selected_locations.is_empty() {
+                            state.selected_locations.clear();
+                            needs_refresh = true;
+                        }
                     }
                     SidebarMode::Goals => {}
+                }
+
+                if needs_refresh {
+                    state.refresh_filtered_view();
                 }
             }
             KeyCode::Right => {
