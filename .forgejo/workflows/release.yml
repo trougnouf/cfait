@@ -61,9 +61,9 @@ jobs:
           path: dist/*
   # --- JOB 2: ANDROID BUILD (Ubuntu 24.04) ---
   build-android:
-    runs-on: self-hosted-ubuntu
+    runs-on: self-hosted-debian
     container:
-      image: local/ubuntu-builder
+      image: local/debian-builder
       volumes:
         - cargo-registry:/usr/local/cargo/registry
         - gradle-cache:/root/.gradle
