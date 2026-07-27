@@ -67,9 +67,6 @@ jobs:
       volumes:
         - cargo-registry:/usr/local/cargo/registry
         - gradle-cache:/root/.gradle
-      # Correct location for container-specific environment variables
-      env:
-        RUSTFLAGS: "--remap-path-prefix ${{ github.workspace }}=/c --remap-path-prefix /usr/local/cargo=/cargo -C link-arg=-Wl,--build-id=none"
 
     steps:
       - name: Checkout
@@ -86,6 +83,8 @@ jobs:
         run: echo "${{ secrets.ANDROID_SIGNING_KEYSTORE_B64 }}" | base64 --decode > cfait-release.keystore
 
       - name: Build Rust JNI Libs
+        env:
+          RUSTFLAGS: "--remap-path-prefix ${{ github.workspace }}=/c --remap-path-prefix /usr/local/cargo=/cargo -C link-arg=-Wl,--build-id=none"
         run: |
           cargo ndk \
             -t aarch64-linux-android \
