@@ -83,9 +83,22 @@ jobs:
         run: echo "${{ secrets.ANDROID_SIGNING_KEYSTORE_B64 }}" | base64 --decode > cfait-release.keystore
 
       - name: Build Rust JNI Libs
-        env:
-          RUSTFLAGS: "--remap-path-prefix ${{ github.workspace }}=/c --remap-path-prefix /usr/local/cargo=/cargo -C link-arg=-Wl,--build-id=none"
-        run: |
+        run:
+          |
+          export CARGO_HOME_PATH="${CARGO_HOME:-$HOME/.cargo}"
+          export CFLAGS="-ffile-prefix-map=${{ github.workspace }}=/c -ffile-prefix-map=$CARGO_HOME_PATH=/cargo"
+          export CXXFLAGS="-ffile-prefix-map=${{ github.workspace }}=/c -ffile-prefix-map=$CARGO_HOME_PATH=/cargo"
+          export RUSTFLAGS="--remap-path-prefix ${{ github.workspace }}=/c --remap-path-prefix $CARGO_HOME_PATH=/cargo -C link-arg=-Wl,--build-id=none"
+
+          echo "=== REPRODUCIBILITY DIAGNOSTICS ==="
+          echo "Workspace: ${{ github.workspace }}"
+          echo "Cargo Home: $CARGO_HOME_PATH"
+          echo "Rustc Version: $(rustc --version)"
+          echo "Cargo Version: $(cargo --version)"
+          echo "CFLAGS: $CFLAGS"
+          echo "CXXFLAGS: $CXXFLAGS"
+          echo "RUSTFLAGS: $RUSTFLAGS"
+          echo "===================================="
           cargo ndk \
             -t aarch64-linux-android \
             -t armv7-linux-androideabi \
