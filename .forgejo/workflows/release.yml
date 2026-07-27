@@ -88,7 +88,6 @@ jobs:
 
           # Force 1 codegen unit to eliminate multithreaded layout non-determinism
           export CARGO_PROFILE_RELEASE_CODEGEN_UNITS="1"
-          export CARGO_PROFILE_RELEASE_TRIM_PATHS="all"
 
           export CFLAGS="-ffile-prefix-map=${{ github.workspace }}=/c -ffile-prefix-map=$CARGO_HOME_PATH=/cargo"
           export CXXFLAGS="-ffile-prefix-map=${{ github.workspace }}=/c -ffile-prefix-map=$CARGO_HOME_PATH=/cargo"
