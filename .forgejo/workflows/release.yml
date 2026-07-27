@@ -89,8 +89,11 @@ jobs:
           # Force 1 codegen unit to eliminate multithreaded layout non-determinism
           export CARGO_PROFILE_RELEASE_CODEGEN_UNITS="1"
 
-          export CFLAGS="-ffile-prefix-map=${{ github.workspace }}=/c -ffile-prefix-map=$CARGO_HOME_PATH=/cargo"
-          export CXXFLAGS="-ffile-prefix-map=${{ github.workspace }}=/c -ffile-prefix-map=$CARGO_HOME_PATH=/cargo"
+          # Abort on panic to entirely strip the non-deterministic .gcc_except_table and .eh_frame
+          export CARGO_PROFILE_RELEASE_PANIC="abort"
+
+          export CFLAGS="-ffile-prefix-map=${{ github.workspace }}=/c -ffile-prefix-map=$CARGO_HOME_PATH=/cargo -fno-exceptions -fno-unwind-tables"
+          export CXXFLAGS="-ffile-prefix-map=${{ github.workspace }}=/c -ffile-prefix-map=$CARGO_HOME_PATH=/cargo -fno-exceptions -fno-unwind-tables"
 
           # Explicitly map the rust sysroot so stdlib panic strings match exactly across hosts
           export RUST_SYSROOT="$(rustc --print sysroot)"
