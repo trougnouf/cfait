@@ -2701,10 +2701,6 @@ impl TaskStore {
             let mut direct_matches_initial = HashSet::new();
 
             for t in &scoped_refs {
-                if Some(t.uid.as_str()) == options.focused_task_uid {
-                    direct_matches_initial.insert(t.uid.clone());
-                }
-
                 if is_match(t) {
                     direct_matches_initial.insert(t.uid.clone());
                 }
