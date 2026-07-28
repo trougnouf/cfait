@@ -476,10 +476,10 @@ pub fn serialize_task_tree(
 
     // Topologically sort children so that blocked tasks inherently follow their dependencies.
     // This perfectly preserves sequence ordering (1., 2., 3.) when re-extracting markdown.
+    // We pre-sort deterministically (by created date, then summary) to ensure stable
+    // git diffs and consistent publication output, rather than volatile priority/status sorting.
     for list in children_map.values_mut() {
-        list.sort_by(|a, b| {
-            a.compare_for_sort(b, 5, false, crate::config::SortPreset::UrgentStartedDue)
-        });
+        list.sort_by_cached_key(|t| (t.created_date(), t.summary.clone(), t.uid.clone()));
 
         if list.len() <= 1 {
             continue;
