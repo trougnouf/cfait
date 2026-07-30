@@ -12,7 +12,7 @@ fn test_parent_and_dependency_coexistence() {
     let ics = task.to_ics();
 
     // Verify string content contains both (this fails if one overwrites the other)
-    let parent_present = ics.contains("RELATED-TO:parent-123");
+    let parent_present = ics.contains("RELATED-TO;RELTYPE=PARENT:parent-123");
     let dep_present = ics.contains("RELATED-TO;RELTYPE=DEPENDS-ON:blocker-456");
 
     if !parent_present || !dep_present {
@@ -49,7 +49,7 @@ fn test_multiple_dependencies_with_parent() {
 
     // Verify all relations are present in ICS
     assert!(
-        ics.contains("RELATED-TO:parent-abc"),
+        ics.contains("RELATED-TO;RELTYPE=PARENT:parent-abc"),
         "Parent missing in ICS"
     );
     assert!(
@@ -142,7 +142,10 @@ fn test_all_relationship_types() {
     let ics = task.to_ics();
 
     // Verify all three types are present
-    assert!(ics.contains("RELATED-TO:parent-x"), "Parent missing");
+    assert!(
+        ics.contains("RELATED-TO;RELTYPE=PARENT:parent-x"),
+        "Parent missing"
+    );
     assert!(
         ics.contains("RELATED-TO;RELTYPE=DEPENDS-ON:blocker-y"),
         "Dependency missing"

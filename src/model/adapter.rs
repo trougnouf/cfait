@@ -285,7 +285,8 @@ impl IcsAdapter {
 
         if let Some(p_uid) = &task.parent_uid {
             let p_uid_str: String = p_uid.as_str().into();
-            let prop = icalendar::Property::new("RELATED-TO", &p_uid_str);
+            let mut prop = icalendar::Property::new("RELATED-TO", &p_uid_str);
+            prop.add_parameter("RELTYPE", "PARENT");
             todo.append_multi_property(prop);
         }
         for dep_uid in &task.dependencies {
