@@ -2110,7 +2110,7 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
     };
 
     let mut context_banner: Option<Element<'_, Message>> = None;
-    let is_desc_focused = app.active_focus != Focus::AddTaskInput;
+    let is_desc_focused = app.last_edited_field == 1 || app.editing_tree_uid.is_some();
 
     let (target_text, cursor_pos) = if is_desc_focused {
         (
@@ -2326,7 +2326,8 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
     }
 
     let inner_content: Element<'_, Message> = if is_expanded {
-        let max_desc_height = (app.current_window_size.height - 180.0).max(160.0);
+        let banner_height = if context_banner.is_some() { 65.0 } else { 0.0 };
+        let max_desc_height = (app.current_window_size.height - 190.0 - banner_height).max(160.0);
 
         let placeholder = if app.creating_with_desc {
             rust_i18n::t!("notes_create_subtasks_placeholder").into_owned()

@@ -211,19 +211,41 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 *focus = Focus::AddTaskInput;
             }
 
-            // Re-create the text replacing the range
-            let current = app.input_value.text();
-            let mut new_text = current[..range.start].to_string();
-            new_text.push_str(&text);
-            if range.end < current.len() {
-                new_text.push_str(&current[range.end..]);
+            let is_desc = app.last_edited_field == 1 || app.editing_tree_uid.is_some();
+
+            if is_desc {
+                let current = app.description_value.text();
+                app.desc_undo_stack.push(current.clone());
+                app.desc_redo_stack.clear();
+
+                let mut new_text = current[..range.start].to_string();
+                new_text.push_str(&text);
+                if range.end < current.len() {
+                    new_text.push_str(&current[range.end..]);
+                } else {
+                    new_text.push(' ');
+                }
+                app.description_value = text_editor::Content::with_text(&new_text);
+                app.description_value
+                    .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
+                iced::widget::operation::focus(iced::widget::Id::new("description_input"))
             } else {
-                new_text.push(' ');
+                let current = app.input_value.text();
+                app.input_undo_stack.push(current.clone());
+                app.input_redo_stack.clear();
+
+                let mut new_text = current[..range.start].to_string();
+                new_text.push_str(&text);
+                if range.end < current.len() {
+                    new_text.push_str(&current[range.end..]);
+                } else {
+                    new_text.push(' ');
+                }
+                app.input_value = text_editor::Content::with_text(&new_text);
+                app.input_value
+                    .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
+                iced::widget::operation::focus(iced::widget::Id::new("main_input"))
             }
-            app.input_value = text_editor::Content::with_text(&new_text);
-            app.input_value
-                .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
-            iced::widget::operation::focus(iced::widget::Id::new("main_input"))
         }
         Message::InputChanged(action) => {
             app.active_focus = Focus::AddTaskInput;
