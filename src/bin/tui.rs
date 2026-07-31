@@ -128,7 +128,13 @@ async fn apply_markdown_update(
     full_uid: &str,
     new_content: &str,
     use_tree: bool,
-) -> Result<(Vec<cfait::journal::Action>, Vec<String>), String> {
+) -> Result<
+    (
+        Vec<cfait::journal::Action>,
+        Vec<cfait::store::DependencyWarning>,
+    ),
+    String,
+> {
     let def_time = chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
     let mut actions = Vec::new();
     let mut warnings = Vec::new();

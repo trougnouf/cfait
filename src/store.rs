@@ -79,6 +79,41 @@ pub struct AggregateItem {
     pub is_expanded: bool,
 }
 
+#[derive(Debug, Clone)]
+pub enum DependencyWarning {
+    NotFound {
+        raw: String,
+    },
+    Ambiguous {
+        raw: String,
+        source_task_uid: String,
+        relation_type: String, // "dep" or "rel"
+        candidates: Vec<(String, String)>,
+    },
+}
+
+impl std::fmt::Display for DependencyWarning {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DependencyWarning::NotFound { raw } => write!(f, "Task reference '{}' not found.", raw),
+            DependencyWarning::Ambiguous {
+                raw, candidates, ..
+            } => {
+                let summaries: Vec<String> = candidates
+                    .iter()
+                    .take(3)
+                    .map(|(_, s)| format!("'{}'", s))
+                    .collect();
+                let mut matches_str = summaries.join(", ");
+                if candidates.len() > 3 {
+                    matches_str.push_str(", ...");
+                }
+                write!(f, "Ambiguous reference '{}'. Matches: {}", raw, matches_str)
+            }
+        }
+    }
+}
+
 /// Result container returned by the `filter` pipeline.
 pub struct FilterResult {
     pub items: Vec<TaskListItem>,
@@ -880,7 +915,35 @@ impl TaskStore {
         Err(rust_i18n::t!("error_task_not_found_for_dep", reference = clean_ref).to_string())
     }
 
-    pub fn resolve_dependencies(&self, task: &mut Task) -> Vec<String> {
+    pub fn get_dependency_candidates(&self, reference: &str) -> Vec<(String, String)> {
+        let clean_ref = reference
+            .trim_start_matches("[[")
+            .trim_end_matches("]]")
+            .trim();
+        let lower_ref = clean_ref.to_lowercase();
+        let mut matches = Vec::new();
+
+        for (href, map) in &self.calendars {
+            let is_system = href == crate::storage::LOCAL_TRASH_HREF || href == "local://recovery";
+            for (uid, task) in map {
+                if uid.starts_with(clean_ref)
+                    || (!is_system && task.summary.to_lowercase().contains(&lower_ref))
+                {
+                    matches.push((uid.clone(), task.summary.clone()));
+                }
+            }
+        }
+
+        matches.sort_by(|a, b| {
+            let a_starts = a.1.to_lowercase().starts_with(&lower_ref);
+            let b_starts = b.1.to_lowercase().starts_with(&lower_ref);
+            b_starts.cmp(&a_starts).then_with(|| a.1.cmp(&b.1))
+        });
+        matches.dedup_by(|a, b| a.0 == b.0);
+        matches
+    }
+
+    pub fn resolve_dependencies(&self, task: &mut Task) -> Vec<DependencyWarning> {
         let mut resolved_deps = Vec::new();
         let mut warnings = Vec::new();
 
@@ -888,12 +951,20 @@ impl TaskStore {
             let uid = if dep.len() == 36 && uuid::Uuid::parse_str(dep).is_ok() {
                 dep.clone()
             } else {
-                match self.resolve_dependency_ref(dep) {
-                    Ok(u) => u,
-                    Err(e) => {
-                        warnings.push(e);
-                        dep.clone()
-                    }
+                let candidates = self.get_dependency_candidates(dep);
+                if candidates.len() == 1 {
+                    candidates[0].0.clone()
+                } else if candidates.len() > 1 {
+                    warnings.push(DependencyWarning::Ambiguous {
+                        raw: dep.clone(),
+                        source_task_uid: task.uid.clone(),
+                        relation_type: "dep".to_string(),
+                        candidates,
+                    });
+                    dep.clone()
+                } else {
+                    warnings.push(DependencyWarning::NotFound { raw: dep.clone() });
+                    dep.clone()
                 }
             };
 
@@ -916,12 +987,20 @@ impl TaskStore {
             let uid = if rel.len() == 36 && uuid::Uuid::parse_str(rel).is_ok() {
                 rel.clone()
             } else {
-                match self.resolve_dependency_ref(rel) {
-                    Ok(u) => u,
-                    Err(e) => {
-                        warnings.push(e);
-                        rel.clone()
-                    }
+                let candidates = self.get_dependency_candidates(rel);
+                if candidates.len() == 1 {
+                    candidates[0].0.clone()
+                } else if candidates.len() > 1 {
+                    warnings.push(DependencyWarning::Ambiguous {
+                        raw: rel.clone(),
+                        source_task_uid: task.uid.clone(),
+                        relation_type: "rel".to_string(),
+                        candidates,
+                    });
+                    rel.clone()
+                } else {
+                    warnings.push(DependencyWarning::NotFound { raw: rel.clone() });
+                    rel.clone()
                 }
             };
 
@@ -1378,6 +1457,54 @@ impl TaskStore {
         None
     }
 
+    pub fn replace_dependency(
+        &mut self,
+        task_uid: &str,
+        old_dep: &str,
+        new_dep: String,
+    ) -> Option<Task> {
+        if let Some((task, _)) = self.get_task_mut(task_uid)
+            && let Some(pos) = task.dependencies.iter().position(|d| d == old_dep)
+        {
+            task.dependencies[pos] = new_dep.clone();
+            task.sequence += 1;
+            let task_clone = task.clone();
+            if let Some(list) = self.blocking_index.get_mut(old_dep) {
+                list.retain(|u| u != task_uid);
+            }
+            self.blocking_index
+                .entry(new_dep)
+                .or_default()
+                .push(task_uid.to_string());
+            return Some(task_clone);
+        }
+        None
+    }
+
+    pub fn replace_relation(
+        &mut self,
+        task_uid: &str,
+        old_rel: &str,
+        new_rel: String,
+    ) -> Option<Task> {
+        if let Some((task, _)) = self.get_task_mut(task_uid)
+            && let Some(pos) = task.related_to.iter().position(|r| r == old_rel)
+        {
+            task.related_to[pos] = new_rel.clone();
+            task.sequence += 1;
+            let task_clone = task.clone();
+            if let Some(list) = self.related_from_index.get_mut(old_rel) {
+                list.retain(|u| u != task_uid);
+            }
+            self.related_from_index
+                .entry(new_rel)
+                .or_default()
+                .push(task_uid.to_string());
+            return Some(task_clone);
+        }
+        None
+    }
+
     /// Synchronizes a modified markdown tree back into the database.
     pub fn sync_tree_from_markdown(
         &mut self,
@@ -1387,7 +1514,7 @@ impl TaskStore {
         default_reminder_time: Option<chrono::NaiveTime>,
         trash_retention_days: u32,
         calendars: &[crate::model::CalendarListEntry],
-    ) -> Result<(Vec<crate::journal::Action>, Vec<String>), String> {
+    ) -> Result<(Vec<crate::journal::Action>, Vec<DependencyWarning>), String> {
         let mut actions = Vec::new();
         let old_descendants = self.get_descendant_uids(root_uid);
         let (clean_desc, extracted) = crate::model::extractor::extract_markdown_tasks(markdown);
@@ -3669,6 +3796,24 @@ impl TaskStore {
                 let new_tasks = self.duplicate_task_tree(uid);
                 actions.extend(new_tasks.into_iter().map(JournalAction::Create));
             }
+            AppIntent::ReplaceDependency {
+                uid,
+                old_dep,
+                new_dep,
+            } => {
+                if let Some(updated) = self.replace_dependency(uid, old_dep, new_dep.clone()) {
+                    actions.push(JournalAction::Update(updated));
+                }
+            }
+            AppIntent::ReplaceRelation {
+                uid,
+                old_rel,
+                new_rel,
+            } => {
+                if let Some(updated) = self.replace_relation(uid, old_rel, new_rel.clone()) {
+                    actions.push(JournalAction::Update(updated));
+                }
+            }
             AppIntent::RemoveParent { uid } => {
                 let new_parent = self
                     .get_task_ref(uid)
@@ -3823,6 +3968,9 @@ impl TaskStore {
                 }
             }
             AppIntent::DuplicateTaskTree { .. } => "Duplicated",
+            AppIntent::ReplaceDependency { .. } | AppIntent::ReplaceRelation { .. } => {
+                "Fixed relationship"
+            }
             _ => "Action",
         }
         .to_string();

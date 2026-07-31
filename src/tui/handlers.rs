@@ -3608,8 +3608,17 @@ pub async fn handle_key_event(
                         state.mode = InputMode::Normal;
                         state.message = rust_i18n::t!("jumped_to_task").to_string();
                     } else {
-                        state.message = rust_i18n::t!("error_task_not_found").to_string();
+                        // FALLBACK: Treat degraded/unresolved references as a search query!
+                        state.input_buffer = target_uid.clone();
+                        state.active_search_query = target_uid.clone();
+                        state.search_collapsed_tasks.clear();
+                        state.selected_categories.clear();
+                        state.selected_locations.clear();
+
+                        state.refresh_filtered_view();
+
                         state.mode = InputMode::Normal;
+                        state.message = format!("Searching: '{}'", target_uid);
                     }
                 }
             }

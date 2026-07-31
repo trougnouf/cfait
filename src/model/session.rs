@@ -160,39 +160,118 @@ impl SessionState {
 #[cfg_attr(feature = "mobile", derive(uniffi::Enum))]
 #[derive(Clone, Debug)]
 pub enum AppIntent {
-    ToggleTask { uid: String },
-    ToggleTaskShift { uid: String },
-    DeleteTask { uid: String },
-    DeleteTaskTree { uid: String },
-    TogglePin { uid: String },
-    CancelTask { uid: String },
-    ChangePriority { uid: String, delta: i8 },
-    StartTask { uid: String },
-    PauseTask { uid: String },
-    StopTask { uid: String },
-    MoveTask { uid: String, target_href: String },
-    MoveTaskTree { uid: String, target_href: String },
-    DuplicateTaskTree { uid: String },
-    RemoveParent { uid: String },
-    MakeChild { uid: String, parent_uid: String },
-    AddDependency { uid: String, blocker_uid: String },
-    RemoveDependency { uid: String, blocker_uid: String },
-    AddRelatedTo { uid: String, related_uid: String },
-    RemoveRelatedTo { uid: String, related_uid: String },
+    ToggleTask {
+        uid: String,
+    },
+    ToggleTaskShift {
+        uid: String,
+    },
+    DeleteTask {
+        uid: String,
+    },
+    DeleteTaskTree {
+        uid: String,
+    },
+    TogglePin {
+        uid: String,
+    },
+    CancelTask {
+        uid: String,
+    },
+    ChangePriority {
+        uid: String,
+        delta: i8,
+    },
+    StartTask {
+        uid: String,
+    },
+    PauseTask {
+        uid: String,
+    },
+    StopTask {
+        uid: String,
+    },
+    MoveTask {
+        uid: String,
+        target_href: String,
+    },
+    MoveTaskTree {
+        uid: String,
+        target_href: String,
+    },
+    DuplicateTaskTree {
+        uid: String,
+    },
+    RemoveParent {
+        uid: String,
+    },
+    MakeChild {
+        uid: String,
+        parent_uid: String,
+    },
+    AddDependency {
+        uid: String,
+        blocker_uid: String,
+    },
+    RemoveDependency {
+        uid: String,
+        blocker_uid: String,
+    },
+    AddRelatedTo {
+        uid: String,
+        related_uid: String,
+    },
+    RemoveRelatedTo {
+        uid: String,
+        related_uid: String,
+    },
 
-    SetSearchTerm { term: String },
-    ToggleTagFilter { tag: String },
-    ToggleLocationFilter { location: String },
+    SetSearchTerm {
+        term: String,
+    },
+    ToggleTagFilter {
+        tag: String,
+    },
+    ToggleLocationFilter {
+        location: String,
+    },
     ClearFilters,
     ToggleMatchAllCategories,
-    SetSidebarCalendar { href: String },
+    SetSidebarCalendar {
+        href: String,
+    },
     ClearTagFilters,
     ClearLocationFilters,
-    ToggleTreeCollapse { uid: String },
-    SetTreeCollapse { uid: String, collapsed: bool },
-    ToggleDoneGroup { key: String },
-    ToggleTagCollapse { tag: String },
-    ToggleLocationCollapse { location: String },
-    FocusTaskTree { uid: Option<String> },
-    CompleteTree { uid: String },
+    ToggleTreeCollapse {
+        uid: String,
+    },
+    SetTreeCollapse {
+        uid: String,
+        collapsed: bool,
+    },
+    ToggleDoneGroup {
+        key: String,
+    },
+    ToggleTagCollapse {
+        tag: String,
+    },
+    ToggleLocationCollapse {
+        location: String,
+    },
+    FocusTaskTree {
+        uid: Option<String>,
+    },
+    CompleteTree {
+        uid: String,
+    },
+    ReplaceDependency {
+        uid: String,
+        old_dep: String,
+        new_dep: String,
+    },
+    ReplaceRelation {
+        uid: String,
+        old_rel: String,
+        new_rel: String,
+    },
 }

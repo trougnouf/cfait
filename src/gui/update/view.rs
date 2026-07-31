@@ -1348,9 +1348,29 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 // 5. USE DELAYED SCROLL
                 // We use delayed here because if we just un-hid the calendar or cleared filters,
                 // the row widget does not exist in the current frame.
-                return scroll_to_selected_delayed(app, true);
+                scroll_to_selected_delayed(app, true)
+            } else {
+                // FALLBACK: Treat degraded/unresolved references as a search query!
+                app.search_value = iced::widget::text_editor::Content::with_text(&uid);
+                app.session.search_term = uid.clone();
+                app.session.search_collapsed_tasks.clear();
+                app.session.selected_categories.clear();
+                app.session.selected_locations.clear();
+
+                app.search_value
+                    .perform(iced::widget::text_editor::Action::Move(
+                        iced::widget::text_editor::Motion::DocumentEnd,
+                    ));
+
+                refresh_filtered_tasks(app);
+
+                app.active_focus = Focus::SearchInput;
+                if let Ok(mut focus) = ACTIVE_FOCUS.write() {
+                    *focus = Focus::SearchInput;
+                }
+
+                iced::widget::operation::focus(iced::widget::Id::new("header_search_input"))
             }
-            Task::none()
         }
         Message::TagHovered(uid) => {
             app.hovered_tag_uid = uid;
