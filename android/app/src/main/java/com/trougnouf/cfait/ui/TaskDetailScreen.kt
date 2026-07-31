@@ -59,8 +59,11 @@ fun TaskDetailScreen(
     var smartInput by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
     var description by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
     
+    var smartUndoStack by remember { mutableStateOf(listOf<TextFieldValue>()) }
+    var smartRedoStack by remember { mutableStateOf(listOf<TextFieldValue>()) }
     var descUndoStack by remember { mutableStateOf(listOf<TextFieldValue>()) }
     var descRedoStack by remember { mutableStateOf(listOf<TextFieldValue>()) }
+    var lastEdited by remember { mutableStateOf("smart") }
 
     var showMoveDialog by remember { mutableStateOf(false) }
     val isDark = isSystemInDarkTheme()
@@ -114,11 +117,17 @@ fun TaskDetailScreen(
             // This ensures completed/hidden tasks can still be opened and edited.
             task = api.getTaskByUid(uid)
             task?.let {
-                smartInput = androidx.compose.ui.text.input.TextFieldValue(it.smartString)
+                val newSmart = androidx.compose.ui.text.input.TextFieldValue(it.smartString)
+                smartInput = newSmart
+                smartUndoStack = listOf(newSmart)
+                smartRedoStack = emptyList()
+
                 val newDesc = androidx.compose.ui.text.input.TextFieldValue(it.description)
                 description = newDesc
                 descUndoStack = listOf(newDesc)
                 descRedoStack = emptyList()
+                
+                lastEdited = "smart"
             }
         }
     }
@@ -249,24 +258,52 @@ fun TaskDetailScreen(
                         }
                     }
 
-                    if (descUndoStack.size > 1) {
+                    val canUndoDesc = descUndoStack.size > 1
+                    val canUndoSmart = smartUndoStack.size > 1
+                    val canUndo = (lastEdited == "smart" && canUndoSmart) || (lastEdited == "desc" && canUndoDesc) || canUndoSmart || canUndoDesc
+
+                    if (canUndo) {
                         IconButton(onClick = {
-                            if (descUndoStack.size > 1) {
+                            if (lastEdited == "smart" && canUndoSmart) {
+                                val current = smartUndoStack.last()
+                                smartRedoStack = (smartRedoStack + current).takeLast(50)
+                                smartUndoStack = smartUndoStack.dropLast(1)
+                                smartInput = smartUndoStack.last()
+                            } else if (canUndoDesc) {
                                 val current = descUndoStack.last()
                                 descRedoStack = (descRedoStack + current).takeLast(50)
                                 descUndoStack = descUndoStack.dropLast(1)
                                 description = descUndoStack.last()
+                            } else if (canUndoSmart) {
+                                val current = smartUndoStack.last()
+                                smartRedoStack = (smartRedoStack + current).takeLast(50)
+                                smartUndoStack = smartUndoStack.dropLast(1)
+                                smartInput = smartUndoStack.last()
                             }
                         }) { NfIcon(NfIcons.UNDO, 20.sp) }
                     }
                     
-                    if (descRedoStack.isNotEmpty()) {
+                    val canRedoDesc = descRedoStack.isNotEmpty()
+                    val canRedoSmart = smartRedoStack.isNotEmpty()
+                    val canRedo = (lastEdited == "smart" && canRedoSmart) || (lastEdited == "desc" && canRedoDesc) || canRedoSmart || canRedoDesc
+
+                    if (canRedo) {
                         IconButton(onClick = {
-                            if (descRedoStack.isNotEmpty()) {
+                            if (lastEdited == "smart" && canRedoSmart) {
+                                val next = smartRedoStack.last()
+                                smartRedoStack = smartRedoStack.dropLast(1)
+                                smartUndoStack = (smartUndoStack + next).takeLast(50)
+                                smartInput = next
+                            } else if (canRedoDesc) {
                                 val next = descRedoStack.last()
                                 descRedoStack = descRedoStack.dropLast(1)
                                 descUndoStack = (descUndoStack + next).takeLast(50)
                                 description = next
+                            } else if (canRedoSmart) {
+                                val next = smartRedoStack.last()
+                                smartRedoStack = smartRedoStack.dropLast(1)
+                                smartUndoStack = (smartUndoStack + next).takeLast(50)
+                                smartInput = next
                             }
                         }) { NfIcon(NfIcons.REDO, 20.sp) }
                     }
@@ -313,7 +350,15 @@ fun TaskDetailScreen(
         ) {
             OutlinedTextField(
                 value = smartInput,
-                onValueChange = { smartInput = it.copy(text = it.text.replace("\n", "")) }, // Manually block newlines
+                onValueChange = { 
+                    val replaced = it.copy(text = it.text.replace("\n", ""))
+                    if (replaced.text != smartInput.text) {
+                        smartUndoStack = (smartUndoStack + it).takeLast(50)
+                        smartRedoStack = emptyList()
+                        lastEdited = "smart"
+                    }
+                    smartInput = replaced
+                }, // Manually block newlines
                 label = { Text(stringResource(R.string.task_smart_syntax_label)) },
                 modifier = Modifier.fillMaxWidth(),
                 visualTransformation = remember(isDark) { SmartSyntaxTransformation(api, isDark) },
@@ -876,6 +921,7 @@ fun TaskDetailScreen(
                     if (it.text != description.text) {
                         descUndoStack = (descUndoStack + it).takeLast(50)
                         descRedoStack = emptyList()
+                        lastEdited = "desc"
                     }
                     description = it 
                 },

@@ -1106,6 +1106,22 @@ pub async fn handle_key_event(
 
     match state.mode {
         InputMode::Creating => match key.code {
+            KeyCode::Char('z') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if let Some(prev) = state.text_undo_stack.pop() {
+                    state.text_redo_stack.push(state.input_buffer.clone());
+                    state.input_buffer = prev;
+                    state.cursor_position = state.input_buffer.chars().count();
+                }
+                return None;
+            }
+            KeyCode::Char('y') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if let Some(next) = state.text_redo_stack.pop() {
+                    state.text_undo_stack.push(state.input_buffer.clone());
+                    state.input_buffer = next;
+                    state.cursor_position = state.input_buffer.chars().count();
+                }
+                return None;
+            }
             // NEW: Enter description mode during creation (Ctrl+E)
             KeyCode::Char('e') | KeyCode::Char('E')
                 if key.modifiers.contains(KeyModifiers::CONTROL) =>
@@ -1371,6 +1387,22 @@ pub async fn handle_key_event(
             _ => {}
         },
         InputMode::Editing => match key.code {
+            KeyCode::Char('z') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if let Some(prev) = state.text_undo_stack.pop() {
+                    state.text_redo_stack.push(state.input_buffer.clone());
+                    state.input_buffer = prev;
+                    state.cursor_position = state.input_buffer.chars().count();
+                }
+                return None;
+            }
+            KeyCode::Char('y') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if let Some(next) = state.text_redo_stack.pop() {
+                    state.text_undo_stack.push(state.input_buffer.clone());
+                    state.input_buffer = next;
+                    state.cursor_position = state.input_buffer.chars().count();
+                }
+                return None;
+            }
             KeyCode::Enter => {
                 let (clean_input_1, new_goals) =
                     crate::model::parser::extract_inline_goals(&state.input_buffer);
@@ -1462,6 +1494,22 @@ pub async fn handle_key_event(
             _ => {}
         },
         InputMode::EditingDescription | InputMode::EditingTree(_) => match key.code {
+            KeyCode::Char('z') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if let Some(prev) = state.text_undo_stack.pop() {
+                    state.text_redo_stack.push(state.input_buffer.clone());
+                    state.input_buffer = prev;
+                    state.cursor_position = state.input_buffer.chars().count();
+                }
+                return None;
+            }
+            KeyCode::Char('y') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if let Some(next) = state.text_redo_stack.pop() {
+                    state.text_undo_stack.push(state.input_buffer.clone());
+                    state.input_buffer = next;
+                    state.cursor_position = state.input_buffer.chars().count();
+                }
+                return None;
+            }
             // Enter inserts a newline
             KeyCode::Enter => {
                 state.enter_char('\n');
@@ -3228,6 +3276,22 @@ pub async fn handle_key_event(
             _ => {}
         },
         InputMode::AddingSession => match key.code {
+            KeyCode::Char('z') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if let Some(prev) = state.text_undo_stack.pop() {
+                    state.text_redo_stack.push(state.input_buffer.clone());
+                    state.input_buffer = prev;
+                    state.cursor_position = state.input_buffer.chars().count();
+                }
+                return None;
+            }
+            KeyCode::Char('y') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if let Some(next) = state.text_redo_stack.pop() {
+                    state.text_undo_stack.push(state.input_buffer.clone());
+                    state.input_buffer = next;
+                    state.cursor_position = state.input_buffer.chars().count();
+                }
+                return None;
+            }
             KeyCode::Enter => {
                 let input = state.input_buffer.clone();
                 if let Some(session) = crate::model::parser::parse_session_input(&input) {
@@ -3332,6 +3396,22 @@ pub async fn handle_key_event(
         },
 
         InputMode::EditingSession(ref uid, idx) => match key.code {
+            KeyCode::Char('z') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if let Some(prev) = state.text_undo_stack.pop() {
+                    state.text_redo_stack.push(state.input_buffer.clone());
+                    state.input_buffer = prev;
+                    state.cursor_position = state.input_buffer.chars().count();
+                }
+                return None;
+            }
+            KeyCode::Char('y') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if let Some(next) = state.text_redo_stack.pop() {
+                    state.text_undo_stack.push(state.input_buffer.clone());
+                    state.input_buffer = next;
+                    state.cursor_position = state.input_buffer.chars().count();
+                }
+                return None;
+            }
             KeyCode::Enter => {
                 let input = state.input_buffer.clone();
                 if let Some(session) = crate::model::parser::parse_session_input(&input) {

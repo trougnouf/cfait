@@ -168,6 +168,9 @@ pub struct AppState {
 
     pub undo_stack: Vec<crate::journal::UndoRecord>,
     pub redo_stack: Vec<crate::journal::UndoRecord>,
+
+    pub text_undo_stack: Vec<String>,
+    pub text_redo_stack: Vec<String>,
 }
 
 impl Default for AppState {
@@ -289,6 +292,8 @@ impl AppState {
             needs_redraw: false,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
+            text_undo_stack: Vec::new(),
+            text_redo_stack: Vec::new(),
         }
     }
 
@@ -543,6 +548,7 @@ impl AppState {
         self.cursor_position = self.clamp_cursor(cursor_moved_right);
     }
     pub fn enter_char(&mut self, new_char: char) {
+        let old = self.input_buffer.clone();
         // Safe insertion for UTF-8 strings
         let byte_index = self
             .input_buffer
@@ -553,19 +559,36 @@ impl AppState {
 
         self.input_buffer.insert(byte_index, new_char);
         self.move_cursor_right();
+        if old != self.input_buffer {
+            self.text_undo_stack.push(old);
+            self.text_redo_stack.clear();
+            if self.text_undo_stack.len() > 50 {
+                self.text_undo_stack.remove(0);
+            }
+        }
     }
     pub fn delete_char(&mut self) {
         if self.cursor_position != 0 {
+            let old = self.input_buffer.clone();
             let current_index = self.cursor_position;
             let before = self.input_buffer.chars().take(current_index - 1);
             let after = self.input_buffer.chars().skip(current_index);
             self.input_buffer = before.chain(after).collect();
             self.move_cursor_left();
+            if old != self.input_buffer {
+                self.text_undo_stack.push(old);
+                self.text_redo_stack.clear();
+                if self.text_undo_stack.len() > 50 {
+                    self.text_undo_stack.remove(0);
+                }
+            }
         }
     }
     pub fn reset_input(&mut self) {
         self.input_buffer.clear();
         self.cursor_position = 0;
+        self.text_undo_stack.clear();
+        self.text_redo_stack.clear();
     }
     fn clamp_cursor(&self, new_cursor_pos: usize) -> usize {
         new_cursor_pos.clamp(0, self.input_buffer.chars().count())
