@@ -187,11 +187,7 @@ pub fn suggest(
                     .map(|t| Suggestion {
                         replacement: format!("{}{}", original_prefix, quote_value(&t.summary)),
                         display: t.summary.clone(),
-                        description: if kind == PrefixToken::Dependency {
-                            "Depends On".to_string()
-                        } else {
-                            "Related To".to_string()
-                        },
+                        description: String::new(),
                     })
                     .collect();
 
