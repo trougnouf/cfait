@@ -1971,7 +1971,19 @@ fun HomeScreen(
                 },
                 bottomBar = {
                     Column {
-                        SnackbarHost(hostState = snackbarHostState)
+                        SnackbarHost(
+                            hostState = snackbarHostState,
+                            snackbar = { snackbarData ->
+                                Snackbar(
+                                    snackbarData = snackbarData,
+                                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                                    contentColor = MaterialTheme.colorScheme.onSurface,
+                                    actionColor = MaterialTheme.colorScheme.primary,
+                                    shape = RoundedCornerShape(4.dp),
+                                    modifier = Modifier.border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                                )
+                            }
+                        )
                         if (tabPosition == "bottom") {
                             tabsContent()
                         }
