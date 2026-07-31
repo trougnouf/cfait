@@ -2437,9 +2437,7 @@ impl CfaitMobile {
         let mut task = Task::new(&clean_input, &config.tag_aliases, def_time);
 
         let store = self.controller.store.lock().await;
-        if let Err(e) = store.resolve_dependencies(&mut task) {
-            return Err(MobileError::from(e));
-        }
+        let _warnings = store.resolve_dependencies(&mut task);
         drop(store);
 
         if task.summary.trim().is_empty() {
@@ -2549,9 +2547,7 @@ impl CfaitMobile {
         let mut task = Task::new(&clean_input, &config.tag_aliases, def_time);
 
         let store = self.controller.store.lock().await;
-        if let Err(e) = store.resolve_dependencies(&mut task) {
-            return Err(MobileError::from(e));
-        }
+        let _warnings2 = store.resolve_dependencies(&mut task);
         drop(store);
 
         if task.summary.trim().is_empty() && cleaned_desc.is_empty() {
@@ -2605,9 +2601,7 @@ impl CfaitMobile {
             );
 
             let store = self.controller.store.lock().await;
-            if let Err(e) = store.resolve_dependencies(&mut sub) {
-                return Err(MobileError::from(e));
-            }
+            let _warnings2 = store.resolve_dependencies(&mut sub);
             drop(store);
 
             if !ext.description.is_empty() {
@@ -2904,8 +2898,14 @@ impl CfaitMobile {
             config.trash_retention_days,
             &cals,
         ) {
-            Ok(actions) => {
+            Ok((actions, warnings)) => {
                 drop(store);
+                if !warnings.is_empty() {
+                    #[cfg(target_os = "android")]
+                    for w in warnings {
+                        log::warn!("Dependency resolution: {}", w);
+                    }
+                }
                 if !actions.is_empty() {
                     self.controller
                         .persist_changes(actions)

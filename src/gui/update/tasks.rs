@@ -1423,7 +1423,7 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
         crate::model::extractor::extract_markdown_tasks(&desc_text);
 
     if let Some(tree_uid) = &app.editing_tree_uid {
-        let mut actions = match app.store.sync_tree_from_markdown(
+        let (mut actions, warnings) = match app.store.sync_tree_from_markdown(
             tree_uid,
             &desc_text,
             &app.tag_aliases,
@@ -1431,12 +1431,18 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
             app.core_config.trash_retention_days,
             &app.calendars,
         ) {
-            Ok(acts) => acts,
+            Ok(res) => res,
             Err(e) => {
                 app.error_msg = Some(e);
                 return Task::none();
             }
         };
+
+        if !warnings.is_empty() {
+            for w in warnings {
+                log::warn!("Dependency resolution: {}", w);
+            }
+        }
 
         app.selected_uid = Some(tree_uid.clone());
         app.input_value = text_editor::Content::new();
@@ -1465,9 +1471,11 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
             task.description = cleaned_desc;
             task.apply_smart_input(&clean_input, &app.tag_aliases, config_time);
 
-            if let Err(e) = app.store.resolve_dependencies(&mut task) {
-                app.error_msg = Some(e);
-                return Task::none();
+            let warnings = app.store.resolve_dependencies(&mut task);
+            if !warnings.is_empty() {
+                for w in warnings {
+                    log::warn!("Dependency resolution: {}", w);
+                }
             }
 
             if let Some(target) = task.target_collection.take() {
@@ -1517,9 +1525,11 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
                     (sub.categories.clone(), sub.location.clone(), sub.priority),
                 );
 
-                if let Err(e) = app.store.resolve_dependencies(&mut sub) {
-                    app.error_msg = Some(e);
-                    return Task::none();
+                let warnings = app.store.resolve_dependencies(&mut sub);
+                if !warnings.is_empty() {
+                    for w in warnings {
+                        log::warn!("Dependency resolution: {}", w);
+                    }
                 }
 
                 if !ext.description.is_empty() {
@@ -1585,9 +1595,11 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
     } else if !clean_input.is_empty() {
         let mut new_task = TodoTask::new(&clean_input, &app.tag_aliases, config_time);
 
-        if let Err(e) = app.store.resolve_dependencies(&mut new_task) {
-            app.error_msg = Some(e);
-            return Task::none();
+        let warnings = app.store.resolve_dependencies(&mut new_task);
+        if !warnings.is_empty() {
+            for w in warnings {
+                log::warn!("Dependency resolution: {}", w);
+            }
         }
 
         if new_task.summary.trim().is_empty() && cleaned_desc.is_empty() {
@@ -1659,9 +1671,11 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
                     (sub.categories.clone(), sub.location.clone(), sub.priority),
                 );
 
-                if let Err(e) = app.store.resolve_dependencies(&mut sub) {
-                    app.error_msg = Some(e);
-                    return Task::none();
+                let warnings = app.store.resolve_dependencies(&mut sub);
+                if !warnings.is_empty() {
+                    for w in warnings {
+                        log::warn!("Dependency resolution: {}", w);
+                    }
                 }
 
                 if !ext.description.is_empty() {
@@ -1720,9 +1734,11 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
 
             // Resolve dependencies atomically before mutating store
             for t in &mut tasks_to_create {
-                if let Err(e) = app.store.resolve_dependencies(t) {
-                    app.error_msg = Some(e);
-                    return Task::none();
+                let warnings = app.store.resolve_dependencies(t);
+                if !warnings.is_empty() {
+                    for w in warnings {
+                        log::warn!("Dependency resolution: {}", w);
+                    }
                 }
             }
 

@@ -128,9 +128,10 @@ async fn apply_markdown_update(
     full_uid: &str,
     new_content: &str,
     use_tree: bool,
-) -> Result<Vec<cfait::journal::Action>, String> {
+) -> Result<(Vec<cfait::journal::Action>, Vec<String>), String> {
     let def_time = chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
     let mut actions = Vec::new();
+    let mut warnings = Vec::new();
 
     if use_tree {
         let mut cals = cfait::cache::Cache::load_calendars(ctx.as_ref()).unwrap_or_default();
@@ -145,8 +146,9 @@ async fn apply_markdown_update(
             config.trash_retention_days,
             &cals,
         ) {
-            Ok(acts) => {
+            Ok((acts, warns)) => {
                 actions.extend(acts);
+                warnings.extend(warns);
             }
             Err(e) => return Err(e),
         }
@@ -161,7 +163,7 @@ async fn apply_markdown_update(
         task.description = clean_desc.to_string();
         task.apply_smart_input(smart_input, &config.tag_aliases, def_time);
 
-        store.resolve_dependencies(&mut task)?;
+        warnings.extend(store.resolve_dependencies(&mut task));
 
         task.sequence += 1;
         actions.push(cfait::journal::Action::Update(task.clone()));
@@ -192,7 +194,7 @@ async fn apply_markdown_update(
                 (sub.categories.clone(), sub.location.clone(), sub.priority),
             );
 
-            store.resolve_dependencies(&mut sub)?;
+            warnings.extend(store.resolve_dependencies(&mut sub));
             if !ext.description.is_empty() {
                 if sub.description.is_empty() {
                     sub.description = ext.description;
@@ -236,7 +238,7 @@ async fn apply_markdown_update(
             actions.push(cfait::journal::Action::Create(sub));
         }
     }
-    Ok(actions)
+    Ok((actions, warnings))
 }
 
 fn run_editor_cli(
@@ -671,9 +673,11 @@ async fn main() -> Result<()> {
             };
 
             let mut task = Task::new(&clean_input, &config.tag_aliases, def_time);
-            if let Err(e) = temp_store.resolve_dependencies(&mut task) {
-                eprintln!("{}", e);
-                std::process::exit(1);
+            let warnings = temp_store.resolve_dependencies(&mut task);
+            if !warnings.is_empty() {
+                for w in warnings {
+                    eprintln!("Warning: {}", w);
+                }
             }
 
             if let Some(d) = desc_text {
@@ -903,7 +907,7 @@ async fn main() -> Result<()> {
                     std::process::exit(1);
                 });
 
-                let actions = match apply_markdown_update(
+                let (actions, warnings) = match apply_markdown_update(
                     &ctx,
                     &mut store,
                     &config,
@@ -913,12 +917,18 @@ async fn main() -> Result<()> {
                 )
                 .await
                 {
-                    Ok(acts) => acts,
+                    Ok(res) => res,
                     Err(e) => {
                         eprintln!("Error applying markdown: {}", e);
                         std::process::exit(1);
                     }
                 };
+
+                if !warnings.is_empty() {
+                    for w in warnings {
+                        eprintln!("Warning: {}", w);
+                    }
+                }
 
                 if !actions.is_empty() {
                     let store_arc = Arc::new(tokio::sync::Mutex::new(store));
@@ -1025,9 +1035,11 @@ async fn main() -> Result<()> {
                     temp_task = Some(t);
                 }
                 if let Some(mut t) = temp_task {
-                    if let Err(e) = store.resolve_dependencies(&mut t) {
-                        eprintln!("{}", e);
-                        std::process::exit(1);
+                    let warnings = store.resolve_dependencies(&mut t);
+                    if !warnings.is_empty() {
+                        for w in warnings {
+                            eprintln!("Warning: {}", w);
+                        }
                     }
                     if let Some((task_mut, _)) = store.get_task_mut(&full_uid) {
                         *task_mut = t;
@@ -1206,7 +1218,7 @@ async fn main() -> Result<()> {
                 return Ok(());
             }
 
-            let actions = match apply_markdown_update(
+            let (actions, warnings) = match apply_markdown_update(
                 &ctx,
                 &mut store,
                 &config,
@@ -1216,12 +1228,17 @@ async fn main() -> Result<()> {
             )
             .await
             {
-                Ok(acts) => acts,
+                Ok(res) => res,
                 Err(e) => {
                     eprintln!("Error applying markdown: {}", e);
                     std::process::exit(1);
                 }
             };
+            if !warnings.is_empty() {
+                for w in warnings {
+                    eprintln!("Warning: {}", w);
+                }
+            }
 
             if !actions.is_empty() {
                 let store_arc = Arc::new(tokio::sync::Mutex::new(store));

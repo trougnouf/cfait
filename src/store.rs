@@ -880,13 +880,21 @@ impl TaskStore {
         Err(rust_i18n::t!("error_task_not_found_for_dep", reference = clean_ref).to_string())
     }
 
-    pub fn resolve_dependencies(&self, task: &mut Task) -> Result<(), String> {
+    pub fn resolve_dependencies(&self, task: &mut Task) -> Vec<String> {
         let mut resolved_deps = Vec::new();
+        let mut warnings = Vec::new();
+
         for dep in &task.dependencies {
             let uid = if dep.len() == 36 && uuid::Uuid::parse_str(dep).is_ok() {
                 dep.clone()
             } else {
-                self.resolve_dependency_ref(dep)?
+                match self.resolve_dependency_ref(dep) {
+                    Ok(u) => u,
+                    Err(e) => {
+                        warnings.push(e);
+                        dep.clone()
+                    }
+                }
             };
 
             // Auto-heal: Strip out dependencies that point to trashed/recovered tasks
@@ -908,7 +916,13 @@ impl TaskStore {
             let uid = if rel.len() == 36 && uuid::Uuid::parse_str(rel).is_ok() {
                 rel.clone()
             } else {
-                self.resolve_dependency_ref(rel)?
+                match self.resolve_dependency_ref(rel) {
+                    Ok(u) => u,
+                    Err(e) => {
+                        warnings.push(e);
+                        rel.clone()
+                    }
+                }
             };
 
             // Auto-heal: Strip out relations that point to trashed/recovered tasks
@@ -925,7 +939,7 @@ impl TaskStore {
         resolved_rels.dedup();
         task.related_to = resolved_rels;
 
-        Ok(())
+        warnings
     }
 
     /// Update an existing task or insert it if missing. This method attempts to handle
@@ -1373,7 +1387,7 @@ impl TaskStore {
         default_reminder_time: Option<chrono::NaiveTime>,
         trash_retention_days: u32,
         calendars: &[crate::model::CalendarListEntry],
-    ) -> Result<Vec<crate::journal::Action>, String> {
+    ) -> Result<(Vec<crate::journal::Action>, Vec<String>), String> {
         let mut actions = Vec::new();
         let old_descendants = self.get_descendant_uids(root_uid);
         let (clean_desc, extracted) = crate::model::extractor::extract_markdown_tasks(markdown);
@@ -1381,7 +1395,7 @@ impl TaskStore {
         let root_calendar_href = if let Some(root) = self.get_task_ref(root_uid) {
             root.calendar_href.clone()
         } else {
-            return Ok(actions);
+            return Ok((actions, Vec::new()));
         };
 
         let root_in_extracted = extracted
@@ -1662,14 +1676,15 @@ impl TaskStore {
         }
 
         // --- Validate dependencies atomically before mutating the store ---
+        let mut all_warnings = Vec::new();
         if !root_in_extracted {
-            self.resolve_dependencies(&mut root_clone)?;
+            all_warnings.extend(self.resolve_dependencies(&mut root_clone));
         }
         for t in &mut tasks_to_update {
-            self.resolve_dependencies(t)?;
+            all_warnings.extend(self.resolve_dependencies(t));
         }
         for t in &mut tasks_to_create {
-            self.resolve_dependencies(t)?;
+            all_warnings.extend(self.resolve_dependencies(t));
         }
 
         // --- All safe, apply to store ---
@@ -1700,7 +1715,7 @@ impl TaskStore {
             }
         }
 
-        Ok(actions)
+        Ok((actions, all_warnings))
     }
 
     /// Deep-duplicate a task and all its descendants.

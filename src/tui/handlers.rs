@@ -312,7 +312,12 @@ async fn execute_task_action(
                             config.trash_retention_days,
                             &state.calendars,
                         ) {
-                            Ok(actions) => {
+                            Ok((actions, warnings)) => {
+                                if !warnings.is_empty() {
+                                    for w in warnings {
+                                        log::warn!("Dependency resolution: {}", w);
+                                    }
+                                }
                                 state.refresh_filtered_view();
                                 let _ = action_tx
                                     .try_send(crate::tui::action::Action::PersistBatch(actions));
@@ -520,7 +525,12 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
             config.trash_retention_days,
             &state.calendars,
         ) {
-            Ok(actions) => {
+            Ok((actions, warnings)) => {
+                if !warnings.is_empty() {
+                    for w in warnings {
+                        log::warn!("Dependency resolution: {}", w);
+                    }
+                }
                 state.refresh_filtered_view();
                 state.mode = InputMode::Normal;
                 state.reset_input();
@@ -572,9 +582,11 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
 
         let mut parent = Task::new(&clean_input, &state.tag_aliases, def_time);
 
-        if let Err(e) = state.store.resolve_dependencies(&mut parent) {
-            state.message = e;
-            return;
+        let warnings = state.store.resolve_dependencies(&mut parent);
+        if !warnings.is_empty() {
+            for w in warnings {
+                log::warn!("Dependency resolution: {}", w);
+            }
         }
 
         if parent.summary.trim().is_empty() && !clean_input.trim().is_empty() {
@@ -652,9 +664,11 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
                 (sub.categories.clone(), sub.location.clone(), sub.priority),
             );
 
-            if let Err(e) = state.store.resolve_dependencies(&mut sub) {
-                state.message = e;
-                return;
+            let warnings = state.store.resolve_dependencies(&mut sub);
+            if !warnings.is_empty() {
+                for w in warnings {
+                    log::warn!("Dependency resolution: {}", w);
+                }
             }
             if !ext.description.is_empty() {
                 if sub.description.is_empty() {
@@ -769,9 +783,11 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
                     (sub.categories.clone(), sub.location.clone(), sub.priority),
                 );
 
-                if let Err(e) = state.store.resolve_dependencies(&mut sub) {
-                    state.message = e;
-                    return;
+                let warnings = state.store.resolve_dependencies(&mut sub);
+                if !warnings.is_empty() {
+                    for w in warnings {
+                        log::warn!("Dependency resolution: {}", w);
+                    }
                 }
                 if !ext.description.is_empty() {
                     if sub.description.is_empty() {
@@ -1288,9 +1304,11 @@ pub async fn handle_key_event(
 
                     let mut task = Task::new(&clean_input, &state.tag_aliases, def_time);
 
-                    if let Err(e) = state.store.resolve_dependencies(&mut task) {
-                        state.message = e;
-                        return None;
+                    let warnings = state.store.resolve_dependencies(&mut task);
+                    if !warnings.is_empty() {
+                        for w in warnings {
+                            log::warn!("Dependency resolution: {}", w);
+                        }
                     }
 
                     if task.summary.trim().is_empty() && task.description.trim().is_empty() {
@@ -1406,9 +1424,11 @@ pub async fn handle_key_event(
                         NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
                     t.apply_smart_input(&clean_input, &state.tag_aliases, def_time);
 
-                    if let Err(e) = state.store.resolve_dependencies(&mut t) {
-                        state.message = e;
-                        return None;
+                    let warnings = state.store.resolve_dependencies(&mut t);
+                    if !warnings.is_empty() {
+                        for w in warnings {
+                            log::warn!("Dependency resolution: {}", w);
+                        }
                     }
 
                     if let Some(target) = t.target_collection.take() {
@@ -1882,7 +1902,12 @@ pub async fn handle_key_event(
                                     config.trash_retention_days,
                                     &state.calendars,
                                 ) {
-                                    Ok(actions) => {
+                                    Ok((actions, warnings)) => {
+                                        if !warnings.is_empty() {
+                                            for w in warnings {
+                                                log::warn!("Dependency resolution: {}", w);
+                                            }
+                                        }
                                         state.refresh_filtered_view();
                                         let _ = action_tx.try_send(
                                             crate::tui::action::Action::PersistBatch(actions),
