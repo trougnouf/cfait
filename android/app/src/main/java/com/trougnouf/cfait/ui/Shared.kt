@@ -52,6 +52,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -955,7 +956,7 @@ class SmartSyntaxTransformation(
 }
 
 @Composable
-fun CursorContextBanner(api: CfaitMobile, textFieldValue: TextFieldValue) {
+fun CursorContextBanner(api: CfaitMobile, textFieldValue: TextFieldValue, onTextChange: (TextFieldValue) -> Unit) {
     val cursor = textFieldValue.selection.start
     val text = textFieldValue.text
     
@@ -991,7 +992,7 @@ fun CursorContextBanner(api: CfaitMobile, textFieldValue: TextFieldValue) {
                 Button(
                     onClick = {
                         val newText = text.substring(0, s.rangeStart) + s.replacement + if (s.rangeEnd < text.length) text.substring(s.rangeEnd) else " "
-                        textFieldValue.text = newText
+                        onTextChange(textFieldValue.copy(text = newText))
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp)

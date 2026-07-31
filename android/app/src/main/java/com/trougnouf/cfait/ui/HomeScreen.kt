@@ -458,6 +458,28 @@ fun HomeScreen(
         }
     }
 
+    val handleRefresh = {
+        scope.launch {
+            isManualSyncing = true
+            try {
+                api.sync()
+                lastSyncFailed = false
+                onDataChanged()
+                updateTaskList()
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                lastSyncFailed = true
+                Toast.makeText(context, context.getString(R.string.sync_error, e.message ?: ""), Toast.LENGTH_SHORT)
+                    .show()
+                api.loadFromCache()
+                updateTaskList()
+            } finally {
+                checkSyncStatus()
+                isManualSyncing = false
+            }
+        }
+    }
+
     fun addTask(txt: String, desc: String) {
         val text = txt.trim()
         val isAliasDef = text.contains(":=")
@@ -759,28 +781,6 @@ fun HomeScreen(
             } finally {
                 checkSyncStatus()
                 activeOpCount--
-            }
-        }
-    }
-
-    val handleRefresh = {
-        scope.launch {
-            isManualSyncing = true
-            try {
-                api.sync()
-                lastSyncFailed = false
-                onDataChanged()
-                updateTaskList()
-            } catch (e: Exception) {
-                if (e is CancellationException) throw e
-                lastSyncFailed = true
-                Toast.makeText(context, context.getString(R.string.sync_error, e.message ?: ""), Toast.LENGTH_SHORT)
-                    .show()
-                api.loadFromCache()
-                updateTaskList()
-            } finally {
-                checkSyncStatus()
-                isManualSyncing = false
             }
         }
     }
@@ -2034,7 +2034,7 @@ fun HomeScreen(
                                             textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp),
                                             visualTransformation = remember(isDark) { MarkdownTransformation(isDark, api) },
                                         )
-                                        CursorContextBanner(api, newDescriptionText)
+                                        CursorContextBanner(api, newDescriptionText) { newDescriptionText = it }
                                         Spacer(Modifier.height(8.dp))
                                     }
                                 }
@@ -2058,7 +2058,7 @@ fun HomeScreen(
                                                 )
                                             }),
                                         )
-                                        CursorContextBanner(api, newTaskText)
+                                        CursorContextBanner(api, newTaskText) { newTaskText = it }
                                     }
 
                                     AnimatedVisibility(visible = isCreateExpanded) {

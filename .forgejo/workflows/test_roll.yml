@@ -6,8 +6,8 @@ on:
       - "master"
       - "**"
     tags:
+      - "*"
       - "!rolling"
-      - "**"
   pull_request:
 
 jobs:
@@ -197,7 +197,7 @@ jobs:
   # --- JOB 5: PUBLISH ROLLING RELEASE ---
   publish-rolling:
     needs: [rolling-android, rolling-windows, rolling-flatpak]
-    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push' && github.ref_type == 'branch'
     runs-on: self-hosted-ubuntu
     container:
       image: local/ubuntu-builder

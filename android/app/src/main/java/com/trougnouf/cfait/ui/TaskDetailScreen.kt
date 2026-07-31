@@ -324,7 +324,7 @@ fun TaskDetailScreen(
                     handleSaveWithGeo(smartInput.text, description.text)
                 }),
             )
-            com.trougnouf.cfait.ui.CursorContextBanner(api, smartInput)
+            com.trougnouf.cfait.ui.CursorContextBanner(api, smartInput) { smartInput = it }
             Text(
                 stringResource(R.string.help_syntax_short),
                 style = MaterialTheme.typography.bodySmall,
@@ -884,7 +884,7 @@ fun TaskDetailScreen(
                 textStyle = TextStyle(textAlign = androidx.compose.ui.text.style.TextAlign.Start),
                 visualTransformation = remember(isDark) { MarkdownTransformation(isDark, api) },
             )
-            com.trougnouf.cfait.ui.CursorContextBanner(api, description)
+            com.trougnouf.cfait.ui.CursorContextBanner(api, description) { description = it }
 
             if (task!!.createdDateIso != null || task!!.lastModifiedDateIso != null) {
                 val dateStrs = mutableListOf<String>()
