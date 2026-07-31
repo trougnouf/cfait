@@ -222,6 +222,7 @@ pub enum Message {
     MigrationComplete(Result<usize, String>),
     FontLoaded(Result<(), String>),
     DismissError,
+    DismissInfo(usize),
     ToggleAllCalendars(bool),
     Tick,
     InitBackgroundWorker(mpsc::Sender<crate::gui::async_ops::WorkerCommand>),

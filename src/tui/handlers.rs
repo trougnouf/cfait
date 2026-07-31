@@ -1204,6 +1204,13 @@ pub async fn handle_key_event(
                                     state.redo_stack.remove(0);
                                 }
                                 state.refresh_filtered_view();
+
+                                if let Some(uid) = &record.primary_uid
+                                    && let Some(idx) = state.find_task_index_by_uid(uid)
+                                {
+                                    state.list_state.select(Some(idx));
+                                }
+
                                 let tx = action_tx.clone();
                                 tokio::spawn(async move {
                                     let _ = tx.send(Action::PersistBatch(record.reverse)).await;
@@ -1218,11 +1225,20 @@ pub async fn handle_key_event(
                                 state.store.apply_actions(&record.forward);
                                 state.undo_stack.push(record.clone());
                                 state.refresh_filtered_view();
+
+                                if let Some(uid) = &record.primary_uid
+                                    && let Some(idx) = state.find_task_index_by_uid(uid)
+                                {
+                                    state.list_state.select(Some(idx));
+                                }
+
                                 let tx = action_tx.clone();
                                 tokio::spawn(async move {
                                     let _ = tx.send(Action::PersistBatch(record.forward)).await;
                                 });
-                                state.message = format!("Redone: {}", record.description);
+                                state.message =
+                                    rust_i18n::t!("task_action_redone", desc = record.description)
+                                        .to_string();
                             }
                         }
                         ":sync" => {
@@ -2300,11 +2316,19 @@ pub async fn handle_key_event(
                     state.store.apply_actions(&record.forward);
                     state.undo_stack.push(record.clone());
                     state.refresh_filtered_view();
+
+                    if let Some(uid) = &record.primary_uid
+                        && let Some(idx) = state.find_task_index_by_uid(uid)
+                    {
+                        state.list_state.select(Some(idx));
+                    }
+
                     let tx = action_tx.clone();
                     tokio::spawn(async move {
                         let _ = tx.send(Action::PersistBatch(record.forward)).await;
                     });
-                    state.message = format!("Redone: {}", record.description);
+                    state.message =
+                        rust_i18n::t!("task_action_redone", desc = record.description).to_string();
                 }
             }
             KeyCode::Char('y') => {
@@ -2621,6 +2645,13 @@ pub async fn handle_key_event(
                         state.redo_stack.remove(0);
                     }
                     state.refresh_filtered_view();
+
+                    if let Some(uid) = &record.primary_uid
+                        && let Some(idx) = state.find_task_index_by_uid(uid)
+                    {
+                        state.list_state.select(Some(idx));
+                    }
+
                     let tx = action_tx.clone();
                     tokio::spawn(async move {
                         let _ = tx.send(Action::PersistBatch(record.reverse)).await;

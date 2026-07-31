@@ -503,10 +503,11 @@ impl AppState {
             self.focused_task_uid = uid.clone();
             return Vec::new();
         }
-        let (forward, reverse, desc) = self.store.apply_task_intent(intent, config);
+        let (forward, reverse, desc, primary_uid) = self.store.apply_task_intent(intent, config);
         if !forward.is_empty() {
             self.undo_stack.push(crate::journal::UndoRecord {
                 description: desc,
+                primary_uid,
                 forward: forward.clone(),
                 reverse,
             });

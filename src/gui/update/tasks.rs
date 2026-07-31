@@ -83,11 +83,33 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 if app.redo_stack.len() > 50 {
                     app.redo_stack.remove(0);
                 }
+
+                // Prevent jump: focus the task that was modified
+                app.selected_uid = record.primary_uid.clone();
                 common::refresh_filtered_tasks(app);
+
                 if let Some(tx) = &app.bg_tx {
                     let _ =
                         tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(record.reverse));
                 }
+
+                app.info_msg = Some(
+                    rust_i18n::t!("task_action_undone", desc = record.description).to_string(),
+                );
+                app.info_msg_version = app.info_msg_version.wrapping_add(1);
+                app.error_msg = None;
+
+                let version = app.info_msg_version;
+                return Task::batch(vec![
+                    common::scroll_to_selected_delayed(app, false),
+                    Task::perform(
+                        async move {
+                            tokio::time::sleep(std::time::Duration::from_secs(4)).await;
+                            version
+                        },
+                        Message::DismissInfo,
+                    ),
+                ]);
             }
             Task::none()
         }
@@ -95,11 +117,33 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some(record) = app.redo_stack.pop() {
                 app.store.apply_actions(&record.forward);
                 app.undo_stack.push(record.clone());
+
+                // Prevent jump: focus the task that was modified
+                app.selected_uid = record.primary_uid.clone();
                 common::refresh_filtered_tasks(app);
+
                 if let Some(tx) = &app.bg_tx {
                     let _ =
                         tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(record.forward));
                 }
+
+                app.info_msg = Some(
+                    rust_i18n::t!("task_action_redone", desc = record.description).to_string(),
+                );
+                app.info_msg_version = app.info_msg_version.wrapping_add(1);
+                app.error_msg = None;
+
+                let version = app.info_msg_version;
+                return Task::batch(vec![
+                    common::scroll_to_selected_delayed(app, false),
+                    Task::perform(
+                        async move {
+                            tokio::time::sleep(std::time::Duration::from_secs(4)).await;
+                            version
+                        },
+                        Message::DismissInfo,
+                    ),
+                ]);
             }
             Task::none()
         }
@@ -742,6 +786,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Ok(mut focus) = ACTIVE_FOCUS.write() {
                 *focus = Focus::MainList;
             }
+            app.info_msg = None;
             if app.editing_uid.is_some()
                 || app.editing_tree_uid.is_some()
                 || app.creating_child_of.is_some()
@@ -765,7 +810,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             let mut needs_refresh = false;
             let mut captured_action = false;
 
-            if app.moving_task_uid.is_some() {
+            if app.info_msg.is_some() {
+                app.info_msg = None;
+                captured_action = true;
+            } else if app.moving_task_uid.is_some() {
                 app.moving_task_uid = None;
                 captured_action = true;
             } else if app.ics_import_dialog_open {

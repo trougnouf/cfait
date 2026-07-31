@@ -1783,6 +1783,35 @@ fn view_main_content(app: &GuiApp, show_logo: bool, is_expanded: bool) -> Elemen
         );
     }
 
+    if let Some(info) = &app.info_msg {
+        let info_content = row![
+            text(info)
+                .style(|theme: &Theme| text::Style {
+                    color: Some(theme.extended_palette().background.base.text)
+                })
+                .size(14)
+                .width(Length::Fill),
+            iced::widget::button(
+                icon::icon(icon::CROSS)
+                    .size(14)
+                    .color(app.theme().extended_palette().background.base.text)
+            )
+            .style(iced::widget::button::text)
+            .padding(2)
+            .on_press(Message::DismissInfo(app.info_msg_version))
+        ]
+        .align_y(iced::Alignment::Center);
+        main_col = main_col.push(
+            container(info_content)
+                .width(Length::Fill)
+                .padding(5)
+                .style(|theme: &Theme| container::Style {
+                    background: Some(theme.extended_palette().success.base.color.into()),
+                    ..Default::default()
+                }),
+        );
+    }
+
     main_col = main_col.push(input_area);
 
     if !is_expanded

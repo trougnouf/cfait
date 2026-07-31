@@ -200,6 +200,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::FocusInput
         | Message::FocusSearch
         | Message::DismissError
+        | Message::DismissInfo(_)
         | Message::ToggleAllCalendars(_)
         | Message::ToggleCalendarVisibility(_, _)
         | Message::IsolateCalendar(_)

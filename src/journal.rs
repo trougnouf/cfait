@@ -31,6 +31,7 @@ pub enum Action {
 #[derive(Clone, Debug)]
 pub struct UndoRecord {
     pub description: String,
+    pub primary_uid: Option<String>,
     pub forward: Vec<Action>,
     pub reverse: Vec<Action>,
 }

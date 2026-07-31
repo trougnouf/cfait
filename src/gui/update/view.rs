@@ -739,6 +739,14 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.error_msg = None;
             Task::none()
         }
+        Message::DismissInfo(version) => {
+            if app.info_msg_version == version {
+                app.info_msg = None;
+                // Prevent the list from jumping to the top when the banner layout is removed
+                return crate::gui::update::common::scroll_to_selected_delayed(app, false);
+            }
+            Task::none()
+        }
         Message::ToggleAllCalendars(show_all) => {
             if show_all {
                 app.hidden_calendars.clear();

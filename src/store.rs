@@ -3394,14 +3394,20 @@ impl TaskStore {
     }
 
     /// Applies a Task-related AppIntent to the in-memory store and returns the tuple
-    /// (forward_actions, reverse_actions, intent_description) for journaling and undo stacks.
+    /// (forward_actions, reverse_actions, intent_description, primary_uid) for journaling and undo stacks.
     /// This method ignores Session-related intents (like SetSearchTerm).
     pub fn apply_task_intent(
         &mut self,
         intent: &AppIntent,
         config: &Config,
-    ) -> (Vec<JournalAction>, Vec<JournalAction>, String) {
+    ) -> (
+        Vec<JournalAction>,
+        Vec<JournalAction>,
+        String,
+        Option<String>,
+    ) {
         // 1. Snapshot old states of potentially affected UIDs
+        let mut primary_uid = None;
         let mut potential_uids = Vec::new();
         match intent {
             AppIntent::ToggleTask { uid }
@@ -3414,32 +3420,38 @@ impl TaskStore {
             | AppIntent::TogglePin { uid }
             | AppIntent::ToggleTreeCollapse { uid }
             | AppIntent::SetTreeCollapse { uid, .. } => {
+                primary_uid = Some(uid.clone());
                 potential_uids.push(uid.clone());
                 potential_uids.extend(self.get_descendant_uids(uid));
             }
             AppIntent::DeleteTask { uid }
             | AppIntent::MoveTask { uid, .. }
             | AppIntent::RemoveParent { uid } => {
+                primary_uid = Some(uid.clone());
                 potential_uids.push(uid.clone());
             }
             AppIntent::DeleteTaskTree { uid }
             | AppIntent::MoveTaskTree { uid, .. }
             | AppIntent::DuplicateTaskTree { uid }
             | AppIntent::CompleteTree { uid } => {
+                primary_uid = Some(uid.clone());
                 potential_uids.push(uid.clone());
                 potential_uids.extend(self.get_descendant_uids(uid));
             }
             AppIntent::MakeChild { uid, parent_uid } => {
+                primary_uid = Some(uid.clone());
                 potential_uids.push(uid.clone());
                 potential_uids.push(parent_uid.clone());
             }
             AppIntent::AddDependency { uid, blocker_uid }
             | AppIntent::RemoveDependency { uid, blocker_uid } => {
+                primary_uid = Some(uid.clone());
                 potential_uids.push(uid.clone());
                 potential_uids.push(blocker_uid.clone());
             }
             AppIntent::AddRelatedTo { uid, related_uid }
             | AppIntent::RemoveRelatedTo { uid, related_uid } => {
+                primary_uid = Some(uid.clone());
                 potential_uids.push(uid.clone());
                 potential_uids.push(related_uid.clone());
             }
@@ -3452,6 +3464,11 @@ impl TaskStore {
                 old_states.insert(u.clone(), t.clone());
             }
         }
+
+        let summary_text = primary_uid
+            .as_ref()
+            .and_then(|u| self.get_summary(u))
+            .unwrap_or_default();
 
         let mut actions = Vec::new();
         match intent {
@@ -3739,29 +3756,74 @@ impl TaskStore {
         reverse_actions.reverse();
 
         let desc = match intent {
-            AppIntent::ToggleTask { .. }
-            | AppIntent::CompleteTree { .. }
-            | AppIntent::ToggleTaskShift { .. }
-            | AppIntent::CancelTask { .. } => "Status change",
-            AppIntent::DeleteTask { .. } | AppIntent::DeleteTaskTree { .. } => "Delete",
-            AppIntent::MoveTask { .. } | AppIntent::MoveTaskTree { .. } => "Move",
-            AppIntent::ChangePriority { .. } => "Priority change",
-            AppIntent::StartTask { .. }
-            | AppIntent::PauseTask { .. }
-            | AppIntent::StopTask { .. } => "Timer",
-            AppIntent::MakeChild { .. }
-            | AppIntent::RemoveParent { .. }
-            | AppIntent::AddDependency { .. }
-            | AppIntent::RemoveDependency { .. }
-            | AppIntent::AddRelatedTo { .. }
-            | AppIntent::RemoveRelatedTo { .. } => "Relationship change",
-            AppIntent::TogglePin { .. } => "Pin toggle",
-            AppIntent::DuplicateTaskTree { .. } => "Duplicate",
+            AppIntent::ToggleTask { uid } | AppIntent::ToggleTaskShift { uid } => {
+                if let Some(old) = old_states.get(uid) {
+                    if old.status.is_done() {
+                        "Marked as pending"
+                    } else {
+                        "Marked as completed"
+                    }
+                } else {
+                    "Status change"
+                }
+            }
+            AppIntent::CompleteTree { .. } => "Completed tree",
+            AppIntent::CancelTask { .. } => "Cancelled",
+            AppIntent::DeleteTask { .. } => "Deleted task",
+            AppIntent::DeleteTaskTree { .. } => "Deleted tree",
+            AppIntent::MoveTask { .. } => "Moved task",
+            AppIntent::MoveTaskTree { .. } => "Moved tree",
+            AppIntent::ChangePriority { delta, .. } => {
+                if *delta > 0 {
+                    "Increased priority"
+                } else {
+                    "Decreased priority"
+                }
+            }
+            AppIntent::StartTask { .. } => "Started timer",
+            AppIntent::PauseTask { .. } => "Paused timer",
+            AppIntent::StopTask { .. } => "Stopped timer",
+            AppIntent::MakeChild { .. } => "Indented",
+            AppIntent::RemoveParent { .. } => "Outdented",
+            AppIntent::AddDependency { .. } => "Added dependency",
+            AppIntent::RemoveDependency { .. } => "Removed dependency",
+            AppIntent::AddRelatedTo { .. } => "Added relation",
+            AppIntent::RemoveRelatedTo { .. } => "Removed relation",
+            AppIntent::TogglePin { uid } => {
+                if let Some(old) = old_states.get(uid) {
+                    if old.pinned { "Unpinned" } else { "Pinned" }
+                } else {
+                    "Toggled pin"
+                }
+            }
+            AppIntent::ToggleTreeCollapse { uid } | AppIntent::SetTreeCollapse { uid, .. } => {
+                if let Some(old) = old_states.get(uid) {
+                    if old.collapsed {
+                        "Expanded tree"
+                    } else {
+                        "Collapsed tree"
+                    }
+                } else {
+                    "Toggled tree"
+                }
+            }
+            AppIntent::DuplicateTaskTree { .. } => "Duplicated",
             _ => "Action",
         }
         .to_string();
 
-        (actions, reverse_actions, desc)
+        let full_desc = if summary_text.is_empty() {
+            desc
+        } else {
+            let trunc = if summary_text.chars().count() > 30 {
+                format!("{}...", summary_text.chars().take(27).collect::<String>())
+            } else {
+                summary_text
+            };
+            format!("{}: {}", desc, trunc)
+        };
+
+        (actions, reverse_actions, full_desc, primary_uid)
     }
 }
 

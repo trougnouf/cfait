@@ -181,6 +181,8 @@ pub struct GuiApp {
     // System
     pub loading: bool,
     pub error_msg: Option<String>,
+    pub info_msg: Option<String>,
+    pub info_msg_version: usize,
 
     // Onboarding / Config
     pub ob_url: String,
@@ -513,6 +515,8 @@ impl Default for GuiApp {
 
             loading: true,
             error_msg: None,
+            info_msg: None,
+            info_msg_version: 0,
             ob_url: String::new(),
             ob_user: String::new(),
             ob_pass: String::new(),

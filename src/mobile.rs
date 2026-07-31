@@ -2266,7 +2266,7 @@ impl CfaitMobile {
         config_to_save.expanded_locations = session.expanded_locations.clone();
         let _ = config_to_save.save(self.ctx.as_ref());
 
-        let (forward, _, _) = store.apply_task_intent(&intent, &config);
+        let (forward, _, _, _) = store.apply_task_intent(&intent, &config);
 
         drop(store);
         drop(session);

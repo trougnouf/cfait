@@ -1098,7 +1098,7 @@ async fn main() -> Result<()> {
                     uid: full_uid.clone(),
                     target_href: matched_href,
                 };
-                let (move_forward, _, _) = store.apply_task_intent(&intent, &config);
+                let (move_forward, _, _, _) = store.apply_task_intent(&intent, &config);
                 actions.extend(move_forward);
             }
 
@@ -1552,7 +1552,7 @@ async fn main() -> Result<()> {
                     let intent = cfait::model::AppIntent::StartTask {
                         uid: full_uid.clone(),
                     };
-                    let (forward, _, _) = store_lock.apply_task_intent(&intent, &config);
+                    let (forward, _, _, _) = store_lock.apply_task_intent(&intent, &config);
                     drop(store_lock);
                     controller
                         .persist_changes(forward)
@@ -1565,7 +1565,7 @@ async fn main() -> Result<()> {
                     let intent = cfait::model::AppIntent::PauseTask {
                         uid: full_uid.clone(),
                     };
-                    let (forward, _, _) = store_lock.apply_task_intent(&intent, &config);
+                    let (forward, _, _, _) = store_lock.apply_task_intent(&intent, &config);
                     drop(store_lock);
                     controller
                         .persist_changes(forward)
@@ -1578,7 +1578,7 @@ async fn main() -> Result<()> {
                     let intent = cfait::model::AppIntent::ToggleTask {
                         uid: full_uid.clone(),
                     };
-                    let (forward, _, _) = store_lock.apply_task_intent(&intent, &config);
+                    let (forward, _, _, _) = store_lock.apply_task_intent(&intent, &config);
                     drop(store_lock);
                     controller
                         .persist_changes(forward)
@@ -1774,7 +1774,7 @@ async fn main() -> Result<()> {
                 }
             };
 
-            let (forward, _, _) = store.apply_task_intent(&intent, &config);
+            let (forward, _, _, _) = store.apply_task_intent(&intent, &config);
 
             if !forward.is_empty() {
                 let store_arc = Arc::new(tokio::sync::Mutex::new(store));
@@ -1844,7 +1844,7 @@ async fn main() -> Result<()> {
                 let intent = cfait::model::AppIntent::DeleteTask {
                     uid: full_uid.clone(),
                 };
-                let (forward, _, _) = store_lock.apply_task_intent(&intent, &config);
+                let (forward, _, _, _) = store_lock.apply_task_intent(&intent, &config);
                 forward
             };
             controller
