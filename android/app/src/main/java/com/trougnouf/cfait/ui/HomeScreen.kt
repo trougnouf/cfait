@@ -442,10 +442,13 @@ fun HomeScreen(
                         duration = SnackbarDuration.Short
                     )
                     if (result == SnackbarResult.ActionPerformed) {
-                        api.undo()
+                        val desc = api.undo()
                         updateTaskList()
                         checkSyncStatus()
                         onDataChanged()
+                        if (desc != null) {
+                            Toast.makeText(context, context.getString(R.string.task_action_undone, desc), Toast.LENGTH_SHORT).show()
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -487,17 +490,38 @@ fun HomeScreen(
         if (text.startsWith(":") && !text.contains(" ")) {
             when (text.lowercase()) {
                 ":undo" -> {
-                    scope.launch { api.undo(); updateTaskList(); checkSyncStatus(); triggerBackgroundSync(context, api) }
+                    scope.launch {
+                        val desc = api.undo()
+                        updateTaskList()
+                        checkSyncStatus()
+                        triggerBackgroundSync(context, api)
+                        if (desc != null) {
+                            Toast.makeText(context, context.getString(R.string.task_action_undone, desc), Toast.LENGTH_SHORT).show()
+                        }
+                    }
                     newTaskText = androidx.compose.ui.text.input.TextFieldValue("")
                     return
                 }
                 ":redo" -> {
-                    scope.launch { api.redo(); updateTaskList(); checkSyncStatus(); triggerBackgroundSync(context, api) }
+                    scope.launch {
+                        val desc = api.redo()
+                        updateTaskList()
+                        checkSyncStatus()
+                        triggerBackgroundSync(context, api)
+                        if (desc != null) {
+                            Toast.makeText(context, context.getString(R.string.task_action_redone, desc), Toast.LENGTH_SHORT).show()
+                        }
+                    }
                     newTaskText = androidx.compose.ui.text.input.TextFieldValue("")
                     return
                 }
-                ":sync" -> {
-                    handleRefresh()
+                ":empty-trash" -> {
+                    scope.launch {
+                        api.emptyTrash()
+                        updateTaskList()
+                        checkSyncStatus()
+                        triggerBackgroundSync(context, api)
+                    }
                     newTaskText = androidx.compose.ui.text.input.TextFieldValue("")
                     return
                 }
@@ -768,10 +792,13 @@ fun HomeScreen(
                             duration = SnackbarDuration.Short
                         )
                         if (result == SnackbarResult.ActionPerformed) {
-                            api.undo()
+                            val desc = api.undo()
                             updateTaskList()
                             checkSyncStatus()
                             onDataChanged()
+                            if (desc != null) {
+                                Toast.makeText(context, context.getString(R.string.task_action_undone, desc), Toast.LENGTH_SHORT).show()
+                            }
                         }
                     }
                 }
@@ -1016,10 +1043,13 @@ fun HomeScreen(
                                                     duration = SnackbarDuration.Short
                                                 )
                                                 if (result == SnackbarResult.ActionPerformed) {
-                                                    api.undo()
+                                                    val desc = api.undo()
                                                     updateTaskList()
                                                     checkSyncStatus()
                                                     onDataChanged()
+                                                    if (desc != null) {
+                                                        Toast.makeText(context, context.getString(R.string.task_action_undone, desc), Toast.LENGTH_SHORT).show()
+                                                    }
                                                 }
                                             }
                                         } catch (e: Exception) {

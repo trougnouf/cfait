@@ -1053,7 +1053,7 @@ impl CfaitMobile {
             .collect()
     }
 
-    pub fn undo(&self) -> Result<bool, MobileError> {
+    pub fn undo(&self) -> Result<Option<String>, MobileError> {
         let mut undo_lock = self.controller.undo_stack.blocking_lock();
         if let Some(record) = undo_lock.pop() {
             let mut store = self.controller.store.blocking_lock();
@@ -1071,13 +1071,13 @@ impl CfaitMobile {
                     let _ = c_clone.persist_changes(record.reverse).await;
                 });
             }
-            Ok(true)
+            Ok(Some(record.description))
         } else {
-            Ok(false)
+            Ok(None)
         }
     }
 
-    pub fn redo(&self) -> Result<bool, MobileError> {
+    pub fn redo(&self) -> Result<Option<String>, MobileError> {
         let mut redo_lock = self.controller.redo_stack.blocking_lock();
         if let Some(record) = redo_lock.pop() {
             let mut store = self.controller.store.blocking_lock();
@@ -1095,10 +1095,19 @@ impl CfaitMobile {
                     let _ = c_clone.persist_changes(record.forward).await;
                 });
             }
-            Ok(true)
+            Ok(Some(record.description))
         } else {
-            Ok(false)
+            Ok(None)
         }
+    }
+
+    pub async fn empty_trash(&self) -> Result<u32, MobileError> {
+        let count = self
+            .controller
+            .empty_trash()
+            .await
+            .map_err(MobileError::from)?;
+        Ok(count as u32)
     }
 
     pub fn get_config(&self) -> MobileConfig {
@@ -2266,12 +2275,25 @@ impl CfaitMobile {
         config_to_save.expanded_locations = session.expanded_locations.clone();
         let _ = config_to_save.save(self.ctx.as_ref());
 
-        let (forward, _, _, _) = store.apply_task_intent(&intent, &config);
+        let (forward, reverse, desc, primary_uid) = store.apply_task_intent(&intent, &config);
 
         drop(store);
         drop(session);
 
         if !forward.is_empty() {
+            let mut undo_lock = self.controller.undo_stack.lock().await;
+            undo_lock.push(crate::journal::UndoRecord {
+                description: desc,
+                primary_uid,
+                forward: forward.clone(),
+                reverse,
+            });
+            self.controller.redo_stack.lock().await.clear();
+            if undo_lock.len() > 50 {
+                undo_lock.remove(0);
+            }
+            drop(undo_lock);
+
             // Await disk persistence synchronously so the app doesn't suspend
             // before the user's modifications are safely queued to disk.
             let _ = self.controller.persist_changes(forward).await;

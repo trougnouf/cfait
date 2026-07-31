@@ -1241,11 +1241,19 @@ pub async fn handle_key_event(
                                         .to_string();
                             }
                         }
-                        ":sync" => {
-                            let _ = action_tx.try_send(crate::tui::action::Action::Refresh);
-                        }
-                        ":quit" => {
-                            let _ = action_tx.try_send(crate::tui::action::Action::Quit);
+                        ":empty-trash" => {
+                            let tx = action_tx.clone();
+                            let store_arc =
+                                std::sync::Arc::new(tokio::sync::Mutex::new(state.store.clone()));
+                            let ctrl = crate::controller::TaskController::new(
+                                store_arc,
+                                std::sync::Arc::new(tokio::sync::Mutex::new(None)),
+                                state.ctx.clone(),
+                            );
+                            tokio::spawn(async move {
+                                let _ = ctrl.empty_trash().await;
+                                let _ = tx.send(crate::tui::action::Action::Refresh).await;
+                            });
                         }
                         _ => {}
                     }

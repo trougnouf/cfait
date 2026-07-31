@@ -489,6 +489,30 @@ impl TaskController {
         Ok(vec![])
     }
 
+    pub async fn empty_trash(&self) -> Result<usize, String> {
+        let mut store = self.store.lock().await;
+        let mut tasks_to_purge = Vec::new();
+
+        if let Some(trash_map) = store.calendars.get(crate::storage::LOCAL_TRASH_HREF) {
+            for task in trash_map.values() {
+                tasks_to_purge.push(task.uid.clone());
+            }
+        }
+
+        let mut purged_tasks = Vec::new();
+        for uid in tasks_to_purge {
+            if let Some((task, _)) = store.delete_task(&uid) {
+                purged_tasks.push(task);
+            }
+        }
+        drop(store);
+
+        let count = purged_tasks.len();
+        let actions = purged_tasks.into_iter().map(Action::Delete).collect();
+        let _ = self.persist_changes(actions).await;
+        Ok(count)
+    }
+
     pub async fn prune_trash(&self) -> Result<usize, String> {
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let retention_days = config.trash_retention_days as i64;

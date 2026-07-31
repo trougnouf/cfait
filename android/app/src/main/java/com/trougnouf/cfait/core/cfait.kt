@@ -847,6 +847,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_edit_session(): Int
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_empty_trash(): Int
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_export_local_ics(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_export_locations_gpx(): Int
@@ -1117,6 +1119,8 @@ internal object UniffiLib {
         `input`: RustBuffer.ByValue,
     ): Long
 
+    external fun uniffi_cfait_fn_method_cfaitmobile_empty_trash(`ptr`: Long): Long
+
     external fun uniffi_cfait_fn_method_cfaitmobile_export_local_ics(
         `ptr`: Long,
         `calendarHref`: RustBuffer.ByValue,
@@ -1297,7 +1301,7 @@ internal object UniffiLib {
     external fun uniffi_cfait_fn_method_cfaitmobile_redo(
         `ptr`: Long,
         uniffi_out_err: UniffiRustCallStatus,
-    ): Byte
+    ): RustBuffer.ByValue
 
     external fun uniffi_cfait_fn_method_cfaitmobile_remove_alias(
         `ptr`: Long,
@@ -1430,7 +1434,7 @@ internal object UniffiLib {
     external fun uniffi_cfait_fn_method_cfaitmobile_undo(
         `ptr`: Long,
         uniffi_out_err: UniffiRustCallStatus,
-    ): Byte
+    ): RustBuffer.ByValue
 
     external fun uniffi_cfait_fn_method_cfaitmobile_update_local_calendar(
         `ptr`: Long,
@@ -1753,6 +1757,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_edit_session() != 60746) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_empty_trash() != 9690) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_export_local_ics() != 7714) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1852,7 +1859,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_pause_task() != 38923) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_redo() != 48975) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_redo() != 56145) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_remove_alias() != 19509) {
@@ -1924,7 +1931,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_toggle_task_shift() != 15294) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_undo() != 50224) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_undo() != 14759) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_update_local_calendar() != 59729) {
@@ -2560,6 +2567,8 @@ public interface CfaitMobileInterface {
         `input`: kotlin.String,
     )
 
+    suspend fun `emptyTrash`(): kotlin.UInt
+
     fun `exportLocalIcs`(`calendarHref`: kotlin.String): kotlin.String
 
     fun `exportLocationsGpx`(`uid`: kotlin.String): kotlin.String
@@ -2655,7 +2664,7 @@ public interface CfaitMobileInterface {
 
     suspend fun `pauseTask`(`uid`: kotlin.String)
 
-    fun `redo`(): kotlin.Boolean
+    fun `redo`(): kotlin.String?
 
     fun `removeAlias`(`key`: kotlin.String)
 
@@ -2732,7 +2741,7 @@ public interface CfaitMobileInterface {
 
     suspend fun `toggleTaskShift`(`uid`: kotlin.String)
 
-    fun `undo`(): kotlin.Boolean
+    fun `undo`(): kotlin.String?
 
     suspend fun `updateLocalCalendar`(
         `href`: kotlin.String,
@@ -3310,6 +3319,24 @@ open class CfaitMobile :
     )
 
     @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `emptyTrash`(): kotlin.UInt =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_empty_trash(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_u32(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_u32(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_u32(future) },
+            // lift function
+            { FfiConverterUInt.lift(it) },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
+
+    @Throws(MobileException::class)
     override fun `exportLocalIcs`(`calendarHref`: kotlin.String): kotlin.String =
         FfiConverterString.lift(
             callWithHandle {
@@ -3816,8 +3843,8 @@ open class CfaitMobile :
         )
 
     @Throws(MobileException::class)
-    override fun `redo`(): kotlin.Boolean =
-        FfiConverterBoolean.lift(
+    override fun `redo`(): kotlin.String? =
+        FfiConverterOptionalString.lift(
             callWithHandle {
                 uniffiRustCallWithError(MobileException) { _status ->
                     UniffiLib.uniffi_cfait_fn_method_cfaitmobile_redo(
@@ -4242,8 +4269,8 @@ open class CfaitMobile :
         )
 
     @Throws(MobileException::class)
-    override fun `undo`(): kotlin.Boolean =
-        FfiConverterBoolean.lift(
+    override fun `undo`(): kotlin.String? =
+        FfiConverterOptionalString.lift(
             callWithHandle {
                 uniffiRustCallWithError(MobileException) { _status ->
                     UniffiLib.uniffi_cfait_fn_method_cfaitmobile_undo(

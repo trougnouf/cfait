@@ -42,8 +42,7 @@ pub fn suggest(
         let cmds = vec![
             (":undo", "Undo last action"),
             (":redo", "Redo last undone action"),
-            (":sync", "Force background sync"),
-            (":quit", "Quit application"),
+            (":empty-trash", "Empty the local trash"),
         ];
         let mut suggestions = Vec::new();
         for (cmd, desc) in cmds {
@@ -63,35 +62,38 @@ pub fn suggest(
     // 1. Tags
     if word.starts_with('#') {
         let query = &lower[1..];
-        let mut tags = std::collections::HashSet::new();
+        let mut tag_counts: HashMap<String, usize> = HashMap::new();
 
         for k in aliases.keys() {
             if let Some(clean) = k.strip_prefix('#')
                 && clean.to_lowercase().starts_with(query)
             {
-                tags.insert(clean.to_string());
+                tag_counts.insert(clean.to_string(), 0);
             }
         }
         for map in store.calendars.values() {
             for t in map.values() {
                 for c in &t.categories {
-                    if c.to_lowercase().starts_with(query) {
-                        tags.insert(c.clone());
+                    let c_lower = c.to_lowercase();
+                    if c_lower.starts_with(query) {
+                        *tag_counts.entry(c.clone()).or_insert(0) += 1;
                     }
                 }
             }
         }
 
-        let mut suggestions: Vec<_> = tags
+        let mut tags: Vec<_> = tag_counts.into_iter().collect();
+        tags.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+
+        let suggestions: Vec<_> = tags
             .into_iter()
-            .map(|t| Suggestion {
+            .take(10)
+            .map(|(t, _)| Suggestion {
                 replacement: format!("#{}", quote_value(&t)),
                 display: format!("#{}", t),
-                description: "Tag".to_string(),
+                description: String::new(),
             })
             .collect();
-        suggestions.sort_by(|a, b| a.display.cmp(&b.display));
-        suggestions.truncate(10);
 
         if !suggestions.is_empty() {
             return Some((start..end, suggestions));
@@ -109,13 +111,13 @@ pub fn suggest(
             (match_res.0, &word[match_res.0.len()..])
         };
         let query_lower = query.to_lowercase();
-        let mut locs = std::collections::HashSet::new();
+        let mut loc_counts: HashMap<String, usize> = HashMap::new();
 
         for k in aliases.keys() {
             if let Some(clean) = k.strip_prefix("@@")
                 && clean.to_lowercase().starts_with(&query_lower)
             {
-                locs.insert(clean.to_string());
+                loc_counts.insert(clean.to_string(), 0);
             }
         }
         for map in store.calendars.values() {
@@ -123,21 +125,23 @@ pub fn suggest(
                 if let Some(l) = &t.location
                     && l.to_lowercase().starts_with(&query_lower)
                 {
-                    locs.insert(l.clone());
+                    *loc_counts.entry(l.clone()).or_insert(0) += 1;
                 }
             }
         }
 
-        let mut suggestions: Vec<_> = locs
+        let mut loc_list: Vec<_> = loc_counts.into_iter().collect();
+        loc_list.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+
+        let suggestions: Vec<_> = loc_list
             .into_iter()
-            .map(|l| Suggestion {
+            .take(10)
+            .map(|(l, _)| Suggestion {
                 replacement: format!("{}{}", prefix_str, quote_value(&l)),
                 display: format!("@@{}", l),
-                description: "Location".to_string(),
+                description: String::new(),
             })
             .collect();
-        suggestions.sort_by(|a, b| a.display.cmp(&b.display));
-        suggestions.truncate(10);
 
         if !suggestions.is_empty() {
             return Some((start..end, suggestions));

@@ -1279,12 +1279,15 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
                 app.input_value = text_editor::Content::new();
                 return handle(app, Message::Redo);
             }
-            ":sync" => {
+            ":empty-trash" => {
                 app.input_value = text_editor::Content::new();
-                return handle(app, Message::Refresh);
-            }
-            ":quit" => {
-                return handle(app, Message::CloseWindow);
+                let ctrl = app.controller.clone();
+                return Task::perform(
+                    async move {
+                        let _ = ctrl.empty_trash().await;
+                    },
+                    |_| Message::Refresh,
+                );
             }
             _ => {}
         }
