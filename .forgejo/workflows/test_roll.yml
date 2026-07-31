@@ -10,6 +10,7 @@ on:
 jobs:
   # --- JOB 1: VALIDATION ---
   test:
+    if: github.ref_type != 'tag'
     runs-on: self-hosted-arch
     container:
       image: local/arch-builder
