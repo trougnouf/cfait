@@ -165,6 +165,9 @@ pub struct AppState {
     pub cached_goals_progress: HashMap<String, (u32, Vec<f32>)>,
     pub cached_task_goals: Vec<(String, String, crate::config::Goal, u32, Vec<f32>)>,
     pub needs_redraw: bool,
+
+    pub undo_stack: Vec<crate::journal::UndoRecord>,
+    pub redo_stack: Vec<crate::journal::UndoRecord>,
 }
 
 impl Default for AppState {
@@ -284,6 +287,8 @@ impl AppState {
             cached_goals_progress: HashMap::new(),
             cached_task_goals: Vec::new(),
             needs_redraw: false,
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
         }
     }
 
@@ -498,7 +503,19 @@ impl AppState {
             self.focused_task_uid = uid.clone();
             return Vec::new();
         }
-        self.store.apply_task_intent(intent, config)
+        let (forward, reverse, desc) = self.store.apply_task_intent(intent, config);
+        if !forward.is_empty() {
+            self.undo_stack.push(crate::journal::UndoRecord {
+                description: desc,
+                forward: forward.clone(),
+                reverse,
+            });
+            self.redo_stack.clear();
+            if self.undo_stack.len() > 50 {
+                self.undo_stack.remove(0);
+            }
+        }
+        forward
     }
 
     /// Get all real tasks (excluding control items)

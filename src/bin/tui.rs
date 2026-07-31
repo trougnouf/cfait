@@ -1098,8 +1098,8 @@ async fn main() -> Result<()> {
                     uid: full_uid.clone(),
                     target_href: matched_href,
                 };
-                let move_actions = store.apply_task_intent(&intent, &config);
-                actions.extend(move_actions);
+                let (move_forward, _, _) = store.apply_task_intent(&intent, &config);
+                actions.extend(move_forward);
             }
 
             if !actions.is_empty() {
@@ -1552,10 +1552,10 @@ async fn main() -> Result<()> {
                     let intent = cfait::model::AppIntent::StartTask {
                         uid: full_uid.clone(),
                     };
-                    let actions = store_lock.apply_task_intent(&intent, &config);
+                    let (forward, _, _) = store_lock.apply_task_intent(&intent, &config);
                     drop(store_lock);
                     controller
-                        .persist_changes(actions)
+                        .persist_changes(forward)
                         .await
                         .map_err(|e| anyhow::anyhow!(e))?;
                     println!("{}", rust_i18n::t!("task_started", uid = partial_uid));
@@ -1565,10 +1565,10 @@ async fn main() -> Result<()> {
                     let intent = cfait::model::AppIntent::PauseTask {
                         uid: full_uid.clone(),
                     };
-                    let actions = store_lock.apply_task_intent(&intent, &config);
+                    let (forward, _, _) = store_lock.apply_task_intent(&intent, &config);
                     drop(store_lock);
                     controller
-                        .persist_changes(actions)
+                        .persist_changes(forward)
                         .await
                         .map_err(|e| anyhow::anyhow!(e))?;
                     println!("{}", rust_i18n::t!("task_paused", uid = partial_uid));
@@ -1578,10 +1578,10 @@ async fn main() -> Result<()> {
                     let intent = cfait::model::AppIntent::ToggleTask {
                         uid: full_uid.clone(),
                     };
-                    let actions = store_lock.apply_task_intent(&intent, &config);
+                    let (forward, _, _) = store_lock.apply_task_intent(&intent, &config);
                     drop(store_lock);
                     controller
-                        .persist_changes(actions)
+                        .persist_changes(forward)
                         .await
                         .map_err(|e| anyhow::anyhow!(e))?;
                     println!("{}", rust_i18n::t!("task_toggled", uid = partial_uid));
@@ -1774,16 +1774,16 @@ async fn main() -> Result<()> {
                 }
             };
 
-            let actions = store.apply_task_intent(&intent, &config);
+            let (forward, _, _) = store.apply_task_intent(&intent, &config);
 
-            if !actions.is_empty() {
+            if !forward.is_empty() {
                 let store_arc = Arc::new(tokio::sync::Mutex::new(store));
                 let client_arc = Arc::new(tokio::sync::Mutex::new(None));
                 let controller =
                     cfait::controller::TaskController::new(store_arc, client_arc, ctx.clone());
 
                 controller
-                    .persist_changes(actions)
+                    .persist_changes(forward)
                     .await
                     .map_err(|e| anyhow::anyhow!(e))?;
                 println!("Task moved successfully.");
@@ -1844,7 +1844,8 @@ async fn main() -> Result<()> {
                 let intent = cfait::model::AppIntent::DeleteTask {
                     uid: full_uid.clone(),
                 };
-                store_lock.apply_task_intent(&intent, &config)
+                let (forward, _, _) = store_lock.apply_task_intent(&intent, &config);
+                forward
             };
             controller
                 .persist_changes(actions)

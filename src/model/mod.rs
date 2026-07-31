@@ -3,6 +3,7 @@
 //! Central model module re-exports to make types available as `crate::model::*`.
 
 pub mod adapter;
+pub mod autocomplete;
 pub mod display;
 pub mod extractor;
 pub mod item;

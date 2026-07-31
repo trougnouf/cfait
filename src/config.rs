@@ -745,6 +745,9 @@ pub struct Config {
     #[serde(default = "default_true")]
     pub show_task_goals_in_sidebar: bool,
 
+    #[serde(default = "default_true")]
+    pub show_undo_snackbar: bool,
+
     #[serde(default)]
     pub sidebar_is_hidden: bool,
 
@@ -858,6 +861,8 @@ pub struct SyncableConfig {
     #[serde(default = "default_true")]
     pub show_task_goals_in_sidebar: bool,
     #[serde(default = "default_true")]
+    pub show_undo_snackbar: bool,
+    #[serde(default = "default_true")]
     pub sort_collections_by_size: bool,
 }
 
@@ -920,6 +925,7 @@ impl Default for Config {
             show_quick_filter: true,
             show_goals_tab: true,
             show_task_goals_in_sidebar: true,
+            show_undo_snackbar: true,
             sidebar_is_hidden: false,
             description_editor: String::new(),
             log_level: default_log_level(),
@@ -973,6 +979,7 @@ impl Config {
             show_quick_filter: self.show_quick_filter,
             show_goals_tab: self.show_goals_tab,
             show_task_goals_in_sidebar: self.show_task_goals_in_sidebar,
+            show_undo_snackbar: self.show_undo_snackbar,
             sort_collections_by_size: self.sort_collections_by_size,
         }
     }
@@ -1017,6 +1024,7 @@ impl Config {
         self.show_quick_filter = sync.show_quick_filter;
         self.show_goals_tab = sync.show_goals_tab;
         self.show_task_goals_in_sidebar = sync.show_task_goals_in_sidebar;
+        self.show_undo_snackbar = sync.show_undo_snackbar;
         self.sort_collections_by_size = sync.sort_collections_by_size;
     }
 

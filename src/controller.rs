@@ -21,6 +21,8 @@ pub struct TaskController {
     pub store: Arc<Mutex<TaskStore>>,
     pub client: Arc<Mutex<Option<RustyClient>>>,
     pub ctx: Arc<dyn AppContext>,
+    pub undo_stack: Arc<Mutex<Vec<crate::journal::UndoRecord>>>,
+    pub redo_stack: Arc<Mutex<Vec<crate::journal::UndoRecord>>>,
 }
 
 impl TaskController {
@@ -29,7 +31,13 @@ impl TaskController {
         client: Arc<Mutex<Option<RustyClient>>>,
         ctx: Arc<dyn AppContext>,
     ) -> Self {
-        Self { store, client, ctx }
+        Self {
+            store,
+            client,
+            ctx,
+            undo_stack: Arc::new(Mutex::new(Vec::new())),
+            redo_stack: Arc::new(Mutex::new(Vec::new())),
+        }
     }
 
     /// Process a batch of actions atomically to ensure proper journal queueing.

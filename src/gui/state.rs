@@ -270,6 +270,9 @@ pub struct GuiApp {
 
     // ADDED: UI Scale (for global zooming)
     pub ui_scale: f32,
+
+    pub undo_stack: Vec<crate::journal::UndoRecord>,
+    pub redo_stack: Vec<crate::journal::UndoRecord>,
 }
 
 impl GuiApp {
@@ -591,6 +594,9 @@ impl Default for GuiApp {
             ics_import_content: None,
             ics_import_selected_calendar: None,
             ics_import_task_count: None,
+
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
         }
     }
 }

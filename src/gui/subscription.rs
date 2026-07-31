@@ -197,6 +197,8 @@ fn handle_hotkey(
                     "n" => return Some(Message::StartCreateWithDescription),
                     "e" => return Some(Message::KeyboardEditTree),
                     "," => return Some(Message::OpenSettings),
+                    "z" => return Some(Message::Undo),
+                    "y" => return Some(Message::Redo),
                     _ => {}
                 }
             }
@@ -259,6 +261,8 @@ fn handle_hotkey(
                     }
                     "," => return Some(Message::OpenSettings),
                     "p" => return Some(Message::ToggleSortStandardByPriorityToggle),
+                    "z" => return Some(Message::Undo),
+                    "y" => return Some(Message::Redo),
                     _ => {}
                 }
             } else if let keyboard::Key::Named(Named::Delete) = key.as_ref() {

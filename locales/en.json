@@ -1,4 +1,9 @@
 {
+    "undo": "Undo",
+    "redo": "Redo",
+    "sync": "Sync",
+    "config_show_undo_snackbar": "Show Undo snackbar on task actions",
+    "task_action_undone": "Action undone: %{desc}",
     "about_chat": "Chat: %{url}",
     "about_license": "GPL-3.0 license",
     "about_repository": "Repository: %{url}",

@@ -363,9 +363,12 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
                 .retain(|(t, a)| !(t.uid == t_uid && a.uid == a_uid));
             tasks::handle(app, Message::DismissAlarm(t_uid, a_uid))
         }
-        Message::ToggleTaskShift(_) | Message::CompleteTree(_) | Message::ShiftSpaceSelected => {
-            tasks::handle(app, message)
-        }
+        Message::ToggleTaskShift(_)
+        | Message::CompleteTree(_)
+        | Message::ShiftSpaceSelected
+        | Message::Undo
+        | Message::Redo
+        | Message::ApplySuggestion(..) => tasks::handle(app, message),
     };
 
     // Prune ringing tasks that are no longer valid (done, canceled, or alarm acknowledged/snoozed/removed)

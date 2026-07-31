@@ -421,7 +421,7 @@ async fn execute_task_action(
     }
 
     if let Some(i) = intent {
-        let actions = state.store.apply_task_intent(&i, &config);
+        let actions = state.apply_task_intent(&i, &config);
         state.refresh_filtered_view();
         if !actions.is_empty() {
             let tx = action_tx.clone();
@@ -974,7 +974,7 @@ pub async fn handle_key_event(
                         // Push update via centralized logic
                         let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                         let intent = AppIntent::ToggleTask { uid: uid.clone() };
-                        let actions = state.store.apply_task_intent(&intent, &config);
+                        let actions = state.apply_task_intent(&intent, &config);
                         // Push update to alarm actor
                         update_alarms(state);
 
@@ -996,7 +996,7 @@ pub async fn handle_key_event(
                         // Push update via centralized logic
                         let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                         let intent = AppIntent::ToggleTask { uid: uid.clone() };
-                        let actions = state.store.apply_task_intent(&intent, &config);
+                        let actions = state.apply_task_intent(&intent, &config);
                         update_alarms(state);
 
                         let tx = action_tx.clone();
@@ -1017,7 +1017,7 @@ pub async fn handle_key_event(
                         // Push update via centralized logic
                         let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                         let intent = AppIntent::ToggleTask { uid: uid.clone() };
-                        let actions = state.store.apply_task_intent(&intent, &config);
+                        let actions = state.apply_task_intent(&intent, &config);
                         update_alarms(state);
 
                         let tx = action_tx.clone();
@@ -1038,7 +1038,7 @@ pub async fn handle_key_event(
                         // Compute changes via centralized logic
                         let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                         let intent = AppIntent::ToggleTask { uid: uid.clone() };
-                        let actions = state.store.apply_task_intent(&intent, &config);
+                        let actions = state.apply_task_intent(&intent, &config);
                         state.refresh_filtered_view();
                         update_alarms(state);
 
@@ -1059,7 +1059,7 @@ pub async fn handle_key_event(
                         // Apply cancel logic via centralized logic
                         let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                         let intent = AppIntent::CancelTask { uid: uid.clone() };
-                        let actions = state.store.apply_task_intent(&intent, &config);
+                        let actions = state.apply_task_intent(&intent, &config);
                         state.refresh_filtered_view();
                         update_alarms(state);
 
@@ -1193,6 +1193,50 @@ pub async fn handle_key_event(
                 let is_alias_only = trimmed.is_empty()
                     || (!trimmed.contains(' ')
                         && (trimmed.contains(":=") || trimmed.to_lowercase().starts_with("loc:")));
+
+                if trimmed.starts_with(':') && !trimmed.contains(' ') {
+                    match trimmed.to_lowercase().as_str() {
+                        ":undo" => {
+                            if let Some(record) = state.undo_stack.pop() {
+                                state.store.apply_actions(&record.reverse);
+                                state.redo_stack.push(record.clone());
+                                if state.redo_stack.len() > 50 {
+                                    state.redo_stack.remove(0);
+                                }
+                                state.refresh_filtered_view();
+                                let tx = action_tx.clone();
+                                tokio::spawn(async move {
+                                    let _ = tx.send(Action::PersistBatch(record.reverse)).await;
+                                });
+                                state.message =
+                                    rust_i18n::t!("task_action_undone", desc = record.description)
+                                        .to_string();
+                            }
+                        }
+                        ":redo" => {
+                            if let Some(record) = state.redo_stack.pop() {
+                                state.store.apply_actions(&record.forward);
+                                state.undo_stack.push(record.clone());
+                                state.refresh_filtered_view();
+                                let tx = action_tx.clone();
+                                tokio::spawn(async move {
+                                    let _ = tx.send(Action::PersistBatch(record.forward)).await;
+                                });
+                                state.message = format!("Redone: {}", record.description);
+                            }
+                        }
+                        ":sync" => {
+                            let _ = action_tx.try_send(crate::tui::action::Action::Refresh);
+                        }
+                        ":quit" => {
+                            let _ = action_tx.try_send(crate::tui::action::Action::Quit);
+                        }
+                        _ => {}
+                    }
+                    state.mode = InputMode::Normal;
+                    state.reset_input();
+                    return None;
+                }
 
                 if is_alias_only {
                     state.mode = InputMode::Normal;
@@ -1564,7 +1608,7 @@ pub async fn handle_key_event(
                         // Push update via centralized logic
                         let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                         let intent = AppIntent::ToggleTask { uid: uid.clone() };
-                        let actions = state.store.apply_task_intent(&intent, &config);
+                        let actions = state.apply_task_intent(&intent, &config);
                         update_alarms(state);
 
                         let tx = action_tx.clone();
@@ -1994,7 +2038,7 @@ pub async fn handle_key_event(
                             AppIntent::ToggleTask { uid: uid.clone() }
                         };
 
-                        let actions = state.store.apply_task_intent(&intent, &config);
+                        let actions = state.apply_task_intent(&intent, &config);
                         state.refresh_filtered_view();
                         update_alarms(state);
 
@@ -2036,7 +2080,7 @@ pub async fn handle_key_event(
                         AppIntent::StartTask { uid: uid.clone() }
                     };
 
-                    let actions = state.store.apply_task_intent(&intent, &config);
+                    let actions = state.apply_task_intent(&intent, &config);
                     if !actions.is_empty() {
                         state.refresh_filtered_view();
                         let tx = action_tx.clone();
@@ -2052,7 +2096,7 @@ pub async fn handle_key_event(
                     let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                     let intent = AppIntent::StopTask { uid: uid.clone() };
 
-                    let actions = state.store.apply_task_intent(&intent, &config);
+                    let actions = state.apply_task_intent(&intent, &config);
                     if !actions.is_empty() {
                         state.refresh_filtered_view();
                         let tx = action_tx.clone();
@@ -2069,7 +2113,7 @@ pub async fn handle_key_event(
                         let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                         let intent = AppIntent::CancelTask { uid: uid.clone() };
 
-                        let actions = state.store.apply_task_intent(&intent, &config);
+                        let actions = state.apply_task_intent(&intent, &config);
                         state.refresh_filtered_view();
                         update_alarms(state);
 
@@ -2106,7 +2150,7 @@ pub async fn handle_key_event(
                         delta: 1,
                     };
 
-                    let actions = state.store.apply_task_intent(&intent, &config);
+                    let actions = state.apply_task_intent(&intent, &config);
                     state.refresh_filtered_view();
                     if !actions.is_empty() {
                         let tx = action_tx.clone();
@@ -2124,7 +2168,7 @@ pub async fn handle_key_event(
                         delta: -1,
                     };
 
-                    let actions = state.store.apply_task_intent(&intent, &config);
+                    let actions = state.apply_task_intent(&intent, &config);
                     state.refresh_filtered_view();
                     if !actions.is_empty() {
                         let tx = action_tx.clone();
@@ -2144,7 +2188,7 @@ pub async fn handle_key_event(
                             AppIntent::DeleteTask { uid: uid.clone() }
                         };
 
-                        let actions = state.store.apply_task_intent(&intent, &config);
+                        let actions = state.apply_task_intent(&intent, &config);
                         state.refresh_filtered_view();
                         update_alarms(state);
 
@@ -2189,7 +2233,7 @@ pub async fn handle_key_event(
                         parent_uid: parent_uid.clone(),
                     };
 
-                    let actions = state.store.apply_task_intent(&intent, &config);
+                    let actions = state.apply_task_intent(&intent, &config);
                     if !state.yank_lock_active {
                         state.yanked_uid = None;
                     }
@@ -2237,7 +2281,7 @@ pub async fn handle_key_event(
                     let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                     let intent = AppIntent::DuplicateTaskTree { uid: uid.clone() };
 
-                    let actions = state.store.apply_task_intent(&intent, &config);
+                    let actions = state.apply_task_intent(&intent, &config);
                     state.refresh_filtered_view();
                     if !actions.is_empty() {
                         let tx = action_tx.clone();
@@ -2250,6 +2294,18 @@ pub async fn handle_key_event(
             KeyCode::Char('Y') => {
                 state.yank_lock_active = !state.yank_lock_active;
                 state.needs_redraw = true;
+            }
+            KeyCode::Char('y') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if let Some(record) = state.redo_stack.pop() {
+                    state.store.apply_actions(&record.forward);
+                    state.undo_stack.push(record.clone());
+                    state.refresh_filtered_view();
+                    let tx = action_tx.clone();
+                    tokio::spawn(async move {
+                        let _ = tx.send(Action::PersistBatch(record.forward)).await;
+                    });
+                    state.message = format!("Redone: {}", record.description);
+                }
             }
             KeyCode::Char('y') => {
                 if let Some(t) = state.get_selected_task() {
@@ -2398,7 +2454,7 @@ pub async fn handle_key_event(
                             blocker_uid: yanked_uid.clone(),
                         };
 
-                        let actions = state.store.apply_task_intent(&intent, &config);
+                        let actions = state.apply_task_intent(&intent, &config);
                         if !state.yank_lock_active {
                             state.yanked_uid = None;
                         }
@@ -2431,7 +2487,7 @@ pub async fn handle_key_event(
                             related_uid: yanked_uid.clone(),
                         };
 
-                        let actions = state.store.apply_task_intent(&intent, &config);
+                        let actions = state.apply_task_intent(&intent, &config);
                         if !state.yank_lock_active {
                             state.yanked_uid = None;
                         }
@@ -2463,7 +2519,7 @@ pub async fn handle_key_event(
                         parent_uid: parent_uid.clone(),
                     };
 
-                    let actions = state.store.apply_task_intent(&intent, &config);
+                    let actions = state.apply_task_intent(&intent, &config);
                     state.refresh_filtered_view();
                     if !actions.is_empty() {
                         let tx = action_tx.clone();
@@ -2482,7 +2538,7 @@ pub async fn handle_key_event(
                     let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                     let intent = AppIntent::RemoveParent { uid: uid.clone() };
 
-                    let actions = state.store.apply_task_intent(&intent, &config);
+                    let actions = state.apply_task_intent(&intent, &config);
                     state.refresh_filtered_view();
                     if !actions.is_empty() {
                         let tx = action_tx.clone();
@@ -2557,6 +2613,22 @@ pub async fn handle_key_event(
                 state.sidebar_mode = SidebarMode::Categories;
                 state.refresh_filtered_view();
             }
+            KeyCode::Char('z') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if let Some(record) = state.undo_stack.pop() {
+                    state.store.apply_actions(&record.reverse);
+                    state.redo_stack.push(record.clone());
+                    if state.redo_stack.len() > 50 {
+                        state.redo_stack.remove(0);
+                    }
+                    state.refresh_filtered_view();
+                    let tx = action_tx.clone();
+                    tokio::spawn(async move {
+                        let _ = tx.send(Action::PersistBatch(record.reverse)).await;
+                    });
+                    state.message =
+                        rust_i18n::t!("task_action_undone", desc = record.description).to_string();
+                }
+            }
             KeyCode::Char('z') => {
                 if state.active_focus == Focus::Main {
                     if let Some(task) = state.get_selected_task() {
@@ -2579,7 +2651,7 @@ pub async fn handle_key_event(
                             uid: uid.clone(),
                             collapsed: new_state,
                         };
-                        let actions = state.store.apply_task_intent(&intent, &config);
+                        let actions = state.apply_task_intent(&intent, &config);
                         state.refresh_filtered_view();
                         if !actions.is_empty() {
                             let tx = action_tx.clone();
@@ -3292,7 +3364,7 @@ pub async fn handle_key_event(
                         }
                     };
 
-                    let actions = state.store.apply_task_intent(&intent, &config);
+                    let actions = state.apply_task_intent(&intent, &config);
                     state.refresh_filtered_view();
                     // Update alarms immediately if needed (task moved, though move doesn't clear completion)
                     // Moving a task keeps its alarms but might change visibility.
@@ -3429,7 +3501,7 @@ pub async fn handle_key_event(
                     }
 
                     if let Some(i) = intent {
-                        let actions = state.store.apply_task_intent(&i, &config);
+                        let actions = state.apply_task_intent(&i, &config);
                         state.refresh_filtered_view();
                         if !actions.is_empty() {
                             let tx = action_tx.clone();

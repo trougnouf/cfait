@@ -459,7 +459,18 @@ pub fn dispatch_intent(app: &mut GuiApp, intent: AppIntent) {
     app.session.apply_session_intent(&intent);
 
     // 2. Mutate in-memory store synchronously & extract persistence actions
-    let actions = app.store.apply_task_intent(&intent, config);
+    let (actions, reverse, desc) = app.store.apply_task_intent(&intent, config);
+    if !actions.is_empty() {
+        app.undo_stack.push(crate::journal::UndoRecord {
+            description: desc,
+            forward: actions.clone(),
+            reverse,
+        });
+        app.redo_stack.clear();
+        if app.undo_stack.len() > 50 {
+            app.undo_stack.remove(0);
+        }
+    }
 
     // 3. Update the UI rendering
     refresh_filtered_tasks(app);

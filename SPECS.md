@@ -147,6 +147,13 @@ Tasks sort deterministically by rank (0 to 9), then by Overdue -> Priority -> Du
 
 ## 4. Core Business Workflows
 
+### 4.0. Undo / Redo & Smart Commands
+All clients maintain an active session Undo/Redo stack. Every task mutation applied to the `TaskStore` pushes an `UndoRecord` (containing the exact inverse journal actions derived from pre-mutation snapshots).
+*   **Android:** Mutations trigger a transient Snackbar allowing 1-tap Undo. Markdown editors feature explicit ↶/↷ toolbar buttons.
+*   **Desktop (GUI/TUI):** Global `Ctrl+Z` (Undo) and `Ctrl+Y` (Redo) shortcuts.
+*   **Smart Commands:** If the Add Task input starts with `:` and contains no spaces (e.g., `:undo`, `:redo`, `:sync`, `:quit`), it is intercepted and executed as a session command rather than creating a task. 
+*   **Auto-Complete:** The `CursorContextBanner` acts as a unified auto-complete engine, suggesting commands (when typing `:`), tags (when typing `#`), and locations (when typing `@@`).
+
 ### 4.1. The "Yank" Relationship System
 Instead of drag-and-drop, Cfait uses a robust "Yank" (Clipboard) system for hierarchy management.
 1.  **Yank (`y` / Action Menu):** Copies the selected task's UID to an internal "Yanked" state. UI displays a persistent banner.

@@ -28,6 +28,13 @@ pub enum Action {
     Move(Task, String),
 }
 
+#[derive(Clone, Debug)]
+pub struct UndoRecord {
+    pub description: String,
+    pub forward: Vec<Action>,
+    pub reverse: Vec<Action>,
+}
+
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Journal {
     pub queue: Vec<Action>,

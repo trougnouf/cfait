@@ -475,6 +475,7 @@ pub struct MobileConfig {
     pub expanded_tags: Vec<String>,
     pub expanded_locations: Vec<String>,
     pub expanded_done_groups: Vec<String>,
+    pub show_undo_snackbar: bool,
 }
 
 #[derive(uniffi::Record)]
@@ -501,6 +502,15 @@ pub struct MobileHelpCategoryData {
 pub struct MobileVersionInfo {
     pub version: String,
     pub commit: String,
+}
+
+#[derive(uniffi::Record)]
+pub struct MobileSuggestion {
+    pub replacement: String,
+    pub display: String,
+    pub description: String,
+    pub range_start: i32,
+    pub range_end: i32,
 }
 
 #[uniffi::export]
@@ -564,6 +574,30 @@ impl CfaitMobile {
             .iter()
             .map(|s| s.to_string())
             .collect()
+    }
+
+    pub fn suggest(&self, input: String, cursor_byte_idx: i32) -> Vec<MobileSuggestion> {
+        let config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
+        let store = self.controller.store.blocking_lock();
+        if let Some((range, suggs)) = crate::model::autocomplete::suggest(
+            &input,
+            cursor_byte_idx as usize,
+            &store,
+            &config.tag_aliases,
+        ) {
+            suggs
+                .into_iter()
+                .map(|s| MobileSuggestion {
+                    replacement: s.replacement,
+                    display: s.display,
+                    description: s.description,
+                    range_start: range.start as i32,
+                    range_end: range.end as i32,
+                })
+                .collect()
+        } else {
+            Vec::new()
+        }
     }
 
     pub fn get_token_context(
@@ -1019,6 +1053,54 @@ impl CfaitMobile {
             .collect()
     }
 
+    pub fn undo(&self) -> Result<bool, MobileError> {
+        let mut undo_lock = self.controller.undo_stack.blocking_lock();
+        if let Some(record) = undo_lock.pop() {
+            let mut store = self.controller.store.blocking_lock();
+            store.apply_actions(&record.reverse);
+            drop(store);
+
+            self.controller
+                .redo_stack
+                .blocking_lock()
+                .push(record.clone());
+
+            let c_clone = self.controller.clone();
+            if let Some(runtime) = TOKIO_RUNTIME.get() {
+                runtime.spawn(async move {
+                    let _ = c_clone.persist_changes(record.reverse).await;
+                });
+            }
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    pub fn redo(&self) -> Result<bool, MobileError> {
+        let mut redo_lock = self.controller.redo_stack.blocking_lock();
+        if let Some(record) = redo_lock.pop() {
+            let mut store = self.controller.store.blocking_lock();
+            store.apply_actions(&record.forward);
+            drop(store);
+
+            self.controller
+                .undo_stack
+                .blocking_lock()
+                .push(record.clone());
+
+            let c_clone = self.controller.clone();
+            if let Some(runtime) = TOKIO_RUNTIME.get() {
+                runtime.spawn(async move {
+                    let _ = c_clone.persist_changes(record.forward).await;
+                });
+            }
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
     pub fn get_config(&self) -> MobileConfig {
         let c = load_mobile_config_with_credentials(self.ctx.as_ref());
         MobileConfig {
@@ -1089,6 +1171,7 @@ impl CfaitMobile {
             expanded_tags: c.expanded_tags,
             expanded_locations: c.expanded_locations,
             expanded_done_groups: Vec::new(),
+            show_undo_snackbar: c.show_undo_snackbar,
         }
     }
 
@@ -1210,6 +1293,7 @@ impl CfaitMobile {
         c.quick_filter_term = config.quick_filter_term;
         c.quick_filter_icon = config.quick_filter_icon;
         c.sync_settings = config.sync_settings;
+        c.show_undo_snackbar = config.show_undo_snackbar;
 
         c.goals = config
             .goals
@@ -2182,15 +2266,15 @@ impl CfaitMobile {
         config_to_save.expanded_locations = session.expanded_locations.clone();
         let _ = config_to_save.save(self.ctx.as_ref());
 
-        let actions = store.apply_task_intent(&intent, &config);
+        let (forward, _, _) = store.apply_task_intent(&intent, &config);
 
         drop(store);
         drop(session);
 
-        if !actions.is_empty() {
+        if !forward.is_empty() {
             // Await disk persistence synchronously so the app doesn't suspend
             // before the user's modifications are safely queued to disk.
-            let _ = self.controller.persist_changes(actions).await;
+            let _ = self.controller.persist_changes(forward).await;
         }
 
         let store_arc = self.controller.store.clone();

@@ -16,6 +16,7 @@ import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.trougnouf.cfait.R
@@ -35,6 +36,9 @@ fun TreeEditorScreen(
     val clipboard = LocalClipboard.current
 
     var markdownText by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
+    var undoStack by remember { mutableStateOf(listOf<TextFieldValue>()) }
+    var redoStack by remember { mutableStateOf(listOf<TextFieldValue>()) }
+
     var isLoading by remember { mutableStateOf(true) }
     var isSaving by remember { mutableStateOf(false) }
     val isDark = isSystemInDarkTheme()
@@ -42,7 +46,10 @@ fun TreeEditorScreen(
     LaunchedEffect(uid) {
         scope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
-                markdownText = androidx.compose.ui.text.input.TextFieldValue(api.getTaskTreeMarkdown(uid))
+                val initVal = androidx.compose.ui.text.input.TextFieldValue(api.getTaskTreeMarkdown(uid))
+                markdownText = initVal
+                undoStack = listOf(initVal)
+                redoStack = emptyList()
             } catch (e: Exception) {
                 markdownText = androidx.compose.ui.text.input.TextFieldValue(context.getString(R.string.error_general, e.message ?: ""))
             } finally {
@@ -59,6 +66,28 @@ fun TreeEditorScreen(
                     IconButton(onClick = onBack) { NfIcon(NfIcons.CROSS, 20.sp) }
                 },
                 actions = {
+                    if (undoStack.size > 1) {
+                        IconButton(onClick = {
+                            if (undoStack.size > 1) {
+                                val current = undoStack.last()
+                                redoStack = (redoStack + current).takeLast(50)
+                                undoStack = undoStack.dropLast(1)
+                                markdownText = undoStack.last()
+                            }
+                        }) { NfIcon(NfIcons.UNDO, 20.sp) }
+                    }
+                    
+                    if (redoStack.isNotEmpty()) {
+                        IconButton(onClick = {
+                            if (redoStack.isNotEmpty()) {
+                                val next = redoStack.last()
+                                redoStack = redoStack.dropLast(1)
+                                undoStack = (undoStack + next).takeLast(50)
+                                markdownText = next
+                            }
+                        }) { NfIcon(NfIcons.REDO, 20.sp) }
+                    }
+
                     IconButton(
                         onClick = {
                             scope.launch {
@@ -110,7 +139,13 @@ fun TreeEditorScreen(
             ) {
                 OutlinedTextField(
                     value = markdownText,
-                    onValueChange = { markdownText = it },
+                    onValueChange = { 
+                        if (it.text != markdownText.text) {
+                            undoStack = (undoStack + it).takeLast(50)
+                            redoStack = emptyList()
+                        }
+                        markdownText = it 
+                    },
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp),
                     visualTransformation = remember(isDark) {

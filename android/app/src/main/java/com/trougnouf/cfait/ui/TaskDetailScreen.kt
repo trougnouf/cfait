@@ -32,6 +32,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.core.content.ContextCompat
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.AppIntent
@@ -57,6 +58,10 @@ fun TaskDetailScreen(
     val scope = rememberCoroutineScope()
     var smartInput by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
     var description by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
+    
+    var descUndoStack by remember { mutableStateOf(listOf<TextFieldValue>()) }
+    var descRedoStack by remember { mutableStateOf(listOf<TextFieldValue>()) }
+
     var showMoveDialog by remember { mutableStateOf(false) }
     val isDark = isSystemInDarkTheme()
     val uriHandler = LocalUriHandler.current
@@ -110,7 +115,10 @@ fun TaskDetailScreen(
             task = api.getTaskByUid(uid)
             task?.let {
                 smartInput = androidx.compose.ui.text.input.TextFieldValue(it.smartString)
-                description = androidx.compose.ui.text.input.TextFieldValue(it.description)
+                val newDesc = androidx.compose.ui.text.input.TextFieldValue(it.description)
+                description = newDesc
+                descUndoStack = listOf(newDesc)
+                descRedoStack = emptyList()
             }
         }
     }
@@ -240,6 +248,29 @@ fun TaskDetailScreen(
                             NfIcon(NfIcons.WEB_CHECK, 20.sp)
                         }
                     }
+
+                    if (descUndoStack.size > 1) {
+                        IconButton(onClick = {
+                            if (descUndoStack.size > 1) {
+                                val current = descUndoStack.last()
+                                descRedoStack = (descRedoStack + current).takeLast(50)
+                                descUndoStack = descUndoStack.dropLast(1)
+                                description = descUndoStack.last()
+                            }
+                        }) { NfIcon(NfIcons.UNDO, 20.sp) }
+                    }
+                    
+                    if (descRedoStack.isNotEmpty()) {
+                        IconButton(onClick = {
+                            if (descRedoStack.isNotEmpty()) {
+                                val next = descRedoStack.last()
+                                descRedoStack = descRedoStack.dropLast(1)
+                                descUndoStack = (descUndoStack + next).takeLast(50)
+                                description = next
+                            }
+                        }) { NfIcon(NfIcons.REDO, 20.sp) }
+                    }
+
                     IconButton(onClick = { onEditTree(task!!.uid) }) {
                         NfIcon(NfIcons.EDIT_TREE, 20.sp)
                     }
@@ -841,7 +872,13 @@ fun TaskDetailScreen(
 
             OutlinedTextField(
                 value = description,
-                onValueChange = { description = it },
+                onValueChange = { 
+                    if (it.text != description.text) {
+                        descUndoStack = (descUndoStack + it).takeLast(50)
+                        descRedoStack = emptyList()
+                    }
+                    description = it 
+                },
                 label = { Text(stringResource(R.string.description_label)) },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 150.dp),
                 textStyle = TextStyle(textAlign = androidx.compose.ui.text.style.TextAlign.Start),

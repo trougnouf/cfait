@@ -31,6 +31,10 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -265,6 +269,15 @@ fun HomeScreen(
         }
     }
 
+    val snackbarHostState = remember { SnackbarHostState() }
+    var showUndoSnackbar by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        try {
+            showUndoSnackbar = api.getConfig().showUndoSnackbar
+        } catch (e: Exception) {}
+    }
+
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var isSearchActive by rememberSaveable { mutableStateOf(false) }
     val searchFocusRequester = remember { FocusRequester() }
@@ -421,6 +434,20 @@ fun HomeScreen(
                 onDataChanged()
                 lastSyncFailed = false
                 triggerBackgroundSync(context, api)
+
+                if (showUndoSnackbar) {
+                    val result = snackbarHostState.showSnackbar(
+                        message = context.getString(R.string.status_saved),
+                        actionLabel = context.getString(R.string.undo),
+                        duration = SnackbarDuration.Short
+                    )
+                    if (result == SnackbarResult.ActionPerformed) {
+                        api.undo()
+                        updateTaskList()
+                        checkSyncStatus()
+                        onDataChanged()
+                    }
+                }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 lastSyncFailed = true
@@ -434,6 +461,26 @@ fun HomeScreen(
     fun addTask(txt: String, desc: String) {
         val text = txt.trim()
         val isAliasDef = text.contains(":=")
+
+        if (text.startsWith(":") && !text.contains(" ")) {
+            when (text.lowercase()) {
+                ":undo" -> {
+                    scope.launch { api.undo(); updateTaskList(); checkSyncStatus(); triggerBackgroundSync(context, api) }
+                    newTaskText = androidx.compose.ui.text.input.TextFieldValue("")
+                    return
+                }
+                ":redo" -> {
+                    scope.launch { api.redo(); updateTaskList(); checkSyncStatus(); triggerBackgroundSync(context, api) }
+                    newTaskText = androidx.compose.ui.text.input.TextFieldValue("")
+                    return
+                }
+                ":sync" -> {
+                    handleRefresh()
+                    newTaskText = androidx.compose.ui.text.input.TextFieldValue("")
+                    return
+                }
+            }
+        }
 
         if (text.startsWith("#") && !text.contains(" ") && !isAliasDef) {
             val tag = text.removePrefix("#")
@@ -691,6 +738,20 @@ fun HomeScreen(
                     onDataChanged()
                     lastSyncFailed = false
                     triggerBackgroundSync(context, api)
+
+                    if (showUndoSnackbar && (action == "delete" || action == "delete_tree" || action == "cancel" || action == "complete_and_shift" || action == "move")) {
+                        val result = snackbarHostState.showSnackbar(
+                            message = context.getString(R.string.status_saved),
+                            actionLabel = context.getString(R.string.undo),
+                            duration = SnackbarDuration.Short
+                        )
+                        if (result == SnackbarResult.ActionPerformed) {
+                            api.undo()
+                            updateTaskList()
+                            checkSyncStatus()
+                            onDataChanged()
+                        }
+                    }
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
@@ -947,6 +1008,20 @@ fun HomeScreen(
                                             updateTaskList()
                                             onDataChanged()
                                             triggerBackgroundSync(context, api)
+
+                                            if (showUndoSnackbar) {
+                                                val result = snackbarHostState.showSnackbar(
+                                                    message = context.getString(R.string.status_saved),
+                                                    actionLabel = context.getString(R.string.undo),
+                                                    duration = SnackbarDuration.Short
+                                                )
+                                                if (result == SnackbarResult.ActionPerformed) {
+                                                    api.undo()
+                                                    updateTaskList()
+                                                    checkSyncStatus()
+                                                    onDataChanged()
+                                                }
+                                            }
                                         } catch (e: Exception) {
                                             if (e is CancellationException) throw e
                                             Toast.makeText(
@@ -1866,6 +1941,7 @@ fun HomeScreen(
                 },
                 bottomBar = {
                     Column {
+                        SnackbarHost(hostState = snackbarHostState)
                         if (tabPosition == "bottom") {
                             tabsContent()
                         }

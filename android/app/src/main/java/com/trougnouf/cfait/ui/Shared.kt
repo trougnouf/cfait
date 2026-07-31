@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -375,6 +377,8 @@ object NfIcons {
     val CHECK = get(0xf00c)
     val CHECK_SQUARE = get(0xf14a)
     val CROSS = get(0xf00d)
+    val UNDO = get(0xf0e2) // nf-fa-undo
+    val REDO = get(0xf01e) // nf-fa-repeat
     val CHILD_ARROW = get(0xf149)
     val DETAILED_TRIANGLE = get(0xf01c6)
 
@@ -954,67 +958,115 @@ class SmartSyntaxTransformation(
 fun CursorContextBanner(api: CfaitMobile, textFieldValue: TextFieldValue) {
     val cursor = textFieldValue.selection.start
     val text = textFieldValue.text
-
-    var activeToken by remember { mutableStateOf<com.trougnouf.cfait.core.MobileSyntaxToken?>(null) }
-    var resolvedDep by remember { mutableStateOf<com.trougnouf.cfait.core.MobileResolvedDependency?>(null) }
-    var rawWord by remember { mutableStateOf("") }
-
-    LaunchedEffect(cursor, text) {
-        try {
-            val tokens = api.parseSmartString(text, false)
-            val token = tokens.find { cursor >= it.start && cursor <= it.end &&
-                (it.kind == com.trougnouf.cfait.core.MobileSyntaxType.DEPENDENCY ||
-                 it.kind == com.trougnouf.cfait.core.MobileSyntaxType.RELATION ||
-                 it.kind == com.trougnouf.cfait.core.MobileSyntaxType.WIKI_LINK)
-            }
-
-            if (token != null) {
-                val word = text.substring(token.start, token.end)
-                if (token != activeToken || word != rawWord) {
-                    activeToken = token
-                    rawWord = word
-                    resolvedDep = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        api.getTokenContext(word, token.kind)
-                    }
-                }
-            } else {
-                activeToken = null
-                resolvedDep = null
-            }
-        } catch (e: Exception) {
-            activeToken = null
-            resolvedDep = null
+    
+    var suggestions by remember { mutableStateOf<List<com.trougnouf.cfait.core.MobileSuggestion>>(emptyList()) }
+    
+    LaunchedEffect(text, cursor) {
+        suggestions = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            api.suggest(text, cursor)
         }
     }
 
-    if (activeToken != null && resolvedDep != null) {
-        val isDep = activeToken!!.kind == com.trougnouf.cfait.core.MobileSyntaxType.DEPENDENCY
-        val iconChar = if (!resolvedDep!!.isFound) NfIcons.SYNC_ALERT else if (isDep) NfIcons.BLOCKED else NfIcons.LINK
-        val color = if (!resolvedDep!!.isFound) Color(0xFFE53935) else if (isDep) Color(0xFFFF9800) else Color(0xFF42A5F5)
-
-        Box(
+    if (suggestions.isNotEmpty()) {
+        androidx.compose.foundation.lazy.LazyRow(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 8.dp)
+                .background(Color.Black.copy(alpha = 0.2f), RoundedCornerShape(6.dp))
+                .border(1.dp, Color.Gray.copy(alpha = 0.2f), RoundedCornerShape(6.dp))
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Row(
+            items(suggestions.size) { i ->
+                val s = suggestions[i]
+                val color = if (s.display.startsWith("#")) {
+                    Color(0xFF64B5F6)
+                } else if (s.display.startsWith("@@")) {
+                    Color(0xFFFFB300)
+                } else if (s.display.startsWith(":")) {
+                    Color(0xFFAB47BC)
+                } else {
+                    Color(0xFF4FC3F7)
+                }
+                
+                Button(
+                    onClick = {
+                        val newText = text.substring(0, s.rangeStart) + s.replacement + if (s.rangeEnd < text.length) text.substring(s.rangeEnd) else " "
+                        textFieldValue.text = newText
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(s.display, color = color, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    if (s.description.isNotEmpty()) {
+                        Spacer(Modifier.width(4.dp))
+                        Text(s.description, color = Color.Gray, fontSize = 12.sp)
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+    } else {
+        var activeToken by remember { mutableStateOf<com.trougnouf.cfait.core.MobileSyntaxToken?>(null) }
+        var resolvedDep by remember { mutableStateOf<com.trougnouf.cfait.core.MobileResolvedDependency?>(null) }
+        var rawWord by remember { mutableStateOf("") }
+
+        LaunchedEffect(cursor, text) {
+            try {
+                val tokens = api.parseSmartString(text, false)
+                val token = tokens.find { cursor >= it.start && cursor <= it.end &&
+                    (it.kind == com.trougnouf.cfait.core.MobileSyntaxType.DEPENDENCY ||
+                     it.kind == com.trougnouf.cfait.core.MobileSyntaxType.RELATION ||
+                     it.kind == com.trougnouf.cfait.core.MobileSyntaxType.WIKI_LINK)
+                }
+
+                if (token != null) {
+                    val word = text.substring(token.start, token.end)
+                    if (token != activeToken || word != rawWord) {
+                        activeToken = token
+                        rawWord = word
+                        resolvedDep = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            api.getTokenContext(word, token.kind)
+                        }
+                    }
+                } else {
+                    activeToken = null
+                    resolvedDep = null
+                }
+            } catch (e: Exception) {
+                activeToken = null
+                resolvedDep = null
+            }
+        }
+
+        if (activeToken != null && resolvedDep != null) {
+            val isDep = activeToken!!.kind == com.trougnouf.cfait.core.MobileSyntaxType.DEPENDENCY
+            val iconChar = if (!resolvedDep!!.isFound) NfIcons.SYNC_ALERT else if (isDep) NfIcons.BLOCKED else NfIcons.LINK
+            val color = if (!resolvedDep!!.isFound) Color(0xFFE53935) else if (isDep) Color(0xFFFF9800) else Color(0xFF42A5F5)
+
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(color.copy(alpha = 0.1f), RoundedCornerShape(6.dp))
-                    .border(1.dp, color.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(bottom = 8.dp)
             ) {
-                NfIcon(iconChar, 14.sp, color)
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = "$rawWord ➔ ${resolvedDep!!.summary}",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = color,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(color.copy(alpha = 0.1f), RoundedCornerShape(6.dp))
+                        .border(1.dp, color.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    NfIcon(iconChar, 14.sp, color)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "$rawWord ➔ ${resolvedDep!!.summary}",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = color,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
     }

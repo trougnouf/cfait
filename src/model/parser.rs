@@ -1411,7 +1411,7 @@ pub fn quote_value(s: &str) -> String {
     }
 }
 
-fn split_input_respecting_quotes(input: &str) -> Vec<(usize, usize, String)> {
+pub fn split_input_respecting_quotes(input: &str) -> Vec<(usize, usize, String)> {
     let mut parts = Vec::new();
     let mut current = String::new();
     let mut start_idx = 0;

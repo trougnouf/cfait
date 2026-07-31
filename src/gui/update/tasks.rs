@@ -76,6 +76,53 @@ fn dispatch_and_select_next_row(app: &mut GuiApp, intent: AppIntent, uid: String
 
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {
+        Message::Undo => {
+            if let Some(record) = app.undo_stack.pop() {
+                app.store.apply_actions(&record.reverse);
+                app.redo_stack.push(record.clone());
+                if app.redo_stack.len() > 50 {
+                    app.redo_stack.remove(0);
+                }
+                common::refresh_filtered_tasks(app);
+                if let Some(tx) = &app.bg_tx {
+                    let _ =
+                        tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(record.reverse));
+                }
+            }
+            Task::none()
+        }
+        Message::Redo => {
+            if let Some(record) = app.redo_stack.pop() {
+                app.store.apply_actions(&record.forward);
+                app.undo_stack.push(record.clone());
+                common::refresh_filtered_tasks(app);
+                if let Some(tx) = &app.bg_tx {
+                    let _ =
+                        tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(record.forward));
+                }
+            }
+            Task::none()
+        }
+        Message::ApplySuggestion(range, text) => {
+            app.active_focus = Focus::AddTaskInput;
+            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
+                *focus = Focus::AddTaskInput;
+            }
+
+            // Re-create the text replacing the range
+            let current = app.input_value.text();
+            let mut new_text = current[..range.start].to_string();
+            new_text.push_str(&text);
+            if range.end < current.len() {
+                new_text.push_str(&current[range.end..]);
+            } else {
+                new_text.push(' ');
+            }
+            app.input_value = text_editor::Content::with_text(&new_text);
+            app.input_value
+                .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
+            iced::widget::operation::focus(iced::widget::Id::new("main_input"))
+        }
         Message::InputChanged(action) => {
             app.active_focus = Focus::AddTaskInput;
             if let Ok(mut focus) = ACTIVE_FOCUS.write() {
@@ -1172,6 +1219,27 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
     if text_to_submit.is_empty() && app.editing_tree_uid.is_none() {
         app.input_value = text_editor::Content::new();
         return Task::none();
+    }
+
+    if text_to_submit.starts_with(':') && !text_to_submit.contains(' ') {
+        match text_to_submit.to_lowercase().as_str() {
+            ":undo" => {
+                app.input_value = text_editor::Content::new();
+                return handle(app, Message::Undo);
+            }
+            ":redo" => {
+                app.input_value = text_editor::Content::new();
+                return handle(app, Message::Redo);
+            }
+            ":sync" => {
+                app.input_value = text_editor::Content::new();
+                return handle(app, Message::Refresh);
+            }
+            ":quit" => {
+                return handle(app, Message::CloseWindow);
+            }
+            _ => {}
+        }
     }
 
     let (clean_input_1, new_goals) = crate::model::parser::extract_inline_goals(&text_to_submit);

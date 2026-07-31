@@ -3329,6 +3329,23 @@ impl TaskStore {
         self.children_index.keys().cloned().collect()
     }
 
+    /// Applies a batch of raw actions (used primarily for Undo/Redo)
+    pub fn apply_actions(&mut self, actions: &[crate::journal::Action]) {
+        for act in actions {
+            match act {
+                crate::journal::Action::Create(t) | crate::journal::Action::Update(t) => {
+                    self.update_or_add_task(t.clone())
+                }
+                crate::journal::Action::Delete(t) => {
+                    self.delete_task(&t.uid);
+                }
+                crate::journal::Action::Move(t, target) => {
+                    self.move_task(&t.uid, target.clone());
+                }
+            }
+        }
+    }
+
     /// Removes all relationships (parent, dependencies, related_to) pointing to `target_uid`
     /// from other tasks in the store. Returns the journal actions for the updated tasks.
     pub fn cleanup_references(&mut self, target_uid: &str) -> Vec<crate::journal::Action> {
@@ -3376,10 +3393,66 @@ impl TaskStore {
         actions
     }
 
-    /// Applies a Task-related AppIntent to the in-memory store and returns the list of
-    /// persistence Actions that should be written to the journal/server.
+    /// Applies a Task-related AppIntent to the in-memory store and returns the tuple
+    /// (forward_actions, reverse_actions, intent_description) for journaling and undo stacks.
     /// This method ignores Session-related intents (like SetSearchTerm).
-    pub fn apply_task_intent(&mut self, intent: &AppIntent, config: &Config) -> Vec<JournalAction> {
+    pub fn apply_task_intent(
+        &mut self,
+        intent: &AppIntent,
+        config: &Config,
+    ) -> (Vec<JournalAction>, Vec<JournalAction>, String) {
+        // 1. Snapshot old states of potentially affected UIDs
+        let mut potential_uids = Vec::new();
+        match intent {
+            AppIntent::ToggleTask { uid }
+            | AppIntent::ToggleTaskShift { uid }
+            | AppIntent::CancelTask { uid }
+            | AppIntent::StartTask { uid }
+            | AppIntent::PauseTask { uid }
+            | AppIntent::StopTask { uid }
+            | AppIntent::ChangePriority { uid, .. }
+            | AppIntent::TogglePin { uid }
+            | AppIntent::ToggleTreeCollapse { uid }
+            | AppIntent::SetTreeCollapse { uid, .. } => {
+                potential_uids.push(uid.clone());
+                potential_uids.extend(self.get_descendant_uids(uid));
+            }
+            AppIntent::DeleteTask { uid }
+            | AppIntent::MoveTask { uid, .. }
+            | AppIntent::RemoveParent { uid } => {
+                potential_uids.push(uid.clone());
+            }
+            AppIntent::DeleteTaskTree { uid }
+            | AppIntent::MoveTaskTree { uid, .. }
+            | AppIntent::DuplicateTaskTree { uid }
+            | AppIntent::CompleteTree { uid } => {
+                potential_uids.push(uid.clone());
+                potential_uids.extend(self.get_descendant_uids(uid));
+            }
+            AppIntent::MakeChild { uid, parent_uid } => {
+                potential_uids.push(uid.clone());
+                potential_uids.push(parent_uid.clone());
+            }
+            AppIntent::AddDependency { uid, blocker_uid }
+            | AppIntent::RemoveDependency { uid, blocker_uid } => {
+                potential_uids.push(uid.clone());
+                potential_uids.push(blocker_uid.clone());
+            }
+            AppIntent::AddRelatedTo { uid, related_uid }
+            | AppIntent::RemoveRelatedTo { uid, related_uid } => {
+                potential_uids.push(uid.clone());
+                potential_uids.push(related_uid.clone());
+            }
+            _ => {}
+        }
+
+        let mut old_states = HashMap::new();
+        for u in &potential_uids {
+            if let Some(t) = self.get_task_ref(u) {
+                old_states.insert(u.clone(), t.clone());
+            }
+        }
+
         let mut actions = Vec::new();
         match intent {
             AppIntent::CompleteTree { uid } => {
@@ -3635,7 +3708,60 @@ impl TaskStore {
             }
             _ => {} // Ignore session intents
         }
-        actions
+
+        // 3. Build reverse actions automatically
+        let mut reverse_actions = Vec::new();
+        for act in &actions {
+            match act {
+                JournalAction::Create(t) => reverse_actions.push(JournalAction::Delete(t.clone())),
+                JournalAction::Update(t) => {
+                    if let Some(old) = old_states.get(&t.uid) {
+                        reverse_actions.push(JournalAction::Update(old.clone()));
+                    } else {
+                        reverse_actions.push(JournalAction::Delete(t.clone()));
+                    }
+                }
+                JournalAction::Delete(t) => {
+                    if let Some(old) = old_states.get(&t.uid) {
+                        reverse_actions.push(JournalAction::Create(old.clone()));
+                    } else {
+                        reverse_actions.push(JournalAction::Create(t.clone()));
+                    }
+                }
+                JournalAction::Move(t, _target) => {
+                    if let Some(old) = old_states.get(&t.uid) {
+                        reverse_actions
+                            .push(JournalAction::Move(t.clone(), old.calendar_href.clone()));
+                    }
+                }
+            }
+        }
+        reverse_actions.reverse();
+
+        let desc = match intent {
+            AppIntent::ToggleTask { .. }
+            | AppIntent::CompleteTree { .. }
+            | AppIntent::ToggleTaskShift { .. }
+            | AppIntent::CancelTask { .. } => "Status change",
+            AppIntent::DeleteTask { .. } | AppIntent::DeleteTaskTree { .. } => "Delete",
+            AppIntent::MoveTask { .. } | AppIntent::MoveTaskTree { .. } => "Move",
+            AppIntent::ChangePriority { .. } => "Priority change",
+            AppIntent::StartTask { .. }
+            | AppIntent::PauseTask { .. }
+            | AppIntent::StopTask { .. } => "Timer",
+            AppIntent::MakeChild { .. }
+            | AppIntent::RemoveParent { .. }
+            | AppIntent::AddDependency { .. }
+            | AppIntent::RemoveDependency { .. }
+            | AppIntent::AddRelatedTo { .. }
+            | AppIntent::RemoveRelatedTo { .. } => "Relationship change",
+            AppIntent::TogglePin { .. } => "Pin toggle",
+            AppIntent::DuplicateTaskTree { .. } => "Duplicate",
+            _ => "Action",
+        }
+        .to_string();
+
+        (actions, reverse_actions, desc)
     }
 }
 

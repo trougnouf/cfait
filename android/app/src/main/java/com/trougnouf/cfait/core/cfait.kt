@@ -913,6 +913,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_pause_task(): Int
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_redo(): Int
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_remove_alias(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_remove_dependency(): Int
@@ -943,6 +945,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_stop_task(): Int
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_suggest(): Int
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_sync(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_sync_journal(): Int
@@ -956,6 +960,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_cfait_checksum_method_cfaitmobile_toggle_task(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_toggle_task_shift(): Int
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_undo(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_update_local_calendar(): Int
 
@@ -1288,6 +1294,11 @@ internal object UniffiLib {
         `uid`: RustBuffer.ByValue,
     ): Long
 
+    external fun uniffi_cfait_fn_method_cfaitmobile_redo(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Byte
+
     external fun uniffi_cfait_fn_method_cfaitmobile_remove_alias(
         `ptr`: Long,
         `key`: RustBuffer.ByValue,
@@ -1378,6 +1389,13 @@ internal object UniffiLib {
         `uid`: RustBuffer.ByValue,
     ): Long
 
+    external fun uniffi_cfait_fn_method_cfaitmobile_suggest(
+        `ptr`: Long,
+        `input`: RustBuffer.ByValue,
+        `cursorByteIdx`: Int,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
     external fun uniffi_cfait_fn_method_cfaitmobile_sync(`ptr`: Long): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_sync_journal(`ptr`: Long): Long
@@ -1408,6 +1426,11 @@ internal object UniffiLib {
         `ptr`: Long,
         `uid`: RustBuffer.ByValue,
     ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_undo(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Byte
 
     external fun uniffi_cfait_fn_method_cfaitmobile_update_local_calendar(
         `ptr`: Long,
@@ -1829,6 +1852,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_pause_task() != 38923) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_redo() != 48975) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_remove_alias() != 19509) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1874,6 +1900,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_stop_task() != 37957) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_suggest() != 6988) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_sync() != 34697) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1893,6 +1922,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_toggle_task_shift() != 15294) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_undo() != 50224) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_update_local_calendar() != 59729) {
@@ -2623,6 +2655,8 @@ public interface CfaitMobileInterface {
 
     suspend fun `pauseTask`(`uid`: kotlin.String)
 
+    fun `redo`(): kotlin.Boolean
+
     fun `removeAlias`(`key`: kotlin.String)
 
     suspend fun `removeDependency`(
@@ -2676,6 +2710,11 @@ public interface CfaitMobileInterface {
 
     suspend fun `stopTask`(`uid`: kotlin.String)
 
+    fun `suggest`(
+        `input`: kotlin.String,
+        `cursorByteIdx`: kotlin.Int,
+    ): List<MobileSuggestion>
+
     suspend fun `sync`(): kotlin.String
 
     suspend fun `syncJournal`(): kotlin.Boolean
@@ -2692,6 +2731,8 @@ public interface CfaitMobileInterface {
     suspend fun `toggleTask`(`uid`: kotlin.String)
 
     suspend fun `toggleTaskShift`(`uid`: kotlin.String)
+
+    fun `undo`(): kotlin.Boolean
 
     suspend fun `updateLocalCalendar`(
         `href`: kotlin.String,
@@ -3775,6 +3816,19 @@ open class CfaitMobile :
         )
 
     @Throws(MobileException::class)
+    override fun `redo`(): kotlin.Boolean =
+        FfiConverterBoolean.lift(
+            callWithHandle {
+                uniffiRustCallWithError(MobileException) { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_redo(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    @Throws(MobileException::class)
     override fun `removeAlias`(`key`: kotlin.String) =
         callWithHandle {
             uniffiRustCallWithError(MobileException) { _status ->
@@ -4043,6 +4097,23 @@ open class CfaitMobile :
             MobileException.ErrorHandler,
         )
 
+    override fun `suggest`(
+        `input`: kotlin.String,
+        `cursorByteIdx`: kotlin.Int,
+    ): List<MobileSuggestion> =
+        FfiConverterSequenceTypeMobileSuggestion.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_suggest(
+                        it,
+                        FfiConverterString.lower(`input`),
+                        FfiConverterInt.lower(`cursorByteIdx`),
+                        _status,
+                    )
+                }
+            },
+        )
+
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `sync`(): kotlin.String =
@@ -4168,6 +4239,19 @@ open class CfaitMobile :
             { Unit },
             // Error FFI converter
             MobileException.ErrorHandler,
+        )
+
+    @Throws(MobileException::class)
+    override fun `undo`(): kotlin.Boolean =
+        FfiConverterBoolean.lift(
+            callWithHandle {
+                uniffiRustCallWithError(MobileException) { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_undo(
+                        it,
+                        _status,
+                    )
+                }
+            },
         )
 
     @Throws(MobileException::class)
@@ -4437,6 +4521,7 @@ data class MobileConfig(
     var `expandedTags`: List<kotlin.String>,
     var `expandedLocations`: List<kotlin.String>,
     var `expandedDoneGroups`: List<kotlin.String>,
+    var `showUndoSnackbar`: kotlin.Boolean,
 ) {
     companion object
 }
@@ -4488,6 +4573,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
             FfiConverterSequenceString.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterSequenceString.read(buf),
+            FfiConverterBoolean.read(buf),
         )
 
     override fun allocationSize(value: MobileConfig) =
@@ -4532,7 +4618,8 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
                 FfiConverterBoolean.allocationSize(value.`sortCollectionsBySize`) +
                 FfiConverterSequenceString.allocationSize(value.`expandedTags`) +
                 FfiConverterSequenceString.allocationSize(value.`expandedLocations`) +
-                FfiConverterSequenceString.allocationSize(value.`expandedDoneGroups`)
+                FfiConverterSequenceString.allocationSize(value.`expandedDoneGroups`) +
+                FfiConverterBoolean.allocationSize(value.`showUndoSnackbar`)
         )
 
     override fun write(
@@ -4580,6 +4667,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
         FfiConverterSequenceString.write(value.`expandedTags`, buf)
         FfiConverterSequenceString.write(value.`expandedLocations`, buf)
         FfiConverterSequenceString.write(value.`expandedDoneGroups`, buf)
+        FfiConverterBoolean.write(value.`showUndoSnackbar`, buf)
     }
 }
 
@@ -4968,6 +5056,50 @@ public object FfiConverterTypeMobileResolvedDependency : FfiConverterRustBuffer<
         FfiConverterString.write(value.`uid`, buf)
         FfiConverterString.write(value.`summary`, buf)
         FfiConverterBoolean.write(value.`isFound`, buf)
+    }
+}
+
+data class MobileSuggestion(
+    var `replacement`: kotlin.String,
+    var `display`: kotlin.String,
+    var `description`: kotlin.String,
+    var `rangeStart`: kotlin.Int,
+    var `rangeEnd`: kotlin.Int,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMobileSuggestion : FfiConverterRustBuffer<MobileSuggestion> {
+    override fun read(buf: ByteBuffer): MobileSuggestion =
+        MobileSuggestion(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterInt.read(buf),
+            FfiConverterInt.read(buf),
+        )
+
+    override fun allocationSize(value: MobileSuggestion) =
+        (
+            FfiConverterString.allocationSize(value.`replacement`) +
+                FfiConverterString.allocationSize(value.`display`) +
+                FfiConverterString.allocationSize(value.`description`) +
+                FfiConverterInt.allocationSize(value.`rangeStart`) +
+                FfiConverterInt.allocationSize(value.`rangeEnd`)
+        )
+
+    override fun write(
+        value: MobileSuggestion,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`replacement`, buf)
+        FfiConverterString.write(value.`display`, buf)
+        FfiConverterString.write(value.`description`, buf)
+        FfiConverterInt.write(value.`rangeStart`, buf)
+        FfiConverterInt.write(value.`rangeEnd`, buf)
     }
 }
 
@@ -7055,6 +7187,34 @@ public object FfiConverterSequenceTypeMobileRelatedTask : FfiConverterRustBuffer
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeMobileRelatedTask.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeMobileSuggestion : FfiConverterRustBuffer<List<MobileSuggestion>> {
+    override fun read(buf: ByteBuffer): List<MobileSuggestion> {
+        val len = buf.getInt()
+        return List<MobileSuggestion>(len) {
+            FfiConverterTypeMobileSuggestion.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<MobileSuggestion>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeMobileSuggestion.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<MobileSuggestion>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeMobileSuggestion.write(it, buf)
         }
     }
 }
