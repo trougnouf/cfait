@@ -2092,6 +2092,186 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
             .align_y(iced::Alignment::Center)
     };
 
+    let get_byte_offset = |content: &iced::widget::text_editor::Content| -> usize {
+        let cursor_pos = content.cursor().position;
+        let line_idx = cursor_pos.line;
+        let col_idx = cursor_pos.column;
+        let text = content.text();
+        let mut byte_offset = 0;
+
+        for (current_line, line_str) in text.split('\n').enumerate() {
+            if current_line == line_idx {
+                let col_bytes: usize = line_str.chars().take(col_idx).map(|c| c.len_utf8()).sum();
+                return byte_offset + col_bytes;
+            }
+            byte_offset += line_str.len() + 1; // +1 for '\n'
+        }
+        byte_offset
+    };
+
+    let mut context_banner: Option<Element<'_, Message>> = None;
+    let is_desc_focused = app.active_focus != Focus::AddTaskInput;
+
+    let (target_text, cursor_pos) = if is_desc_focused {
+        (
+            app.description_value.text(),
+            get_byte_offset(&app.description_value),
+        )
+    } else {
+        (app.input_value.text(), get_byte_offset(&app.input_value))
+    };
+
+    if let Some((range, suggs)) =
+        crate::model::autocomplete::suggest(&target_text, cursor_pos, &app.store, &app.tag_aliases)
+    {
+        let mut sugg_row = row![].spacing(8);
+        for s in suggs {
+            let color = if s.display.starts_with('#') {
+                let (r, g, b) =
+                    crate::color_utils::generate_color(s.display.trim_start_matches('#'));
+                Color::from_rgb(r, g, b)
+            } else if s.display.starts_with("@@") {
+                Color::from_rgb(0.8, 0.5, 0.0)
+            } else if s.display.starts_with(':') {
+                Color::from_rgb(0.9, 0.2, 0.9)
+            } else {
+                Color::from_rgb(0.2, 0.7, 1.0)
+            };
+
+            let btn = button(
+                row![
+                    text(s.display).size(14).color(color).font(iced::Font {
+                        weight: iced::font::Weight::Bold,
+                        ..Default::default()
+                    }),
+                    text(s.description)
+                        .size(12)
+                        .color(Color::from_rgb(0.5, 0.5, 0.5))
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+            )
+            .style(iced::widget::button::secondary)
+            .padding([4, 8])
+            .on_press(Message::ApplySuggestion(range.clone(), s.replacement));
+
+            sugg_row = sugg_row.push(btn);
+        }
+        context_banner = Some(
+            container(scrollable(sugg_row).direction(
+                iced::widget::scrollable::Direction::Horizontal(
+                    iced::widget::scrollable::Scrollbar::new().width(4),
+                ),
+            ))
+            .width(Length::Fill)
+            .padding([4, 8])
+            .style(|_| container::Style {
+                background: Some(Color::from_rgba(0.0, 0.0, 0.0, 0.2).into()),
+                border: iced::Border {
+                    color: Color::from_rgba(0.5, 0.5, 0.5, 0.2),
+                    width: 1.0,
+                    radius: 6.0.into(),
+                },
+                ..Default::default()
+            })
+            .into(),
+        );
+    } else {
+        let mut active_context: Option<(crate::model::parser::SyntaxType, String)> = None;
+        let tokens = crate::model::parser::tokenize_smart_input(&target_text, false);
+        for t in tokens {
+            if cursor_pos >= t.start && cursor_pos <= t.end {
+                if matches!(
+                    t.kind,
+                    crate::model::parser::SyntaxType::Dependency
+                        | crate::model::parser::SyntaxType::Relation
+                        | crate::model::parser::SyntaxType::WikiLink
+                ) {
+                    active_context = Some((t.kind, target_text[t.start..t.end].to_string()));
+                }
+                break;
+            }
+        }
+
+        if let Some((kind, raw_word)) = active_context {
+            let clean_uid = if kind == crate::model::parser::SyntaxType::WikiLink {
+                crate::model::parser::strip_quotes(
+                    raw_word.trim_start_matches("[[").trim_end_matches("]]"),
+                )
+            } else {
+                let lex_guard = crate::model::parser::LEXICON.read().unwrap();
+                let lower = raw_word.to_lowercase();
+                if let Some((p_str, _, _)) = lex_guard.match_prefix(&lower) {
+                    crate::model::parser::strip_quotes(&raw_word[p_str.len()..])
+                } else {
+                    crate::model::parser::strip_quotes(&raw_word)
+                }
+            };
+
+            if !clean_uid.is_empty() {
+                let (icon_char, color, text_str) =
+                    match app.store.resolve_dependency_ref(&clean_uid) {
+                        Ok(resolved_uid) => {
+                            if let Some(summary) = app.store.get_summary(&resolved_uid) {
+                                let icon = if kind == crate::model::parser::SyntaxType::Dependency {
+                                    icon::BLOCKED
+                                } else {
+                                    icon::LINK
+                                };
+                                let color = if kind == crate::model::parser::SyntaxType::Dependency
+                                {
+                                    Color::from_rgb(0.9, 0.6, 0.2)
+                                } else {
+                                    Color::from_rgb(0.4, 0.6, 0.9)
+                                };
+                                (icon, color, summary)
+                            } else {
+                                (
+                                    icon::INFO,
+                                    Color::from_rgb(0.5, 0.5, 0.5),
+                                    "Resolving...".to_string(),
+                                )
+                            }
+                        }
+                        Err(_) => (
+                            icon::SYNC_ALERT,
+                            Color::from_rgb(0.9, 0.2, 0.2),
+                            format!("Unknown: {}", clean_uid),
+                        ),
+                    };
+
+                context_banner = Some(
+                    container(
+                        row![
+                            icon::icon(icon_char).size(14).color(color),
+                            text(format!("{} ➔ {}", raw_word, text_str))
+                                .size(14)
+                                .font(iced::Font {
+                                    weight: iced::font::Weight::Bold,
+                                    ..Default::default()
+                                })
+                                .color(color)
+                        ]
+                        .spacing(8)
+                        .align_y(iced::Alignment::Center),
+                    )
+                    .padding([6, 12])
+                    .width(Length::Fill)
+                    .style(move |_theme: &Theme| container::Style {
+                        background: Some(Color { a: 0.1, ..color }.into()),
+                        border: iced::Border {
+                            color: Color { a: 0.5, ..color },
+                            width: 1.0,
+                            radius: 6.0.into(),
+                        },
+                        ..Default::default()
+                    })
+                    .into(),
+                );
+            }
+        }
+    }
+
     let inner_content: Element<'_, Message> = if is_expanded {
         let max_desc_height = (app.current_window_size.height - 180.0).max(160.0);
 
@@ -2238,7 +2418,7 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
             .align_y(iced::Alignment::Center)
             .spacing(10);
 
-        let get_byte_offset = |content: &iced::widget::text_editor::Content| -> usize {
+        let _get_byte_offset = |content: &iced::widget::text_editor::Content| -> usize {
             let cursor_pos = content.cursor().position;
             let line_idx = cursor_pos.line;
             let col_idx = cursor_pos.column;
@@ -2256,174 +2436,6 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
             byte_offset
         };
 
-        let mut context_banner: Option<Element<'_, Message>> = None;
-        let is_desc_focused = app.active_focus != Focus::AddTaskInput;
-
-        let (target_text, cursor_pos) = if is_desc_focused {
-            (
-                app.description_value.text(),
-                get_byte_offset(&app.description_value),
-            )
-        } else {
-            (app.input_value.text(), get_byte_offset(&app.input_value))
-        };
-
-        if let Some((range, suggs)) = crate::model::autocomplete::suggest(
-            &target_text,
-            cursor_pos,
-            &app.store,
-            &app.tag_aliases,
-        ) {
-            let mut sugg_row = row![].spacing(8);
-            for s in suggs {
-                let color = if s.display.starts_with('#') {
-                    let (r, g, b) =
-                        crate::color_utils::generate_color(s.display.trim_start_matches('#'));
-                    Color::from_rgb(r, g, b)
-                } else if s.display.starts_with("@@") {
-                    Color::from_rgb(0.8, 0.5, 0.0)
-                } else if s.display.starts_with(':') {
-                    Color::from_rgb(0.9, 0.2, 0.9)
-                } else {
-                    Color::from_rgb(0.2, 0.7, 1.0)
-                };
-
-                let btn = button(
-                    row![
-                        text(s.display).size(14).color(color).font(iced::Font {
-                            weight: iced::font::Weight::Bold,
-                            ..Default::default()
-                        }),
-                        text(s.description)
-                            .size(12)
-                            .color(Color::from_rgb(0.5, 0.5, 0.5))
-                    ]
-                    .spacing(4)
-                    .align_y(iced::Alignment::Center),
-                )
-                .style(iced::widget::button::secondary)
-                .padding([4, 8])
-                .on_press(Message::ApplySuggestion(range.clone(), s.replacement));
-
-                sugg_row = sugg_row.push(btn);
-            }
-            context_banner = Some(
-                container(scrollable(sugg_row).direction(
-                    iced::widget::scrollable::Direction::Horizontal(
-                        iced::widget::scrollable::Scrollbar::new().width(4),
-                    ),
-                ))
-                .width(Length::Fill)
-                .padding([4, 8])
-                .style(|_| container::Style {
-                    background: Some(Color::from_rgba(0.0, 0.0, 0.0, 0.2).into()),
-                    border: iced::Border {
-                        color: Color::from_rgba(0.5, 0.5, 0.5, 0.2),
-                        width: 1.0,
-                        radius: 6.0.into(),
-                    },
-                    ..Default::default()
-                })
-                .into(),
-            );
-        } else {
-            // Fallback to strict exact validation for dependency lines if no suggestions popped up
-            let mut active_context: Option<(crate::model::parser::SyntaxType, String)> = None;
-            let tokens = crate::model::parser::tokenize_smart_input(&target_text, false);
-            for t in tokens {
-                if cursor_pos >= t.start && cursor_pos <= t.end {
-                    if matches!(
-                        t.kind,
-                        crate::model::parser::SyntaxType::Dependency
-                            | crate::model::parser::SyntaxType::Relation
-                            | crate::model::parser::SyntaxType::WikiLink
-                    ) {
-                        active_context = Some((t.kind, target_text[t.start..t.end].to_string()));
-                    }
-                    break;
-                }
-            }
-
-            if let Some((kind, raw_word)) = active_context {
-                let clean_uid = if kind == crate::model::parser::SyntaxType::WikiLink {
-                    crate::model::parser::strip_quotes(
-                        raw_word.trim_start_matches("[[").trim_end_matches("]]"),
-                    )
-                } else {
-                    let lex_guard = crate::model::parser::LEXICON.read().unwrap();
-                    let lower = raw_word.to_lowercase();
-                    if let Some((p_str, _, _)) = lex_guard.match_prefix(&lower) {
-                        crate::model::parser::strip_quotes(&raw_word[p_str.len()..])
-                    } else {
-                        crate::model::parser::strip_quotes(&raw_word)
-                    }
-                };
-
-                if !clean_uid.is_empty() {
-                    let (icon_char, color, text_str) =
-                        match app.store.resolve_dependency_ref(&clean_uid) {
-                            Ok(resolved_uid) => {
-                                if let Some(summary) = app.store.get_summary(&resolved_uid) {
-                                    let icon =
-                                        if kind == crate::model::parser::SyntaxType::Dependency {
-                                            icon::BLOCKED
-                                        } else {
-                                            icon::LINK
-                                        };
-                                    let color =
-                                        if kind == crate::model::parser::SyntaxType::Dependency {
-                                            Color::from_rgb(0.9, 0.6, 0.2)
-                                        } else {
-                                            Color::from_rgb(0.4, 0.6, 0.9)
-                                        };
-                                    (icon, color, summary)
-                                } else {
-                                    (
-                                        icon::INFO,
-                                        Color::from_rgb(0.5, 0.5, 0.5),
-                                        "Resolving...".to_string(),
-                                    )
-                                }
-                            }
-                            Err(_) => (
-                                icon::SYNC_ALERT,
-                                Color::from_rgb(0.9, 0.2, 0.2),
-                                format!("Unknown: {}", clean_uid),
-                            ),
-                        };
-
-                    context_banner = Some(
-                        container(
-                            row![
-                                icon::icon(icon_char).size(14).color(color),
-                                text(format!("{} ➔ {}", raw_word, text_str))
-                                    .size(14)
-                                    .font(iced::Font {
-                                        weight: iced::font::Weight::Bold,
-                                        ..Default::default()
-                                    })
-                                    .color(color)
-                            ]
-                            .spacing(8)
-                            .align_y(iced::Alignment::Center),
-                        )
-                        .padding([6, 12])
-                        .width(Length::Fill)
-                        .style(move |_theme: &Theme| container::Style {
-                            background: Some(Color { a: 0.1, ..color }.into()),
-                            border: iced::Border {
-                                color: Color { a: 0.5, ..color },
-                                width: 1.0,
-                                radius: 6.0.into(),
-                            },
-                            ..Default::default()
-                        })
-                        .into(),
-                    );
-                }
-            }
-        }
-
         let mut col = if app.editing_tree_uid.is_some() {
             column![top_bar, desc_container]
         } else {
@@ -2436,7 +2448,11 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
 
         col.spacing(10).height(Length::Shrink).into()
     } else {
-        column![title_row].spacing(5).into()
+        let mut col = column![title_row].spacing(5);
+        if let Some(banner) = context_banner {
+            col = col.push(banner);
+        }
+        col.into()
     };
 
     container(inner_content)
