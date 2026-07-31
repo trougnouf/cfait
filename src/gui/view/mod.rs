@@ -2124,7 +2124,10 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
     if let Some((range, suggs)) =
         crate::model::autocomplete::suggest(&target_text, cursor_pos, &app.store, &app.tag_aliases)
     {
-        let mut sugg_row = row![].spacing(8);
+        let mut sugg_row = row![].spacing(8).padding(iced::Padding {
+            bottom: 8.0,
+            ..Default::default()
+        });
         for s in suggs {
             let color = if s.display.starts_with('#') {
                 let (r, g, b) =
@@ -2146,33 +2149,74 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
                     }),
                     text(s.description)
                         .size(12)
-                        .color(Color::from_rgb(0.5, 0.5, 0.5))
+                        .style(move |theme: &Theme| text::Style {
+                            color: Some(theme.extended_palette().background.weak.text),
+                        })
                 ]
-                .spacing(4)
+                .spacing(6)
                 .align_y(iced::Alignment::Center),
             )
-            .style(iced::widget::button::secondary)
-            .padding([4, 8])
+            .style(
+                move |_theme: &Theme, status: iced::widget::button::Status| {
+                    let bg_alpha = match status {
+                        iced::widget::button::Status::Hovered
+                        | iced::widget::button::Status::Pressed => 0.25,
+                        _ => 0.15,
+                    };
+                    iced::widget::button::Style {
+                        background: Some(
+                            Color {
+                                a: bg_alpha,
+                                ..color
+                            }
+                            .into(),
+                        ),
+                        text_color: color,
+                        border: iced::Border {
+                            radius: 8.0.into(),
+                            width: 1.0,
+                            color: Color { a: 0.5, ..color },
+                        },
+                        ..iced::widget::button::Style::default()
+                    }
+                },
+            )
+            .padding([6, 12])
             .on_press(Message::ApplySuggestion(range.clone(), s.replacement));
 
             sugg_row = sugg_row.push(btn);
         }
         context_banner = Some(
-            container(scrollable(sugg_row).direction(
-                iced::widget::scrollable::Direction::Horizontal(
-                    iced::widget::scrollable::Scrollbar::new().width(4),
-                ),
-            ))
+            container(
+                scrollable(sugg_row).direction(iced::widget::scrollable::Direction::Horizontal(
+                    iced::widget::scrollable::Scrollbar::new()
+                        .width(4)
+                        .scroller_width(4)
+                        .margin(0),
+                )),
+            )
             .width(Length::Fill)
-            .padding([4, 8])
-            .style(|_| container::Style {
-                background: Some(Color::from_rgba(0.0, 0.0, 0.0, 0.2).into()),
-                border: iced::Border {
-                    color: Color::from_rgba(0.5, 0.5, 0.5, 0.2),
-                    width: 1.0,
-                    radius: 6.0.into(),
-                },
-                ..Default::default()
+            .padding([8, 12])
+            .style(|theme: &Theme| {
+                let palette = theme.extended_palette();
+                container::Style {
+                    background: Some(
+                        Color {
+                            a: 0.5,
+                            ..palette.background.weak.color
+                        }
+                        .into(),
+                    ),
+                    border: iced::Border {
+                        color: Color {
+                            a: 0.5,
+                            ..palette.background.strong.color
+                        },
+                        width: 1.0,
+                        radius: 8.0.into(),
+                    },
+                    ..Default::default()
+                }
             })
             .into(),
         );
@@ -2257,14 +2301,23 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
                     )
                     .padding([6, 12])
                     .width(Length::Fill)
-                    .style(move |_theme: &Theme| container::Style {
-                        background: Some(Color { a: 0.1, ..color }.into()),
-                        border: iced::Border {
-                            color: Color { a: 0.5, ..color },
-                            width: 1.0,
-                            radius: 6.0.into(),
-                        },
-                        ..Default::default()
+                    .style(move |theme: &Theme| {
+                        let palette = theme.extended_palette();
+                        container::Style {
+                            background: Some(
+                                Color {
+                                    a: 0.5,
+                                    ..palette.background.weak.color
+                                }
+                                .into(),
+                            ),
+                            border: iced::Border {
+                                color: Color { a: 0.5, ..color },
+                                width: 1.0,
+                                radius: 8.0.into(),
+                            },
+                            ..Default::default()
+                        }
                     })
                     .into(),
                 );
