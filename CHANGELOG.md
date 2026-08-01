@@ -1,5 +1,46 @@
 # Changelog
 
+## [1.1.2] - 2026-08-01
+
+### 🚀 Features
+
+- Make cfait tree deterministic (git diff friendly)
+- Implement undo/redo ( https://codeberg.org/trougnouf/cfait/issues/96 )
+- Add context to undo/redo message, auto-dismiss banner, preserve focus
+- Add empty-trash command, sort tags/locations by frequency, improve undo/redo UX
+- Give warning and save degraded dependencies instead of showing an error when saving the description
+- Add graceful dependency resolution with disambiguation prompts and search fallback
+- *(gui)* Show autocomplete suggestions in single-line input bar
+- Implement undo/redo for text
+- Add ctrl+shift+z as an alternative to ctrl+y
+- Add ctrl+shift+z as an alternative to ctrl+y
+- *(android)* Use action description in undo snackbar
+
+### 🐛 Bug Fixes
+
+- Prevent focused task from bypassing search filter
+- Add explicit RELTYPE=PARENT to parent RELATED-TO properties for CalDAV compatibility ( https://git.disroot.org/trougnouf/cfait/issues/1 )
+- *(gui)* Auto-complete banner height and suggestion field targeting
+
+### 🚜 Refactor
+
+- Remove redundant "Depends On" and "Related To" labels from autocomplete suggestions
+
+### 🎨 Styling
+
+- *(android)* Make Snackbar transparent
+- *(gui)* Improve the look of auto-complete
+
+### ⚙️ Miscellaneous Tasks
+
+- Fix Android build
+- Attemps to remove ghost rolling release builds
+- Another attempt to remove ghost rolling release builds
+- Another attempt to remove ghost rolling release builds
+- Another attempt to remove ghost rolling release builds
+- *(android)* Fix build
+- Update Cargo dependencies
+- Handle ctrl+shift+z in GUI and remove duplicate TUI redo handler
 ## [1.1.1] - 2026-07-27
 
 ### 🐛 Bug Fixes
@@ -9,6 +50,7 @@
 - *(store)* Preserve tree structure with combined is:ready and search filters ( https://codeberg.org/trougnouf/cfait/issues/94 )
 - *(ci)* Move RUSTFLAGS to Build Rust JNI Libs step for reproducible Android builds on F-Droid
 - *(ci)* Exclude rolling tag from test_roll.yml triggers to prevent duplicate workflow runs
+- *(ci)* Mirror F-Droid directory structure to bypass CMake path leaks
 
 ### ⚙️ Miscellaneous Tasks
 
@@ -17,6 +59,11 @@
 - Fix backfill-releases.yml
 - *(ci)* Fix Android backfill releases
 - Remove backfill-release.yml
+- *(ci)* Add CFLAGS and CXXFLAGS path remapping for C dependencies
+- *(ci)* CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1 (reproducible F-Droid build)
+- *(ci)* Fix failed Android build
+- *(ci)* Switch Android release build to Debian (match F-Droid)
+- *(ci)* Nuke .gcc_except_table and .eh_frame
 ## [1.1.0] - 2026-07-26
 
 ### 🚀 Features

@@ -78,6 +78,50 @@
   </requires>
 
   <releases>
+    <release version="1.1.2" date="2026-08-01">
+      <description>
+        <p>Features:</p>
+        <ul>
+          <li>Make cfait tree deterministic (git diff friendly)</li>
+          <li>Implement undo/redo ( https://codeberg.org/trougnouf/cfait/issues/96 )</li>
+          <li>Add context to undo/redo message, auto-dismiss banner, preserve focus</li>
+          <li>Add empty-trash command, sort tags/locations by frequency, improve undo/redo UX</li>
+          <li>Give warning and save degraded dependencies instead of showing an error when saving the description</li>
+          <li>Add graceful dependency resolution with disambiguation prompts and search fallback</li>
+          <li>(gui) Show autocomplete suggestions in single-line input bar</li>
+          <li>Implement undo/redo for text</li>
+          <li>Add ctrl+shift+z as an alternative to ctrl+y</li>
+          <li>Add ctrl+shift+z as an alternative to ctrl+y</li>
+          <li>(android) Use action description in undo snackbar</li>
+        </ul>
+        <p>Bug Fixes:</p>
+        <ul>
+          <li>Prevent focused task from bypassing search filter</li>
+          <li>Add explicit RELTYPE=PARENT to parent RELATED-TO properties for CalDAV compatibility ( https://git.disroot.org/trougnouf/cfait/issues/1 )</li>
+          <li>(gui) Auto-complete banner height and suggestion field targeting</li>
+        </ul>
+        <p>Refactor:</p>
+        <ul>
+          <li>Remove redundant "Depends On" and "Related To" labels from autocomplete suggestions</li>
+        </ul>
+        <p>Styling:</p>
+        <ul>
+          <li>(android) Make Snackbar transparent</li>
+          <li>(gui) Improve the look of auto-complete</li>
+        </ul>
+        <p>Miscellaneous Tasks:</p>
+        <ul>
+          <li>Fix Android build</li>
+          <li>Attemps to remove ghost rolling release builds</li>
+          <li>Another attempt to remove ghost rolling release builds</li>
+          <li>Another attempt to remove ghost rolling release builds</li>
+          <li>Another attempt to remove ghost rolling release builds</li>
+          <li>(android) Fix build</li>
+          <li>Update Cargo dependencies</li>
+          <li>Handle ctrl+shift+z in GUI and remove duplicate TUI redo handler</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.1.1" date="2026-07-27">
       <description>
         <p>Bug Fixes:</p>
