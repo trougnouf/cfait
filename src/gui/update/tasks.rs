@@ -74,35 +74,65 @@ fn dispatch_and_select_next_row(app: &mut GuiApp, intent: AppIntent, uid: String
     }
 }
 
+fn handle_gui_text_undo(app: &mut GuiApp) {
+    let do_input = |app: &mut GuiApp| {
+        let prev = app.input_undo_stack.pop().unwrap();
+        app.input_redo_stack.push(app.input_value.text());
+        app.input_value = text_editor::Content::with_text(&prev);
+        app.input_value
+            .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
+    };
+    let do_desc = |app: &mut GuiApp| {
+        let prev = app.desc_undo_stack.pop().unwrap();
+        app.desc_redo_stack.push(app.description_value.text());
+        app.description_value = text_editor::Content::with_text(&prev);
+        app.description_value
+            .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
+    };
+
+    if app.last_edited_field == 0 && !app.input_undo_stack.is_empty() {
+        do_input(app);
+    } else if app.last_edited_field == 1 && !app.desc_undo_stack.is_empty() {
+        do_desc(app);
+    } else if !app.input_undo_stack.is_empty() {
+        do_input(app);
+    } else if !app.desc_undo_stack.is_empty() {
+        do_desc(app);
+    }
+}
+
+fn handle_gui_text_redo(app: &mut GuiApp) {
+    let do_input = |app: &mut GuiApp| {
+        let next = app.input_redo_stack.pop().unwrap();
+        app.input_undo_stack.push(app.input_value.text());
+        app.input_value = text_editor::Content::with_text(&next);
+        app.input_value
+            .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
+    };
+    let do_desc = |app: &mut GuiApp| {
+        let next = app.desc_redo_stack.pop().unwrap();
+        app.desc_undo_stack.push(app.description_value.text());
+        app.description_value = text_editor::Content::with_text(&next);
+        app.description_value
+            .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
+    };
+
+    if app.last_edited_field == 0 && !app.input_redo_stack.is_empty() {
+        do_input(app);
+    } else if app.last_edited_field == 1 && !app.desc_redo_stack.is_empty() {
+        do_desc(app);
+    } else if !app.input_redo_stack.is_empty() {
+        do_input(app);
+    } else if !app.desc_redo_stack.is_empty() {
+        do_desc(app);
+    }
+}
+
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {
         Message::Undo => {
             if app.active_focus == Focus::AddTaskInput {
-                if app.last_edited_field == 0 && !app.input_undo_stack.is_empty() {
-                    let prev = app.input_undo_stack.pop().unwrap();
-                    app.input_redo_stack.push(app.input_value.text());
-                    app.input_value = text_editor::Content::with_text(&prev);
-                    app.input_value
-                        .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
-                } else if app.last_edited_field == 1 && !app.desc_undo_stack.is_empty() {
-                    let prev = app.desc_undo_stack.pop().unwrap();
-                    app.desc_redo_stack.push(app.description_value.text());
-                    app.description_value = text_editor::Content::with_text(&prev);
-                    app.description_value
-                        .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
-                } else if !app.input_undo_stack.is_empty() {
-                    let prev = app.input_undo_stack.pop().unwrap();
-                    app.input_redo_stack.push(app.input_value.text());
-                    app.input_value = text_editor::Content::with_text(&prev);
-                    app.input_value
-                        .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
-                } else if !app.desc_undo_stack.is_empty() {
-                    let prev = app.desc_undo_stack.pop().unwrap();
-                    app.desc_redo_stack.push(app.description_value.text());
-                    app.description_value = text_editor::Content::with_text(&prev);
-                    app.description_value
-                        .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
-                }
+                handle_gui_text_undo(app);
                 return Task::none();
             }
 
@@ -144,31 +174,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::Redo => {
             if app.active_focus == Focus::AddTaskInput {
-                if app.last_edited_field == 0 && !app.input_redo_stack.is_empty() {
-                    let next = app.input_redo_stack.pop().unwrap();
-                    app.input_undo_stack.push(app.input_value.text());
-                    app.input_value = text_editor::Content::with_text(&next);
-                    app.input_value
-                        .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
-                } else if app.last_edited_field == 1 && !app.desc_redo_stack.is_empty() {
-                    let next = app.desc_redo_stack.pop().unwrap();
-                    app.desc_undo_stack.push(app.description_value.text());
-                    app.description_value = text_editor::Content::with_text(&next);
-                    app.description_value
-                        .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
-                } else if !app.input_redo_stack.is_empty() {
-                    let next = app.input_redo_stack.pop().unwrap();
-                    app.input_undo_stack.push(app.input_value.text());
-                    app.input_value = text_editor::Content::with_text(&next);
-                    app.input_value
-                        .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
-                } else if !app.desc_redo_stack.is_empty() {
-                    let next = app.desc_redo_stack.pop().unwrap();
-                    app.desc_undo_stack.push(app.description_value.text());
-                    app.description_value = text_editor::Content::with_text(&next);
-                    app.description_value
-                        .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
-                }
+                handle_gui_text_redo(app);
                 return Task::none();
             }
 

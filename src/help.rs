@@ -634,6 +634,11 @@ pub fn get_shortcuts_help(is_gui: bool) -> Vec<HelpSection> {
                     desc: rust_i18n::t!("open_url").to_string(),
                     example: "".to_string(),
                 },
+                HelpItem {
+                    keys: "Ctrl + z / Ctrl + y (Ctrl + Shift + z)".to_string(),
+                    desc: format!("{}/{}", rust_i18n::t!("undo"), rust_i18n::t!("redo")),
+                    example: "".to_string(),
+                },
             ],
         },
         HelpSection {

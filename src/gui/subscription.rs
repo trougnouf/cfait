@@ -197,7 +197,13 @@ fn handle_hotkey(
                     "n" => return Some(Message::StartCreateWithDescription),
                     "e" => return Some(Message::KeyboardEditTree),
                     "," => return Some(Message::OpenSettings),
-                    "z" => return Some(Message::Undo),
+                    "z" => {
+                        if modifiers.shift() {
+                            return Some(Message::Redo);
+                        } else {
+                            return Some(Message::Undo);
+                        }
+                    }
                     "y" => return Some(Message::Redo),
                     _ => {}
                 }
@@ -261,7 +267,13 @@ fn handle_hotkey(
                     }
                     "," => return Some(Message::OpenSettings),
                     "p" => return Some(Message::ToggleSortStandardByPriorityToggle),
-                    "z" => return Some(Message::Undo),
+                    "z" => {
+                        if modifiers.shift() {
+                            return Some(Message::Redo);
+                        } else {
+                            return Some(Message::Undo);
+                        }
+                    }
                     "y" => return Some(Message::Redo),
                     _ => {}
                 }
