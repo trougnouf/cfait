@@ -1712,7 +1712,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_add_task_with_description() != 63009) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_change_priority() != 5969) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_change_priority() != 13856) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_connect() != 2036) {
@@ -1739,19 +1739,19 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_delete_session() != 36570) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_delete_task() != 5837) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_delete_task() != 12336) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_delete_task_tree() != 2357) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_delete_task_tree() != 30581) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_dismiss_alarm() != 58482) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_dispatch() != 15403) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_dispatch() != 35486) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_duplicate_task_tree() != 9064) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_duplicate_task_tree() != 36936) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_edit_session() != 60746) {
@@ -1844,10 +1844,10 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_move_calendar() != 8547) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_move_task() != 34791) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_move_task() != 34881) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_move_task_tree() != 25746) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_move_task_tree() != 45149) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_parse_duration_string() != 50754) {
@@ -1856,7 +1856,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_parse_smart_string() != 13932) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_pause_task() != 38923) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_pause_task() != 13884) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_redo() != 56145) {
@@ -1889,10 +1889,10 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_set_parent() != 47671) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_set_status_cancelled() != 64507) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_set_status_cancelled() != 2093) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_set_status_process() != 38563) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_set_status_process() != 4201) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_should_keep_notification() != 49921) {
@@ -1901,10 +1901,10 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_snooze_alarm() != 32966) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_start_task() != 40116) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_start_task() != 9033) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_stop_task() != 37957) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_stop_task() != 1742) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_suggest() != 6988) {
@@ -1922,13 +1922,13 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_toggle_all_calendars() != 23727) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_toggle_pin() != 27967) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_toggle_pin() != 17464) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_toggle_task() != 17675) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_toggle_task() != 62107) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_toggle_task_shift() != 15294) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_toggle_task_shift() != 46577) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_undo() != 14759) {
@@ -2516,7 +2516,7 @@ public interface CfaitMobileInterface {
     suspend fun `changePriority`(
         `uid`: kotlin.String,
         `delta`: kotlin.Byte,
-    )
+    ): kotlin.String
 
     suspend fun `connect`(
         `url`: kotlin.String,
@@ -2548,18 +2548,18 @@ public interface CfaitMobileInterface {
         `index`: kotlin.UInt,
     )
 
-    suspend fun `deleteTask`(`uid`: kotlin.String)
+    suspend fun `deleteTask`(`uid`: kotlin.String): kotlin.String
 
-    suspend fun `deleteTaskTree`(`uid`: kotlin.String)
+    suspend fun `deleteTaskTree`(`uid`: kotlin.String): kotlin.String
 
     suspend fun `dismissAlarm`(
         `taskUid`: kotlin.String,
         `alarmUid`: kotlin.String,
     )
 
-    suspend fun `dispatch`(`intent`: AppIntent)
+    suspend fun `dispatch`(`intent`: AppIntent): kotlin.String
 
-    suspend fun `duplicateTaskTree`(`uid`: kotlin.String)
+    suspend fun `duplicateTaskTree`(`uid`: kotlin.String): kotlin.String
 
     suspend fun `editSession`(
         `uid`: kotlin.String,
@@ -2648,12 +2648,12 @@ public interface CfaitMobileInterface {
     suspend fun `moveTask`(
         `uid`: kotlin.String,
         `newCalHref`: kotlin.String,
-    )
+    ): kotlin.String
 
     suspend fun `moveTaskTree`(
         `uid`: kotlin.String,
         `newCalHref`: kotlin.String,
-    )
+    ): kotlin.String
 
     fun `parseDurationString`(`val`: kotlin.String): kotlin.UInt?
 
@@ -2662,7 +2662,7 @@ public interface CfaitMobileInterface {
         `isSearch`: kotlin.Boolean,
     ): List<MobileSyntaxToken>
 
-    suspend fun `pauseTask`(`uid`: kotlin.String)
+    suspend fun `pauseTask`(`uid`: kotlin.String): kotlin.String
 
     fun `redo`(): kotlin.String?
 
@@ -2699,9 +2699,9 @@ public interface CfaitMobileInterface {
         `parentUid`: kotlin.String?,
     )
 
-    suspend fun `setStatusCancelled`(`uid`: kotlin.String)
+    suspend fun `setStatusCancelled`(`uid`: kotlin.String): kotlin.String
 
-    suspend fun `setStatusProcess`(`uid`: kotlin.String)
+    suspend fun `setStatusProcess`(`uid`: kotlin.String): kotlin.String
 
     suspend fun `shouldKeepNotification`(
         `taskUid`: kotlin.String,
@@ -2715,9 +2715,9 @@ public interface CfaitMobileInterface {
         `minutes`: kotlin.UInt,
     )
 
-    suspend fun `startTask`(`uid`: kotlin.String)
+    suspend fun `startTask`(`uid`: kotlin.String): kotlin.String
 
-    suspend fun `stopTask`(`uid`: kotlin.String)
+    suspend fun `stopTask`(`uid`: kotlin.String): kotlin.String
 
     fun `suggest`(
         `input`: kotlin.String,
@@ -2735,11 +2735,11 @@ public interface CfaitMobileInterface {
 
     fun `toggleAllCalendars`(`showAll`: kotlin.Boolean)
 
-    suspend fun `togglePin`(`uid`: kotlin.String)
+    suspend fun `togglePin`(`uid`: kotlin.String): kotlin.String
 
-    suspend fun `toggleTask`(`uid`: kotlin.String)
+    suspend fun `toggleTask`(`uid`: kotlin.String): kotlin.String
 
-    suspend fun `toggleTaskShift`(`uid`: kotlin.String)
+    suspend fun `toggleTaskShift`(`uid`: kotlin.String): kotlin.String
 
     fun `undo`(): kotlin.String?
 
@@ -3016,22 +3016,23 @@ open class CfaitMobile :
     override suspend fun `changePriority`(
         `uid`: kotlin.String,
         `delta`: kotlin.Byte,
-    ) = uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_change_priority(
-                uniffiHandle,
-                FfiConverterString.lower(`uid`),
-                FfiConverterByte.lower(`delta`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
-        { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
-        // lift function
-        { Unit },
-        // Error FFI converter
-        MobileException.ErrorHandler,
-    )
+    ): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_change_priority(
+                    uniffiHandle,
+                    FfiConverterString.lower(`uid`),
+                    FfiConverterByte.lower(`delta`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
@@ -3198,7 +3199,7 @@ open class CfaitMobile :
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `deleteTask`(`uid`: kotlin.String) =
+    override suspend fun `deleteTask`(`uid`: kotlin.String): kotlin.String =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
                 UniffiLib.uniffi_cfait_fn_method_cfaitmobile_delete_task(
@@ -3206,18 +3207,18 @@ open class CfaitMobile :
                     FfiConverterString.lower(`uid`),
                 )
             },
-            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
-            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
-            { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
             // lift function
-            { Unit },
+            { FfiConverterString.lift(it) },
             // Error FFI converter
             MobileException.ErrorHandler,
         )
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `deleteTaskTree`(`uid`: kotlin.String) =
+    override suspend fun `deleteTaskTree`(`uid`: kotlin.String): kotlin.String =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
                 UniffiLib.uniffi_cfait_fn_method_cfaitmobile_delete_task_tree(
@@ -3225,11 +3226,11 @@ open class CfaitMobile :
                     FfiConverterString.lower(`uid`),
                 )
             },
-            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
-            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
-            { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
             // lift function
-            { Unit },
+            { FfiConverterString.lift(it) },
             // Error FFI converter
             MobileException.ErrorHandler,
         )
@@ -3258,7 +3259,7 @@ open class CfaitMobile :
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `dispatch`(`intent`: AppIntent) =
+    override suspend fun `dispatch`(`intent`: AppIntent): kotlin.String =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
                 UniffiLib.uniffi_cfait_fn_method_cfaitmobile_dispatch(
@@ -3266,18 +3267,18 @@ open class CfaitMobile :
                     FfiConverterTypeAppIntent.lower(`intent`),
                 )
             },
-            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
-            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
-            { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
             // lift function
-            { Unit },
+            { FfiConverterString.lift(it) },
             // Error FFI converter
             MobileException.ErrorHandler,
         )
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `duplicateTaskTree`(`uid`: kotlin.String) =
+    override suspend fun `duplicateTaskTree`(`uid`: kotlin.String): kotlin.String =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
                 UniffiLib.uniffi_cfait_fn_method_cfaitmobile_duplicate_task_tree(
@@ -3285,11 +3286,11 @@ open class CfaitMobile :
                     FfiConverterString.lower(`uid`),
                 )
             },
-            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
-            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
-            { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
             // lift function
-            { Unit },
+            { FfiConverterString.lift(it) },
             // Error FFI converter
             MobileException.ErrorHandler,
         )
@@ -3754,44 +3755,46 @@ open class CfaitMobile :
     override suspend fun `moveTask`(
         `uid`: kotlin.String,
         `newCalHref`: kotlin.String,
-    ) = uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_move_task(
-                uniffiHandle,
-                FfiConverterString.lower(`uid`),
-                FfiConverterString.lower(`newCalHref`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
-        { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
-        // lift function
-        { Unit },
-        // Error FFI converter
-        MobileException.ErrorHandler,
-    )
+    ): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_move_task(
+                    uniffiHandle,
+                    FfiConverterString.lower(`uid`),
+                    FfiConverterString.lower(`newCalHref`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `moveTaskTree`(
         `uid`: kotlin.String,
         `newCalHref`: kotlin.String,
-    ) = uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_move_task_tree(
-                uniffiHandle,
-                FfiConverterString.lower(`uid`),
-                FfiConverterString.lower(`newCalHref`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
-        { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
-        // lift function
-        { Unit },
-        // Error FFI converter
-        MobileException.ErrorHandler,
-    )
+    ): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_move_task_tree(
+                    uniffiHandle,
+                    FfiConverterString.lower(`uid`),
+                    FfiConverterString.lower(`newCalHref`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
 
     override fun `parseDurationString`(`val`: kotlin.String): kotlin.UInt? =
         FfiConverterOptionalUInt.lift(
@@ -3825,7 +3828,7 @@ open class CfaitMobile :
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `pauseTask`(`uid`: kotlin.String) =
+    override suspend fun `pauseTask`(`uid`: kotlin.String): kotlin.String =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
                 UniffiLib.uniffi_cfait_fn_method_cfaitmobile_pause_task(
@@ -3833,11 +3836,11 @@ open class CfaitMobile :
                     FfiConverterString.lower(`uid`),
                 )
             },
-            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
-            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
-            { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
             // lift function
-            { Unit },
+            { FfiConverterString.lift(it) },
             // Error FFI converter
             MobileException.ErrorHandler,
         )
@@ -4002,7 +4005,7 @@ open class CfaitMobile :
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `setStatusCancelled`(`uid`: kotlin.String) =
+    override suspend fun `setStatusCancelled`(`uid`: kotlin.String): kotlin.String =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
                 UniffiLib.uniffi_cfait_fn_method_cfaitmobile_set_status_cancelled(
@@ -4010,18 +4013,18 @@ open class CfaitMobile :
                     FfiConverterString.lower(`uid`),
                 )
             },
-            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
-            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
-            { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
             // lift function
-            { Unit },
+            { FfiConverterString.lift(it) },
             // Error FFI converter
             MobileException.ErrorHandler,
         )
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `setStatusProcess`(`uid`: kotlin.String) =
+    override suspend fun `setStatusProcess`(`uid`: kotlin.String): kotlin.String =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
                 UniffiLib.uniffi_cfait_fn_method_cfaitmobile_set_status_process(
@@ -4029,11 +4032,11 @@ open class CfaitMobile :
                     FfiConverterString.lower(`uid`),
                 )
             },
-            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
-            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
-            { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
             // lift function
-            { Unit },
+            { FfiConverterString.lift(it) },
             // Error FFI converter
             MobileException.ErrorHandler,
         )
@@ -4088,7 +4091,7 @@ open class CfaitMobile :
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `startTask`(`uid`: kotlin.String) =
+    override suspend fun `startTask`(`uid`: kotlin.String): kotlin.String =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
                 UniffiLib.uniffi_cfait_fn_method_cfaitmobile_start_task(
@@ -4096,18 +4099,18 @@ open class CfaitMobile :
                     FfiConverterString.lower(`uid`),
                 )
             },
-            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
-            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
-            { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
             // lift function
-            { Unit },
+            { FfiConverterString.lift(it) },
             // Error FFI converter
             MobileException.ErrorHandler,
         )
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `stopTask`(`uid`: kotlin.String) =
+    override suspend fun `stopTask`(`uid`: kotlin.String): kotlin.String =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
                 UniffiLib.uniffi_cfait_fn_method_cfaitmobile_stop_task(
@@ -4115,11 +4118,11 @@ open class CfaitMobile :
                     FfiConverterString.lower(`uid`),
                 )
             },
-            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
-            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
-            { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
             // lift function
-            { Unit },
+            { FfiConverterString.lift(it) },
             // Error FFI converter
             MobileException.ErrorHandler,
         )
@@ -4213,7 +4216,7 @@ open class CfaitMobile :
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `togglePin`(`uid`: kotlin.String) =
+    override suspend fun `togglePin`(`uid`: kotlin.String): kotlin.String =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
                 UniffiLib.uniffi_cfait_fn_method_cfaitmobile_toggle_pin(
@@ -4221,18 +4224,18 @@ open class CfaitMobile :
                     FfiConverterString.lower(`uid`),
                 )
             },
-            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
-            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
-            { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
             // lift function
-            { Unit },
+            { FfiConverterString.lift(it) },
             // Error FFI converter
             MobileException.ErrorHandler,
         )
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `toggleTask`(`uid`: kotlin.String) =
+    override suspend fun `toggleTask`(`uid`: kotlin.String): kotlin.String =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
                 UniffiLib.uniffi_cfait_fn_method_cfaitmobile_toggle_task(
@@ -4240,18 +4243,18 @@ open class CfaitMobile :
                     FfiConverterString.lower(`uid`),
                 )
             },
-            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
-            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
-            { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
             // lift function
-            { Unit },
+            { FfiConverterString.lift(it) },
             // Error FFI converter
             MobileException.ErrorHandler,
         )
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `toggleTaskShift`(`uid`: kotlin.String) =
+    override suspend fun `toggleTaskShift`(`uid`: kotlin.String): kotlin.String =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
                 UniffiLib.uniffi_cfait_fn_method_cfaitmobile_toggle_task_shift(
@@ -4259,11 +4262,11 @@ open class CfaitMobile :
                     FfiConverterString.lower(`uid`),
                 )
             },
-            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
-            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
-            { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
             // lift function
-            { Unit },
+            { FfiConverterString.lift(it) },
             // Error FFI converter
             MobileException.ErrorHandler,
         )
@@ -5854,6 +5857,22 @@ sealed class AppIntent {
         companion object
     }
 
+    data class ReplaceDependency(
+        val `uid`: kotlin.String,
+        val `oldDep`: kotlin.String,
+        val `newDep`: kotlin.String,
+    ) : AppIntent() {
+        companion object
+    }
+
+    data class ReplaceRelation(
+        val `uid`: kotlin.String,
+        val `oldRel`: kotlin.String,
+        val `newRel`: kotlin.String,
+    ) : AppIntent() {
+        companion object
+    }
+
     companion object
 }
 
@@ -6064,6 +6083,22 @@ public object FfiConverterTypeAppIntent : FfiConverterRustBuffer<AppIntent> {
 
             34 -> {
                 AppIntent.CompleteTree(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            35 -> {
+                AppIntent.ReplaceDependency(
+                    FfiConverterString.read(buf),
+                    FfiConverterString.read(buf),
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            36 -> {
+                AppIntent.ReplaceRelation(
+                    FfiConverterString.read(buf),
+                    FfiConverterString.read(buf),
                     FfiConverterString.read(buf),
                 )
             }
@@ -6351,6 +6386,26 @@ public object FfiConverterTypeAppIntent : FfiConverterRustBuffer<AppIntent> {
                         FfiConverterString.allocationSize(value.`uid`)
                 )
             }
+
+            is AppIntent.ReplaceDependency -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`uid`) +
+                        FfiConverterString.allocationSize(value.`oldDep`) +
+                        FfiConverterString.allocationSize(value.`newDep`)
+                )
+            }
+
+            is AppIntent.ReplaceRelation -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`uid`) +
+                        FfiConverterString.allocationSize(value.`oldRel`) +
+                        FfiConverterString.allocationSize(value.`newRel`)
+                )
+            }
         }
 
     override fun write(
@@ -6564,6 +6619,22 @@ public object FfiConverterTypeAppIntent : FfiConverterRustBuffer<AppIntent> {
             is AppIntent.CompleteTree -> {
                 buf.putInt(34)
                 FfiConverterString.write(value.`uid`, buf)
+                Unit
+            }
+
+            is AppIntent.ReplaceDependency -> {
+                buf.putInt(35)
+                FfiConverterString.write(value.`uid`, buf)
+                FfiConverterString.write(value.`oldDep`, buf)
+                FfiConverterString.write(value.`newDep`, buf)
+                Unit
+            }
+
+            is AppIntent.ReplaceRelation -> {
+                buf.putInt(36)
+                FfiConverterString.write(value.`uid`, buf)
+                FfiConverterString.write(value.`oldRel`, buf)
+                FfiConverterString.write(value.`newRel`, buf)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }

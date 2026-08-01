@@ -429,7 +429,7 @@ fun HomeScreen(
         scope.launch {
             activeOpCount++
             try {
-                api.dispatch(AppIntent.ToggleTask(task.uid))
+                val actionDesc = api.dispatch(AppIntent.ToggleTask(task.uid))
                 updateTaskList()
                 checkSyncStatus()
                 onDataChanged()
@@ -438,7 +438,7 @@ fun HomeScreen(
 
                 if (showUndoSnackbar) {
                     val result = snackbarHostState.showSnackbar(
-                        message = context.getString(R.string.status_saved),
+                        message = actionDesc,
                         actionLabel = context.getString(R.string.undo),
                         duration = SnackbarDuration.Short
                     )
@@ -780,7 +780,7 @@ fun HomeScreen(
                 }
 
                 if (intent != null) {
-                    api.dispatch(intent)
+                    val actionDesc = api.dispatch(intent)
                     updateTaskList()
                     onDataChanged()
                     lastSyncFailed = false
@@ -788,7 +788,7 @@ fun HomeScreen(
 
                     if (showUndoSnackbar && (action == "delete" || action == "delete_tree" || action == "cancel" || action == "complete_and_shift" || action == "move")) {
                         val result = snackbarHostState.showSnackbar(
-                            message = context.getString(R.string.status_saved),
+                            message = actionDesc,
                             actionLabel = context.getString(R.string.undo),
                             duration = SnackbarDuration.Short
                         )
@@ -1031,7 +1031,11 @@ fun HomeScreen(
                                     val uid = taskToMove?.uid ?: return@clickable
                                     scope.launch {
                                         try {
-                                            if (moveTree) api.moveTaskTree(uid, cal.href) else api.moveTask(uid, cal.href)
+                                            val actionDesc = if (moveTree) {
+                                                api.dispatch(AppIntent.MoveTaskTree(uid, cal.href))
+                                            } else {
+                                                api.dispatch(AppIntent.MoveTask(uid, cal.href))
+                                            }
                                             taskToMove = null
                                             updateTaskList()
                                             onDataChanged()
@@ -1039,7 +1043,7 @@ fun HomeScreen(
 
                                             if (showUndoSnackbar) {
                                                 val result = snackbarHostState.showSnackbar(
-                                                    message = context.getString(R.string.status_saved),
+                                                    message = actionDesc,
                                                     actionLabel = context.getString(R.string.undo),
                                                     duration = SnackbarDuration.Short
                                                 )
