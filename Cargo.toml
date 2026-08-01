@@ -42,7 +42,7 @@ uuid = { version = "1.24", features = ["v4"] }
 tokio = { version = "1", features = ["full"] }
 camino = "1.2"
 libdav = { git = "https://git.sr.ht/~trougnouf/libdav", branch = "feature/generic-response-bodies" }
-http = "1.4"
+http = "1.5"
 hyper-util = { version = "0.1", features = ["client", "client-legacy", "http1", "tokio"] }
 hyper-rustls = { version = "0.27", features = ["native-tokio"] }
 tower-http = { version = "0.7", features = ["auth", "decompression-full"] }
@@ -62,7 +62,7 @@ futures = "0.3"
 roxmltree = "0.21"
 fs2 = "0.4"
 digest_auth = "0.3"
-base64 = "0.22"
+base64 = "0.23"
 tower = { version = "0.5", features = ["util"] }
 tower-service = "0.3" # Explicitly add tower-service for the trait
 tower-layer = "0.3"   # And tower-layer for the Layer trait
@@ -118,7 +118,7 @@ ndk-context = "0.1"
 mockito = "1.7" # For mocking the HTTP server
 tokio = { version = "1", features = ["full"] }
 uuid = { version = "1.24", features = ["v4"] }
-serial_test = "3.5"
+serial_test = "4.0"
 uniffi_meta = "0.32"
 # Required to run the bindgen binary
 
