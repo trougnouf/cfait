@@ -14,9 +14,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.trougnouf.cfait.core.MobileTask
 
-// Remove incorrect import: import com.trougnouf.cfait.core.NerdFont
-// NerdFont is defined in com.trougnouf.cfait.ui package, so it's available directly here.
-
 /**
  * A simple row used to render the lightweight virtual tasks injected by the Rust core
  * (expand / collapse placeholders for truncated completed/cancelled groups).

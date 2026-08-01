@@ -761,6 +761,7 @@ fun HomeScreen(
                     "promote" -> AppIntent.RemoveParent(task.uid)
                     "cancel" -> AppIntent.CancelTask(task.uid)
                     "complete_and_shift" -> AppIntent.ToggleTaskShift(task.uid)
+                    "complete_tree" -> AppIntent.CompleteTree(task.uid)
                     "playpause" -> if (task.statusString == "InProcess") AppIntent.PauseTask(task.uid) else AppIntent.StartTask(task.uid)
                     "stop" -> AppIntent.StopTask(task.uid)
                     "prio_up" -> AppIntent.ChangePriority(task.uid, 1)
@@ -786,7 +787,7 @@ fun HomeScreen(
                     lastSyncFailed = false
                     triggerBackgroundSync(context, api)
 
-                    if (showUndoSnackbar && (action == "delete" || action == "delete_tree" || action == "cancel" || action == "complete_and_shift" || action == "move")) {
+                    if (showUndoSnackbar && (action == "delete" || action == "delete_tree" || action == "cancel" || action == "complete_and_shift" || action == "complete_tree" || action == "duplicate" || action == "promote" || action == "move")) {
                         val result = snackbarHostState.showSnackbar(
                             message = actionDesc,
                             actionLabel = context.getString(R.string.undo),
