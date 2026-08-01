@@ -24,6 +24,36 @@ use tokio::sync::mpsc::Sender;
 use crate::store::{TaskListItem, select_weighted_random_index};
 use rust_i18n::t;
 
+fn is_undo(key: &KeyEvent) -> bool {
+    matches!(key.code, KeyCode::Char('z') | KeyCode::Char('Z'))
+        && key.modifiers.contains(KeyModifiers::CONTROL)
+        && !key.modifiers.contains(KeyModifiers::SHIFT)
+}
+
+fn is_redo(key: &KeyEvent) -> bool {
+    (matches!(key.code, KeyCode::Char('y') | KeyCode::Char('Y'))
+        && key.modifiers.contains(KeyModifiers::CONTROL))
+        || (matches!(key.code, KeyCode::Char('z') | KeyCode::Char('Z'))
+            && key.modifiers.contains(KeyModifiers::CONTROL)
+            && key.modifiers.contains(KeyModifiers::SHIFT))
+}
+
+fn handle_text_undo(state: &mut AppState) {
+    if let Some(prev) = state.text_undo_stack.pop() {
+        state.text_redo_stack.push(state.input_buffer.clone());
+        state.input_buffer = prev;
+        state.cursor_position = state.input_buffer.chars().count();
+    }
+}
+
+fn handle_text_redo(state: &mut AppState) {
+    if let Some(next) = state.text_redo_stack.pop() {
+        state.text_undo_stack.push(state.input_buffer.clone());
+        state.input_buffer = next;
+        state.cursor_position = state.input_buffer.chars().count();
+    }
+}
+
 /// Generate a random example for session logging syntax
 fn random_session_example() -> String {
     const DURATIONS: &[&str] = &["30m", "1h", "2h", "6h", "14:00-15:30", "09:00-10:15"];
@@ -1104,24 +1134,29 @@ pub async fn handle_key_event(
         state.cursor_position = char_count;
     }
 
+    let is_text_undo_mode = matches!(
+        state.mode,
+        InputMode::Creating
+            | InputMode::Editing
+            | InputMode::EditingDescription
+            | InputMode::EditingTree(_)
+            | InputMode::AddingSession
+            | InputMode::EditingSession(_, _)
+    );
+
+    if is_text_undo_mode {
+        if is_undo(&key) {
+            handle_text_undo(state);
+            return None;
+        }
+        if is_redo(&key) {
+            handle_text_redo(state);
+            return None;
+        }
+    }
+
     match state.mode {
         InputMode::Creating => match key.code {
-            KeyCode::Char('z') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                if let Some(prev) = state.text_undo_stack.pop() {
-                    state.text_redo_stack.push(state.input_buffer.clone());
-                    state.input_buffer = prev;
-                    state.cursor_position = state.input_buffer.chars().count();
-                }
-                return None;
-            }
-            KeyCode::Char('y') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                if let Some(next) = state.text_redo_stack.pop() {
-                    state.text_undo_stack.push(state.input_buffer.clone());
-                    state.input_buffer = next;
-                    state.cursor_position = state.input_buffer.chars().count();
-                }
-                return None;
-            }
             // NEW: Enter description mode during creation (Ctrl+E)
             KeyCode::Char('e') | KeyCode::Char('E')
                 if key.modifiers.contains(KeyModifiers::CONTROL) =>
@@ -1387,22 +1422,6 @@ pub async fn handle_key_event(
             _ => {}
         },
         InputMode::Editing => match key.code {
-            KeyCode::Char('z') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                if let Some(prev) = state.text_undo_stack.pop() {
-                    state.text_redo_stack.push(state.input_buffer.clone());
-                    state.input_buffer = prev;
-                    state.cursor_position = state.input_buffer.chars().count();
-                }
-                return None;
-            }
-            KeyCode::Char('y') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                if let Some(next) = state.text_redo_stack.pop() {
-                    state.text_undo_stack.push(state.input_buffer.clone());
-                    state.input_buffer = next;
-                    state.cursor_position = state.input_buffer.chars().count();
-                }
-                return None;
-            }
             KeyCode::Enter => {
                 let (clean_input_1, new_goals) =
                     crate::model::parser::extract_inline_goals(&state.input_buffer);
@@ -1494,22 +1513,6 @@ pub async fn handle_key_event(
             _ => {}
         },
         InputMode::EditingDescription | InputMode::EditingTree(_) => match key.code {
-            KeyCode::Char('z') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                if let Some(prev) = state.text_undo_stack.pop() {
-                    state.text_redo_stack.push(state.input_buffer.clone());
-                    state.input_buffer = prev;
-                    state.cursor_position = state.input_buffer.chars().count();
-                }
-                return None;
-            }
-            KeyCode::Char('y') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                if let Some(next) = state.text_redo_stack.pop() {
-                    state.text_undo_stack.push(state.input_buffer.clone());
-                    state.input_buffer = next;
-                    state.cursor_position = state.input_buffer.chars().count();
-                }
-                return None;
-            }
             // Enter inserts a newline
             KeyCode::Enter => {
                 state.enter_char('\n');
@@ -2388,11 +2391,13 @@ pub async fn handle_key_event(
                     }
                 }
             }
-            KeyCode::Char('Y') => {
+            KeyCode::Char('Y') if !key.modifiers.contains(KeyModifiers::CONTROL) => {
                 state.yank_lock_active = !state.yank_lock_active;
                 state.needs_redraw = true;
             }
-            KeyCode::Char('y') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Char('z') | KeyCode::Char('Z')
+                if is_redo(&key) =>
+            {
                 if let Some(record) = state.redo_stack.pop() {
                     state.store.apply_actions(&record.forward);
                     state.undo_stack.push(record.clone());
@@ -2718,7 +2723,7 @@ pub async fn handle_key_event(
                 state.sidebar_mode = SidebarMode::Categories;
                 state.refresh_filtered_view();
             }
-            KeyCode::Char('z') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            KeyCode::Char('z') | KeyCode::Char('Z') if is_undo(&key) => {
                 if let Some(record) = state.undo_stack.pop() {
                     state.store.apply_actions(&record.reverse);
                     state.redo_stack.push(record.clone());
@@ -3276,22 +3281,6 @@ pub async fn handle_key_event(
             _ => {}
         },
         InputMode::AddingSession => match key.code {
-            KeyCode::Char('z') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                if let Some(prev) = state.text_undo_stack.pop() {
-                    state.text_redo_stack.push(state.input_buffer.clone());
-                    state.input_buffer = prev;
-                    state.cursor_position = state.input_buffer.chars().count();
-                }
-                return None;
-            }
-            KeyCode::Char('y') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                if let Some(next) = state.text_redo_stack.pop() {
-                    state.text_undo_stack.push(state.input_buffer.clone());
-                    state.input_buffer = next;
-                    state.cursor_position = state.input_buffer.chars().count();
-                }
-                return None;
-            }
             KeyCode::Enter => {
                 let input = state.input_buffer.clone();
                 if let Some(session) = crate::model::parser::parse_session_input(&input) {
@@ -3396,22 +3385,6 @@ pub async fn handle_key_event(
         },
 
         InputMode::EditingSession(ref uid, idx) => match key.code {
-            KeyCode::Char('z') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                if let Some(prev) = state.text_undo_stack.pop() {
-                    state.text_redo_stack.push(state.input_buffer.clone());
-                    state.input_buffer = prev;
-                    state.cursor_position = state.input_buffer.chars().count();
-                }
-                return None;
-            }
-            KeyCode::Char('y') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                if let Some(next) = state.text_redo_stack.pop() {
-                    state.text_undo_stack.push(state.input_buffer.clone());
-                    state.input_buffer = next;
-                    state.cursor_position = state.input_buffer.chars().count();
-                }
-                return None;
-            }
             KeyCode::Enter => {
                 let input = state.input_buffer.clone();
                 if let Some(session) = crate::model::parser::parse_session_input(&input) {
