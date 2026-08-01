@@ -2391,31 +2391,9 @@ pub async fn handle_key_event(
                     }
                 }
             }
-            KeyCode::Char('Y') if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+            KeyCode::Char('Y') => {
                 state.yank_lock_active = !state.yank_lock_active;
                 state.needs_redraw = true;
-            }
-            KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Char('z') | KeyCode::Char('Z')
-                if is_redo(&key) =>
-            {
-                if let Some(record) = state.redo_stack.pop() {
-                    state.store.apply_actions(&record.forward);
-                    state.undo_stack.push(record.clone());
-                    state.refresh_filtered_view();
-
-                    if let Some(uid) = &record.primary_uid
-                        && let Some(idx) = state.find_task_index_by_uid(uid)
-                    {
-                        state.list_state.select(Some(idx));
-                    }
-
-                    let tx = action_tx.clone();
-                    tokio::spawn(async move {
-                        let _ = tx.send(Action::PersistBatch(record.forward)).await;
-                    });
-                    state.message =
-                        rust_i18n::t!("task_action_redone", desc = record.description).to_string();
-                }
             }
             KeyCode::Char('y') => {
                 if let Some(t) = state.get_selected_task() {
