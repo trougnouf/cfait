@@ -824,6 +824,8 @@ fun getSyntaxColor(kind: MobileSyntaxType, text: String, isDark: Boolean): Color
 }
 
 class MarkdownTransformation(val isDark: Boolean, val api: CfaitMobile? = null) : VisualTransformation {
+    private val lineCache = android.util.LruCache<String, List<AnnotatedString.Range<SpanStyle>>>(1000)
+
     override fun filter(text: AnnotatedString): TransformedText {
         val raw = text.text
         val builder = AnnotatedString.Builder(raw)
@@ -834,21 +836,46 @@ class MarkdownTransformation(val isDark: Boolean, val api: CfaitMobile? = null) 
         val checkboxColor = Color(0xFF66BB6A) // Greenish
         val codeColor = Color(0xFFCC9966) // Brown/Orange
 
+        val inlinePatterns = listOf(
+            Pair(Regex("""<!-- uid:.*?-->")"""), SpanStyle(color = dimColor, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)),
+            Pair(Regex("""\[\[.*?\]\]"""), SpanStyle(color = linkColor, fontWeight = FontWeight.Bold)),
+            Pair(Regex("""\[.*?\]\(.*?\)"""), SpanStyle(color = linkColor, fontWeight = FontWeight.Bold)),
+            Pair(Regex("""[a-zA-Z][a-zA-Z0-9+.-]*://[^\s)]+"""), SpanStyle(color = linkColor, fontWeight = FontWeight.Bold)),
+            Pair(Regex("""mailto:[^\s)]+"""), SpanStyle(color = linkColor, fontWeight = FontWeight.Bold)),
+            Pair(Regex("""\*\*.*?\*\*"""), SpanStyle(fontWeight = FontWeight.Bold)),
+            Pair(Regex("""__.*?__"""), SpanStyle(fontWeight = FontWeight.Bold)),
+            Pair(Regex("""~~.*?~~"""), SpanStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough)),
+            Pair(Regex("""(?<!\)\*(?!\).*?(?<!\*)\*(?!\*)"""), SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)),
+            Pair(Regex("""(?<!_)_(?!_).*?(?<!_)_(?!_)"""), SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)),
+            Pair(Regex("""`.*?`"""), SpanStyle(color = codeColor, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace))
+        )
+
         var lineStart = 0
         val lines = raw.split('\n')
+        
         for (line in lines) {
             val lineEnd = lineStart + line.length
-            val trimmed = line.trimStart()
+            
+            val cachedStyles = lineCache.get(line)
+            if (cachedStyles != null) {
+                for (style in cachedStyles) {
+                    builder.addStyle(style.item, lineStart + style.start, lineStart + style.end)
+                }
+                lineStart = lineEnd + 1
+                continue
+            }
 
+            val newStyles = mutableListOf<AnnotatedString.Range<SpanStyle>>()
+            val trimmed = line.trimStart()
             var afterMarker = 0
 
             if (trimmed.startsWith("#")) {
-                builder.addStyle(SpanStyle(color = headerColor, fontWeight = FontWeight.Bold), lineStart, lineEnd)
+                newStyles.add(AnnotatedString.Range(SpanStyle(color = headerColor, fontWeight = FontWeight.Bold), 0, line.length))
                 afterMarker = line.length
-            } else if (trimmed.startsWith("- [") || trimmed.startsWith("* [") || trimmed.startsWith("+ [") || Regex("""^\d+\.\s*\[""").containsMatchIn(trimmed)) {
+            } else if (trimmed.startsWith("- [") || trimmed.startsWith("* [") || trimmed.startsWith("+ [") || Regex("""^\d+\.\s*\\[""").containsMatchIn(trimmed)) {
                 val cbStart = line.indexOf('[')
                 if (cbStart != -1 && cbStart + 2 < line.length && line[cbStart + 2] == ']') {
-                    builder.addStyle(SpanStyle(color = checkboxColor), lineStart + cbStart, lineStart + cbStart + 3)
+                    newStyles.add(AnnotatedString.Range(SpanStyle(color = checkboxColor), cbStart, cbStart + 3))
                     afterMarker = cbStart + 4
                 }
             } else {
@@ -885,38 +912,30 @@ class MarkdownTransformation(val isDark: Boolean, val api: CfaitMobile? = null) 
                             val spanColor = getSyntaxColor(token.kind, rest.substring(token.start, token.end), isDark)
                             if (spanColor != null) {
                                 val weight = if (token.kind == MobileSyntaxType.PRIORITY || token.kind == MobileSyntaxType.TAG || token.kind == MobileSyntaxType.CALENDAR || token.kind == MobileSyntaxType.OPERATOR) FontWeight.Bold else FontWeight.Normal
-                                builder.addStyle(SpanStyle(color = spanColor, fontWeight = weight), lineStart + afterMarker + token.start, lineStart + afterMarker + token.end)
+                                newStyles.add(AnnotatedString.Range(SpanStyle(color = spanColor, fontWeight = weight), afterMarker + token.start, afterMarker + token.end))
                             }
                         }
                     } catch (e: Exception) {}
                 }
             }
 
-            lineStart = lineEnd + 1
-        }
-
-        try {
-            val inlinePatterns = listOf(
-                Pair(Regex("""<!-- uid:.*?-->"""), SpanStyle(color = dimColor, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)),
-                Pair(Regex("""\[\[.*?\]\]"""), SpanStyle(color = linkColor, fontWeight = FontWeight.Bold)),
-                Pair(Regex("""\[.*?\]\\(.*?\\)"""), SpanStyle(color = linkColor, fontWeight = FontWeight.Bold)),
-                Pair(Regex("""[a-zA-Z][a-zA-Z0-9+.-]*://[^\s)]+"""), SpanStyle(color = linkColor, fontWeight = FontWeight.Bold)),
-                Pair(Regex("""mailto:[^\s)]+"""), SpanStyle(color = linkColor, fontWeight = FontWeight.Bold)),
-                Pair(Regex("""\*\*.*?\*\*"""), SpanStyle(fontWeight = FontWeight.Bold)),
-                Pair(Regex("""__.*?__"""), SpanStyle(fontWeight = FontWeight.Bold)),
-                Pair(Regex("""~~.*?~~"""), SpanStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough)),
-                Pair(Regex("""(?<!\*)\*(?!\*).*?(?<!\*)\*(?!\*)"""), SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)),
-                Pair(Regex("""(?<!_)_(?!_).*?(?<!_)_(?!_)"""), SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)),
-                Pair(Regex("""`.*?`"""), SpanStyle(color = codeColor, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace))
-            )
-
-            for ((regex, style) in inlinePatterns) {
-                regex.findAll(raw).forEach { match ->
-                    builder.addStyle(style, match.range.first, match.range.last + 1)
+            try {
+                for ((regex, style) in inlinePatterns) {
+                    regex.findAll(line).forEach { match ->
+                        newStyles.add(AnnotatedString.Range(style, match.range.first, match.range.last + 1))
+                    }
                 }
+            } catch (e: Exception) {
+                // Ignore regex bounds errors
             }
-        } catch (e: Exception) {
-            // Ignore regex bounds errors to guarantee the text field never crashes
+
+            lineCache.put(line, newStyles)
+
+            for (style in newStyles) {
+                builder.addStyle(style.item, lineStart + style.start, lineStart + style.end)
+            }
+
+            lineStart = lineEnd + 1
         }
 
         return TransformedText(builder.toAnnotatedString(), OffsetMapping.Identity)
