@@ -481,8 +481,6 @@ pub fn compare_sortkeys(
     }
 }
 
-// Helper context used by hierarchy organization routines.
-// Bundles the children map, result vector and other parameters so recursive helpers
 impl Task {
     pub fn get_effective_goal(&self) -> Option<crate::config::Goal> {
         if let Some(g) = &self.goal {

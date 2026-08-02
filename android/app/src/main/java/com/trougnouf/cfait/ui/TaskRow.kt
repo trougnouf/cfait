@@ -544,6 +544,14 @@ fun TaskRow(
                         leadingIcon = { NfIcon(NfIcons.CLONE, 16.sp) }
                     )
 
+                    if (task.hasSubtasks) {
+                        DropdownMenuItem(
+                            text = { Text(androidx.compose.ui.res.stringResource(R.string.action_complete_tree)) },
+                            onClick = { expanded = false; onAction("complete_tree") },
+                            leadingIcon = { NfIcon(NfIcons.LIST_CHECK, 16.sp) }
+                        )
+                    }
+
                     if (enabledCalendarCount > 1) {
                         DropdownMenuItem(
                             text = { Text(androidx.compose.ui.res.stringResource(R.string.menu_move)) },

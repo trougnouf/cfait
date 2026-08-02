@@ -2263,7 +2263,7 @@ impl CfaitMobile {
         }
     }
 
-    pub async fn dispatch(&self, intent: crate::model::AppIntent) -> Result<(), MobileError> {
+    pub async fn dispatch(&self, intent: crate::model::AppIntent) -> Result<String, MobileError> {
         let mut session = self.session.lock().await;
         let mut store = self.controller.store.lock().await;
         let config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
@@ -2283,7 +2283,7 @@ impl CfaitMobile {
         if !forward.is_empty() {
             let mut undo_lock = self.controller.undo_stack.lock().await;
             undo_lock.push(crate::journal::UndoRecord {
-                description: desc,
+                description: desc.clone(),
                 primary_uid,
                 forward: forward.clone(),
                 reverse,
@@ -2315,7 +2315,7 @@ impl CfaitMobile {
             *alarm_cache.lock().await = Some(index);
         });
 
-        Ok(())
+        Ok(desc)
     }
 
     pub async fn get_random_task_uid(
@@ -2660,38 +2660,32 @@ impl CfaitMobile {
         Ok(parent_uid)
     }
 
-    pub async fn change_priority(&self, uid: String, delta: i8) -> Result<(), MobileError> {
+    pub async fn change_priority(&self, uid: String, delta: i8) -> Result<String, MobileError> {
         self.dispatch(crate::model::AppIntent::ChangePriority { uid, delta })
-            .await?;
-        Ok(())
+            .await
     }
 
-    pub async fn set_status_process(&self, uid: String) -> Result<(), MobileError> {
+    pub async fn set_status_process(&self, uid: String) -> Result<String, MobileError> {
         self.dispatch(crate::model::AppIntent::StartTask { uid })
-            .await?;
-        Ok(())
+            .await
     }
 
-    pub async fn set_status_cancelled(&self, uid: String) -> Result<(), MobileError> {
+    pub async fn set_status_cancelled(&self, uid: String) -> Result<String, MobileError> {
         self.dispatch(crate::model::AppIntent::CancelTask { uid })
-            .await?;
-        Ok(())
+            .await
     }
 
-    pub async fn pause_task(&self, uid: String) -> Result<(), MobileError> {
+    pub async fn pause_task(&self, uid: String) -> Result<String, MobileError> {
         self.dispatch(crate::model::AppIntent::PauseTask { uid })
-            .await?;
-        Ok(())
+            .await
     }
-    pub async fn stop_task(&self, uid: String) -> Result<(), MobileError> {
+    pub async fn stop_task(&self, uid: String) -> Result<String, MobileError> {
         self.dispatch(crate::model::AppIntent::StopTask { uid })
-            .await?;
-        Ok(())
+            .await
     }
-    pub async fn start_task(&self, uid: String) -> Result<(), MobileError> {
+    pub async fn start_task(&self, uid: String) -> Result<String, MobileError> {
         self.dispatch(crate::model::AppIntent::StartTask { uid })
-            .await?;
-        Ok(())
+            .await
     }
 
     pub async fn update_task_smart(
@@ -2816,62 +2810,58 @@ impl CfaitMobile {
         Ok(())
     }
 
-    pub async fn toggle_task(&self, uid: String) -> Result<(), MobileError> {
+    pub async fn toggle_task(&self, uid: String) -> Result<String, MobileError> {
         self.dispatch(crate::model::AppIntent::ToggleTask { uid })
-            .await?;
-        Ok(())
+            .await
     }
 
-    pub async fn toggle_task_shift(&self, uid: String) -> Result<(), MobileError> {
+    pub async fn toggle_task_shift(&self, uid: String) -> Result<String, MobileError> {
         self.dispatch(crate::model::AppIntent::ToggleTaskShift { uid })
-            .await?;
-        Ok(())
+            .await
     }
 
-    pub async fn move_task(&self, uid: String, new_cal_href: String) -> Result<(), MobileError> {
+    pub async fn move_task(
+        &self,
+        uid: String,
+        new_cal_href: String,
+    ) -> Result<String, MobileError> {
         self.dispatch(crate::model::AppIntent::MoveTask {
             uid,
             target_href: new_cal_href,
         })
-        .await?;
-        Ok(())
+        .await
     }
 
     pub async fn move_task_tree(
         &self,
         uid: String,
         new_cal_href: String,
-    ) -> Result<(), MobileError> {
+    ) -> Result<String, MobileError> {
         self.dispatch(crate::model::AppIntent::MoveTaskTree {
             uid,
             target_href: new_cal_href,
         })
-        .await?;
-        Ok(())
+        .await
     }
 
-    pub async fn delete_task(&self, uid: String) -> Result<(), MobileError> {
+    pub async fn delete_task(&self, uid: String) -> Result<String, MobileError> {
         self.dispatch(crate::model::AppIntent::DeleteTask { uid })
-            .await?;
-        Ok(())
+            .await
     }
 
-    pub async fn duplicate_task_tree(&self, uid: String) -> Result<(), MobileError> {
+    pub async fn duplicate_task_tree(&self, uid: String) -> Result<String, MobileError> {
         self.dispatch(crate::model::AppIntent::DuplicateTaskTree { uid })
-            .await?;
-        Ok(())
+            .await
     }
 
-    pub async fn delete_task_tree(&self, uid: String) -> Result<(), MobileError> {
+    pub async fn delete_task_tree(&self, uid: String) -> Result<String, MobileError> {
         self.dispatch(crate::model::AppIntent::DeleteTaskTree { uid })
-            .await?;
-        Ok(())
+            .await
     }
 
-    pub async fn toggle_pin(&self, uid: String) -> Result<(), MobileError> {
+    pub async fn toggle_pin(&self, uid: String) -> Result<String, MobileError> {
         self.dispatch(crate::model::AppIntent::TogglePin { uid })
-            .await?;
-        Ok(())
+            .await
     }
 
     pub async fn sync_task_tree_from_markdown(

@@ -165,7 +165,6 @@ impl Highlighter for SmartInputHighlighter {
                         }),
                     },
                     SyntaxType::Calendar => highlighter::Format {
-                        // Added handler
                         color: Some(Color::from_rgb(0.91, 0.11, 0.38)), // #E91E63 Pink
                         font: Some(Font {
                             weight: iced::font::Weight::Bold,

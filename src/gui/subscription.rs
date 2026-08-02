@@ -192,7 +192,7 @@ fn handle_hotkey(
             }
             let is_cmd = modifiers.control() || modifiers.command();
             if is_cmd && let keyboard::Key::Character(s) = key.as_ref() {
-                match s {
+                match s.to_lowercase().as_str() {
                     "s" => return Some(Message::SubmitTask),
                     "n" => return Some(Message::StartCreateWithDescription),
                     "e" => return Some(Message::KeyboardEditTree),

@@ -376,7 +376,7 @@ impl TaskAction {
             TaskAction::OpenUrl => rust_i18n::t!("open_url").to_string(),
             TaskAction::TogglePin => rust_i18n::t!("action_toggle_pin").to_string(),
             TaskAction::Focus => rust_i18n::t!("focus_hide_others").to_string(),
-            TaskAction::EditTree => "Edit tree".to_string(),
+            TaskAction::EditTree => rust_i18n::t!("edit_tree_title").to_string(),
             TaskAction::CompleteTree => rust_i18n::t!("action_complete_tree").to_string(),
         }
     }

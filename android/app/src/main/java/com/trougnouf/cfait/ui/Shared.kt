@@ -415,6 +415,7 @@ object NfIcons {
     val ARROW_DOWN = get(0xf063)
     val HAND_STOP = get(0xf256)
     val FOCUS_FIELD = get(0xf0f4f)
+    val LIST_CHECK = get(0xf0ae)
     val THUMB_TACK = get(0xf08d)
     val ARROW_LEFT = get(0xf060)
     val ARROW_RIGHT = get(0xf061)
