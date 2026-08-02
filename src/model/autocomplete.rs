@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+use crate::model::CalendarListEntry;
 use crate::model::parser::{LEXICON, PrefixToken, quote_value, split_input_respecting_quotes};
 use crate::store::TaskStore;
 use std::collections::HashMap;
@@ -16,6 +17,7 @@ pub fn suggest(
     cursor_byte_idx: usize,
     store: &TaskStore,
     aliases: &HashMap<String, Vec<String>>,
+    calendars: &[CalendarListEntry],
 ) -> Option<(Range<usize>, Vec<Suggestion>)> {
     let parts = split_input_respecting_quotes(input);
 
@@ -67,6 +69,7 @@ pub fn suggest(
         for k in aliases.keys() {
             if let Some(clean) = k.strip_prefix('#')
                 && clean.to_lowercase().starts_with(query)
+                && clean != "cfait-internal"
             {
                 tag_counts.insert(clean.to_string(), 0);
             }
@@ -194,6 +197,47 @@ pub fn suggest(
                 if !suggestions.is_empty() {
                     return Some((start..end, suggestions));
                 }
+            }
+        } else if kind == PrefixToken::Collection {
+            let original_prefix = &word[..p_str.len()];
+            let query_clean = crate::model::parser::strip_quotes(rem).to_lowercase();
+
+            let mut matches = Vec::new();
+            for cal in calendars {
+                if cal.href == "local://trash" || cal.href == "local://recovery" {
+                    continue;
+                }
+                if cal.name.to_lowercase().contains(&query_clean) {
+                    matches.push(cal.clone());
+                }
+            }
+
+            matches.sort_by(|a, b| {
+                let a_starts = a.name.to_lowercase().starts_with(&query_clean);
+                let b_starts = b.name.to_lowercase().starts_with(&query_clean);
+
+                let count_a = store.calendars.get(&a.href).map_or(0, |m| m.len());
+                let count_b = store.calendars.get(&b.href).map_or(0, |m| m.len());
+
+                b_starts
+                    .cmp(&a_starts)
+                    .then_with(|| count_b.cmp(&count_a))
+                    .then_with(|| a.name.cmp(&b.name))
+            });
+
+            matches.truncate(10);
+
+            let suggestions: Vec<_> = matches
+                .into_iter()
+                .map(|c| Suggestion {
+                    replacement: format!("{}{}", original_prefix, quote_value(&c.name)),
+                    display: c.name.clone(),
+                    description: String::new(),
+                })
+                .collect();
+
+            if !suggestions.is_empty() {
+                return Some((start..end, suggestions));
             }
         }
     }
