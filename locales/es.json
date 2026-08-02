@@ -728,6 +728,7 @@
     "tooltip_maximize_ctrl_m": "Maximizar (Ctrl+M)",
     "tooltip_restore_ctrl_m": "Reducir (Ctrl+M)",
     "tooltip_save_ctrl_s": "Guardar (Ctrl+S)",
+    "tooltip_save_keep_editing": "Guardar y continuar editando (Ctrl+Mayús+S)",
     "tooltip_toggle_quick_filter": "Alternar «%{term}» (w)",
     "tooltip_toggle_space": "Alternar (Barra espaciadora)",
     "translation_help": "Ayuda a traducir Cfait: %{url}",
