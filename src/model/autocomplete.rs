@@ -67,6 +67,7 @@ pub fn suggest(
         for k in aliases.keys() {
             if let Some(clean) = k.strip_prefix('#')
                 && clean.to_lowercase().starts_with(query)
+                && clean != "cfait-internal"
             {
                 tag_counts.insert(clean.to_string(), 0);
             }
