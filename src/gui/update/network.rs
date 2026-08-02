@@ -82,14 +82,24 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.last_sync_failed = false;
             crate::gui::update::common::update_journal_state(app);
 
-            // The TaskController updated the shared TaskStore in the background.
+            // Update ETags in the GUI's main store so subsequent edits don't trigger 412s.
+            let mut rebuild_ui = false;
+            for sync_task in &synced_tasks {
+                if let Some((existing, _)) = app.store.get_task_mut(&sync_task.uid) {
+                    if existing.etag != sync_task.etag || existing.href != sync_task.href {
+                        existing.etag = sync_task.etag.clone();
+                        existing.href = sync_task.href.clone();
+                    }
+                } else if sync_task.summary.ends_with("(Conflict Copy)") {
+                    app.store.add_task(sync_task.clone());
+                    rebuild_ui = true;
+                }
+            }
+
             // We only need to trigger a heavy UI rebuild if a completely new task
             // was introduced (like a Conflict Copy), otherwise ETags updating in the
             // background are invisible to the user.
-            if synced_tasks
-                .iter()
-                .any(|t| t.summary.ends_with("(Conflict Copy)"))
-            {
+            if rebuild_ui {
                 crate::gui::update::common::refresh_filtered_tasks(app);
             }
 

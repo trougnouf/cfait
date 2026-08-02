@@ -39,12 +39,7 @@ pub enum AppEvent {
     ConfigUpdated(Box<crate::config::Config>),
     CalendarsLoaded(Vec<CalendarListEntry>),
     TasksLoaded(Vec<(String, Vec<Task>)>),
-    TaskSynced {
-        uid: String,
-        href: String,
-        etag: String,
-        sequence: u32,
-    },
+    TaskSynced(Box<Task>),
     /// An event that carries a stable message key plus a localized/human string.
     /// Use `key` in tests and logic for stable comparisons; `human` is intended
     /// for UI display (localized).

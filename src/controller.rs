@@ -411,6 +411,44 @@ impl TaskController {
                         let _ = self.persist_changes(actions).await;
                     }
 
+                    // Update Cache to reflect successful uploads, preventing 3-way merge failures
+                    // if the user edits the task again before a full sync.
+                    let mut by_calendar: std::collections::HashMap<String, Vec<Task>> =
+                        std::collections::HashMap::new();
+                    for t in &actual {
+                        if !t.calendar_href.starts_with("local://") {
+                            by_calendar
+                                .entry(t.calendar_href.clone())
+                                .or_default()
+                                .push(t.clone());
+                        }
+                    }
+
+                    for (href, tasks) in by_calendar {
+                        if let Ok((mut cached, token)) =
+                            crate::cache::Cache::load(self.ctx.as_ref(), &href)
+                        {
+                            let mut changed = false;
+                            for t in tasks {
+                                if let Some(idx) = cached.iter().position(|x| x.uid == t.uid) {
+                                    cached[idx] = t;
+                                    changed = true;
+                                } else {
+                                    cached.push(t);
+                                    changed = true;
+                                }
+                            }
+                            if changed {
+                                let _ = crate::cache::Cache::save(
+                                    self.ctx.as_ref(),
+                                    &href,
+                                    &cached,
+                                    token,
+                                );
+                            }
+                        }
+                    }
+
                     (w, actual)
                 }
                 Err(e) => return Err(e),

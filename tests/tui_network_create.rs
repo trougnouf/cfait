@@ -243,8 +243,8 @@ END:VCALENDAR</cal:calendar-data>
     // Wait for the status saved and task synced events
     loop {
         match tokio::time::timeout(std::time::Duration::from_secs(5), event_rx.recv()).await {
-            Ok(Some(AppEvent::TaskSynced { uid, .. })) => {
-                if uid == new_uid {
+            Ok(Some(AppEvent::TaskSynced(task))) => {
+                if task.uid == new_uid {
                     synced_new_task = true;
                 }
             }

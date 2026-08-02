@@ -927,18 +927,16 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
             state.refresh_filtered_view();
             state.loading = false;
         }
-        AppEvent::TaskSynced {
-            uid,
-            href,
-            etag,
-            sequence,
-        } => {
-            if let Some((existing, _)) = state.store.get_task_mut(&uid) {
-                existing.href = href;
-                existing.etag = etag;
-                if sequence > existing.sequence {
-                    existing.sequence = sequence;
+        AppEvent::TaskSynced(sync_task) => {
+            if let Some((existing, _)) = state.store.get_task_mut(&sync_task.uid) {
+                existing.href = sync_task.href.clone();
+                existing.etag = sync_task.etag.clone();
+                if sync_task.sequence > existing.sequence {
+                    existing.sequence = sync_task.sequence;
                 }
+            } else if sync_task.summary.ends_with("(Conflict Copy)") {
+                state.store.add_task(*sync_task);
+                state.refresh_filtered_view();
             }
         }
         AppEvent::ConfigUpdated(cfg) => {

@@ -326,12 +326,7 @@ pub async fn run_network_actor(
                                 // without overwriting the UI's optimistic state!
                                 for sync_task in synced_tasks {
                                     let _ = event_tx_clone
-                                        .send(AppEvent::TaskSynced {
-                                            uid: sync_task.uid,
-                                            href: sync_task.href,
-                                            etag: sync_task.etag,
-                                            sequence: sync_task.sequence,
-                                        })
+                                        .send(AppEvent::TaskSynced(Box::new(sync_task)))
                                         .await;
                                 }
 
