@@ -407,6 +407,12 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
                     if current_ts.as_deref() != Some(expected_ts) {
                         return false;
                     }
+
+                    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(expected_ts)
+                        && store_task.has_alarm_at(dt.with_timezone(&chrono::Utc))
+                    {
+                        return false;
+                    }
                 } else {
                     return false;
                 }

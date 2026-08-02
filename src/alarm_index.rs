@@ -75,7 +75,7 @@ pub struct AlarmIndex {
 impl Default for AlarmIndex {
     fn default() -> Self {
         Self {
-            version: 2,
+            version: 3,
             last_updated: Utc::now().timestamp(),
             alarms: Vec::new(),
         }
@@ -103,7 +103,7 @@ impl AlarmIndex {
         LocalStorage::with_lock(&path, || {
             let content = fs::read_to_string(&path)?;
             let index: AlarmIndex = serde_json::from_str(&content)?;
-            if index.version != 2 {
+            if index.version != 3 {
                 return Ok(Self::default());
             }
             Ok(index)
@@ -205,6 +205,13 @@ impl AlarmIndex {
                         let mut add_implicit = |dt: DateTime<Utc>, desc: &str, type_key: &str| {
                             // Only index future alarms (or recent past within grace period)
                             if dt > now || (now - dt).num_minutes() < 60 {
+                                // Check if there's already ANY alarm (including acknowledged/dismissed)
+                                // for this task at this exact time. This prevents firing on restart
+                                // after dismissal.
+                                if task.has_alarm_at(dt) {
+                                    return;
+                                }
+
                                 let trigger_ms = dt.timestamp_millis();
 
                                 // If there's already an alarm for the same task at the same time,
@@ -257,7 +264,7 @@ impl AlarmIndex {
         alarms.dedup_by(|a, b| a.alarm_uid == b.alarm_uid);
 
         Self {
-            version: 1,
+            version: 3,
             last_updated: now.timestamp(),
             alarms,
         }
@@ -441,5 +448,107 @@ mod tests {
         index.prune_old_alarms();
         assert_eq!(index.alarms.len(), 1);
         assert_eq!(index.alarms[0].task_uid, "task-1");
+    }
+
+    #[test]
+    fn test_dismissed_implicit_alarm_not_in_index() {
+        use crate::model::{Alarm, DateType, Task};
+        use std::collections::HashMap;
+
+        let now = Utc::now();
+        let trigger_dt = now + chrono::Duration::hours(1);
+
+        // Create a minimal task with a due date
+        // We need to set all required fields that have defaults
+        let mut task = Task {
+            uid: "test-task".to_string(),
+            summary: "Test task".to_string(),
+            description: String::new(),
+            status: crate::model::TaskStatus::NeedsAction,
+            estimated_duration: None,
+            estimated_duration_max: None,
+            due: Some(DateType::Specific(trigger_dt)),
+            dtstart: None,
+            alarms: vec![],
+            exdates: vec![],
+            priority: 0,
+            percent_complete: None,
+            parent_uid: None,
+            dependencies: vec![],
+            related_to: vec![],
+            etag: String::new(),
+            href: String::new(),
+            calendar_href: "local".to_string(),
+            categories: vec![],
+            depth: 0,
+            rrule: None,
+            location: None,
+            url: None,
+            geo: None,
+            collapsed: false,
+            pinned: false,
+            is_note: false,
+            manual_block: false,
+            permanent: false,
+            time_spent_seconds: 0,
+            last_started_at: None,
+            sessions: vec![],
+            unmapped_properties: vec![],
+            sequence: 0,
+            raw_alarms: vec![],
+            raw_components: vec![],
+            create_event: None,
+            goal: None,
+            target_collection: None,
+            is_blocked: false,
+            is_implicitly_blocked: false,
+            is_implicitly_future: false,
+            has_subtasks: false,
+            has_visible_subtasks: false,
+            sort_rank: 0,
+            effective_priority: 0,
+            effective_due: None,
+            effective_dtstart: None,
+            visible_categories: vec![],
+            visible_location: None,
+            has_blocking_tasks: false,
+            has_related_tasks: false,
+            is_future_start: false,
+            is_overdue: false,
+            is_due_today: false,
+            tree_location_count: 0,
+            is_search_context: false,
+        };
+
+        // Simulate dismissing the implicit alarm by adding an explicit acknowledged alarm
+        let mut dismissed_alarm = Alarm::new_absolute(trigger_dt);
+        dismissed_alarm.acknowledged = Some(Utc::now());
+        dismissed_alarm.description = Some("Due now".to_string());
+        task.alarms.push(dismissed_alarm);
+
+        // Create a calendar map
+        let mut calendars = HashMap::new();
+        let mut task_map = HashMap::new();
+        task_map.insert(task.uid.clone(), task);
+        calendars.insert("local".to_string(), task_map);
+
+        // Rebuild the alarm index
+        let index = AlarmIndex::rebuild_from_tasks(
+            &calendars, true,    // auto_reminders_enabled
+            "09:00", // default_reminder_time
+        );
+
+        // The index should NOT contain any alarms for this task
+        // because the implicit alarm time has an acknowledged explicit alarm
+        let task_alarms: Vec<_> = index
+            .alarms
+            .iter()
+            .filter(|a| a.task_uid == "test-task")
+            .collect();
+        assert_eq!(
+            task_alarms.len(),
+            0,
+            "Dismissed implicit alarm should not be in the index"
+        );
     }
 }
