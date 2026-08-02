@@ -837,7 +837,7 @@ class MarkdownTransformation(val isDark: Boolean, val api: CfaitMobile? = null) 
         val codeColor = Color(0xFFCC9966) // Brown/Orange
 
         val inlinePatterns = listOf(
-            Pair(Regex("""<!-- uid:.*?-->")"""), SpanStyle(color = dimColor, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)),
+            Pair(Regex("""<!-- uid:.*?-->"""), SpanStyle(color = dimColor, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)),
             Pair(Regex("""\[\[.*?\]\]"""), SpanStyle(color = linkColor, fontWeight = FontWeight.Bold)),
             Pair(Regex("""\[.*?\]\(.*?\)"""), SpanStyle(color = linkColor, fontWeight = FontWeight.Bold)),
             Pair(Regex("""[a-zA-Z][a-zA-Z0-9+.-]*://[^\s)]+"""), SpanStyle(color = linkColor, fontWeight = FontWeight.Bold)),
@@ -845,17 +845,17 @@ class MarkdownTransformation(val isDark: Boolean, val api: CfaitMobile? = null) 
             Pair(Regex("""\*\*.*?\*\*"""), SpanStyle(fontWeight = FontWeight.Bold)),
             Pair(Regex("""__.*?__"""), SpanStyle(fontWeight = FontWeight.Bold)),
             Pair(Regex("""~~.*?~~"""), SpanStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough)),
-            Pair(Regex("""(?<!\)\*(?!\).*?(?<!\*)\*(?!\*)"""), SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)),
+            Pair(Regex("""(?<!\*)\*(?!\*).*?(?<!\*)\*(?!\*)"""), SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)),
             Pair(Regex("""(?<!_)_(?!_).*?(?<!_)_(?!_)"""), SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)),
             Pair(Regex("""`.*?`"""), SpanStyle(color = codeColor, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace))
         )
 
         var lineStart = 0
         val lines = raw.split('\n')
-        
+
         for (line in lines) {
             val lineEnd = lineStart + line.length
-            
+
             val cachedStyles = lineCache.get(line)
             if (cachedStyles != null) {
                 for (style in cachedStyles) {
@@ -872,7 +872,7 @@ class MarkdownTransformation(val isDark: Boolean, val api: CfaitMobile? = null) 
             if (trimmed.startsWith("#")) {
                 newStyles.add(AnnotatedString.Range(SpanStyle(color = headerColor, fontWeight = FontWeight.Bold), 0, line.length))
                 afterMarker = line.length
-            } else if (trimmed.startsWith("- [") || trimmed.startsWith("* [") || trimmed.startsWith("+ [") || Regex("""^\d+\.\s*\\[""").containsMatchIn(trimmed)) {
+            } else if (trimmed.startsWith("- [") || trimmed.startsWith("* [") || trimmed.startsWith("+ [") || Regex("""^\d+\.\s*\[""").containsMatchIn(trimmed)) {
                 val cbStart = line.indexOf('[')
                 if (cbStart != -1 && cbStart + 2 < line.length && line[cbStart + 2] == ']') {
                     newStyles.add(AnnotatedString.Range(SpanStyle(color = checkboxColor), cbStart, cbStart + 3))
@@ -991,9 +991,9 @@ class SmartSyntaxTransformation(
 fun CursorContextBanner(api: CfaitMobile, textFieldValue: TextFieldValue, onTextChange: (TextFieldValue) -> Unit) {
     val cursor = textFieldValue.selection.start
     val text = textFieldValue.text
-    
+
     var suggestions by remember { mutableStateOf<List<com.trougnouf.cfait.core.MobileSuggestion>>(emptyList()) }
-    
+
     LaunchedEffect(text, cursor) {
         val lineStart = text.lastIndexOf('\n', cursor - 1).let { if (it == -1) 0 else it + 1 }
         val lineEnd = text.indexOf('\n', cursor).let { if (it == -1) text.length else it }
@@ -1033,7 +1033,7 @@ fun CursorContextBanner(api: CfaitMobile, textFieldValue: TextFieldValue, onText
                 } else {
                     Color(0xFF4FC3F7)
                 }
-                
+
                 Button(
                     onClick = {
                         val globalStart = s.rangeStart
