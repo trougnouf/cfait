@@ -2230,16 +2230,27 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
         );
     } else {
         let mut active_context: Option<(crate::model::parser::SyntaxType, String)> = None;
-        let tokens = crate::model::parser::tokenize_smart_input(&target_text, false);
+        let line_start = target_text[..cursor_pos]
+            .rfind('\n')
+            .map(|i| i + 1)
+            .unwrap_or(0);
+        let line_end = target_text[cursor_pos..]
+            .find('\n')
+            .map(|i| cursor_pos + i)
+            .unwrap_or(target_text.len());
+        let current_line = &target_text[line_start..line_end];
+        let local_cursor = cursor_pos - line_start;
+
+        let tokens = crate::model::parser::tokenize_smart_input(current_line, false);
         for t in tokens {
-            if cursor_pos >= t.start && cursor_pos <= t.end {
+            if local_cursor >= t.start && local_cursor <= t.end {
                 if matches!(
                     t.kind,
                     crate::model::parser::SyntaxType::Dependency
                         | crate::model::parser::SyntaxType::Relation
                         | crate::model::parser::SyntaxType::WikiLink
                 ) {
-                    active_context = Some((t.kind, target_text[t.start..t.end].to_string()));
+                    active_context = Some((t.kind, current_line[t.start..t.end].to_string()));
                 }
                 break;
             }

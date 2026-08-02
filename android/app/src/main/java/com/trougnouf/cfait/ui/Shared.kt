@@ -867,17 +867,29 @@ class MarkdownTransformation(val isDark: Boolean, val api: CfaitMobile? = null) 
 
             if (api != null && afterMarker > 0 && afterMarker < line.length) {
                 val rest = line.substring(afterMarker)
-                try {
-                    val tokens = api.parseSmartString(rest, false)
-                    for (token in tokens) {
-                        if (token.kind == MobileSyntaxType.TEXT) continue
-                        val spanColor = getSyntaxColor(token.kind, rest.substring(token.start, token.end), isDark)
-                        if (spanColor != null) {
-                            val weight = if (token.kind == MobileSyntaxType.PRIORITY || token.kind == MobileSyntaxType.TAG || token.kind == MobileSyntaxType.CALENDAR || token.kind == MobileSyntaxType.OPERATOR) FontWeight.Bold else FontWeight.Normal
-                            builder.addStyle(SpanStyle(color = spanColor, fontWeight = weight), lineStart + afterMarker + token.start, lineStart + afterMarker + token.end)
+                val hasSmartSyntax = rest.indexOfAny(charArrayOf('!', '@', '^', '~', '#', '[')) != -1 ||
+                                     rest.contains("rem:", true) ||
+                                     rest.contains("spent:", true) ||
+                                     rest.contains("done:", true) ||
+                                     rest.contains("loc:", true) ||
+                                     rest.contains("url:", true) ||
+                                     rest.contains("geo:", true) ||
+                                     rest.contains("col:", true) ||
+                                     rest.contains("dep:", true) ||
+                                     rest.contains("rel:", true)
+                if (hasSmartSyntax) {
+                    try {
+                        val tokens = api.parseSmartString(rest, false)
+                        for (token in tokens) {
+                            if (token.kind == MobileSyntaxType.TEXT) continue
+                            val spanColor = getSyntaxColor(token.kind, rest.substring(token.start, token.end), isDark)
+                            if (spanColor != null) {
+                                val weight = if (token.kind == MobileSyntaxType.PRIORITY || token.kind == MobileSyntaxType.TAG || token.kind == MobileSyntaxType.CALENDAR || token.kind == MobileSyntaxType.OPERATOR) FontWeight.Bold else FontWeight.Normal
+                                builder.addStyle(SpanStyle(color = spanColor, fontWeight = weight), lineStart + afterMarker + token.start, lineStart + afterMarker + token.end)
+                            }
                         }
-                    }
-                } catch (e: Exception) {}
+                    } catch (e: Exception) {}
+                }
             }
 
             lineStart = lineEnd + 1
@@ -964,8 +976,21 @@ fun CursorContextBanner(api: CfaitMobile, textFieldValue: TextFieldValue, onText
     var suggestions by remember { mutableStateOf<List<com.trougnouf.cfait.core.MobileSuggestion>>(emptyList()) }
     
     LaunchedEffect(text, cursor) {
+        val lineStart = text.lastIndexOf('\n', cursor - 1).let { if (it == -1) 0 else it + 1 }
+        val lineEnd = text.indexOf('\n', cursor).let { if (it == -1) text.length else it }
+        val currentLine = text.substring(lineStart, lineEnd)
+        val localCursor = cursor - lineStart
+
         suggestions = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            api.suggest(text, cursor)
+            api.suggest(currentLine, localCursor).map { s ->
+                com.trougnouf.cfait.core.MobileSuggestion(
+                    replacement = s.replacement,
+                    display = s.display,
+                    description = s.description,
+                    rangeStart = s.rangeStart + lineStart,
+                    rangeEnd = s.rangeEnd + lineStart
+                )
+            }
         }
     }
 
@@ -992,7 +1017,9 @@ fun CursorContextBanner(api: CfaitMobile, textFieldValue: TextFieldValue, onText
                 
                 Button(
                     onClick = {
-                        val newText = text.substring(0, s.rangeStart) + s.replacement + if (s.rangeEnd < text.length) text.substring(s.rangeEnd) else " "
+                        val globalStart = s.rangeStart
+                        val globalEnd = s.rangeEnd
+                        val newText = text.substring(0, globalStart) + s.replacement + if (globalEnd < text.length) text.substring(globalEnd) else " "
                         onTextChange(textFieldValue.copy(text = newText))
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
@@ -1014,15 +1041,20 @@ fun CursorContextBanner(api: CfaitMobile, textFieldValue: TextFieldValue, onText
 
         LaunchedEffect(cursor, text) {
             try {
-                val tokens = api.parseSmartString(text, false)
-                val token = tokens.find { cursor >= it.start && cursor <= it.end &&
+                val lineStart = text.lastIndexOf('\n', cursor - 1).let { if (it == -1) 0 else it + 1 }
+                val lineEnd = text.indexOf('\n', cursor).let { if (it == -1) text.length else it }
+                val currentLine = text.substring(lineStart, lineEnd)
+                val localCursor = cursor - lineStart
+
+                val tokens = api.parseSmartString(currentLine, false)
+                val token = tokens.find { localCursor >= it.start && localCursor <= it.end &&
                     (it.kind == com.trougnouf.cfait.core.MobileSyntaxType.DEPENDENCY ||
                      it.kind == com.trougnouf.cfait.core.MobileSyntaxType.RELATION ||
                      it.kind == com.trougnouf.cfait.core.MobileSyntaxType.WIKI_LINK)
                 }
 
                 if (token != null) {
-                    val word = text.substring(token.start, token.end)
+                    val word = currentLine.substring(token.start, token.end)
                     if (token != activeToken || word != rawWord) {
                         activeToken = token
                         rawWord = word

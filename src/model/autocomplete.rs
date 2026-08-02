@@ -19,17 +19,30 @@ pub fn suggest(
     aliases: &HashMap<String, Vec<String>>,
     calendars: &[CalendarListEntry],
 ) -> Option<(Range<usize>, Vec<Suggestion>)> {
-    let parts = split_input_respecting_quotes(input);
+    let line_start = input[..cursor_byte_idx]
+        .rfind('\n')
+        .map(|i| i + 1)
+        .unwrap_or(0);
+    let line_end = input[cursor_byte_idx..]
+        .find('\n')
+        .map(|i| cursor_byte_idx + i)
+        .unwrap_or(input.len());
+    let current_line = &input[line_start..line_end];
+    let local_cursor = cursor_byte_idx - line_start;
+
+    let parts = split_input_respecting_quotes(current_line);
 
     let mut current_part = None;
     for (start, end, word) in parts {
-        if cursor_byte_idx >= start && cursor_byte_idx <= end {
+        if local_cursor >= start && local_cursor <= end {
             current_part = Some((start, end, word));
             break;
         }
     }
 
-    let (start, end, word) = current_part?;
+    let (local_start, local_end, word) = current_part?;
+    let start = local_start + line_start;
+    let end = local_end + line_start;
     if word.is_empty() {
         return None;
     }
