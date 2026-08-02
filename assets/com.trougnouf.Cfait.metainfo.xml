@@ -78,6 +78,32 @@
   </requires>
 
   <releases>
+    <release version="1.1.3" date="2026-08-03">
+      <description>
+        <p>Features:</p>
+        <ul>
+          <li>Skip #cfait-internal in auto-completion/suggestions</li>
+          <li>(autocomplete) Add `col:`</li>
+          <li>(gui) Add ctrl+M / button to maximize text editor (and fix # of lines estimation for text wrapping)</li>
+          <li>(gui) Add SaveTaskKeepEditing button</li>
+        </ul>
+        <p>Bug Fixes:</p>
+        <ul>
+          <li>(alarm) Prevent dismissed implicit alarms from reappearing</li>
+          <li>(sync) Apply updated ETags to prevent 412 conflicts and conflict copies</li>
+        </ul>
+        <p>Performance:</p>
+        <ul>
+          <li>Optimize tokenization from O(N) to O(L) by processing only current line</li>
+          <li>(android) Cache line styles in MarkdownTransformation to fix scrolling lag</li>
+        </ul>
+        <p>Miscellaneous Tasks:</p>
+        <ul>
+          <li>Update dependencies</li>
+          <li>Fix mangled android regex</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.1.2" date="2026-08-01">
       <description>
         <p>Features:</p>

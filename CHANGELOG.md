@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.1.3] - 2026-08-02
+
+### 🚀 Features
+
+- Skip #cfait-internal in auto-completion/suggestions
+- *(autocomplete)* Add `col:`
+- *(gui)* Add ctrl+M / button to maximize text editor (and fix # of lines estimation for text wrapping)
+- *(gui)* Add SaveTaskKeepEditing button
+
+### 🐛 Bug Fixes
+
+- *(alarm)* Prevent dismissed implicit alarms from reappearing
+- *(sync)* Apply updated ETags to prevent 412 conflicts and conflict copies
+
+### ⚡ Performance
+
+- Optimize tokenization from O(N) to O(L) by processing only current line
+- *(android)* Cache line styles in MarkdownTransformation to fix scrolling lag
+
+### ⚙️ Miscellaneous Tasks
+
+- Update dependencies
+- Fix mangled android regex
 ## [1.1.2] - 2026-08-01
 
 ### 🚀 Features
