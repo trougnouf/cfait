@@ -250,6 +250,9 @@ pub const RELATED_MALE_FEMALE: char = '\u{f02e8}'; // nf-md-human_male_female
 pub const ARROW_EXPAND_DOWN: char = '\u{f0796}';
 pub const ARROW_EXPAND_UP: char = '\u{f0799}';
 
+// Maximize icon (nf-fae-maximize)
+pub const MAXIMIZE: char = '\u{e25d}';
+
 // Fallback ASCII versions for environments that don't have the Nerd Font available.
 // Clients may choose to use these when rendering in basic terminals or font-limited UIs.
 pub const ARROW_EXPAND_DOWN_FALLBACK: char = 'v';

@@ -267,7 +267,7 @@ Tasks tagged with `is:permanent` act as endless trackers. When checked off (Comp
     *   `S`: Stop/Reset timer.
     *   `x`: Cancel task.
     *   `+` / `-`: Increase/Decrease priority.
-    *   `e`: Edit title. `E`: Edit description (Markdown). `Ctrl+E`: Edit tree (Markdown) / Switch editor mode. `Ctrl+N`: Create new task with description.
+    *   `e`: Edit title. `E`: Edit description (Markdown). `Ctrl+E`: Edit tree (Markdown) / Switch editor mode. `Ctrl+N`: Create new task with description. `Ctrl+M`: Maximize/Restore description editor.
     *   `Delete`: Move to trash. `Ctrl+Delete`: Delete entire tree.
     *   `M`: Move task (or task tree) to another collection.
     *   `t`: Log time session manually.

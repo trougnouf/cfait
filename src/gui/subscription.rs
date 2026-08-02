@@ -265,6 +265,7 @@ fn handle_hotkey(
                         }
                         return Some(Message::KeyboardEditTree);
                     }
+                    "m" => return Some(Message::ToggleEditorMaximize),
                     "," => return Some(Message::OpenSettings),
                     "p" => return Some(Message::ToggleSortStandardByPriorityToggle),
                     "z" => {

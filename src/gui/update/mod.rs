@@ -266,6 +266,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ZoomReset
         | Message::ToggleQuickFilter
         | Message::ToggleSidebar
+        | Message::ToggleEditorMaximize
         | Message::ToggleTagCollapse(_)
         | Message::ToggleLocationCollapse(_)
         | Message::MoveSelected

@@ -566,6 +566,11 @@ pub fn get_shortcuts_help(is_gui: bool) -> Vec<HelpSection> {
                     example: "".to_string(),
                 },
                 HelpItem {
+                    keys: "Ctrl + m".to_string(),
+                    desc: rust_i18n::t!("help_shortcut_maximize_editor").to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
                     keys: "Space".to_string(),
                     desc: rust_i18n::t!("done").to_string(),
                     example: "".to_string(),

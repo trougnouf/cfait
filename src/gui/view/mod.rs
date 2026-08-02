@@ -2034,14 +2034,18 @@ fn view_main_content(app: &GuiApp, show_logo: bool, is_expanded: bool) -> Elemen
         }))
         .spacing(1);
 
-    main_col = main_col.push(
-        scrollable(tasks_view)
-            .height(Length::Fill)
-            .id(app.scrollable_id.clone())
-            .direction(Direction::Vertical(
-                Scrollbar::new().width(10).scroller_width(10).margin(0),
-            )),
-    );
+    if app.editor_maximized && is_expanded {
+        // Skip rendering tasks_view to maximize the editor space
+    } else {
+        main_col = main_col.push(
+            scrollable(tasks_view)
+                .height(Length::Fill)
+                .id(app.scrollable_id.clone())
+                .direction(Direction::Vertical(
+                    Scrollbar::new().width(10).scroller_width(10).margin(0),
+                )),
+        );
+    }
 
     container(main_col)
         .width(Length::Fill)
@@ -2339,9 +2343,36 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
             app.notes_placeholder.clone()
         };
 
+        // Estimate wrapped line height more accurately
         let text_content = app.description_value.text();
-        let line_count = text_content.chars().filter(|&c| c == '\n').count() + 1;
-        let estimated_height = (line_count as f32 * 21.0 + 30.0).clamp(160.0, max_desc_height);
+        let mut visual_lines = 0.0;
+        let approx_char_width = 8.0;
+        let available_width_px = if app.sidebar_is_hidden {
+            app.current_window_size.width - 60.0
+        } else {
+            app.current_window_size.width - 280.0
+        }
+        .max(100.0);
+        let chars_per_line = (available_width_px / approx_char_width).max(20.0);
+
+        for line in text_content.lines() {
+            let len = line.chars().count() as f32;
+            if len == 0.0 {
+                visual_lines += 1.0;
+            } else {
+                visual_lines += (len / chars_per_line).ceil();
+            }
+        }
+        if text_content.ends_with('\n') || text_content.is_empty() {
+            visual_lines += 1.0;
+        }
+
+        let calculated_height = visual_lines * 21.0 + 30.0;
+        let estimated_height = if app.editor_maximized {
+            calculated_height // Unbounded because length is Fill
+        } else {
+            calculated_height.clamp(160.0, max_desc_height)
+        };
 
         let is_focused = app.active_focus == Focus::AddTaskInput;
 
@@ -2354,7 +2385,11 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
                 |highlight, _theme| *highlight,
             )
             .padding(10)
-            .height(Length::Shrink)
+            .height(if app.editor_maximized {
+                Length::Fill
+            } else {
+                Length::Shrink
+            })
             .min_height(estimated_height)
             .style(move |theme: &Theme, status| {
                 let class = <Theme as iced::widget::text_editor::Catalog>::default();
@@ -2374,7 +2409,11 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
 
         let desc_container = container(scrollable_desc)
             .width(Length::Fill)
-            .height(Length::Fixed(estimated_height))
+            .height(if app.editor_maximized {
+                Length::Fill
+            } else {
+                Length::Fixed(estimated_height)
+            })
             .style(move |theme: &Theme| {
                 let status = if is_focused {
                     iced::widget::text_editor::Status::Focused { is_hovered: false }
@@ -2406,6 +2445,21 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
                 .style(iced::widget::button::primary)
                 .on_press(Message::SubmitTask),
             text(rust_i18n::t!("tooltip_save_ctrl_s")).size(12),
+            tooltip::Position::Top,
+        )
+        .style(tooltip_style)
+        .delay(Duration::from_millis(700));
+
+        let maximize_btn = tooltip(
+            iced::widget::button(icon::icon(icon::MAXIMIZE).size(16))
+                .style(iced::widget::button::secondary)
+                .on_press(Message::ToggleEditorMaximize),
+            text(if app.editor_maximized {
+                rust_i18n::t!("tooltip_restore_ctrl_m")
+            } else {
+                rust_i18n::t!("tooltip_maximize_ctrl_m")
+            })
+            .size(12),
             tooltip::Position::Top,
         )
         .style(tooltip_style)
@@ -2466,6 +2520,8 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
             Space::new().width(Length::Fill),
         ];
 
+        top_bar = top_bar.push(maximize_btn);
+
         if let Some(btn) = switch_btn {
             top_bar = top_bar.push(btn);
         }
@@ -2504,7 +2560,13 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
             col = col.push(banner);
         }
 
-        col.spacing(10).height(Length::Shrink).into()
+        col.spacing(10)
+            .height(if app.editor_maximized {
+                Length::Fill
+            } else {
+                Length::Shrink
+            })
+            .into()
     } else {
         let mut col = column![title_row].spacing(5);
         if let Some(banner) = context_banner {
@@ -2520,7 +2582,11 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
             left: 10.0,
             right: 10.0,
         })
-        .height(Length::Shrink)
+        .height(if app.editor_maximized && is_expanded {
+            Length::Fill
+        } else {
+            Length::Shrink
+        })
         .into()
 }
 

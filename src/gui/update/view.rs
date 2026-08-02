@@ -1031,6 +1031,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             save_config(app);
             Task::none()
         }
+        Message::ToggleEditorMaximize => {
+            app.editor_maximized = !app.editor_maximized;
+            Task::none()
+        }
         Message::ToggleQuickFilter => {
             let current = app.search_value.text();
             let new_text = if current.contains(&app.quick_filter_term) {

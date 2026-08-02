@@ -281,6 +281,7 @@ pub struct GuiApp {
     pub desc_undo_stack: Vec<String>,
     pub desc_redo_stack: Vec<String>,
     pub last_edited_field: u8, // 0 for main input, 1 for description
+    pub editor_maximized: bool,
 }
 
 impl GuiApp {
@@ -613,6 +614,7 @@ impl Default for GuiApp {
             desc_undo_stack: Vec::new(),
             desc_redo_stack: Vec::new(),
             last_edited_field: 0,
+            editor_maximized: false,
         }
     }
 }

@@ -130,6 +130,7 @@ pub enum Message {
     ZoomReset,
     ToggleQuickFilter,
     ToggleSidebar,
+    ToggleEditorMaximize,
 
     // --- View & Filter ---
     OpenWikiLink(String),

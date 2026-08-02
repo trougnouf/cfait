@@ -487,6 +487,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.creating_child_of = None;
             app.child_lock_active = false;
             app.creating_with_desc = false;
+            app.editor_maximized = false;
             common::scroll_to_selected(app, true)
         }
 
@@ -930,6 +931,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.editing_tree_uid = None;
                 app.creating_child_of = None;
                 app.creating_with_desc = false;
+                app.editor_maximized = false;
             }
             common::scroll_to_selected_delayed(app, false)
         }
@@ -967,6 +969,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.creating_child_of = None;
                 app.child_lock_active = false;
                 app.creating_with_desc = false;
+                app.editor_maximized = false;
                 captured_action = true;
             } else if app.yanked_uid.is_some() {
                 app.yanked_uid = None;
@@ -1472,6 +1475,7 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
         && app.editing_tree_uid.is_none()
     {
         app.input_value = text_editor::Content::new();
+        app.editor_maximized = false;
         refresh_filtered_tasks(app);
         if !retroactive_sync_batch.is_empty() {
             let actions: Vec<_> = retroactive_sync_batch
@@ -1585,6 +1589,7 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
         app.input_value = text_editor::Content::new();
         app.description_value = text_editor::Content::new();
         app.editing_tree_uid = None;
+        app.editor_maximized = false;
 
         refresh_filtered_tasks(app);
 
@@ -1628,6 +1633,7 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
             app.input_value = text_editor::Content::new();
             app.description_value = text_editor::Content::new();
             app.editing_uid = None;
+            app.editor_maximized = false;
             app.selected_uid = Some(task_copy.uid.clone());
 
             let mut actions = Vec::new();
@@ -1743,6 +1749,7 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
             app.input_value = text_editor::Content::new();
             app.description_value = text_editor::Content::new();
             app.creating_with_desc = false;
+            app.editor_maximized = false;
             return Task::none();
         }
 
@@ -1893,6 +1900,7 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
             app.input_value = text_editor::Content::new();
             app.description_value = text_editor::Content::new();
             app.creating_with_desc = false;
+            app.editor_maximized = false;
 
             let scroll_cmd = common::scroll_to_selected_delayed(app, false);
             let focus_cmd = iced::widget::operation::focus(iced::widget::Id::new("main_input"));
