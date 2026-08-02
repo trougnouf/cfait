@@ -679,6 +679,7 @@
     "tooltip_cancel_esc": "Cancel (Esc)",
     "tooltip_clear_esc": "Clear (Esc)",
     "tooltip_save_ctrl_s": "Save (Ctrl+S)",
+    "tooltip_save_keep_editing": "Save & Keep Editing (Ctrl+Shift+S)",
     "tooltip_toggle_quick_filter": "Toggle '%{term}' (w)",
     "tooltip_toggle_space": "Toggle (Space)",
     "translation_help": "Help translate Cfait: %{url}",

@@ -2450,6 +2450,16 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
         .style(tooltip_style)
         .delay(Duration::from_millis(700));
 
+        let apply_btn = tooltip(
+            iced::widget::button(icon::icon(icon::CONTENT_SAVE_EDIT).size(16))
+                .style(iced::widget::button::secondary)
+                .on_press(Message::SaveTaskKeepEditing),
+            text(rust_i18n::t!("tooltip_save_keep_editing")).size(12),
+            tooltip::Position::Top,
+        )
+        .style(tooltip_style)
+        .delay(Duration::from_millis(700));
+
         let maximize_btn = tooltip(
             iced::widget::button(icon::icon(icon::MAXIMIZE).size(16))
                 .style(iced::widget::button::secondary)
@@ -2527,6 +2537,7 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
         }
 
         let top_bar = top_bar
+            .push(apply_btn)
             .push(cancel_btn)
             .push(save_btn)
             .align_y(iced::Alignment::Center)

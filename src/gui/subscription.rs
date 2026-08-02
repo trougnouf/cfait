@@ -193,7 +193,13 @@ fn handle_hotkey(
             let is_cmd = modifiers.control() || modifiers.command();
             if is_cmd && let keyboard::Key::Character(s) = key.as_ref() {
                 match s.to_lowercase().as_str() {
-                    "s" => return Some(Message::SubmitTask),
+                    "s" => {
+                        if modifiers.shift() {
+                            return Some(Message::SaveTaskKeepEditing);
+                        } else {
+                            return Some(Message::SubmitTask);
+                        }
+                    }
                     "n" => return Some(Message::StartCreateWithDescription),
                     "e" => return Some(Message::KeyboardEditTree),
                     "," => return Some(Message::OpenSettings),
@@ -255,7 +261,13 @@ fn handle_hotkey(
                     "0" => return Some(Message::ZoomReset),
                     "b" => return Some(Message::ToggleSidebar),
                     "d" => return Some(Message::KeyboardDuplicateTask),
-                    "s" => return Some(Message::SubmitTask),
+                    "s" => {
+                        if modifiers.shift() {
+                            return Some(Message::SaveTaskKeepEditing);
+                        } else {
+                            return Some(Message::SubmitTask);
+                        }
+                    }
                     "n" => return Some(Message::StartCreateWithDescription),
                     "e" => {
                         if let Ok(focus) = ACTIVE_FOCUS.read()

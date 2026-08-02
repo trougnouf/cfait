@@ -259,7 +259,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 *focus = Focus::AddTaskInput;
             }
             if let text_editor::Action::Edit(text_editor::Edit::Enter) = action {
-                return handle_submit(app);
+                return handle_submit(app, false);
             }
             if let text_editor::Action::Edit(text_editor::Edit::Insert('\t')) = action {
                 return Task::none();
@@ -382,13 +382,14 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
         }
 
-        Message::SubmitTask => handle_submit(app),
+        Message::SubmitTask => handle_submit(app, false),
+        Message::SaveTaskKeepEditing => handle_submit(app, true),
 
         Message::SaveAndSwitchEditor => {
             let to_tree = app.editing_tree_uid.clone();
             let to_desc = app.editing_uid.clone();
 
-            let task = handle_submit(app);
+            let task = handle_submit(app, false);
 
             if let Some(uid) = to_tree {
                 if let Some(idx) = app.find_task_index_by_uid(&uid) {
@@ -1390,7 +1391,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     }
 }
 
-fn handle_submit(app: &mut GuiApp) -> Task<Message> {
+fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
     use crate::gui::update::common::{
         apply_alias_retroactively, refresh_filtered_tasks, save_config,
     };
@@ -1405,7 +1406,9 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
     let text_to_submit = raw_text.trim().to_string();
 
     if text_to_submit.is_empty() && app.editing_tree_uid.is_none() {
-        app.input_value = text_editor::Content::new();
+        if !keep_editing {
+            app.input_value = text_editor::Content::new();
+        }
         return Task::none();
     }
 
@@ -1474,8 +1477,10 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
         && app.editing_uid.is_none()
         && app.editing_tree_uid.is_none()
     {
-        app.input_value = text_editor::Content::new();
-        app.editor_maximized = false;
+        if !keep_editing {
+            app.input_value = text_editor::Content::new();
+            app.editor_maximized = false;
+        }
         refresh_filtered_tasks(app);
         if !retroactive_sync_batch.is_empty() {
             let actions: Vec<_> = retroactive_sync_batch
@@ -1503,7 +1508,9 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
             for t in tags {
                 app.session.selected_categories.push(t);
             }
-            app.input_value = text_editor::Content::new();
+            if !keep_editing {
+                app.input_value = text_editor::Content::new();
+            }
             refresh_filtered_tasks(app);
 
             if !retroactive_sync_batch.is_empty() {
@@ -1539,7 +1546,9 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
             for l in locs {
                 app.session.selected_locations.push(l);
             }
-            app.input_value = text_editor::Content::new();
+            if !keep_editing {
+                app.input_value = text_editor::Content::new();
+            }
             refresh_filtered_tasks(app);
 
             if !retroactive_sync_batch.is_empty() {
@@ -1586,10 +1595,16 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
         }
 
         app.selected_uid = Some(tree_uid.clone());
-        app.input_value = text_editor::Content::new();
-        app.description_value = text_editor::Content::new();
-        app.editing_tree_uid = None;
-        app.editor_maximized = false;
+        if !keep_editing {
+            app.input_value = text_editor::Content::new();
+            app.description_value = text_editor::Content::new();
+            app.editing_tree_uid = None;
+            app.editor_maximized = false;
+        } else {
+            let tree_md =
+                crate::model::extractor::serialize_task_tree(&app.store, tree_uid, &app.calendars);
+            app.description_value = text_editor::Content::with_text(&tree_md);
+        }
 
         refresh_filtered_tasks(app);
 
@@ -1610,7 +1625,7 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
         if let Some(task_ref) = app.store.get_task_ref(&edit_uid) {
             let old_href = task_ref.calendar_href.clone();
             let mut task = task_ref.clone();
-            task.description = cleaned_desc;
+            task.description = cleaned_desc.clone();
             task.apply_smart_input(&clean_input, &app.tag_aliases, config_time);
 
             let warnings = app.store.resolve_dependencies(&mut task);
@@ -1630,10 +1645,15 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
             let task_copy = task.clone();
             app.store.update_or_add_task(task);
 
-            app.input_value = text_editor::Content::new();
-            app.description_value = text_editor::Content::new();
-            app.editing_uid = None;
-            app.editor_maximized = false;
+            if !keep_editing {
+                app.input_value = text_editor::Content::new();
+                app.description_value = text_editor::Content::new();
+                app.editing_uid = None;
+                app.editor_maximized = false;
+            } else {
+                app.input_value = text_editor::Content::with_text(&clean_input);
+                app.description_value = text_editor::Content::with_text(&cleaned_desc);
+            }
             app.selected_uid = Some(task_copy.uid.clone());
 
             let mut actions = Vec::new();
@@ -1746,16 +1766,18 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
         }
 
         if new_task.summary.trim().is_empty() && cleaned_desc.is_empty() {
-            app.input_value = text_editor::Content::new();
-            app.description_value = text_editor::Content::new();
-            app.creating_with_desc = false;
-            app.editor_maximized = false;
+            if !keep_editing {
+                app.input_value = text_editor::Content::new();
+                app.description_value = text_editor::Content::new();
+                app.creating_with_desc = false;
+                app.editor_maximized = false;
+            }
             return Task::none();
         }
 
         if !cleaned_desc.is_empty() {
             if new_task.description.is_empty() {
-                new_task.description = cleaned_desc;
+                new_task.description = cleaned_desc.clone();
             } else {
                 new_task
                     .description
@@ -1897,10 +1919,17 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
             app.selected_uid = Some(parent_uid.clone());
             refresh_filtered_tasks(app);
 
-            app.input_value = text_editor::Content::new();
-            app.description_value = text_editor::Content::new();
-            app.creating_with_desc = false;
-            app.editor_maximized = false;
+            if !keep_editing {
+                app.input_value = text_editor::Content::new();
+                app.description_value = text_editor::Content::new();
+                app.creating_with_desc = false;
+                app.editor_maximized = false;
+            } else {
+                app.creating_with_desc = false;
+                app.editing_uid = Some(parent_uid.clone());
+                app.input_value = text_editor::Content::with_text(&clean_input);
+                app.description_value = text_editor::Content::with_text(&cleaned_desc);
+            }
 
             let scroll_cmd = common::scroll_to_selected_delayed(app, false);
             let focus_cmd = iced::widget::operation::focus(iced::widget::Id::new("main_input"));

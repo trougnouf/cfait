@@ -52,6 +52,7 @@ pub enum Message {
     ClearSearch,
     SetSearchTerm(String),
     SubmitTask,
+    SaveTaskKeepEditing,
     SaveAndSwitchEditor,
     ToggleTask(usize, bool),
     ToggleTaskShift(String),
