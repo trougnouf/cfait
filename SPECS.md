@@ -152,7 +152,7 @@ All clients maintain an active session Undo/Redo stack. Every task mutation appl
 *   **Android:** Mutations trigger a transient Snackbar allowing 1-tap Undo. Markdown editors feature explicit ↶/↷ toolbar buttons.
 *   **Desktop (GUI/TUI):** Global `Ctrl+Z` (Undo) and `Ctrl+Y` / `Ctrl+Shift+Z` (Redo) shortcuts.
 *   **Smart Commands:** If the Add Task input starts with `:` and contains no spaces (e.g., `:undo`, `:redo`, `:empty-trash`), it is intercepted and executed as a session command rather than creating a task. 
-*   **Auto-Complete:** The `CursorContextBanner` acts as a unified auto-complete engine, suggesting commands (when typing `:`), tags (when typing `#`), and locations (when typing `@@`).
+*   **Auto-Complete:** The `CursorContextBanner` acts as a unified auto-complete engine, suggesting commands (when typing `:`), tags (when typing `#`), locations (when typing `@@`), collections (when typing `col:`), and relationships (when typing `dep:`, `rel:`, or `[[`). Suggestions are typically ordered by exact prefix match, then by descending frequency/usage, and finally alphabetically.
 
 ### 4.1. The "Yank" Relationship System
 Instead of drag-and-drop, Cfait uses a robust "Yank" (Clipboard) system for hierarchy management.

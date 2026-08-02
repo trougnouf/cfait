@@ -2121,9 +2121,13 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
         (app.input_value.text(), get_byte_offset(&app.input_value))
     };
 
-    if let Some((range, suggs)) =
-        crate::model::autocomplete::suggest(&target_text, cursor_pos, &app.store, &app.tag_aliases)
-    {
+    if let Some((range, suggs)) = crate::model::autocomplete::suggest(
+        &target_text,
+        cursor_pos,
+        &app.store,
+        &app.tag_aliases,
+        &app.calendars,
+    ) {
         let mut sugg_row = row![].spacing(8).padding(iced::Padding {
             bottom: 8.0,
             ..Default::default()

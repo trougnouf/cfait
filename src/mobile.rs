@@ -578,12 +578,23 @@ impl CfaitMobile {
 
     pub fn suggest(&self, input: String, cursor_byte_idx: i32) -> Vec<MobileSuggestion> {
         let config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
+        let cals_list = self.get_calendars();
+        let calendars: Vec<crate::model::CalendarListEntry> = cals_list
+            .into_iter()
+            .map(|c| crate::model::CalendarListEntry {
+                name: c.name,
+                href: c.href,
+                color: c.color,
+            })
+            .collect();
+
         let store = self.controller.store.blocking_lock();
         if let Some((range, suggs)) = crate::model::autocomplete::suggest(
             &input,
             cursor_byte_idx as usize,
             &store,
             &config.tag_aliases,
+            &calendars,
         ) {
             suggs
                 .into_iter()
