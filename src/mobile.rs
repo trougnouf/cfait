@@ -1039,6 +1039,10 @@ impl CfaitMobile {
         Ok(msg)
     }
 
+    pub fn extract_list_prefix(&self, line: String) -> String {
+        crate::model::extractor::extract_list_prefix(&line)
+    }
+
     pub fn parse_smart_string(&self, input: String, is_search: bool) -> Vec<MobileSyntaxToken> {
         let tokens = tokenize_smart_input(&input, is_search);
         let mut byte_to_utf16 = std::collections::BTreeMap::new();

@@ -917,13 +917,42 @@ fun TaskDetailScreen(
 
             OutlinedTextField(
                 value = description,
-                onValueChange = { 
-                    if (it.text != description.text) {
-                        descUndoStack = (descUndoStack + it).takeLast(50)
+                onValueChange = { newValue ->
+                    var finalValue = newValue
+                    
+                    // Auto-indentation on Enter
+                    if (newValue.text.length > description.text.length && 
+                        newValue.selection.start == description.selection.start + 1 &&
+                        newValue.text[description.selection.start] == '\n'
+                    ) {
+                        val cursor = description.selection.start
+                        val lineStart = description.text.lastIndexOf('\n', cursor - 1).let { if (it == -1) 0 else it + 1 }
+                        val prevLine = description.text.substring(lineStart, cursor)
+                        val prefix = api.extractListPrefix(prevLine)
+                        
+                        if (prefix.isNotEmpty()) {
+                            if (prevLine.trim() == prefix.trim()) {
+                                // User hit enter on an empty item: remove the newline and prefix
+                                val before = description.text.substring(0, lineStart)
+                                val after = newValue.text.substring(newValue.selection.start)
+                                val newText = before + after
+                                finalValue = TextFieldValue(text = newText, selection = androidx.compose.ui.text.TextRange(lineStart))
+                            } else {
+                                // Auto-indent the next item
+                                val before = newValue.text.substring(0, newValue.selection.start)
+                                val after = newValue.text.substring(newValue.selection.start)
+                                val newText = before + prefix + after
+                                finalValue = TextFieldValue(text = newText, selection = androidx.compose.ui.text.TextRange(newValue.selection.start + prefix.length))
+                            }
+                        }
+                    }
+
+                    if (finalValue.text != description.text) {
+                        descUndoStack = (descUndoStack + finalValue).takeLast(50)
                         descRedoStack = emptyList()
                         lastEdited = "desc"
                     }
-                    description = it 
+                    description = finalValue 
                 },
                 label = { Text(stringResource(R.string.description_label)) },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 150.dp),

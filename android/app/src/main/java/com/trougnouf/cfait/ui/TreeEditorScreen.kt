@@ -139,12 +139,41 @@ fun TreeEditorScreen(
             ) {
                 OutlinedTextField(
                     value = markdownText,
-                    onValueChange = { 
-                        if (it.text != markdownText.text) {
-                            undoStack = (undoStack + it).takeLast(50)
+                    onValueChange = { newValue ->
+                        var finalValue = newValue
+                        
+                        // Auto-indentation on Enter
+                        if (newValue.text.length > markdownText.text.length && 
+                            newValue.selection.start == markdownText.selection.start + 1 &&
+                            newValue.text[markdownText.selection.start] == '\n'
+                        ) {
+                            val cursor = markdownText.selection.start
+                            val lineStart = markdownText.text.lastIndexOf('\n', cursor - 1).let { if (it == -1) 0 else it + 1 }
+                            val prevLine = markdownText.text.substring(lineStart, cursor)
+                            val prefix = api.extractListPrefix(prevLine)
+                            
+                            if (prefix.isNotEmpty()) {
+                                if (prevLine.trim() == prefix.trim()) {
+                                    // User hit enter on an empty item: remove the newline and prefix
+                                    val before = markdownText.text.substring(0, lineStart)
+                                    val after = newValue.text.substring(newValue.selection.start)
+                                    val newText = before + after
+                                    finalValue = TextFieldValue(text = newText, selection = androidx.compose.ui.text.TextRange(lineStart))
+                                } else {
+                                    // Auto-indent the next item
+                                    val before = newValue.text.substring(0, newValue.selection.start)
+                                    val after = newValue.text.substring(newValue.selection.start)
+                                    val newText = before + prefix + after
+                                    finalValue = TextFieldValue(text = newText, selection = androidx.compose.ui.text.TextRange(newValue.selection.start + prefix.length))
+                                }
+                            }
+                        }
+
+                        if (finalValue.text != markdownText.text) {
+                            undoStack = (undoStack + finalValue).takeLast(50)
                             redoStack = emptyList()
                         }
-                        markdownText = it 
+                        markdownText = finalValue 
                     },
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp),

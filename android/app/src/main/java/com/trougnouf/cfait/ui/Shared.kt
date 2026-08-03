@@ -825,9 +825,14 @@ fun getSyntaxColor(kind: MobileSyntaxType, text: String, isDark: Boolean): Color
 
 class MarkdownTransformation(val isDark: Boolean, val api: CfaitMobile? = null) : VisualTransformation {
     private val lineCache = android.util.LruCache<String, List<AnnotatedString.Range<SpanStyle>>>(1000)
+    private var lastRaw: String? = null
+    private var lastTransformed: TransformedText? = null
 
     override fun filter(text: AnnotatedString): TransformedText {
         val raw = text.text
+        if (raw == lastRaw && lastTransformed != null) {
+            return lastTransformed!!
+        }
         val builder = AnnotatedString.Builder(raw)
 
         val headerColor = Color(0xFFFF9800) // Orange
@@ -938,7 +943,10 @@ class MarkdownTransformation(val isDark: Boolean, val api: CfaitMobile? = null) 
             lineStart = lineEnd + 1
         }
 
-        return TransformedText(builder.toAnnotatedString(), OffsetMapping.Identity)
+        val result = TransformedText(builder.toAnnotatedString(), OffsetMapping.Identity)
+        lastRaw = raw
+        lastTransformed = result
+        return result
     }
 }
 
@@ -947,8 +955,14 @@ class SmartSyntaxTransformation(
     val isDark: Boolean,
     val isSearch: Boolean = false
 ) : VisualTransformation {
+    private var lastRaw: String? = null
+    private var lastTransformed: TransformedText? = null
+
     override fun filter(text: AnnotatedString): TransformedText {
         val raw = text.text
+        if (raw == lastRaw && lastTransformed != null) {
+            return lastTransformed!!
+        }
         val builder = AnnotatedString.Builder(raw)
 
         try {
@@ -983,7 +997,10 @@ class SmartSyntaxTransformation(
         } catch (e: Exception) {
         }
 
-        return TransformedText(builder.toAnnotatedString(), OffsetMapping.Identity)
+        val result = TransformedText(builder.toAnnotatedString(), OffsetMapping.Identity)
+        lastRaw = raw
+        lastTransformed = result
+        return result
     }
 }
 
