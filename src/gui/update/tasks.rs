@@ -285,13 +285,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.description_value.perform(action);
 
             if is_enter {
-                // Calculate line index based on newline count
+                let cursor_pos = app.description_value.cursor().position;
+                let line_idx = cursor_pos.line;
                 let text = app.description_value.text();
-                let newline_count = text.matches('\n').count();
-                let line_idx = newline_count;
 
                 if line_idx > 0 {
-                    let lines: Vec<&str> = text.lines().collect();
+                    let lines: Vec<&str> = text.split('\n').collect();
                     if line_idx - 1 < lines.len() {
                         let prev_line = lines[line_idx - 1];
                         let prefix = crate::model::extractor::extract_list_prefix(prev_line);
