@@ -588,22 +588,54 @@ impl CfaitMobile {
             })
             .collect();
 
+        let cursor_utf16_idx = cursor_byte_idx; // Kotlin passes UTF-16 index
+        let mut byte_to_utf16 = std::collections::BTreeMap::new();
+        let mut utf16_to_byte = std::collections::BTreeMap::new();
+        let mut b_pos: usize = 0;
+        let mut u_pos: i32 = 0;
+        byte_to_utf16.insert(0, 0);
+        utf16_to_byte.insert(0, 0);
+        for c in input.chars() {
+            b_pos += c.len_utf8();
+            u_pos += c.len_utf16() as i32;
+            byte_to_utf16.insert(b_pos, u_pos);
+            utf16_to_byte.insert(u_pos, b_pos);
+        }
+
+        let actual_byte_idx = utf16_to_byte
+            .range(..=cursor_utf16_idx)
+            .next_back()
+            .map(|(_, &b)| b)
+            .unwrap_or(b_pos);
+
         let store = self.controller.store.blocking_lock();
         if let Some((range, suggs)) = crate::model::autocomplete::suggest(
             &input,
-            cursor_byte_idx as usize,
+            actual_byte_idx,
             &store,
             &config.tag_aliases,
             &calendars,
         ) {
             suggs
                 .into_iter()
-                .map(|s| MobileSuggestion {
-                    replacement: s.replacement,
-                    display: s.display,
-                    description: s.description,
-                    range_start: range.start as i32,
-                    range_end: range.end as i32,
+                .map(|s| {
+                    let start_16 = byte_to_utf16
+                        .range(..=range.start)
+                        .next_back()
+                        .map(|(_, &v)| v)
+                        .unwrap_or(0);
+                    let end_16 = byte_to_utf16
+                        .range(..=range.end)
+                        .next_back()
+                        .map(|(_, &v)| v)
+                        .unwrap_or(start_16);
+                    MobileSuggestion {
+                        replacement: s.replacement,
+                        display: s.display,
+                        description: s.description,
+                        range_start: start_16,
+                        range_end: end_16,
+                    }
                 })
                 .collect()
         } else {
@@ -1057,8 +1089,16 @@ impl CfaitMobile {
         tokens
             .into_iter()
             .map(|t| {
-                let start_16 = *byte_to_utf16.get(&t.start).unwrap_or(&0);
-                let end_16 = *byte_to_utf16.get(&t.end).unwrap_or(&start_16);
+                let start_16 = byte_to_utf16
+                    .range(..=t.start)
+                    .next_back()
+                    .map(|(_, &v)| v)
+                    .unwrap_or(0);
+                let end_16 = byte_to_utf16
+                    .range(..=t.end)
+                    .next_back()
+                    .map(|(_, &v)| v)
+                    .unwrap_or(start_16);
                 MobileSyntaxToken {
                     kind: MobileSyntaxType::from(t.kind),
                     start: start_16,
