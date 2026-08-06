@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.1.4] - 2026-08-06
+
+### 🚀 Features
+
+- *(android)* Add auto-indentation and cache VisualTransformation (perf)
+
+### 🐛 Bug Fixes
+
+- *(gui)* Indent to the correct level in markdown editor
+- *(android)* Fix crash with international characters
 ## [1.1.3] - 2026-08-02
 
 ### 🚀 Features
