@@ -62,7 +62,7 @@ class NotificationActionWorker(
             when (action) {
                 ACTION_SNOOZE_CUSTOM -> {
                     val input = customInput ?: "10m"
-                    val mins = api.parseDurationString(input) ?: 10u
+                    val mins = api.parseSnoozeTarget(input) ?: 10u
                     api.snoozeAlarm(taskUid, alarmUid, mins)
                     Log.d("CfaitNotificationAction", "Alarm custom snoozed for $mins minutes")
                 }
