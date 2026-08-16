@@ -362,10 +362,76 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
 
+        Message::TabPressed(forward) => {
+            let is_desc_focused = app.last_edited_field == 1 || app.editing_tree_uid.is_some();
+            let (target_text, cursor_pos) = if is_desc_focused {
+                let content = &app.description_value;
+                let text = content.text();
+                let line_idx = content.cursor().position.line;
+                let col_idx = content.cursor().position.column;
+                let mut byte_offset = 0;
+                for (current_line, line_str) in text.split('\n').enumerate() {
+                    if current_line == line_idx {
+                        let col_bytes: usize =
+                            line_str.chars().take(col_idx).map(|c| c.len_utf8()).sum();
+                        byte_offset += col_bytes;
+                        break;
+                    }
+                    byte_offset += line_str.len() + 1;
+                }
+                (text.to_string(), byte_offset)
+            } else {
+                let content = &app.input_value;
+                let text = content.text();
+                let line_idx = content.cursor().position.line;
+                let col_idx = content.cursor().position.column;
+                let mut byte_offset = 0;
+                for (current_line, line_str) in text.split('\n').enumerate() {
+                    if current_line == line_idx {
+                        let col_bytes: usize =
+                            line_str.chars().take(col_idx).map(|c| c.len_utf8()).sum();
+                        byte_offset += col_bytes;
+                        break;
+                    }
+                    byte_offset += line_str.len() + 1;
+                }
+                (text.to_string(), byte_offset)
+            };
+
+            if let Some((range, suggs)) = crate::model::autocomplete::suggest(
+                &target_text,
+                cursor_pos,
+                &app.store,
+                &app.tag_aliases,
+                &app.calendars,
+            ) && let Some(s) = suggs.into_iter().next()
+            {
+                return handle(app, Message::ApplySuggestion(range, s.replacement));
+            }
+
+            if is_desc_focused {
+                let old_text = app.description_value.text();
+                app.description_value
+                    .perform(iced::widget::text_editor::Action::Edit(
+                        iced::widget::text_editor::Edit::Insert('\t'),
+                    ));
+                let new_text = app.description_value.text();
+                if old_text != new_text {
+                    app.desc_undo_stack.push(old_text);
+                    app.desc_redo_stack.clear();
+                    if app.desc_undo_stack.len() > 50 {
+                        app.desc_undo_stack.remove(0);
+                    }
+                    app.last_edited_field = 1;
+                }
+                Task::none()
+            } else {
+                handle(app, Message::CycleFocus(forward))
+            }
+        }
         Message::CycleFocus(forward) => {
-            // Ignore Tab navigation if we are actively editing a description,
-            // allowing the Tab character to be inserted in the description editor instead.
-            if app.editing_uid.is_some() || app.creating_with_desc {
+            if app.editing_uid.is_some() || app.creating_with_desc || app.editing_tree_uid.is_some()
+            {
                 return Task::none();
             }
 
@@ -982,7 +1048,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 iced::widget::text_editor::Edit::Insert('\t'),
             ) = &action
             {
-                return Task::none();
+                return Task::done(Message::CycleFocus(true));
             }
             app.search_value.perform(action);
             app.session.search_term = app.search_value.text();

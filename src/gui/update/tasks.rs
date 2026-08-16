@@ -262,7 +262,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 return handle_submit(app, false);
             }
             if let text_editor::Action::Edit(text_editor::Edit::Insert('\t')) = action {
-                return Task::none();
+                return Task::done(Message::TabPressed(true));
             }
             let old_text = app.input_value.text();
             app.input_value.perform(action);
@@ -279,6 +279,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::DescriptionChanged(action) => {
+            if let text_editor::Action::Edit(text_editor::Edit::Insert('\t')) = action {
+                return Task::done(Message::TabPressed(true));
+            }
+
             let is_enter = matches!(action, text_editor::Action::Edit(text_editor::Edit::Enter));
             let old_text = app.description_value.text();
 

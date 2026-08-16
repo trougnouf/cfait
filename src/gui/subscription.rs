@@ -187,9 +187,6 @@ fn handle_hotkey(
             if *key == keyboard::Key::Named(Named::Escape) {
                 return Some(Message::EscCaptured);
             }
-            if *key == keyboard::Key::Named(Named::Tab) {
-                return Some(Message::CycleFocus(!modifiers.shift()));
-            }
             let is_cmd = modifiers.control() || modifiers.command();
             if is_cmd && let keyboard::Key::Character(s) = key.as_ref() {
                 match s.to_lowercase().as_str() {
