@@ -1055,8 +1055,10 @@ fun CursorContextBanner(api: CfaitMobile, textFieldValue: TextFieldValue, onText
                     onClick = {
                         val globalStart = s.rangeStart
                         val globalEnd = s.rangeEnd
-                        val newText = text.substring(0, globalStart) + s.replacement + if (globalEnd < text.length) text.substring(globalEnd) else " "
-                        onTextChange(textFieldValue.copy(text = newText))
+                        val replacementText = s.replacement + if (globalEnd < text.length) "" else " "
+                        val newText = text.substring(0, globalStart) + replacementText + if (globalEnd < text.length) text.substring(globalEnd) else ""
+                        val newCursor = globalStart + replacementText.length
+                        onTextChange(androidx.compose.ui.text.input.TextFieldValue(text = newText, selection = androidx.compose.ui.text.TextRange(newCursor)))
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp)
