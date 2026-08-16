@@ -718,6 +718,20 @@ impl Task {
             return 8;
         }
 
+        if self.is_note {
+            let now = chrono::Utc::now();
+            let is_over = if let Some(due) = &self.effective_due {
+                due.to_comparison_time() < now
+            } else if let Some(start) = &self.effective_dtstart {
+                start.to_comparison_time() < now
+            } else {
+                false
+            };
+            if is_over {
+                return 8;
+            }
+        }
+
         if self.pinned {
             return 0;
         }
