@@ -2015,7 +2015,21 @@ pub fn parse_duration_range(val: &str) -> Option<(u32, Option<u32>)> {
 
 pub fn parse_duration_range_with_lex(val: &str, lex: &ParserLexicon) -> Option<(u32, Option<u32>)> {
     if let Some((left, right)) = val.split_once('-') {
-        let min = parse_duration_with_lex(left, lex)?;
+        let right_lower = right.to_lowercase();
+        let left_lower = left.to_lowercase();
+
+        let left_idx = left_lower.find(|c: char| !c.is_numeric());
+
+        let min = if let (None, Some(right_idx)) =
+            (left_idx, right_lower.find(|c: char| !c.is_numeric()))
+        {
+            let unit_str = &right_lower[right_idx..];
+            let combined = format!("{}{}", left_lower, unit_str);
+            parse_duration_with_lex(&combined, lex)?
+        } else {
+            parse_duration_with_lex(left, lex)?
+        };
+
         let max = parse_duration_with_lex(right, lex)?;
         if max >= min {
             return Some((min, Some(max)));
