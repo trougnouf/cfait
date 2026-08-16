@@ -2116,9 +2116,62 @@ impl CfaitMobile {
         }
     }
 
+    pub fn parse_snooze_target(&self, val: String) -> Option<u32> {
+        let lex_guard = crate::model::parser::LEXICON.read().unwrap();
+        let lex = &*lex_guard;
+        let val = val.trim().to_lowercase();
+
+        let dur_val = val.replace(' ', "");
+        if let Some(mins) = crate::model::parser::parse_duration_with_lex(&dur_val, lex) {
+            return Some(mins);
+        }
+
+        if let Some(d) = crate::model::parser::parse_smart_date_with_lex(&val, lex).or_else(|| {
+            crate::model::parser::parse_next_date_with_lex(&val, lex)
+                .map(crate::model::DateType::AllDay)
+        }) {
+            let now = chrono::Utc::now();
+
+            let config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
+            let def_time =
+                chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M")
+                    .unwrap_or_else(|_| chrono::NaiveTime::from_hms_opt(9, 0, 0).unwrap());
+
+            let dt = match d {
+                crate::model::DateType::AllDay(nd) => {
+                    crate::model::item::safe_local_to_utc(nd, def_time)
+                }
+                crate::model::DateType::Specific(dt) => dt,
+                crate::model::DateType::Month(y, m) => crate::model::item::safe_local_to_utc(
+                    chrono::NaiveDate::from_ymd_opt(y, m, 1).unwrap(),
+                    def_time,
+                ),
+                crate::model::DateType::Year(y) => crate::model::item::safe_local_to_utc(
+                    chrono::NaiveDate::from_ymd_opt(y, 1, 1).unwrap(),
+                    def_time,
+                ),
+            };
+
+            let diff = dt.timestamp() - now.timestamp();
+            if diff > 0 {
+                return Some((diff / 60) as u32);
+            }
+        }
+        None
+    }
+
     pub async fn get_view_tasks(&self, options: MobileFilterOptions) -> MobileViewData {
         // Acquire session lock first to match the order in dispatch()
-        let session = self.session.lock().await;
+        let mut session = self.session.lock().await;
+
+        session.search_term = options.search_query.clone();
+        session.selected_categories = options.filter_tags.clone();
+        session.selected_locations = options.filter_locations.clone();
+        session.expanded_done_groups = options.expanded_groups.clone();
+        session.match_all_categories = options.match_all_categories;
+        session.expanded_tags = options.expanded_tags.clone();
+        session.expanded_locations = options.expanded_locations.clone();
+
         let search_collapsed_set: HashSet<String> =
             session.search_collapsed_tasks.iter().cloned().collect();
         let focused_task_uid = session.focused_task_uid.clone();
@@ -2512,10 +2565,25 @@ impl CfaitMobile {
             !task.alarms.is_empty()
         );
 
+        let mobile_calendars = self.get_calendars();
+        let calendars: Vec<crate::model::item::CalendarListEntry> = mobile_calendars
+            .into_iter()
+            .map(|c| crate::model::item::CalendarListEntry {
+                name: c.name,
+                href: c.href,
+                color: c.color,
+            })
+            .collect();
         let active_cal = self.session.lock().await.active_calendar_href.clone();
-        task.calendar_href = active_cal
+        let inherited_href = active_cal
             .or(config.default_calendar.clone())
             .unwrap_or(LOCAL_CALENDAR_HREF.to_string());
+
+        task.calendar_href = if let Some(target) = task.target_collection.take() {
+            crate::model::resolve_collection(&target, &calendars, &inherited_href)
+        } else {
+            inherited_href.clone()
+        };
 
         let uid = self
             .controller
@@ -2622,10 +2690,25 @@ impl CfaitMobile {
             }
         }
 
+        let mobile_calendars = self.get_calendars();
+        let calendars: Vec<crate::model::item::CalendarListEntry> = mobile_calendars
+            .into_iter()
+            .map(|c| crate::model::item::CalendarListEntry {
+                name: c.name,
+                href: c.href,
+                color: c.color,
+            })
+            .collect();
         let active_cal = self.session.lock().await.active_calendar_href.clone();
-        task.calendar_href = active_cal
+        let inherited_href = active_cal
             .or(config.default_calendar.clone())
             .unwrap_or(crate::storage::LOCAL_CALENDAR_HREF.to_string());
+
+        task.calendar_href = if let Some(target) = task.target_collection.take() {
+            crate::model::resolve_collection(&target, &calendars, &inherited_href)
+        } else {
+            inherited_href.clone()
+        };
 
         let parent_props = (
             task.categories.clone(),

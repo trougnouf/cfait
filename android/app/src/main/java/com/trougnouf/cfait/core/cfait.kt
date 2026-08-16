@@ -915,6 +915,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_parse_smart_string(): Int
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_parse_snooze_target(): Int
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_pause_task(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_redo(): Int
@@ -1298,6 +1300,12 @@ internal object UniffiLib {
         `ptr`: Long,
         `input`: RustBuffer.ByValue,
         `isSearch`: Byte,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_parse_snooze_target(
+        `ptr`: Long,
+        `val`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
@@ -1865,6 +1873,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_parse_smart_string() != 13932) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_parse_snooze_target() != 40321) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_pause_task() != 13884) {
@@ -2674,6 +2685,8 @@ public interface CfaitMobileInterface {
         `input`: kotlin.String,
         `isSearch`: kotlin.Boolean,
     ): List<MobileSyntaxToken>
+
+    fun `parseSnoozeTarget`(`val`: kotlin.String): kotlin.UInt?
 
     suspend fun `pauseTask`(`uid`: kotlin.String): kotlin.String
 
@@ -3846,6 +3859,19 @@ open class CfaitMobile :
                         it,
                         FfiConverterString.lower(`input`),
                         FfiConverterBoolean.lower(`isSearch`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    override fun `parseSnoozeTarget`(`val`: kotlin.String): kotlin.UInt? =
+        FfiConverterOptionalUInt.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_parse_snooze_target(
+                        it,
+                        FfiConverterString.lower(`val`),
                         _status,
                     )
                 }
