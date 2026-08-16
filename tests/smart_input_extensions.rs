@@ -248,7 +248,7 @@ fn test_complex_task_with_recurrence_extensions() {
 
     assert_eq!(t.exdates.len(), 1);
     assert!(t.categories.contains(&"work".to_string()));
-    assert_eq!(t.location, Some("office".to_string()));
+    assert_eq!(t.locations, vec!["office".to_string()]);
     assert_eq!(t.estimated_duration, Some(60));
     assert!(!t.alarms.is_empty());
 }

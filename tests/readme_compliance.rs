@@ -115,13 +115,13 @@ fn readme_extra_fields() {
 #[test]
 fn readme_location() {
     let t1 = parse("@@home");
-    assert_eq!(t1.location, Some("home".to_string()));
+    assert_eq!(t1.locations, vec!["home".to_string()]);
 
     let t2 = parse("@@\"somewhere else\"");
-    assert_eq!(t2.location, Some("somewhere else".to_string()));
+    assert_eq!(t2.locations, vec!["somewhere else".to_string()]);
 
     let t3 = parse("loc:office");
-    assert_eq!(t3.location, Some("office".to_string()));
+    assert_eq!(t3.locations, vec!["office".to_string()]);
 }
 
 #[test]

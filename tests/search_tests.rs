@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 fn create_task_with_loc(summary: &str, location: &str) -> Task {
     let mut t = Task::new(summary, &HashMap::new(), None);
-    t.location = Some(location.to_string());
+    t.locations = vec![location.to_string()];
     t
 }
 

@@ -216,10 +216,10 @@ fn test_negative_orphaned_sigils() {
 #[test]
 fn test_negative_locations() {
     let t = parse("Look at @@");
-    assert!(t.location.is_none());
+    assert!(t.locations.is_empty());
     assert_eq!(t.summary, "Look at @@");
     let t2 = parse("Go to loc:");
-    assert!(t2.location.is_none());
+    assert!(t2.locations.is_empty());
     assert_eq!(t2.summary, "Go to loc:");
 }
 // --- EXTENDED COVERAGE ---
@@ -238,7 +238,7 @@ fn test_case_insensitivity() {
         parse("URL:example.com").url,
         Some("https://example.com".to_string())
     );
-    assert_eq!(parse("LOC:Home").location, Some("Home".to_string()));
+    assert_eq!(parse("LOC:Home").locations, vec!["Home".to_string()]);
 }
 
 #[test]
@@ -268,7 +268,7 @@ fn test_quoted_values() {
 
     // Location with spaces
     let t2 = parse("Meeting @@\"Conference Room B\"");
-    assert_eq!(t2.location, Some("Conference Room B".to_string()));
+    assert_eq!(t2.locations, vec!["Conference Room B".to_string()]);
 
     // Description with spaces
     let t3 = parse("desc:\"Call mom back\"");
@@ -311,7 +311,7 @@ fn test_kitchen_sink() {
     assert_eq!(t.estimated_duration, Some(120));
     assert!(t.categories.contains(&"work".to_string()));
     assert!(t.categories.contains(&"urgent".to_string()));
-    assert_eq!(t.location, Some("Office".to_string()));
+    assert_eq!(t.locations, vec!["Office".to_string()]);
     assert_eq!(t.url, Some("https://github.com".to_string()));
     assert_eq!(t.description, "Check PR");
 }
@@ -411,7 +411,7 @@ fn test_until_and_except_combined_stress() {
     assert!(t2.rrule.as_ref().unwrap().contains("UNTIL=20250630"));
     assert_eq!(t2.exdates.len(), 1);
     assert!(t2.categories.contains(&"work".to_string()));
-    assert_eq!(t2.location, Some("office".to_string()));
+    assert_eq!(t2.locations, vec!["office".to_string()]);
     assert_eq!(t2.estimated_duration, Some(60));
 }
 

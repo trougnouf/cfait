@@ -733,7 +733,7 @@ fun HomeScreen(
                 sb.append("!${task.priority} ")
             }
             task.categories.forEach { cat -> sb.append("#${quote(cat)} ") }
-            task.location?.let { loc -> sb.append("@@${quote(loc)} ") }
+            task.locations.forEach { loc -> sb.append("@@${quote(loc)} ") }
             newTaskText = androidx.compose.ui.text.input.TextFieldValue(sb.toString())
             return
         }

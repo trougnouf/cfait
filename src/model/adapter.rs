@@ -93,8 +93,8 @@ impl IcsAdapter {
         todo.timestamp(Utc::now());
         todo.add_property("SEQUENCE", task.sequence.to_string());
 
-        if let Some(loc) = &task.location {
-            todo.add_property("LOCATION", loc);
+        if !task.locations.is_empty() {
+            todo.add_property("LOCATION", task.locations.join(" | "));
         }
         if let Some(u) = &task.url {
             todo.add_property("URL", u);
@@ -617,7 +617,15 @@ impl IcsAdapter {
             .unwrap_or(0);
         let percent_complete = get_prop("PERCENT-COMPLETE").and_then(|v| v.parse::<u8>().ok());
 
-        let location = get_prop("LOCATION").map(|s| unescape_ics(&s));
+        let locations = get_prop("LOCATION")
+            .map(|s| {
+                unescape_ics(&s)
+                    .split('|')
+                    .map(|l| l.trim().to_string())
+                    .filter(|l| !l.is_empty())
+                    .collect::<Vec<String>>()
+            })
+            .unwrap_or_default();
         let url = get_prop("URL").map(|s| {
             let unescaped = unescape_ics(&s);
             if !unescaped.is_empty()
@@ -1124,7 +1132,7 @@ impl IcsAdapter {
             categories,
             depth: 0,
             rrule,
-            location,
+            locations,
             url,
             geo,
             collapsed,
@@ -1152,7 +1160,7 @@ impl IcsAdapter {
             effective_due: None,
             effective_dtstart: None,
             visible_categories: Vec::new(),
-            visible_location: None,
+            visible_locations: Vec::new(),
             has_blocking_tasks: false,
             has_related_tasks: false,
             is_future_start: false,
@@ -1581,8 +1589,8 @@ impl IcsAdapter {
         }
         event.description(&event_desc);
 
-        if let Some(loc) = &task.location {
-            event.add_property("LOCATION", loc);
+        if !task.locations.is_empty() {
+            event.add_property("LOCATION", task.locations.join(" | "));
         }
         if let Some(url) = &task.url {
             event.add_property("URL", url);

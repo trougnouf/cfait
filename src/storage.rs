@@ -24,7 +24,7 @@ pub const LOCAL_CALENDAR_HREF: &str = "local://default";
 pub const LOCAL_CALENDAR_NAME: &str = "Local";
 pub const LOCAL_TRASH_HREF: &str = "local://trash";
 pub const LOCAL_REGISTRY_FILENAME: &str = "local_calendars.json";
-const LOCAL_STORAGE_VERSION: u32 = 8;
+const LOCAL_STORAGE_VERSION: u32 = 9;
 
 #[derive(Serialize, Deserialize)]
 struct LocalStorageData {
@@ -441,7 +441,7 @@ impl LocalStorage {
         }
         let tasks = match old_version {
             0 | 1 => Self::migrate_v1_to_v2(json)?,
-            2..=7 => {
+            2..=8 => {
                 let data: LocalStorageData = serde_json::from_str(json)?;
                 data.tasks
             }

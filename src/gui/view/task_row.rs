@@ -363,7 +363,7 @@ pub fn view_task_row<'a>(
             let is_expanded = app.expanded_tasks.contains(&task.uid);
 
             let visible_tags = &task.visible_categories;
-            let visible_location = &task.visible_location;
+            let visible_locations = &task.visible_locations;
 
             let mut font_size = 20;
             if task.is_note {
@@ -529,7 +529,7 @@ pub fn view_task_row<'a>(
                 || task.rrule.is_some()
                 || is_blocked
                 || task.estimated_duration.is_some()
-                || task.location.is_some()
+                || !task.locations.is_empty()
                 || task.url.is_some()
                 || task.geo.is_some()
                 || task.time_spent_seconds > 0
@@ -558,7 +558,7 @@ pub fn view_task_row<'a>(
                 for cat in visible_tags {
                     tags_width += (cat.len() as f32 + 1.0) * 7.0 + 10.0;
                 }
-                if let Some(l) = &visible_location {
+                for l in visible_locations {
                     tags_width += (l.len() as f32 * 7.0) + 25.0;
                 }
                 if task.estimated_duration.is_some()
@@ -680,7 +680,7 @@ pub fn view_task_row<'a>(
                     );
                 }
 
-                if let Some(loc) = &visible_location {
+                for loc in visible_locations {
                     let mut text_color = Color::WHITE;
                     text_color.a *= dim_factor;
 

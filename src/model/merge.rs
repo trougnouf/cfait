@@ -54,7 +54,7 @@ pub fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task>
         categories: _,
         depth: _,
         rrule: _,
-        location: _,
+        locations: _,
         url: _,
         geo: _,
         collapsed: _,
@@ -81,7 +81,7 @@ pub fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task>
         effective_due: _,
         effective_dtstart: _,
         visible_categories: _,
-        visible_location: _,
+        visible_locations: _,
         has_blocking_tasks: _,
         has_related_tasks: _,
         is_future_start: _,
@@ -117,7 +117,6 @@ pub fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task>
     merge_field!(estimated_duration_max);
     merge_field!(rrule);
     merge_field!(percent_complete);
-    merge_field!(location);
     merge_field!(url);
     merge_field!(geo);
     merge_field!(create_event);
@@ -133,6 +132,9 @@ pub fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task>
     // List properties (Set-based 3-way merge to handle deletions correctly)
     merged.categories = merge_lists(&base.categories, &local.categories, &server.categories);
     merged.categories.sort();
+
+    merged.locations = merge_lists(&base.locations, &local.locations, &server.locations);
+    merged.locations.sort();
 
     merged.dependencies = merge_lists(
         &base.dependencies,
@@ -319,12 +321,12 @@ mod tests {
     #[test]
     fn test_three_way_merge_preserves_new_fields() {
         let mut base = Task::new("Base Task", &HashMap::new(), None);
-        base.location = Some("Old Loc".to_string());
+        base.locations.push("Old Loc".to_string());
         base.url = None;
 
         // Local client changed Location
         let mut local = base.clone();
-        local.location = Some("New Loc".to_string());
+        local.locations = vec!["New Loc".to_string()];
 
         // Server client changed Summary
         let mut server = base.clone();
@@ -337,8 +339,8 @@ mod tests {
             "Failed to keep server's summary change"
         );
         assert_eq!(
-            merged.location,
-            Some("New Loc".to_string()),
+            merged.locations,
+            vec!["New Loc".to_string()],
             "Failed to keep local's location change"
         );
     }

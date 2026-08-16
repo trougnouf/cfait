@@ -370,8 +370,8 @@ fun TaskRow(
                         }
                     }
 
-                    // Location - prefixed with @@ to match user expectation
-                    if (task.visibleLocation != null) {
+                    // Locations - prefixed with @@ to match user expectation
+                    task.visibleLocations.forEach { loc ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             val locationColor = Color(0xFFFFB300)
                             Text(
@@ -381,7 +381,7 @@ fun TaskRow(
                                 fontWeight = FontWeight.Bold,
                                 lineHeight = 10.sp
                             )
-                            Text(task.visibleLocation!!, fontSize = 10.sp, color = locationColor, lineHeight = 10.sp)
+                            Text(loc, fontSize = 10.sp, color = locationColor, lineHeight = 10.sp)
                         }
                     }
 

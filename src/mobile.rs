@@ -248,7 +248,7 @@ pub struct MobileTask {
     pub has_related_tasks: bool,
     pub has_visible_subtasks: bool,
     pub tree_location_count: u32,
-    pub location: Option<String>,
+    pub locations: Vec<String>,
     pub url: Option<String>,
     pub geo: Option<String>,
     pub time_spent_seconds: u64,
@@ -270,7 +270,7 @@ pub struct MobileTask {
 
     // UI Visual resolution fields
     pub visible_categories: Vec<String>,
-    pub visible_location: Option<String>,
+    pub visible_locations: Vec<String>,
     pub is_search_context: bool,
     pub is_note: bool,
 }
@@ -315,7 +315,7 @@ impl MobileTask {
             has_related_tasks: false,
             has_visible_subtasks: false,
             tree_location_count: 0,
-            location: None,
+            locations: vec![],
             url: None,
             geo: None,
             time_spent_seconds: 0,
@@ -334,7 +334,7 @@ impl MobileTask {
             goal_history: vec![],
             rrule_history_stat: None,
             visible_categories: vec![],
-            visible_location: None,
+            visible_locations: vec![],
             is_search_context: false,
             is_note: false,
         }
@@ -769,16 +769,16 @@ fn populate_transient(
     t.is_blocked = store.is_blocked(t);
     let (p_tags, p_loc) = if let Some(p_uid) = &t.parent_uid {
         if let Some(p) = store.get_task_ref(p_uid) {
-            (p.categories.iter().cloned().collect(), p.location.clone())
+            (p.categories.iter().cloned().collect(), p.locations.clone())
         } else {
-            (HashSet::new(), None)
+            (HashSet::new(), Vec::new())
         }
     } else {
-        (HashSet::new(), None)
+        (HashSet::new(), Vec::new())
     };
-    let (visible_tags, visible_location) = t.resolve_visual_attributes(&p_tags, &p_loc, aliases);
+    let (visible_tags, visible_locations) = t.resolve_visual_attributes(&p_tags, &p_loc, aliases);
     t.visible_categories = visible_tags;
-    t.visible_location = visible_location;
+    t.visible_locations = visible_locations;
 }
 
 fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
@@ -912,7 +912,7 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
         has_related_tasks: t.has_related_tasks,
         has_visible_subtasks: t.has_visible_subtasks,
         tree_location_count,
-        location: t.location.clone(),
+        locations: t.locations.clone(),
         url: t.url.clone(),
         geo: t.geo.clone(),
         time_spent_seconds: t.time_spent_seconds,
@@ -938,7 +938,7 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
         goal_history,
         rrule_history_stat,
         visible_categories: t.visible_categories.clone(),
-        visible_location: t.visible_location.clone(),
+        visible_locations: t.visible_locations.clone(),
         is_search_context: t.is_search_context,
         is_note: t.is_note,
     }
@@ -2726,7 +2726,7 @@ impl CfaitMobile {
 
         let parent_props = (
             task.categories.clone(),
-            task.location.clone(),
+            task.locations.clone(),
             task.priority,
         );
 
@@ -2749,7 +2749,7 @@ impl CfaitMobile {
             }
             resolved_props.insert(
                 sub.uid.clone(),
-                (sub.categories.clone(), sub.location.clone(), sub.priority),
+                (sub.categories.clone(), sub.locations.clone(), sub.priority),
             );
 
             let store = self.controller.store.lock().await;
@@ -2882,7 +2882,7 @@ impl CfaitMobile {
                 uid.clone(),
                 (
                     task.categories.clone(),
-                    task.location.clone(),
+                    task.locations.clone(),
                     task.priority,
                 ),
             );
@@ -2902,7 +2902,7 @@ impl CfaitMobile {
             }
             resolved_props.insert(
                 sub.uid.clone(),
-                (sub.categories.clone(), sub.location.clone(), sub.priority),
+                (sub.categories.clone(), sub.locations.clone(), sub.priority),
             );
 
             if !ext.description.is_empty() {

@@ -135,7 +135,7 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                 HelpItem {
                     keys: format!("{p_loc}{val_loc}"),
                     desc: rust_i18n::t!("help_org_location_hierarchy").to_string(),
-                    example: format!("{} {p_loc}aldi", rust_i18n::t!("example_buy_cookies")),
+                    example: format!("{} {p_loc}aldi|lidl", rust_i18n::t!("example_buy_cookies")),
                 },
                 HelpItem {
                     keys: "##tag, @@@loc".to_string(),

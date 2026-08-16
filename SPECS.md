@@ -64,7 +64,7 @@ Evaluated instantly during text input. Supported across all clients.
 | `^@` | Sets *both* Start and Due dates. | `^@tomorrow 9am` |
 | `~` or `est:` | Estimated duration (supports ranges). | `~30m`, `~1h-2h` |
 | `#` | Tag/Category (Supports brace expansion). | `#work`, `#project{sub1,sub2}` |
-| `@@` or `loc:`| Location. | `@@office` |
+| `@@` or `loc:`| Location (Supports multiple via `|`). | `@@office`, `@@aldi|auchan` |
 | `url:` / `[[ ]]`| Attach URL or Wiki-link. (Any `scheme://` or `mailto:` is supported. Bare URLs default to `https://`). | `url:perdu.com`, `[[obsidian://open]]`, `[[Master plan|Alias]]` |
 | `dep:` or `depends:`| Set dependency (blocks the task). Supports short UIDs or fuzzy matching by summary. | `dep:"Install foundation"`, `dep:abc1234` |
 | `rel:` or `related:`| Set related task (sibling). Supports short UIDs or fuzzy matching by summary. | `rel:"Master plan"`, `rel:abc1234` |

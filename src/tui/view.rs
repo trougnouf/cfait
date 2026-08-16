@@ -712,7 +712,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 TaskListItem::Task(t) => {
                     // Parent attributes (for resolving visible tags/location)
                     let visible_tags = &t.visible_categories;
-                    let visible_location = &t.visible_location;
+                    let visible_locations = &t.visible_locations;
 
                     // Styling
                     let is_blocked = t.is_blocked;
@@ -978,9 +978,12 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         ));
                     }
 
-                    // Right side (location + visible tags)
+                    // Right side (locations + visible tags)
                     let mut right_spans = Vec::new();
-                    if let Some(loc) = &visible_location {
+                    for loc in visible_locations {
+                        if !right_spans.is_empty() {
+                            right_spans.push(Span::raw(" "));
+                        }
                         right_spans.push(Span::styled(
                             "@@",
                             Style::default().fg(if is_dark_theme {
@@ -1146,11 +1149,11 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         if let Some(geo) = &task.geo {
             meta.push(format!("- **Geo:** {}", geo));
         }
-        if let Some(loc) = &task.location {
+        if !task.locations.is_empty() {
             meta.push(format!(
                 "- **{}:** {}",
                 rust_i18n::t!("cli_view_location").trim_end_matches(':'),
-                loc
+                task.locations.join(", ")
             ));
         }
         let mut date_infos = Vec::new();

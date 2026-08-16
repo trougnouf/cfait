@@ -11,7 +11,7 @@ fn test_escaped_location() {
     let aliases = HashMap::new();
     let task = Task::new("\\@@home", &aliases, None);
     assert_eq!(task.summary, "@@home");
-    assert!(task.location.is_none());
+    assert!(task.locations.is_empty());
 }
 
 #[test]
@@ -43,7 +43,7 @@ fn test_escaped_keyword() {
     let aliases = HashMap::new();
     let task = Task::new("\\loc:home", &aliases, None);
     assert_eq!(task.summary, "loc:home");
-    assert!(task.location.is_none());
+    assert!(task.locations.is_empty());
 }
 
 #[test]
@@ -93,7 +93,7 @@ fn test_quote_escaping_in_location_round_trip() {
     // Input: loc:"New \"York\""
     let input = r#"loc:"New \"York\"""#;
     let task = Task::new(input, &aliases, None);
-    assert_eq!(task.location, Some(r#"New "York""#.to_string()));
+    assert_eq!(task.locations, vec![r#"New "York""#.to_string()]);
 
     // Round trip: Should re-quote and escape
     let smart = task.to_smart_string();

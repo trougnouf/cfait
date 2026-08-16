@@ -1542,12 +1542,12 @@ impl TaskStore {
         let mut resolved_hrefs = HashMap::new();
         resolved_hrefs.insert(root_uid.to_string(), root_calendar_href.clone());
 
-        let mut resolved_props: HashMap<String, (Vec<String>, Option<String>, u8)> = HashMap::new();
+        let mut resolved_props: HashMap<String, (Vec<String>, Vec<String>, u8)> = HashMap::new();
         resolved_props.insert(
             root_uid.to_string(),
             (
                 root_clone.categories.clone(),
-                root_clone.location.clone(),
+                root_clone.locations.clone(),
                 root_clone.priority,
             ),
         );
@@ -1702,7 +1702,7 @@ impl TaskStore {
                     || test_existing.due != test_clone.due
                     || test_existing.dtstart != test_clone.dtstart
                     || test_existing.categories != test_clone.categories
-                    || test_existing.location != test_clone.location
+                    || test_existing.locations != test_clone.locations
                     || test_existing.url != test_clone.url
                     || test_existing.geo != test_clone.geo
                     || test_existing.percent_complete != test_clone.percent_complete
@@ -1725,7 +1725,7 @@ impl TaskStore {
                         task_uid.clone(),
                         (
                             clone.categories.clone(),
-                            clone.location.clone(),
+                            clone.locations.clone(),
                             clone.priority,
                         ),
                     );
@@ -1735,7 +1735,7 @@ impl TaskStore {
                         task_uid.clone(),
                         (
                             existing.categories.clone(),
-                            existing.location.clone(),
+                            existing.locations.clone(),
                             existing.priority,
                         ),
                     );
@@ -1793,7 +1793,7 @@ impl TaskStore {
                     task_uid.clone(),
                     (
                         new_task.categories.clone(),
-                        new_task.location.clone(),
+                        new_task.locations.clone(),
                         new_task.priority,
                     ),
                 );
@@ -2121,11 +2121,9 @@ impl TaskStore {
         for map in self.calendars.values() {
             for task in map.values() {
                 let has_alias_or_child = if is_location_alias {
-                    if let Some(loc) = &task.location {
-                        loc == clean_key || loc.starts_with(&alias_prefix)
-                    } else {
-                        false
-                    }
+                    task.locations
+                        .iter()
+                        .any(|loc| loc == clean_key || loc.starts_with(&alias_prefix))
                 } else {
                     task.categories
                         .iter()
@@ -2143,7 +2141,7 @@ impl TaskStore {
                             }
                         } else if let Some(loc) = val.strip_prefix("@@") {
                             let clean = crate::model::parser::strip_quotes(loc);
-                            if task.location.as_ref() != Some(&clean) {
+                            if !task.locations.contains(&clean) {
                                 needs_update = true;
                                 break;
                             }
@@ -2176,7 +2174,10 @@ impl TaskStore {
                             task.categories.push(clean);
                         }
                     } else if let Some(loc) = val.strip_prefix("@@") {
-                        task.location = Some(crate::model::parser::strip_quotes(loc));
+                        let clean_loc = crate::model::parser::strip_quotes(loc);
+                        if !task.locations.contains(&clean_loc) {
+                            task.locations.push(clean_loc);
+                        }
                     } else if let Some(prio) = val.strip_prefix('!')
                         && let Ok(p) = prio.parse::<u8>()
                     {
@@ -2335,11 +2336,9 @@ impl TaskStore {
                             .iter()
                             .any(|p| p.key == "X-CFAIT-HISTORY-OF" && p.value == clean_key)
                 } else {
-                    t.location.as_deref() == Some(clean_key)
-                        || t.location
-                            .as_deref()
-                            .unwrap_or("")
-                            .starts_with(&format!("{}:", clean_key))
+                    t.locations
+                        .iter()
+                        .any(|l| l == clean_key || l.starts_with(&format!("{}:", clean_key)))
                 };
 
                 if !matches {
@@ -2792,8 +2791,11 @@ impl TaskStore {
 
                 // Location matching
                 if !ignore_locations && !options.selected_locations.is_empty() {
-                    if let Some(loc) = &t.location {
-                        let mut hit = false;
+                    if t.locations.is_empty() {
+                        return false;
+                    }
+                    let mut hit = false;
+                    for loc in &t.locations {
                         for sel in options.selected_locations {
                             if loc == sel
                                 || (loc.starts_with(sel) && loc.chars().nth(sel.len()) == Some(':'))
@@ -2802,10 +2804,11 @@ impl TaskStore {
                                 break;
                             }
                         }
-                        if !hit {
-                            return false;
+                        if hit {
+                            break;
                         }
-                    } else {
+                    }
+                    if !hit {
                         return false;
                     }
                 }
@@ -2963,7 +2966,7 @@ impl TaskStore {
         for t in &loc_refs {
             let is_active = !t.status.is_done();
 
-            if let Some(loc) = &t.location {
+            for loc in &t.locations {
                 let parts: Vec<&str> = loc.split(':').collect();
                 let mut current_hierarchy = String::with_capacity(loc.len());
                 for (i, part) in parts.iter().enumerate() {
@@ -3261,18 +3264,18 @@ impl TaskStore {
 
             let (p_tags, p_loc) = if let Some(p_uid) = &t.parent_uid {
                 if let Some(p) = self.get_task_ref(p_uid) {
-                    (p.categories.iter().cloned().collect(), p.location.clone())
+                    (p.categories.iter().cloned().collect(), p.locations.clone())
                 } else {
-                    (HashSet::new(), None)
+                    (HashSet::new(), Vec::new())
                 }
             } else {
-                (HashSet::new(), None)
+                (HashSet::new(), Vec::new())
             };
 
-            let (visible_tags, visible_location) =
+            let (visible_tags, visible_locations) =
                 t.resolve_visual_attributes(&p_tags, &p_loc, options.tag_aliases);
             t.visible_categories = visible_tags;
-            t.visible_location = visible_location;
+            t.visible_locations = visible_locations;
         }
 
         // Propagation: certain UI operations look up best child/parent contributions.
@@ -4018,7 +4021,7 @@ mod tests {
             categories: vec![],
             depth: 0,
             rrule: None,
-            location: None,
+            locations: vec![],
             url: None,
             geo: None,
             collapsed,
@@ -4047,7 +4050,7 @@ mod tests {
             effective_due: None,
             effective_dtstart: None,
             visible_categories: vec![],
-            visible_location: None,
+            visible_locations: vec![],
             has_blocking_tasks: false,
             has_related_tasks: false,
             is_future_start: false,

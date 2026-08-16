@@ -26,7 +26,7 @@ fn test_basic_parsing() {
     let task = Task::new("Buy milk @@Kroger url:google.com", &aliases, None);
 
     assert_eq!(task.summary, "Buy milk");
-    assert_eq!(task.location, Some("Kroger".to_string()));
+    assert_eq!(task.locations, vec!["Kroger".to_string()]);
     assert_eq!(task.url, Some("https://google.com".to_string()));
 }
 
@@ -42,7 +42,7 @@ fn test_quoting_and_escaping() {
         None,
     );
 
-    assert_eq!(task.location, Some("San Francisco".to_string()));
+    assert_eq!(task.locations, vec!["San Francisco".to_string()]);
     assert_eq!(task.description, "Line 1\"Line 2".to_string());
 }
 
@@ -59,7 +59,7 @@ fn test_alias_expansion() {
 
     // Summary strips tags that were processed
     assert_eq!(task.summary, "Get shoes");
-    assert_eq!(task.location, Some("mall".to_string()));
+    assert_eq!(task.locations, vec!["mall".to_string()]);
     assert!(task.categories.contains(&"shop".to_string()));
     assert!(task.categories.contains(&"buy".to_string()));
 }
@@ -70,11 +70,14 @@ fn test_alias_precedence() {
     // #home sets implicit location
     aliases.insert("home".to_string(), vec!["@@home_addr".to_string()]);
 
-    // User explicitly overrides location while using the #home tag
+    // User explicitly adds location while using the #home tag
     let task = Task::new("@@work_addr #home", &aliases, None);
 
-    // User input must win over alias expansion
-    assert_eq!(task.location, Some("work_addr".to_string()));
+    // Both user input and alias expansion are kept
+    assert_eq!(
+        task.locations,
+        vec!["home_addr".to_string(), "work_addr".to_string()]
+    );
     assert!(task.categories.contains(&"home".to_string()));
 }
 
@@ -88,7 +91,7 @@ fn test_recursive_alias_expansion() {
 
     let task = Task::new("Go #a", &aliases, None);
 
-    assert_eq!(task.location, Some("final_dest".to_string()));
+    assert_eq!(task.locations, vec!["final_dest".to_string()]);
     assert!(task.categories.contains(&"a".to_string()));
     assert!(task.categories.contains(&"b".to_string()));
 }
@@ -166,7 +169,7 @@ fn test_alias_preserves_sigils() {
 
     let task = Task::new("Go #home", &aliases, None);
 
-    assert_eq!(task.location, Some("123 Main St".to_string()));
+    assert_eq!(task.locations, vec!["123 Main St".to_string()]);
     assert!(task.categories.contains(&"home".to_string()));
 }
 

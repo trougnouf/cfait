@@ -87,7 +87,7 @@ async fn test_tui_creating_task_and_alias_simultaneously() {
             assert_eq!(actions.len(), 1, "Expected exactly one action");
             if let cfait::journal::Action::Create(task) = &actions[0] {
                 assert_eq!(task.summary, "Test buy groceries");
-                assert_eq!(task.location, Some("aldi".to_string()));
+                assert_eq!(task.locations, vec!["aldi".to_string()]);
                 assert!(task.categories.contains(&"groceries".to_string()));
                 assert_eq!(task.geo, Some("50.19531,4.53557".to_string()));
             } else {

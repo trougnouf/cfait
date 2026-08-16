@@ -388,7 +388,7 @@ fn test_complex_scenario_with_all_features() {
 
     assert_eq!(t.exdates.len(), 2);
     assert!(t.categories.contains(&"health".to_string()));
-    assert_eq!(t.location, Some("studio".to_string()));
+    assert_eq!(t.locations, vec!["studio".to_string()]);
     assert_eq!(t.estimated_duration, Some(60));
 }
 

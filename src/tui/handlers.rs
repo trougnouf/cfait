@@ -402,7 +402,7 @@ async fn execute_task_action(
             for cat in &task.categories {
                 initial_input.push_str(&format!("#{} ", crate::model::parser::quote_value(cat)));
             }
-            if let Some(loc) = &task.location {
+            for loc in &task.locations {
                 initial_input.push_str(&format!("@@{} ", crate::model::parser::quote_value(loc)));
             }
             state.input_buffer = initial_input;
@@ -663,7 +663,7 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
             parent_uid.clone(),
             (
                 parent.categories.clone(),
-                parent.location.clone(),
+                parent.locations.clone(),
                 parent.priority,
             ),
         );
@@ -691,7 +691,7 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
             }
             resolved_props.insert(
                 sub.uid.clone(),
-                (sub.categories.clone(), sub.location.clone(), sub.priority),
+                (sub.categories.clone(), sub.locations.clone(), sub.priority),
             );
 
             let warnings = state.store.resolve_dependencies(&mut sub);
@@ -793,7 +793,7 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
                     uid.clone(),
                     (
                         t_mut.categories.clone(),
-                        t_mut.location.clone(),
+                        t_mut.locations.clone(),
                         t_mut.priority,
                     ),
                 );
@@ -810,7 +810,7 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
                 }
                 resolved_props.insert(
                     sub.uid.clone(),
-                    (sub.categories.clone(), sub.location.clone(), sub.priority),
+                    (sub.categories.clone(), sub.locations.clone(), sub.priority),
                 );
 
                 let warnings = state.store.resolve_dependencies(&mut sub);
@@ -2365,7 +2365,7 @@ pub async fn handle_key_event(
                             .push_str(&format!("#{} ", crate::model::parser::quote_value(cat)));
                     }
                     // Parity: Add Location inheritance
-                    if let Some(loc) = &task.location {
+                    for loc in &task.locations {
                         initial_input
                             .push_str(&format!("@@{} ", crate::model::parser::quote_value(loc)));
                     }

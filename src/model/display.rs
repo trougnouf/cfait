@@ -143,7 +143,7 @@ impl TaskDisplay for Task {
         if self.priority > 0 {
             s.push_str(&format!(" !{}", self.priority));
         }
-        if let Some(loc) = &self.location {
+        for loc in &self.locations {
             s.push_str(&format!(" @@{}", crate::model::parser::quote_value(loc)));
         }
         if let Some(u) = &self.url {

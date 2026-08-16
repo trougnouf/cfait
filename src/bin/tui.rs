@@ -181,7 +181,7 @@ async fn apply_markdown_update(
             full_uid.to_string(),
             (
                 task.categories.clone(),
-                task.location.clone(),
+                task.locations.clone(),
                 task.priority,
             ),
         );
@@ -198,7 +198,7 @@ async fn apply_markdown_update(
             }
             resolved_props.insert(
                 sub.uid.clone(),
-                (sub.categories.clone(), sub.location.clone(), sub.priority),
+                (sub.categories.clone(), sub.locations.clone(), sub.priority),
             );
 
             warnings.extend(store.resolve_dependencies(&mut sub));
@@ -1133,8 +1133,8 @@ async fn main() -> Result<()> {
                     task_mut.categories.clear();
                     changed = true;
                 }
-                if clear_loc && task_mut.location.is_some() {
-                    task_mut.location = None;
+                if clear_loc && !task_mut.locations.is_empty() {
+                    task_mut.locations.clear();
                     changed = true;
                 }
                 if clear_deps && input.trim().is_empty() && !task_mut.dependencies.is_empty() {
@@ -1563,8 +1563,12 @@ async fn main() -> Result<()> {
                     t.categories.join(", ")
                 );
             }
-            if let Some(l) = &t.location {
-                println!("{}: {}", rust_i18n::t!("cli_view_location"), l);
+            if !t.locations.is_empty() {
+                println!(
+                    "{}: {}",
+                    rust_i18n::t!("cli_view_location"),
+                    t.locations.join(", ")
+                );
             }
             if !t.description.is_empty() {
                 println!(

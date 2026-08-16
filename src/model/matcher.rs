@@ -296,11 +296,10 @@ impl Task {
             } else {
                 rem
             };
-            if let Some(t_loc) = &self.location {
-                return t_loc.to_lowercase().contains(loc_query);
-            } else {
-                return false;
-            }
+            return self
+                .locations
+                .iter()
+                .any(|l| l.to_lowercase().contains(loc_query));
         }
 
         // --- Duration Filter (~30m, ~<1h, ~>2h) ---
@@ -506,9 +505,9 @@ impl Task {
             .iter()
             .any(|c| c.to_lowercase().contains(&part_lower));
         let loc_match = self
-            .location
-            .as_deref()
-            .is_some_and(|l| l.to_lowercase().contains(&part_lower));
+            .locations
+            .iter()
+            .any(|l| l.to_lowercase().contains(&part_lower));
 
         summary_match || desc_match || cat_match || loc_match
     }
@@ -527,7 +526,7 @@ mod tests {
         t.description = "Finish the report".to_string();
         t.categories.push("work".to_string());
         t.categories.push("today".to_string());
-        t.location = Some("home office".to_string());
+        t.locations.push("home office".to_string());
 
         // Implicit AND (space)
         assert!(t.matches_search_term("work today"));
@@ -568,7 +567,7 @@ mod tests {
         let aliases: HashMap<String, Vec<String>> = HashMap::new();
         let mut t = Task::new("Test", &aliases, None);
         t.categories.push("home".to_string());
-        t.location = Some("Kitchen".to_string());
+        t.locations.push("Kitchen".to_string());
 
         // Tag filter using '#'
         assert!(t.matches_search_term("#home"));

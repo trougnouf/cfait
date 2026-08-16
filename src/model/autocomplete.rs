@@ -138,10 +138,10 @@ pub fn suggest(
         }
         for map in store.calendars.values() {
             for t in map.values() {
-                if let Some(l) = &t.location
-                    && l.to_lowercase().starts_with(&query_lower)
-                {
-                    *loc_counts.entry(l.clone()).or_insert(0) += 1;
+                for l in &t.locations {
+                    if l.to_lowercase().starts_with(&query_lower) {
+                        *loc_counts.entry(l.clone()).or_insert(0) += 1;
+                    }
                 }
             }
         }

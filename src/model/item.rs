@@ -236,6 +236,23 @@ impl Alarm {
     }
 }
 
+fn deserialize_locations<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StringOrVec {
+        String(Option<String>),
+        Vec(Vec<String>),
+    }
+    match StringOrVec::deserialize(deserializer)? {
+        StringOrVec::String(Some(s)) => Ok(vec![s]),
+        StringOrVec::String(None) => Ok(vec![]),
+        StringOrVec::Vec(v) => Ok(v),
+    }
+}
+
 fn deserialize_date_option<'de, D>(deserializer: D) -> Result<Option<DateType>, D::Error>
 where
     D: Deserializer<'de>,
@@ -299,7 +316,12 @@ pub struct Task {
     #[serde(default)]
     pub depth: usize,
     pub rrule: Option<String>,
-    pub location: Option<String>,
+    #[serde(
+        default,
+        alias = "location",
+        deserialize_with = "deserialize_locations"
+    )]
+    pub locations: Vec<String>,
     pub url: Option<String>,
     pub geo: Option<String>,
     #[serde(default)]
@@ -366,7 +388,7 @@ pub struct Task {
     #[serde(skip)]
     pub visible_categories: Vec<String>,
     #[serde(skip)]
-    pub visible_location: Option<String>,
+    pub visible_locations: Vec<String>,
     #[serde(skip)]
     pub has_blocking_tasks: bool,
     #[serde(skip)]
@@ -642,7 +664,7 @@ impl Task {
             categories: Vec::new(),
             depth: 0,
             rrule: None,
-            location: None,
+            locations: Vec::new(),
             url: None,
             geo: None,
             collapsed: false,
@@ -670,7 +692,7 @@ impl Task {
             effective_due: None,
             effective_dtstart: None,
             visible_categories: Vec::new(),
-            visible_location: None,
+            visible_locations: Vec::new(),
             has_blocking_tasks: false,
             has_related_tasks: false,
             is_future_start: false,
@@ -1112,12 +1134,12 @@ impl Task {
     pub fn resolve_visual_attributes(
         &self,
         parent_tags: &HashSet<String>,
-        parent_location: &Option<String>,
+        parent_locations: &[String],
         aliases: &HashMap<String, Vec<String>>,
-    ) -> (Vec<String>, Option<String>) {
+    ) -> (Vec<String>, Vec<String>) {
         use crate::model::parser::strip_quotes;
         let mut hidden_tags = parent_tags.clone();
-        let mut hidden_location = parent_location.clone();
+        let mut hidden_locations: HashSet<String> = parent_locations.iter().cloned().collect();
 
         // Expand alias directives (e.g. if a category expands into hidden targets)
         let mut process_expansions = |targets: &Vec<String>| {
@@ -1125,9 +1147,9 @@ impl Task {
                 if let Some(val) = target.strip_prefix('#') {
                     hidden_tags.insert(strip_quotes(val));
                 } else if let Some(val) = target.strip_prefix("@@") {
-                    hidden_location = Some(strip_quotes(val));
+                    hidden_locations.insert(strip_quotes(val));
                 } else if target.to_lowercase().starts_with("loc:") {
-                    hidden_location = Some(strip_quotes(&target[4..]));
+                    hidden_locations.insert(strip_quotes(&target[4..]));
                 }
             }
         };
@@ -1145,7 +1167,7 @@ impl Task {
             }
         }
 
-        if let Some(loc) = &self.location {
+        for loc in &self.locations {
             let key = format!("@@{}", loc);
             if let Some(targets) = aliases.get(&key) {
                 process_expansions(targets);
@@ -1170,17 +1192,15 @@ impl Task {
         }
         visible_tags.sort();
 
-        let visible_location = if let Some(loc) = &self.location {
-            if hidden_location.as_ref() != Some(loc) {
-                Some(loc.clone())
-            } else {
-                None
+        let mut visible_locations = Vec::new();
+        for loc in &self.locations {
+            if !hidden_locations.contains(loc) {
+                visible_locations.push(loc.clone());
             }
-        } else {
-            None
-        };
+        }
+        visible_locations.sort();
 
-        (visible_tags, visible_location)
+        (visible_tags, visible_locations)
     }
 
     /// Recycle a recurring task when it is completed/cancelled.
@@ -1374,7 +1394,7 @@ impl Task {
     pub fn inherit_properties(
         &mut self,
         parent_categories: &[String],
-        parent_location: &Option<String>,
+        parent_locations: &[String],
         parent_priority: u8,
     ) {
         for cat in parent_categories {
@@ -1382,8 +1402,8 @@ impl Task {
                 self.categories.push(cat.clone());
             }
         }
-        if self.location.is_none() {
-            self.location = parent_location.clone();
+        if self.locations.is_empty() {
+            self.locations = parent_locations.to_vec();
         }
         if self.priority == 0 {
             self.priority = parent_priority;

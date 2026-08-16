@@ -58,7 +58,7 @@ fn test_triple_at_inline_location() {
     let t = Task::new("Fix @@@Office printer", &aliases, None);
 
     assert_eq!(t.summary, "Fix Office printer");
-    assert_eq!(t.location, Some("Office".to_string()));
+    assert_eq!(t.locations, vec!["Office".to_string()]);
 }
 
 #[test]
@@ -83,11 +83,11 @@ fn test_mixed_inline_and_regular_locations() {
     // Test: "Visit @@@Home and @@Office"
     // Should save as:
     // - Title: "Visit Home and"
-    // - Location: "Office" (last one wins, but Home is in title)
+    // - Locations: ["Home", "Office"] (both locations are kept)
     let t = Task::new("Visit @@@Home and @@Office", &aliases, None);
 
     assert_eq!(t.summary, "Visit Home and");
-    assert_eq!(t.location, Some("Office".to_string()));
+    assert_eq!(t.locations, vec!["Home".to_string(), "Office".to_string()]);
 }
 
 #[test]
@@ -115,7 +115,7 @@ fn test_inline_location_with_hierarchy() {
     let t = Task::new("Go to @@@home:garage", &aliases, None);
 
     assert_eq!(t.summary, "Go to home:garage");
-    assert_eq!(t.location, Some("home:garage".to_string()));
+    assert_eq!(t.locations, vec!["home:garage".to_string()]);
 }
 
 #[test]
@@ -143,7 +143,7 @@ fn test_double_at_still_works() {
     let t = Task::new("Fix @@Office printer", &aliases, None);
 
     assert_eq!(t.summary, "Fix printer");
-    assert_eq!(t.location, Some("Office".to_string()));
+    assert_eq!(t.locations, vec!["Office".to_string()]);
 }
 
 #[test]
@@ -171,7 +171,7 @@ fn test_empty_inline_location() {
     let t = Task::new("Task @@@", &aliases, None);
 
     assert_eq!(t.summary, "Task @@@");
-    assert_eq!(t.location, None);
+    assert!(t.locations.is_empty());
 }
 
 #[test]
@@ -199,7 +199,7 @@ fn test_quoted_inline_location() {
     let t = Task::new("Go to @@@\"My Office\"", &aliases, None);
 
     assert_eq!(t.summary, "Go to My Office");
-    assert_eq!(t.location, Some("My Office".to_string()));
+    assert_eq!(t.locations, vec!["My Office".to_string()]);
 }
 
 #[test]

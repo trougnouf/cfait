@@ -347,7 +347,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     initial_input
                         .push_str(&format!("#{} ", crate::model::parser::quote_value(cat)));
                 }
-                if let Some(loc) = &parent.location {
+                for loc in &parent.locations {
                     initial_input
                         .push_str(&format!("@@{} ", crate::model::parser::quote_value(loc)));
                 }
@@ -1674,7 +1674,7 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                 edit_uid.clone(),
                 (
                     task_copy.categories.clone(),
-                    task_copy.location.clone(),
+                    task_copy.locations.clone(),
                     task_copy.priority,
                 ),
             );
@@ -1689,7 +1689,7 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                 }
                 resolved_props.insert(
                     sub.uid.clone(),
-                    (sub.categories.clone(), sub.location.clone(), sub.priority),
+                    (sub.categories.clone(), sub.locations.clone(), sub.priority),
                 );
 
                 let warnings = app.store.resolve_dependencies(&mut sub);
@@ -1831,7 +1831,7 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                 parent_uid.clone(),
                 (
                     new_task.categories.clone(),
-                    new_task.location.clone(),
+                    new_task.locations.clone(),
                     new_task.priority,
                 ),
             );
@@ -1848,7 +1848,7 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                 }
                 resolved_props.insert(
                     sub.uid.clone(),
-                    (sub.categories.clone(), sub.location.clone(), sub.priority),
+                    (sub.categories.clone(), sub.locations.clone(), sub.priority),
                 );
 
                 let warnings = app.store.resolve_dependencies(&mut sub);
