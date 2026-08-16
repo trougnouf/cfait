@@ -112,6 +112,7 @@ pub enum Message {
     Undo,
     Redo,
     ApplySuggestion(std::ops::Range<usize>, String),
+    TabPressed(bool),
     EnterPressed,
     DuplicateTask(String),
     DeleteTaskTree(String),
