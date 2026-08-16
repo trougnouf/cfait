@@ -31,7 +31,7 @@ If you *do* want to sync your tasks across devices, Cfait connects seamlessly to
 
 | Desktop (GUI & TUI) | Mobile (Android) |
 | :---: | :---: |
-| ![Cfait GUI Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v1.1.0_screenshot_(GUI).png)<br>The Graphical Interface in v0.5.2 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(GUI)))</small><br><br>![Cfait TUI Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.5.0_screenshot_(TUI).png)<br>The Terminal Interface in v0.5.0 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(TUI)))</small> | ![Cfait Android Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v1.1.0_screenshot_(Android).png)<br>The Android client in v0.5.2 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(Android)))</small> |
+| ![Cfait GUI Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v1.1.0_screenshot_(GUI).png)<br>The Graphical Interface in v1.1.0 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(GUI)))</small><br><br>![Cfait TUI Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.5.0_screenshot_(TUI).png)<br>The Terminal Interface in v0.5.0 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(TUI)))</small> | ![Cfait Android Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v1.1.0_screenshot_(Android).png)<br>The Android client in v1.1.0 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(Android)))</small> |
 
 ### 📖 Documentation & usage
 
