@@ -1982,11 +1982,11 @@ fun HomeScreen(
                             snackbar = { snackbarData ->
                                 Snackbar(
                                     snackbarData = snackbarData,
-                                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
-                                    contentColor = MaterialTheme.colorScheme.onSurface,
-                                    actionColor = MaterialTheme.colorScheme.primary,
+                                    containerColor = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.85f),
+                                    contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                                    actionColor = MaterialTheme.colorScheme.inversePrimary,
                                     shape = RoundedCornerShape(4.dp),
-                                    modifier = Modifier.border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                                    modifier = Modifier.border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
                                 )
                             }
                         )
