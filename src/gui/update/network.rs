@@ -7,7 +7,9 @@ use crate::gui::state::{AppState, GuiApp};
 use crate::gui::update::common::{refresh_filtered_tasks, scroll_to_selected};
 use crate::journal::Journal;
 use crate::model::CalendarListEntry;
-use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_CALENDAR_NAME, LocalCalendarRegistry};
+use crate::storage::{
+    LOCAL_CALENDAR_HREF, LOCAL_CALENDAR_NAME, LOCAL_TRASH_HREF, LocalCalendarRegistry,
+};
 use crate::system::SystemEvent;
 use iced::Task;
 
@@ -186,6 +188,19 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 && !app.hidden_calendars.contains(net_active_href)
             {
                 valid_active = Some(net_active_href.clone());
+            }
+
+            if valid_active.is_none() {
+                valid_active = app
+                    .calendars
+                    .iter()
+                    .find(|c| {
+                        !app.hidden_calendars.contains(&c.href)
+                            && !app.disabled_calendars.contains(&c.href)
+                            && c.href != LOCAL_TRASH_HREF
+                            && c.href != "local://recovery"
+                    })
+                    .map(|c| c.href.clone());
             }
 
             if valid_active.is_none() {

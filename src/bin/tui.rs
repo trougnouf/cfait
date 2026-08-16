@@ -12,9 +12,10 @@
 rust_i18n::i18n!("locales", fallback = "en");
 
 use anyhow::Result;
+use cfait::cache::Cache;
 use cfait::context::{AppContext, StandardContext};
 use cfait::model::Task;
-use cfait::storage::LocalStorage;
+use cfait::storage::{LOCAL_TRASH_HREF, LocalCalendarRegistry, LocalStorage};
 use cfait::store::{FilterOptions, TaskStore};
 use chrono::Utc;
 use std::collections::HashSet;
@@ -694,10 +695,47 @@ async fn main() -> Result<()> {
             }
 
             let target_href_input = col_href.unwrap_or_else(|| {
-                config
-                    .default_calendar
-                    .clone()
-                    .unwrap_or_else(|| cfait::storage::LOCAL_CALENDAR_HREF.to_string())
+                config.default_calendar.clone().unwrap_or_else(|| {
+                    let mut cals = Cache::load_calendars(ctx.as_ref()).unwrap_or_default();
+                    if let Ok(locals) = LocalCalendarRegistry::load(ctx.as_ref()) {
+                        cals.extend(locals);
+                    }
+
+                    let order = config.collection_order.clone();
+                    let sort_by_size = config.sort_collections_by_size;
+
+                    cals.sort_by(|a, b| {
+                        if sort_by_size {
+                            let count_a = temp_store
+                                .calendars
+                                .get(&a.href)
+                                .map(|m| m.len())
+                                .unwrap_or(0);
+                            let count_b = temp_store
+                                .calendars
+                                .get(&b.href)
+                                .map(|m| m.len())
+                                .unwrap_or(0);
+                            cfait::model::compare_calendars_with_size(
+                                &a.href, &a.name, count_a, &b.href, &b.name, count_b, &order,
+                            )
+                        } else {
+                            cfait::model::compare_calendars(
+                                &a.href, &a.name, &b.href, &b.name, &order,
+                            )
+                        }
+                    });
+
+                    cals.into_iter()
+                        .find(|c| {
+                            !config.hidden_calendars.contains(&c.href)
+                                && !config.disabled_calendars.contains(&c.href)
+                                && c.href != LOCAL_TRASH_HREF
+                                && c.href != "local://recovery"
+                        })
+                        .map(|c| c.href)
+                        .unwrap_or_else(|| cfait::storage::LOCAL_CALENDAR_HREF.to_string())
+                })
             });
 
             let mut target_href = resolve_collection_href(&ctx, &target_href_input).await;

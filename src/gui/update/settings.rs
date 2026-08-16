@@ -9,7 +9,7 @@ use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp};
 use crate::gui::update::common::{apply_alias_retroactively, refresh_filtered_tasks, save_config};
 use crate::model::parser::{format_duration_compact, parse_duration, validate_alias_integrity};
-use crate::storage::{LOCAL_CALENDAR_HREF, LocalCalendarRegistry, LocalStorage};
+use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_TRASH_HREF, LocalCalendarRegistry, LocalStorage};
 use iced::Task;
 
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
@@ -148,6 +148,19 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     app.hidden_calendars.remove(&cal.href);
                 }
                 target_href = Some(cal.href.clone());
+            }
+
+            if target_href.is_none() {
+                target_href = app
+                    .calendars
+                    .iter()
+                    .find(|c| {
+                        !app.hidden_calendars.contains(&c.href)
+                            && !app.disabled_calendars.contains(&c.href)
+                            && c.href != LOCAL_TRASH_HREF
+                            && c.href != "local://recovery"
+                    })
+                    .map(|c| c.href.clone());
             }
 
             if target_href.is_none() {

@@ -341,7 +341,7 @@ impl MobileTask {
     }
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Clone)]
 pub struct MobileCalendar {
     pub name: String,
     pub href: String,
@@ -2567,6 +2567,7 @@ impl CfaitMobile {
 
         let mobile_calendars = self.get_calendars();
         let calendars: Vec<crate::model::item::CalendarListEntry> = mobile_calendars
+            .clone()
             .into_iter()
             .map(|c| crate::model::item::CalendarListEntry {
                 name: c.name,
@@ -2577,7 +2578,13 @@ impl CfaitMobile {
         let active_cal = self.session.lock().await.active_calendar_href.clone();
         let inherited_href = active_cal
             .or(config.default_calendar.clone())
-            .unwrap_or(LOCAL_CALENDAR_HREF.to_string());
+            .unwrap_or_else(|| {
+                mobile_calendars
+                    .iter()
+                    .find(|c| c.is_visible && !c.is_disabled)
+                    .map(|c| c.href.clone())
+                    .unwrap_or_else(|| LOCAL_CALENDAR_HREF.to_string())
+            });
 
         task.calendar_href = if let Some(target) = task.target_collection.take() {
             crate::model::resolve_collection(&target, &calendars, &inherited_href)
@@ -2692,6 +2699,7 @@ impl CfaitMobile {
 
         let mobile_calendars = self.get_calendars();
         let calendars: Vec<crate::model::item::CalendarListEntry> = mobile_calendars
+            .clone()
             .into_iter()
             .map(|c| crate::model::item::CalendarListEntry {
                 name: c.name,
@@ -2702,7 +2710,13 @@ impl CfaitMobile {
         let active_cal = self.session.lock().await.active_calendar_href.clone();
         let inherited_href = active_cal
             .or(config.default_calendar.clone())
-            .unwrap_or(crate::storage::LOCAL_CALENDAR_HREF.to_string());
+            .unwrap_or_else(|| {
+                mobile_calendars
+                    .iter()
+                    .find(|c| c.is_visible && !c.is_disabled)
+                    .map(|c| c.href.clone())
+                    .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string())
+            });
 
         task.calendar_href = if let Some(target) = task.target_collection.take() {
             crate::model::resolve_collection(&target, &calendars, &inherited_href)

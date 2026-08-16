@@ -11,7 +11,7 @@ and DateTime::<Utc>::from_utc(...) to construct timezone-aware values.
 use crate::config::Config;
 use crate::model::parser::{extract_inline_aliases, validate_alias_integrity};
 use crate::model::{AppIntent, CalendarListEntry, Task, TaskStatus};
-use crate::storage::LOCAL_CALENDAR_HREF;
+use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_TRASH_HREF};
 use crate::system::SystemEvent;
 use crate::tui::action::{Action, AppEvent, SidebarMode};
 use crate::tui::state::{AppState, Focus, InputMode};
@@ -887,7 +887,8 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
             if !state.local_mode_enabled {
                 cals.retain(|c| !c.href.starts_with("local://"));
             }
-            state.calendars = cals; // let refresh_filtered_view handle sorting
+            state.calendars = cals;
+            state.sort_calendars(); // Explicitly sort before fallback selection
 
             if let Some(def) = default_cal
                 && let Some(found) = state
@@ -905,7 +906,12 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
                 state.active_cal_href = state
                     .calendars
                     .iter()
-                    .find(|c| !state.disabled_calendars.contains(&c.href))
+                    .find(|c| {
+                        !state.hidden_calendars.contains(&c.href)
+                            && !state.disabled_calendars.contains(&c.href)
+                            && c.href != LOCAL_TRASH_HREF
+                            && c.href != "local://recovery"
+                    })
                     .map(|c| c.href.clone())
                     .or_else(|| {
                         if state.local_mode_enabled {

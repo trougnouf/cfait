@@ -8,6 +8,7 @@ use crate::gui::state::{Focus, GuiApp, SidebarMode};
 use crate::gui::subscription::ACTIVE_FOCUS;
 use crate::gui::update::common;
 use crate::model::AppIntent;
+use crate::storage::LOCAL_TRASH_HREF;
 use chrono::NaiveTime;
 use iced::Task;
 use iced::widget::text_editor;
@@ -1798,7 +1799,17 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
         let target_href = app
             .active_cal_href
             .clone()
-            .or_else(|| app.calendars.first().map(|c| c.href.clone()))
+            .or_else(|| {
+                app.calendars
+                    .iter()
+                    .find(|c| {
+                        !app.hidden_calendars.contains(&c.href)
+                            && !app.disabled_calendars.contains(&c.href)
+                            && c.href != LOCAL_TRASH_HREF
+                            && c.href != "local://recovery"
+                    })
+                    .map(|c| c.href.clone())
+            })
             .unwrap_or_default();
 
         if !target_href.is_empty() {
