@@ -651,7 +651,6 @@
     "snooze_hint": "Posponer (ej. 15m, 1h)",
     "snooze_presets": "Opciones de posponer",
     "sort_collections_by_size": "Ordenar las colecciones por tamaño (primero las tareas más numerosas)",
-    "sort_paused_higher": "Priorizar tareas pausadas sobre las no iniciadas",
     "sort_standard_by_date": "Tareas habituales ordenadas por fecha",
     "sort_standard_by_priority": "Tareas habituales ordenadas por prioridad",
     "sort_standard_by_priority_label": "Ordenar las tareas habituales por prioridad en lugar de por fecha",
