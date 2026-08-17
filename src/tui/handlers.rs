@@ -3224,17 +3224,11 @@ pub async fn handle_key_event(
                     let uid = t.uid.clone();
                     match run_external_editor(&desc, state.ctx.as_ref()) {
                         Ok(Some(new_desc)) => {
-                            if new_desc != desc
-                                && let Some((t_mut, _)) = state.store.get_task_mut(&uid)
-                            {
-                                t_mut.description = new_desc;
-                                t_mut.sequence += 1;
-                                let clone = t_mut.clone();
-                                state.refresh_filtered_view();
-                                let _ =
-                                    action_tx.try_send(crate::tui::action::Action::PersistBatch(
-                                        vec![crate::journal::Action::Update(clone)],
-                                    ));
+                            if new_desc != desc {
+                                state.input_buffer = new_desc;
+                                state.editing_uid = Some(uid);
+                                state.mode = InputMode::EditingDescription;
+                                save_description(state, action_tx);
                             }
                             state.needs_redraw = true;
                             return None;

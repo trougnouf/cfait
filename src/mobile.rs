@@ -2865,9 +2865,15 @@ impl CfaitMobile {
     ) -> Result<(), MobileError> {
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let def_time = NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
-        self.apply_store_mutation(&uid, |t, id| {
-            if let Some((task, _)) = t.get_task_mut(id) {
-                task.apply_smart_input(&smart_input, &config.tag_aliases, def_time);
+        self.apply_store_mutation(&uid, |store, id| {
+            let mut temp_task = match store.get_task_ref(id) {
+                Some(t) => t.clone(),
+                None => return None,
+            };
+            temp_task.apply_smart_input(&smart_input, &config.tag_aliases, def_time);
+            let _warnings = store.resolve_dependencies(&mut temp_task);
+            if let Some((task, _)) = store.get_task_mut(id) {
+                *task = temp_task;
                 task.sequence += 1;
                 Some(task.clone())
             } else {
@@ -2964,6 +2970,8 @@ impl CfaitMobile {
                 sub.percent_complete = Some(pc);
             }
             sub.is_note = ext.is_note;
+
+            let _warnings = store.resolve_dependencies(&mut sub);
 
             store.add_task(sub.clone());
             actions.push(crate::journal::Action::Create(sub));
