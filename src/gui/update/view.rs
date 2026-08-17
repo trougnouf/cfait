@@ -1419,6 +1419,47 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     needs_refresh = true;
                 }
 
+                if let Some(task) = app.store.get_task_ref(&uid).cloned() {
+                    if task.status.is_done() && app.hide_completed {
+                        app.hide_completed = false;
+                        app.core_config.hide_completed = false;
+                        save_config(app);
+                        needs_refresh = true;
+                    }
+
+                    if task.status.is_done() {
+                        let group_key = task.parent_uid.clone().unwrap_or_default();
+                        if !app.session.expanded_done_groups.contains(&group_key) {
+                            app.session.expanded_done_groups.push(group_key);
+                            needs_refresh = true;
+                        }
+                    }
+
+                    // Uncollapse ancestors
+                    let mut curr = task.parent_uid.clone();
+                    let mut to_uncollapse = Vec::new();
+                    while let Some(p_uid) = curr {
+                        if let Some(p_task) = app.store.get_task_ref(&p_uid) {
+                            if p_task.collapsed {
+                                to_uncollapse.push(p_uid.clone());
+                            }
+                            curr = p_task.parent_uid.clone();
+                        } else {
+                            break;
+                        }
+                    }
+                    for p_uid in to_uncollapse {
+                        crate::gui::update::common::dispatch_intent(
+                            app,
+                            crate::model::AppIntent::SetTreeCollapse {
+                                uid: p_uid,
+                                collapsed: false,
+                            },
+                        );
+                        needs_refresh = true;
+                    }
+                }
+
                 if needs_refresh {
                     refresh_filtered_tasks(app);
                 }

@@ -564,8 +564,15 @@ fun CfaitNavHost(
                         refreshLists()
                     },
                     onNavigate = { targetUid ->
-                        autoScrollUid = targetUid
-                        navController.popBackStack("home", inclusive = false)
+                        scope.launch {
+                            try {
+                                api.revealTask(targetUid)
+                            } catch (e: Exception) {
+                                // Ignore
+                            }
+                            autoScrollUid = targetUid
+                            navController.popBackStack("home", inclusive = false)
+                        }
                     },
                     onEditTree = { targetUid ->
                         navController.navigate("edit_tree/$targetUid")

@@ -3629,6 +3629,57 @@ pub async fn handle_key_event(
                             state.hidden_calendars.remove(&href);
                         }
 
+                        if let Some(task) = state.store.get_task_ref(&target_uid).cloned() {
+                            if task.status.is_done() && state.hide_completed {
+                                state.hide_completed = false;
+                                if let Ok(mut cfg) = crate::config::Config::load(state.ctx.as_ref())
+                                {
+                                    cfg.hide_completed = false;
+                                    let _ = cfg.save(state.ctx.as_ref());
+                                }
+                            }
+
+                            if task.status.is_done() {
+                                let group_key = task.parent_uid.clone().unwrap_or_default();
+                                state.expanded_done_groups.insert(group_key);
+                            }
+
+                            // Uncollapse ancestors
+                            let mut curr = task.parent_uid.clone();
+                            let mut to_uncollapse = Vec::new();
+                            while let Some(p_uid) = curr {
+                                if let Some(p_task) = state.store.get_task_ref(&p_uid) {
+                                    if p_task.collapsed {
+                                        to_uncollapse.push(p_uid.clone());
+                                    }
+                                    curr = p_task.parent_uid.clone();
+                                } else {
+                                    break;
+                                }
+                            }
+
+                            if !to_uncollapse.is_empty() {
+                                let config = crate::config::Config::load(state.ctx.as_ref())
+                                    .unwrap_or_default();
+                                let mut actions = Vec::new();
+                                for p_uid in to_uncollapse {
+                                    let intent = crate::model::AppIntent::SetTreeCollapse {
+                                        uid: p_uid,
+                                        collapsed: false,
+                                    };
+                                    actions.extend(state.apply_task_intent(&intent, &config));
+                                }
+                                if !actions.is_empty() {
+                                    let tx = action_tx.clone();
+                                    tokio::spawn(async move {
+                                        let _ = tx
+                                            .send(crate::tui::action::Action::PersistBatch(actions))
+                                            .await;
+                                    });
+                                }
+                            }
+                        }
+
                         state.refresh_filtered_view();
 
                         // Find and select the target task in the list

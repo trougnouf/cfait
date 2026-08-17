@@ -929,6 +929,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_resolve_selection_aliases(): Int
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_reveal_task(): Int
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_save_config(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_set_calendar_visibility(): Int
@@ -1343,6 +1345,11 @@ internal object UniffiLib {
         `isLocation`: Byte,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_reveal_task(
+        `ptr`: Long,
+        `uid`: RustBuffer.ByValue,
+    ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_save_config(
         `ptr`: Long,
@@ -1894,6 +1901,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_resolve_selection_aliases() != 37748) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_reveal_task() != 2404) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_save_config() != 10046) {
@@ -2708,6 +2718,8 @@ public interface CfaitMobileInterface {
         `selection`: kotlin.String,
         `isLocation`: kotlin.Boolean,
     ): List<kotlin.String>
+
+    suspend fun `revealTask`(`uid`: kotlin.String)
 
     fun `saveConfig`(`config`: MobileConfig)
 
@@ -3981,6 +3993,25 @@ open class CfaitMobile :
                     )
                 }
             },
+        )
+
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `revealTask`(`uid`: kotlin.String) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_reveal_task(
+                    uniffiHandle,
+                    FfiConverterString.lower(`uid`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            MobileException.ErrorHandler,
         )
 
     @Throws(MobileException::class)

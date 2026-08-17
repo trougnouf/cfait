@@ -707,6 +707,87 @@ impl CfaitMobile {
         }
     }
 
+    pub async fn reveal_task(&self, uid: String) -> Result<(), MobileError> {
+        let mut session = self.session.lock().await;
+        let mut config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
+        let mut config_changed = false;
+
+        let store_guard = self.controller.store.lock().await;
+        let href = store_guard.index.get(&uid).cloned();
+        let task_clone = store_guard.get_task_ref(&uid).cloned();
+
+        // Find ancestors that are collapsed
+        let mut to_uncollapse = Vec::new();
+        if let Some(task) = &task_clone {
+            let mut curr = task.parent_uid.clone();
+            while let Some(p_uid) = curr {
+                if let Some(p_task) = store_guard.get_task_ref(&p_uid) {
+                    if p_task.collapsed {
+                        to_uncollapse.push(p_uid.clone());
+                    }
+                    curr = p_task.parent_uid.clone();
+                } else {
+                    break;
+                }
+            }
+        }
+        drop(store_guard);
+
+        if let Some(href) = href {
+            session.search_term.clear();
+            session.selected_categories.clear();
+            session.selected_locations.clear();
+
+            if session.active_calendar_href.as_ref() != Some(&href) {
+                session.active_calendar_href = Some(href.clone());
+                if config.hidden_calendars.contains(&href) {
+                    config.hidden_calendars.retain(|h| h != &href);
+                    config_changed = true;
+                }
+            }
+
+            if let Some(task) = task_clone {
+                if task.status.is_done() && config.hide_completed {
+                    config.hide_completed = false;
+                    config_changed = true;
+                }
+
+                if task.status.is_done() {
+                    let group_key = task.parent_uid.clone().unwrap_or_default();
+                    if !session.expanded_done_groups.contains(&group_key) {
+                        session.expanded_done_groups.push(group_key);
+                    }
+                }
+            }
+        }
+
+        if config_changed {
+            let _ = config.save(self.ctx.as_ref());
+        }
+
+        drop(session); // Drop session before dispatching intents
+
+        if !to_uncollapse.is_empty() {
+            let mut all_actions = Vec::new();
+            let mut store_guard = self.controller.store.lock().await;
+            for p_uid in to_uncollapse {
+                let intent = crate::model::AppIntent::SetTreeCollapse {
+                    uid: p_uid,
+                    collapsed: false,
+                };
+                let (actions, _, _, _) = store_guard.apply_task_intent(&intent, &config);
+                all_actions.extend(actions);
+            }
+            drop(store_guard);
+
+            if !all_actions.is_empty() {
+                let _ = self.controller.persist_changes(all_actions).await;
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn get_task_tree_markdown(&self, uid: String) -> String {
         let store = self.controller.store.blocking_lock();
         let mut cals = crate::cache::Cache::load_calendars(self.ctx.as_ref()).unwrap_or_default();
