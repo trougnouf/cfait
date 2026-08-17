@@ -430,7 +430,7 @@ pub struct CompareOptions {
     pub start_grace_period_days: u32,
     pub sort_standard_by_priority: bool,
     pub sort_preset: crate::config::SortPreset,
-    pub sort_paused_higher: bool,
+    pub paused_sort_behavior: crate::config::PausedSortBehavior,
     pub sort_tiebreak_recent: bool,
 }
 
@@ -447,7 +447,7 @@ pub fn compare_sortkeys(
     default_prio: u8,
     sort_standard_by_priority: bool,
     sort_preset: crate::config::SortPreset,
-    sort_paused_higher: bool,
+    paused_sort_behavior: crate::config::PausedSortBehavior,
 ) -> Ordering {
     let effective_rank = |rank: u8| {
         if sort_standard_by_priority && rank == 5 {
@@ -457,13 +457,16 @@ pub fn compare_sortkeys(
         }
     };
 
-    if effective_rank(a.rank) != effective_rank(b.rank) {
-        return effective_rank(a.rank).cmp(&effective_rank(b.rank));
+    let rank_a = effective_rank(a.rank);
+    let rank_b = effective_rank(b.rank);
+
+    if rank_a != rank_b {
+        return rank_a.cmp(&rank_b);
     }
 
-    let rank = effective_rank(a.rank);
+    let rank = rank_a;
 
-    if sort_paused_higher && matches!(rank, 4 | 5) {
+    if paused_sort_behavior == crate::config::PausedSortBehavior::Top && matches!(rank, 4 | 5) {
         let paused_cmp = b.is_paused.cmp(&a.is_paused);
         if paused_cmp != Ordering::Equal {
             return paused_cmp;
@@ -494,7 +497,7 @@ pub fn compare_sortkeys(
         _ => true,
     };
 
-    if is_priority_first {
+    let base_cmp = if is_priority_first {
         norm_prio(a.prio)
             .cmp(&norm_prio(b.prio))
             .then_with(|| b.is_overdue.cmp(&a.is_overdue))
@@ -515,7 +518,20 @@ pub fn compare_sortkeys(
                 }
             }
         })
+    };
+
+    if base_cmp != Ordering::Equal {
+        return base_cmp;
     }
+
+    if paused_sort_behavior == crate::config::PausedSortBehavior::Tiebreak {
+        let paused_cmp = b.is_paused.cmp(&a.is_paused);
+        if paused_cmp != Ordering::Equal {
+            return paused_cmp;
+        }
+    }
+
+    Ordering::Equal
 }
 
 impl Task {
@@ -857,7 +873,7 @@ impl Task {
         default_priority: u8,
         sort_standard_by_priority: bool,
         sort_preset: crate::config::SortPreset,
-        sort_paused_higher: bool,
+        paused_sort_behavior: crate::config::PausedSortBehavior,
         sort_tiebreak_recent: bool,
     ) -> Ordering {
         // Stable ordering for trash and completed groups uses completion date desc.
@@ -897,7 +913,7 @@ impl Task {
             default_priority,
             sort_standard_by_priority,
             sort_preset,
-            sort_paused_higher,
+            paused_sort_behavior,
         )
         .then_with(|| {
             if sort_tiebreak_recent {
@@ -954,7 +970,7 @@ impl Task {
             opts.default_priority,
             opts.sort_standard_by_priority,
             opts.sort_preset,
-            opts.sort_paused_higher,
+            opts.paused_sort_behavior,
         )
         .then_with(|| {
             if opts.sort_tiebreak_recent {

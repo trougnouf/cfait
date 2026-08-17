@@ -90,7 +90,7 @@ pub struct AppState {
     pub show_priority_numbers: bool,
     pub sort_cutoff_days: Option<u32>,
     pub sort_standard_by_priority: bool,
-    pub sort_paused_higher: bool,
+    pub paused_sort_behavior: crate::config::PausedSortBehavior,
     pub sort_tiebreak_recent: bool,
 
     pub theme: crate::config::AppTheme,
@@ -234,7 +234,7 @@ impl AppState {
             goal_icon: GOAL_ICONS[fastrand::usize(..GOAL_ICONS.len())],
             sort_cutoff_days: Some(30),
             sort_standard_by_priority: false,
-            sort_paused_higher: true,
+            paused_sort_behavior: crate::config::PausedSortBehavior::default(),
             sort_tiebreak_recent: config.sort_tiebreak_recent,
             theme: crate::config::AppTheme::default(),
             // Initialize sidebar caches as empty; they will be populated by refresh_filtered_view()
@@ -399,7 +399,7 @@ impl AppState {
             start_grace_period_days: self.start_grace_period_days,
             sort_standard_by_priority: self.sort_standard_by_priority,
             sort_preset: config.sort_preset,
-            sort_paused_higher: self.sort_paused_higher,
+            paused_sort_behavior: self.paused_sort_behavior,
             sort_tiebreak_recent: self.sort_tiebreak_recent,
             expanded_done_groups: &self.expanded_done_groups,
             expanded_tags: &self.expanded_tags,

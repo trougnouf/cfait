@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Tests for start grace period functionality.
-use cfait::config::SortPreset;
+use cfait::config::{PausedSortBehavior, SortPreset};
 use cfait::context::TestContext;
 use cfait::model::{Alarm, DateType, Task};
 use cfait::store::{FilterOptions, TaskStore};
@@ -65,7 +65,7 @@ fn test_start_grace_period_keeps_tasks_in_active_section() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
-        sort_paused_higher: true,
+        paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
     };
 
@@ -156,7 +156,7 @@ fn test_grace_period_zero_pushes_all_future_starts() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
-        sort_paused_higher: true,
+        paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
     };
 
@@ -249,7 +249,7 @@ fn test_acknowledged_alarm_keeps_task_in_active_section() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
-        sort_paused_higher: true,
+        paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
     };
 
@@ -351,7 +351,7 @@ fn test_any_acknowledged_alarm_keeps_task_active() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
-        sort_paused_higher: true,
+        paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
     };
 
@@ -443,7 +443,7 @@ fn test_recurring_task_with_fresh_dates_goes_to_future() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
-        sort_paused_higher: true,
+        paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
     };
 

@@ -66,7 +66,7 @@ impl SessionState {
             start_grace_period_days: config.start_grace_period_days,
             sort_standard_by_priority: config.sort_standard_by_priority,
             sort_preset: config.sort_preset,
-            sort_paused_higher: config.sort_paused_higher,
+            paused_sort_behavior: config.paused_sort_behavior,
             sort_tiebreak_recent: config.sort_tiebreak_recent,
             expanded_done_groups: &expanded_done_groups,
             expanded_tags: &expanded_tags,

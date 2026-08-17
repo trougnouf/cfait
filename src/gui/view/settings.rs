@@ -348,7 +348,18 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             };
 
             column![
-                text(rust_i18n::t!("sorting_and_visibility")).size(20),
+                text(rust_i18n::t!("sorting_and_visibility"))
+                    .size(20)
+                    .font(iced::Font {
+                        weight: iced::font::Weight::Bold,
+                        ..Default::default()
+                    }),
+                Space::new().height(5),
+                text(rust_i18n::t!("settings_visibility"))
+                    .size(16)
+                    .style(|t: &Theme| text::Style {
+                        color: Some(t.extended_palette().primary.base.color)
+                    }),
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.hide_completed)
                     .label(rust_i18n::t!("hide_completed_and_canceled_tasks"))
                     .on_toggle(Message::ToggleHideCompleted),
@@ -371,16 +382,32 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.strikethrough_completed)
                     .label(rust_i18n::t!("strikethrough_completed"))
                     .on_toggle(Message::SetStrikethroughCompleted),
+                Space::new().height(10),
+                text(rust_i18n::t!("settings_sorting"))
+                    .size(16)
+                    .style(|t: &Theme| text::Style {
+                        color: Some(t.extended_palette().primary.base.color)
+                    }),
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.sort_standard_by_priority)
                     .label(rust_i18n::t!("sort_standard_by_priority_label"))
                     .on_toggle(Message::ToggleSortStandardByPriority),
-                checkbox::<Message, iced::Theme, iced::Renderer>(app.sort_paused_higher)
-                    .label(rust_i18n::t!("sort_paused_higher"))
-                    .on_toggle(Message::ToggleSortPausedHigher),
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.sort_tiebreak_recent)
                     .label(rust_i18n::t!("sort_tiebreak_recent"))
                     .on_toggle(Message::ToggleSortTiebreakRecent),
-                text(rust_i18n::t!("settings_sort_behavior")).size(18),
+                Space::new().height(5),
+                row![
+                    text(rust_i18n::t!("settings_paused_tasks")).width(Length::Fixed(200.0)),
+                    iced::widget::pick_list(
+                        crate::config::PausedSortBehavior::iter().collect::<Vec<_>>(),
+                        Some(app.paused_sort_behavior),
+                        Message::SetPausedSortBehavior
+                    )
+                    .width(Length::Fill)
+                    .padding(5)
+                ]
+                .spacing(10)
+                .align_y(iced::Alignment::Center),
+                Space::new().height(5),
                 row![
                     text(rust_i18n::t!("sorting_preset_label")).width(Length::Fixed(200.0)),
                     iced::widget::pick_list(
@@ -397,6 +424,11 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                     .size(12)
                     .color(Color::from_rgb(0.6, 0.6, 0.6)),
                 Space::new().height(10),
+                text(rust_i18n::t!("settings_urgent_and_timeframes"))
+                    .size(16)
+                    .style(|t: &Theme| text::Style {
+                        color: Some(t.extended_palette().primary.base.color)
+                    }),
                 text(rust_i18n::t!("settings_urgent_definition")).size(18),
                 row![
                     text(rust_i18n::t!("due_within_days")).width(Length::Fixed(150.0)),

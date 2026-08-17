@@ -143,7 +143,7 @@ pub struct HierarchyOptions<'a> {
     pub sort_preset: crate::config::SortPreset,
     pub search_collapsed_tasks: &'a HashSet<String>,
     pub focused_task_uid: Option<&'a str>,
-    pub sort_paused_higher: bool,
+    pub paused_sort_behavior: crate::config::PausedSortBehavior,
     pub sort_tiebreak_recent: bool,
 }
 
@@ -169,7 +169,7 @@ pub fn organize_hierarchy(
             options.default_priority,
             options.sort_standard_by_priority,
             options.sort_preset,
-            options.sort_paused_higher,
+            options.paused_sort_behavior,
             options.sort_tiebreak_recent,
         )
     });
@@ -481,7 +481,7 @@ pub fn organize_hierarchy(
                 options.default_priority,
                 options.sort_standard_by_priority,
                 options.sort_preset,
-                options.sort_paused_higher,
+                options.paused_sort_behavior,
                 options.sort_tiebreak_recent,
             )
         });
@@ -608,7 +608,7 @@ pub struct FilterOptions<'a> {
     pub tag_aliases: &'a HashMap<String, Vec<String>>,
     pub search_collapsed_tasks: &'a HashSet<String>,
     pub focused_task_uid: Option<&'a str>,
-    pub sort_paused_higher: bool,
+    pub paused_sort_behavior: crate::config::PausedSortBehavior,
     pub sort_tiebreak_recent: bool,
 }
 
@@ -3375,7 +3375,7 @@ impl TaskStore {
                             options.default_priority,
                             options.sort_standard_by_priority,
                             options.sort_preset,
-                            options.sort_paused_higher,
+                            options.paused_sort_behavior,
                         )
                         .then_with(|| {
                             if options.sort_tiebreak_recent {
@@ -3426,7 +3426,7 @@ impl TaskStore {
                             options.default_priority,
                             options.sort_standard_by_priority,
                             options.sort_preset,
-                            options.sort_paused_higher,
+                            options.paused_sort_behavior,
                         )
                         .then_with(|| {
                             if options.sort_tiebreak_recent {
@@ -3500,7 +3500,7 @@ impl TaskStore {
                 sort_preset: options.sort_preset,
                 search_collapsed_tasks: options.search_collapsed_tasks,
                 focused_task_uid: options.focused_task_uid,
-                sort_paused_higher: options.sort_paused_higher,
+                paused_sort_behavior: options.paused_sort_behavior,
                 sort_tiebreak_recent: options.sort_tiebreak_recent,
             },
         );
@@ -4150,7 +4150,7 @@ mod tests {
                 sort_preset: crate::config::SortPreset::UrgentStartedDue,
                 search_collapsed_tasks: &HashSet::new(),
                 focused_task_uid: None,
-                sort_paused_higher: false,
+                paused_sort_behavior: crate::config::PausedSortBehavior::default(),
                 sort_tiebreak_recent: false,
             },
         );
@@ -4202,7 +4202,7 @@ mod tests {
                 sort_preset: crate::config::SortPreset::UrgentStartedDue,
                 search_collapsed_tasks: &HashSet::new(),
                 focused_task_uid: None,
-                sort_paused_higher: false,
+                paused_sort_behavior: crate::config::PausedSortBehavior::default(),
                 sort_tiebreak_recent: false,
             },
         );
@@ -4255,7 +4255,7 @@ mod tests {
                 sort_preset: crate::config::SortPreset::UrgentStartedDue,
                 search_collapsed_tasks: &HashSet::new(),
                 focused_task_uid: None,
-                sort_paused_higher: false,
+                paused_sort_behavior: crate::config::PausedSortBehavior::default(),
                 sort_tiebreak_recent: false,
             },
         );

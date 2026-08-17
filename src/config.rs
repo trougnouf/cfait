@@ -248,6 +248,25 @@ impl<'de> Deserialize<'de> for Goal {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, EnumIter)]
+#[serde(rename_all = "lowercase")]
+pub enum PausedSortBehavior {
+    #[default]
+    Tiebreak,
+    Top,
+    None,
+}
+
+impl fmt::Display for PausedSortBehavior {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PausedSortBehavior::Tiebreak => write!(f, "Tie-breaker (within rank/date)"),
+            PausedSortBehavior::Top => write!(f, "Top of list (above unstarted)"),
+            PausedSortBehavior::None => write!(f, "Off (treat as unstarted)"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, EnumIter)]
 pub enum LogLevel {
     #[default]
     Error,
@@ -675,8 +694,8 @@ pub struct Config {
     /// by priority first, then by due date.  Default is `false` (date-first).
     #[serde(default)]
     pub sort_standard_by_priority: bool,
-    #[serde(default = "default_true")]
-    pub sort_paused_higher: bool,
+    #[serde(default)]
+    pub paused_sort_behavior: PausedSortBehavior,
     #[serde(default)]
     pub sort_tiebreak_recent: bool,
     /// Priority order for sorting tasks within the urgent/due soon/started ranks.
@@ -822,8 +841,8 @@ pub struct SyncableConfig {
     pub sort_cutoff_days: Option<u32>,
     #[serde(default)]
     pub sort_standard_by_priority: bool,
-    #[serde(default = "default_true")]
-    pub sort_paused_higher: bool,
+    #[serde(default)]
+    pub paused_sort_behavior: PausedSortBehavior,
     #[serde(default)]
     pub sort_tiebreak_recent: bool,
     #[serde(default)]
@@ -910,7 +929,7 @@ impl Default for Config {
             ui_scale: 1.0,
             sort_cutoff_days: Some(30),
             sort_standard_by_priority: false,
-            sort_paused_higher: true,
+            paused_sort_behavior: PausedSortBehavior::default(),
             sort_tiebreak_recent: true,
             sort_preset: SortPreset::default(),
             tag_aliases: HashMap::new(),
@@ -971,7 +990,7 @@ impl Config {
             show_inline_descriptions: self.show_inline_descriptions,
             sort_cutoff_days: self.sort_cutoff_days,
             sort_standard_by_priority: self.sort_standard_by_priority,
-            sort_paused_higher: self.sort_paused_higher,
+            paused_sort_behavior: self.paused_sort_behavior,
             sort_tiebreak_recent: self.sort_tiebreak_recent,
             sort_preset: self.sort_preset,
             urgent_days_horizon: self.urgent_days_horizon,
@@ -1018,7 +1037,7 @@ impl Config {
         self.show_inline_descriptions = sync.show_inline_descriptions;
         self.sort_cutoff_days = sync.sort_cutoff_days;
         self.sort_standard_by_priority = sync.sort_standard_by_priority;
-        self.sort_paused_higher = sync.sort_paused_higher;
+        self.paused_sort_behavior = sync.paused_sort_behavior;
         self.sort_tiebreak_recent = sync.sort_tiebreak_recent;
         self.sort_preset = sync.sort_preset;
         self.urgent_days_horizon = sync.urgent_days_horizon;
@@ -1328,11 +1347,9 @@ impl Config {
                 out.push_str(
                     " # Boolean: If true, regular tasks sort by priority first, then by date.",
                 );
-            } else if trimmed.starts_with("sort_paused_higher =") {
+            } else if trimmed.starts_with("paused_sort_behavior =") {
                 out.push_str(line);
-                out.push_str(
-                    " # Boolean: If true, paused tasks bubble to the top of standard actionable ranks.",
-                );
+                out.push_str(" # Enum: Paused tasks behavior (Tiebreak, Top, None).");
             } else if trimmed.starts_with("sort_tiebreak_recent =") {
                 out.push_str(line);
                 out.push_str(

@@ -216,7 +216,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ToggleHideFullyCompletedTags(_)
         | Message::ToggleHideAliasesInSidebar(_)
         | Message::ToggleSortStandardByPriority(_)
-        | Message::ToggleSortPausedHigher(_)
+        | Message::SetPausedSortBehavior(_)
         | Message::ToggleSortTiebreakRecent(_)
         | Message::SetSortPreset(_)
         | Message::ToggleSortStandardByPriorityToggle

@@ -42,7 +42,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.hide_aliases_in_sidebar = config.hide_aliases_in_sidebar;
             app.show_inline_descriptions = config.show_inline_descriptions;
             app.sort_standard_by_priority = config.sort_standard_by_priority;
-            app.sort_paused_higher = config.sort_paused_higher;
+            app.paused_sort_behavior = config.paused_sort_behavior;
             app.sort_tiebreak_recent = config.sort_tiebreak_recent;
             app.sort_preset = config.sort_preset;
             app.ui_scale = config.ui_scale;
@@ -192,7 +192,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.hide_aliases_in_sidebar = config.hide_aliases_in_sidebar;
             app.show_inline_descriptions = config.show_inline_descriptions;
             app.sort_standard_by_priority = config.sort_standard_by_priority;
-            app.sort_paused_higher = config.sort_paused_higher;
+            app.paused_sort_behavior = config.paused_sort_behavior;
             app.sort_tiebreak_recent = config.sort_tiebreak_recent;
             app.sort_preset = config.sort_preset;
             app.ui_scale = config.ui_scale;

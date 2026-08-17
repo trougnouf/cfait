@@ -338,7 +338,7 @@ All persistent state and settings live here. Unrecognized TOML keys must not be 
 
 **Sorting & Limits:**
 *   `sort_preset`: Enum (`UrgentStartedDue`, `UrgentDueStarted`, `StartedUrgentDue`).
-*   `sort_paused_higher`: Boolean. If true, paused tasks bubble to the top of standard actionable ranks.
+*   `paused_sort_behavior`: Enum (`tiebreak`, `top`, `none`). Defines how paused tasks sort against unstarted ones. Default is `tiebreak` (wins ties within the same rank/priority).
 *   `sort_tiebreak_recent`: Boolean. If true, ties in sorting are broken by recently modified rather than alphabetical.
 *   `sort_cutoff_days`: Integer/None. Rank 4 vs 5 divider.
 *   `sort_standard_by_priority`: Boolean. Merge ranks 4/5.

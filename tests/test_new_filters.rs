@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Tests for newer filter features (relative dates, etc.).
-use cfait::config::SortPreset;
+use cfait::config::{PausedSortBehavior, SortPreset};
 use cfait::context::TestContext;
 use cfait::model::{Task, TaskStatus};
 use cfait::store::{FilterOptions, TaskStore};
@@ -182,7 +182,7 @@ fn test_is_ready_filters_future_start_dates() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
-        sort_paused_higher: true,
+        paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
     };
 
@@ -269,7 +269,7 @@ fn test_is_ready_filters_blocked_tasks() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
-        sort_paused_higher: true,
+        paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
     };
 
@@ -362,7 +362,7 @@ fn test_is_ready_combines_with_other_filters() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
-        sort_paused_higher: true,
+        paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
     };
 
@@ -442,7 +442,7 @@ fn test_is_ready_filters_implicitly_future_tasks() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
-        sort_paused_higher: true,
+        paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
     };
 
@@ -505,7 +505,7 @@ fn test_is_ready_filters_implicitly_future_tasks() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
-        sort_paused_higher: true,
+        paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
     };
 

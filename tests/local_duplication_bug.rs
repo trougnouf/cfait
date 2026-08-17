@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Tests for local duplication bug.
-use cfait::config::SortPreset;
+use cfait::config::{PausedSortBehavior, SortPreset};
 use cfait::context::TestContext;
 use cfait::model::{Task, TaskStatus};
 use cfait::storage::{LOCAL_CALENDAR_HREF, LocalStorage};
@@ -80,7 +80,7 @@ fn test_reproduce_android_local_revert_bug() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
-        sort_paused_higher: true,
+        paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
     });
 

@@ -448,7 +448,7 @@ pub struct MobileConfig {
     pub sort_cutoff_days: Option<u32>,
     pub sort_standard_by_priority: bool,
     pub sort_preset: String,
-    pub sort_paused_higher: bool,
+    pub paused_sort_behavior: String,
     pub sort_tiebreak_recent: bool,
     pub urgent_days: u32,
     pub urgent_prio: u8,
@@ -1184,7 +1184,11 @@ impl CfaitMobile {
             sort_cutoff_days: c.sort_cutoff_days,
             sort_standard_by_priority: c.sort_standard_by_priority,
             sort_preset: c.sort_preset.to_string(),
-            sort_paused_higher: c.sort_paused_higher,
+            paused_sort_behavior: match c.paused_sort_behavior {
+                crate::config::PausedSortBehavior::Top => "top".to_string(),
+                crate::config::PausedSortBehavior::None => "none".to_string(),
+                crate::config::PausedSortBehavior::Tiebreak => "tiebreak".to_string(),
+            },
             sort_tiebreak_recent: c.sort_tiebreak_recent,
             urgent_days: c.urgent_days_horizon,
             urgent_prio: c.urgent_priority_threshold,
@@ -1341,7 +1345,11 @@ impl CfaitMobile {
         c.disabled_calendars = config.disabled_calendars;
         c.sort_cutoff_days = config.sort_cutoff_days;
         c.sort_standard_by_priority = config.sort_standard_by_priority;
-        c.sort_paused_higher = config.sort_paused_higher;
+        c.paused_sort_behavior = match config.paused_sort_behavior.as_str() {
+            "top" => crate::config::PausedSortBehavior::Top,
+            "none" => crate::config::PausedSortBehavior::None,
+            _ => crate::config::PausedSortBehavior::Tiebreak,
+        };
         c.sort_tiebreak_recent = config.sort_tiebreak_recent;
         c.sort_preset = config.sort_preset.parse().unwrap_or_default();
         c.urgent_days_horizon = config.urgent_days;
@@ -2217,7 +2225,7 @@ impl CfaitMobile {
             start_grace_period_days: config.start_grace_period_days,
             sort_standard_by_priority: config.sort_standard_by_priority,
             sort_preset: config.sort_preset,
-            sort_paused_higher: config.sort_paused_higher,
+            paused_sort_behavior: config.paused_sort_behavior,
             sort_tiebreak_recent: config.sort_tiebreak_recent,
             expanded_done_groups: &expanded_set,
             expanded_tags: &expanded_tags_set,
@@ -2467,7 +2475,7 @@ impl CfaitMobile {
             start_grace_period_days: config.start_grace_period_days,
             sort_standard_by_priority: config.sort_standard_by_priority,
             sort_preset: config.sort_preset,
-            sort_paused_higher: config.sort_paused_higher,
+            paused_sort_behavior: config.paused_sort_behavior,
             sort_tiebreak_recent: config.sort_tiebreak_recent,
             expanded_done_groups: &HashSet::new(),
             expanded_tags: &HashSet::new(),

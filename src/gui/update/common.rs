@@ -153,7 +153,7 @@ pub fn save_config(app: &mut GuiApp) -> Config {
     cfg.hide_aliases_in_sidebar = app.hide_aliases_in_sidebar;
     cfg.show_inline_descriptions = app.show_inline_descriptions;
     cfg.sort_standard_by_priority = app.sort_standard_by_priority;
-    cfg.sort_paused_higher = app.sort_paused_higher;
+    cfg.paused_sort_behavior = app.paused_sort_behavior;
     cfg.sort_tiebreak_recent = app.sort_tiebreak_recent;
     cfg.sort_preset = app.sort_preset;
     cfg.ui_scale = app.ui_scale;

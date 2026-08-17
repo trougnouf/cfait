@@ -978,8 +978,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             refresh_filtered_tasks(app);
             Task::none()
         }
-        Message::ToggleSortPausedHigher(val) => {
-            app.sort_paused_higher = val;
+        Message::SetPausedSortBehavior(val) => {
+            app.paused_sort_behavior = val;
             save_config(app);
             refresh_filtered_tasks(app);
             Task::none()

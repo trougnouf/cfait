@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Tests for blocked sorting functionality.
-use cfait::config::SortPreset;
+use cfait::config::{PausedSortBehavior, SortPreset};
 use cfait::context::TestContext;
 use cfait::model::{DateType, Task, TaskStatus};
 use cfait::store::{FilterOptions, TaskStore};
@@ -63,7 +63,7 @@ fn test_blocked_tasks_skip_urgent_rank() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
-        sort_paused_higher: true,
+        paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
     };
 
@@ -151,7 +151,7 @@ fn test_blocked_tasks_skip_due_soon_rank() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
-        sort_paused_higher: true,
+        paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
     };
 
@@ -237,7 +237,7 @@ fn test_blocked_tasks_skip_started_rank() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
-        sort_paused_higher: true,
+        paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
     };
 
@@ -324,7 +324,7 @@ fn test_dependency_blocked_tasks_also_skip_ranks() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
-        sort_paused_higher: true,
+        paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
     };
 
@@ -416,7 +416,7 @@ fn test_is_ready_filters_manually_blocked_tasks() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
-        sort_paused_higher: true,
+        paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
     };
 
@@ -494,7 +494,7 @@ fn test_is_blocked_filter_shows_only_blocked() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
-        sort_paused_higher: true,
+        paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
     };
 

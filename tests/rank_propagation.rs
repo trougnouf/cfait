@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Tests for rank propagation.
-use cfait::config::SortPreset;
+use cfait::config::{PausedSortBehavior, SortPreset};
 use cfait::context::TestContext;
 use cfait::model::Task;
 use cfait::store::{FilterOptions, TaskStore};
@@ -72,7 +72,7 @@ fn parent_inherits_child_priority_and_sorts_before_sibling() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
-        sort_paused_higher: true,
+        paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
     };
 
@@ -168,7 +168,7 @@ fn compare_two_parents_inherited_priorities_determine_order() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
-        sort_paused_higher: true,
+        paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
     };
 
@@ -259,7 +259,7 @@ fn parent_inherits_started_child_over_unset_sibling() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
-        sort_paused_higher: true,
+        paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
     };
 

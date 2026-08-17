@@ -53,7 +53,7 @@ fun AdvancedSettingsScreen(
     var tlsClientKeyPath by remember { mutableStateOf("") }
 
     var sortStandardByPriority by remember { mutableStateOf(false) }
-    var sortPausedHigher by remember { mutableStateOf(true) }
+    var pausedSortBehavior by remember { mutableStateOf("tiebreak") }
     var sortTiebreakRecent by remember { mutableStateOf(false) }
     var sortPreset by remember { mutableStateOf("UrgentStartedDue") }
     var sortDays by remember { mutableStateOf("30") }
@@ -79,7 +79,7 @@ fun AdvancedSettingsScreen(
             tlsClientKeyPath = cfg.tlsClientKeyPath ?: ""
 
             sortStandardByPriority = cfg.sortStandardByPriority
-            sortPausedHigher = cfg.sortPausedHigher
+            pausedSortBehavior = cfg.pausedSortBehavior
             sortTiebreakRecent = cfg.sortTiebreakRecent
             sortPreset = cfg.sortPreset
             sortDays = cfg.sortCutoffDays?.toString() ?: ""
@@ -111,7 +111,7 @@ fun AdvancedSettingsScreen(
                 tlsClientKeyPath = tlsClientKeyPath.takeIf { it.isNotBlank() },
 
                 sortStandardByPriority = sortStandardByPriority,
-                sortPausedHigher = sortPausedHigher,
+                pausedSortBehavior = pausedSortBehavior,
                 sortTiebreakRecent = sortTiebreakRecent,
                 sortPreset = sortPreset,
                 sortCutoffDays = sortDays.toUIntOrNull(),
@@ -215,21 +215,23 @@ fun AdvancedSettingsScreen(
 
             // Sorting Rules
             Text(
-                stringResource(R.string.sorting_timeframes),
+                stringResource(R.string.sorting_and_visibility),
                 fontWeight = FontWeight.Bold,
-                fontSize = 18.sp,
+                fontSize = 20.sp,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(bottom = 16.dp)
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            Text(
+                stringResource(R.string.settings_sorting),
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 16.sp,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 8.dp)
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Switch(checked = sortStandardByPriority, onCheckedChange = { sortStandardByPriority = it })
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.sort_standard_by_priority_label))
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
-                Switch(checked = sortPausedHigher, onCheckedChange = { sortPausedHigher = it })
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.sort_paused_higher))
             }
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                 Switch(checked = sortTiebreakRecent, onCheckedChange = { sortTiebreakRecent = it })
@@ -238,10 +240,53 @@ fun AdvancedSettingsScreen(
             }
             
             Spacer(Modifier.height(16.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                Text(stringResource(R.string.settings_paused_tasks), modifier = Modifier.weight(1f))
+                DropdownPicker(
+                    label = "",
+                    selected = pausedSortBehavior,
+                    options = listOf(
+                        "tiebreak" to "Tie-breaker (within rank/date)",
+                        "top" to "Top of list (above unstarted)",
+                        "none" to "Off (treat as unstarted)"
+                    ),
+                    onSelect = { pausedSortBehavior = it },
+                    modifier = Modifier.width(240.dp)
+                )
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                Text(stringResource(R.string.sorting_preset_label), modifier = Modifier.weight(1f))
+                DropdownPicker(
+                    label = "",
+                    selected = sortPreset,
+                    options = listOf(
+                        "UrgentStartedDue" to "Urgent > Ongoing > Due Soon",
+                        "UrgentDueStarted" to "Urgent > Due Soon > Ongoing",
+                        "StartedUrgentDue" to "Ongoing > Urgent > Due Soon"
+                    ),
+                    onSelect = { sortPreset = it },
+                    modifier = Modifier.width(240.dp)
+                )
+            }
             Text(
-                stringResource(R.string.settings_sort_behavior),
+                stringResource(R.string.settings_sort_preset_explain),
+                fontSize = 12.sp,
+                color = androidx.compose.ui.graphics.Color.Gray,
+                modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+            )
+
+            Text(
+                stringResource(R.string.settings_urgent_and_timeframes),
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 16.sp
+                fontSize = 16.sp,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            Text(
+                stringResource(R.string.settings_urgent_definition),
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                modifier = Modifier.padding(bottom = 16.dp)
             )
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                 Text(stringResource(R.string.sorting_preset_label), modifier = Modifier.weight(1f))

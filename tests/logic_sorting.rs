@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Tests for task sorting logic.
-use cfait::config::SortPreset;
+use cfait::config::{PausedSortBehavior, SortPreset};
 use cfait::model::item::{CompareOptions, SortKey, compare_sortkeys};
 use cfait::model::{DateType, Task, TaskStatus};
 use cfait::store::organize_hierarchy;
@@ -34,7 +34,7 @@ fn test_sorting_priority_basic() {
                 start_grace_period_days: 1,
                 sort_standard_by_priority: false,
                 sort_preset: SortPreset::default(),
-                sort_paused_higher: true,
+                paused_sort_behavior: PausedSortBehavior::default(),
                 sort_tiebreak_recent: false,
             }
         ), // Pass defaults
@@ -53,7 +53,7 @@ fn test_sorting_priority_basic() {
                 start_grace_period_days: 1,
                 sort_standard_by_priority: false,
                 sort_preset: SortPreset::default(),
-                sort_paused_higher: true,
+                paused_sort_behavior: PausedSortBehavior::default(),
                 sort_tiebreak_recent: false,
             }
         ), // Pass defaults
@@ -88,7 +88,7 @@ fn test_sorting_status_trumps_everything() {
                 start_grace_period_days: 1,
                 sort_standard_by_priority: false,
                 sort_preset: SortPreset::default(),
-                sort_paused_higher: true,
+                paused_sort_behavior: PausedSortBehavior::default(),
                 sort_tiebreak_recent: false,
             }
         ),
@@ -118,7 +118,7 @@ fn test_sorting_completed_sinks() {
                 start_grace_period_days: 1,
                 sort_standard_by_priority: false,
                 sort_preset: SortPreset::default(),
-                sort_paused_higher: true,
+                paused_sort_behavior: PausedSortBehavior::default(),
                 sort_tiebreak_recent: false,
             }
         ),
@@ -151,7 +151,7 @@ fn test_sorting_due_dates() {
                 start_grace_period_days: 1,
                 sort_standard_by_priority: false,
                 sort_preset: SortPreset::default(),
-                sort_paused_higher: true,
+                paused_sort_behavior: PausedSortBehavior::default(),
                 sort_tiebreak_recent: false,
             }
         ),
@@ -170,7 +170,7 @@ fn test_sorting_due_dates() {
                 start_grace_period_days: 1,
                 sort_standard_by_priority: false,
                 sort_preset: SortPreset::default(),
-                sort_paused_higher: true,
+                paused_sort_behavior: PausedSortBehavior::default(),
                 sort_tiebreak_recent: false,
             }
         ),
@@ -204,7 +204,7 @@ fn test_hierarchy_organization() {
             sort_preset: SortPreset::default(),
             search_collapsed_tasks: &HashSet::new(),
             focused_task_uid: None,
-            sort_paused_higher: true,
+            paused_sort_behavior: PausedSortBehavior::default(),
             sort_tiebreak_recent: false,
         },
     );
@@ -251,7 +251,7 @@ fn test_sort_standard_date_first() {
             5,
             false,
             SortPreset::default(),
-            true
+            PausedSortBehavior::default()
         ),
         std::cmp::Ordering::Less,
         "date-first: soon task should sort before late task regardless of priority"
@@ -286,7 +286,7 @@ fn test_sort_standard_priority_first() {
             5,
             true,
             SortPreset::default(),
-            true
+            PausedSortBehavior::default()
         ),
         std::cmp::Ordering::Less,
         "priority-first: high-priority task should sort before low-priority task regardless of date"
@@ -322,7 +322,7 @@ fn test_sort_merged_rank4_rank5_priority_wins() {
             5,
             true,
             SortPreset::default(),
-            true
+            PausedSortBehavior::default()
         ),
         std::cmp::Ordering::Less,
         "priority-first: rank-5 high-priority task should sort before rank-4 low-priority task"
@@ -362,7 +362,7 @@ fn test_sort_merged_same_priority_date_wins() {
             5,
             true,
             SortPreset::default(),
-            true
+            PausedSortBehavior::default()
         ),
         std::cmp::Ordering::Less,
         "merged (flag=true): same priority → task with date before task without date"
@@ -375,7 +375,7 @@ fn test_sort_merged_same_priority_date_wins() {
             5,
             false,
             SortPreset::default(),
-            true
+            PausedSortBehavior::default()
         ),
         std::cmp::Ordering::Less,
         "non-merged (flag=false): rank-5 is already priority-first+date, so ordering is the same"
@@ -409,7 +409,7 @@ fn test_sort_rank4_before_rank5_when_flag_off() {
             5,
             false,
             SortPreset::default(),
-            true
+            PausedSortBehavior::default()
         ),
         std::cmp::Ordering::Less,
         "flag off: rank-4 task must always sort before rank-5 task"
@@ -444,7 +444,7 @@ fn test_sort_urgent_ranks_always_date_first() {
             5,
             true,
             SortPreset::default(),
-            true
+            PausedSortBehavior::default()
         ),
         std::cmp::Ordering::Less,
         "rank-2 must remain date-first even when sort_standard_by_priority is true"
