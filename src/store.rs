@@ -2228,12 +2228,21 @@ impl TaskStore {
     /// Get list of tasks that DECLARE they are related to the provided uid (i.e. sources).
     pub fn get_tasks_related_to(&self, uid: &str) -> Vec<(String, String)> {
         if let Some(source_uids) = self.related_from_index.get(uid) {
-            source_uids
+            let mut tasks: Vec<_> = source_uids
                 .iter()
-                .filter_map(|source_uid| {
-                    self.get_summary(source_uid)
-                        .map(|summary| (source_uid.clone(), summary))
-                })
+                .filter_map(|source_uid| self.get_task_ref(source_uid))
+                .collect();
+
+            // Sort latest first (descending completion date, then fallback to created date)
+            tasks.sort_by(|a, b| {
+                let a_date = a.completion_date().or_else(|| a.created_date());
+                let b_date = b.completion_date().or_else(|| b.created_date());
+                b_date.cmp(&a_date).then_with(|| a.summary.cmp(&b.summary))
+            });
+
+            tasks
+                .into_iter()
+                .map(|t| (t.uid.clone(), t.summary.clone()))
                 .collect()
         } else {
             Vec::new()
@@ -2243,12 +2252,21 @@ impl TaskStore {
     /// Returns tasks that are blocked BY the given uid (i.e. successors).
     pub fn get_tasks_blocking(&self, uid: &str) -> Vec<(String, String)> {
         if let Some(blocked_uids) = self.blocking_index.get(uid) {
-            blocked_uids
+            let mut tasks: Vec<_> = blocked_uids
                 .iter()
-                .filter_map(|blocked_uid| {
-                    self.get_summary(blocked_uid)
-                        .map(|summary| (blocked_uid.clone(), summary))
-                })
+                .filter_map(|blocked_uid| self.get_task_ref(blocked_uid))
+                .collect();
+
+            // Sort ascending by created date (oldest first) for sequential dependencies
+            tasks.sort_by(|a, b| {
+                let a_date = a.created_date();
+                let b_date = b.created_date();
+                a_date.cmp(&b_date).then_with(|| a.summary.cmp(&b.summary))
+            });
+
+            tasks
+                .into_iter()
+                .map(|t| (t.uid.clone(), t.summary.clone()))
                 .collect()
         } else {
             Vec::new()
