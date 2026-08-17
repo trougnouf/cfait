@@ -243,14 +243,22 @@ fn test_event_generation_month_due_only() {
     let result = task.to_event_ics();
     assert!(
         !result.is_empty(),
-        "Month due-only task should generate an event"
+        "Month due-only task should generate events"
+    );
+    // Fuzzy dates now generate two separate 1-day events
+    assert_eq!(
+        result.len(),
+        2,
+        "Month due-only should split into -start and -due events"
     );
 
-    let (suffix, ics) = &result[0];
-    assert_eq!(suffix, "");
-    // Should span the entire month
-    assert!(ics.contains("DTSTART;VALUE=DATE:20250601"));
-    assert!(ics.contains("DTEND;VALUE=DATE:20250701"));
+    let start_event = result.iter().find(|(s, _)| s == "-start").unwrap();
+    assert!(start_event.1.contains("DTSTART;VALUE=DATE:20250601"));
+    assert!(start_event.1.contains("DTEND;VALUE=DATE:20250602"));
+
+    let due_event = result.iter().find(|(s, _)| s == "-due").unwrap();
+    assert!(due_event.1.contains("DTSTART;VALUE=DATE:20250630"));
+    assert!(due_event.1.contains("DTEND;VALUE=DATE:20250701"));
 }
 
 #[test]
@@ -261,14 +269,22 @@ fn test_event_generation_year_start_only() {
     let result = task.to_event_ics();
     assert!(
         !result.is_empty(),
-        "Year start-only task should generate an event"
+        "Year start-only task should generate events"
+    );
+    // Fuzzy dates now generate two separate 1-day events
+    assert_eq!(
+        result.len(),
+        2,
+        "Year start-only should split into -start and -due events"
     );
 
-    let (suffix, ics) = &result[0];
-    assert_eq!(suffix, "");
-    // Should span the entire year
-    assert!(ics.contains("DTSTART;VALUE=DATE:20250101"));
-    assert!(ics.contains("DTEND;VALUE=DATE:20260101"));
+    let start_event = result.iter().find(|(s, _)| s == "-start").unwrap();
+    assert!(start_event.1.contains("DTSTART;VALUE=DATE:20250101"));
+    assert!(start_event.1.contains("DTEND;VALUE=DATE:20250102"));
+
+    let due_event = result.iter().find(|(s, _)| s == "-due").unwrap();
+    assert!(due_event.1.contains("DTSTART;VALUE=DATE:20251231"));
+    assert!(due_event.1.contains("DTEND;VALUE=DATE:20260101"));
 }
 
 #[test]
@@ -292,11 +308,11 @@ fn test_event_generation_month_start_due_different() {
             .contains("SUMMARY:Cross-month project (start)")
     );
     assert!(start_event.1.contains("DTSTART;VALUE=DATE:20250101"));
-    // For AllDay events, DTEND is exclusive (next day)
-    assert!(start_event.1.contains("DTEND;VALUE=DATE:20250201"));
+    // Fuzzy dates now generate 1-day events, so DTEND is next day
+    assert!(start_event.1.contains("DTEND;VALUE=DATE:20250102"));
 
     let due_event = result.iter().find(|(s, _)| s == "-due").unwrap();
     assert!(due_event.1.contains("SUMMARY:Cross-month project (due)"));
-    assert!(due_event.1.contains("DTSTART;VALUE=DATE:20250301"));
+    assert!(due_event.1.contains("DTSTART;VALUE=DATE:20250331"));
     assert!(due_event.1.contains("DTEND;VALUE=DATE:20250401"));
 }

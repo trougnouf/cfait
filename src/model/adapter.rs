@@ -1282,8 +1282,8 @@ impl IcsAdapter {
                         DateType::Specific(*dt - chrono::Duration::minutes(duration_mins))
                     }
                     DateType::Month(_, _) | DateType::Year(_) => {
-                        let (start_boundary, _) = split_fuzzy_date(due);
-                        start_boundary
+                        let (_, due_boundary) = split_fuzzy_date(due);
+                        due_boundary
                     }
                 };
                 let end_dt = match due {
@@ -1314,8 +1314,8 @@ impl IcsAdapter {
                         DateType::Specific(*dt + chrono::Duration::minutes(duration_mins))
                     }
                     DateType::Month(_, _) | DateType::Year(_) => {
-                        let (_, due_boundary) = split_fuzzy_date(start);
-                        due_boundary
+                        let (start_boundary, _) = split_fuzzy_date(start);
+                        start_boundary
                     }
                 };
                 let ics = Self::make_single_event_ics(task, "", start_dt, end_dt);
@@ -1371,14 +1371,24 @@ impl IcsAdapter {
                                 ));
                             }
                             DateType::Month(_, _) | DateType::Year(_) => {
-                                let (start_boundary, due_boundary) = split_fuzzy_date(d);
+                                let (s_start_boundary, _) = split_fuzzy_date(s);
+                                let (_, d_due_boundary) = split_fuzzy_date(d);
                                 results.push((
-                                    "".to_string(),
+                                    "-start".to_string(),
                                     Self::make_single_event_ics(
                                         task,
-                                        "",
-                                        start_boundary,
-                                        due_boundary,
+                                        "-start",
+                                        s_start_boundary.clone(),
+                                        s_start_boundary,
+                                    ),
+                                ));
+                                results.push((
+                                    "-due".to_string(),
+                                    Self::make_single_event_ics(
+                                        task,
+                                        "-due",
+                                        d_due_boundary.clone(),
+                                        d_due_boundary,
                                     ),
                                 ));
                             }
@@ -1409,22 +1419,22 @@ impl IcsAdapter {
                         } else {
                             // > 1 day apart -> Two separate 1-day/1-hour events
                             // For Month/Year types, split into boundary dates
-                            let (s_start, s_end) = split_fuzzy_date(s);
-                            let (d_start, d_end) = split_fuzzy_date(d);
+                            let (s_start, _s_end) = split_fuzzy_date(s);
+                            let (_d_start, d_end) = split_fuzzy_date(d);
 
                             let start_event_end = match s {
                                 DateType::AllDay(date) => DateType::AllDay(*date),
                                 DateType::Specific(dt) => {
                                     DateType::Specific(*dt + chrono::Duration::hours(1))
                                 }
-                                DateType::Month(_, _) | DateType::Year(_) => s_end.clone(),
+                                DateType::Month(_, _) | DateType::Year(_) => s_start.clone(),
                             };
                             let due_event_start = match d {
                                 DateType::AllDay(date) => DateType::AllDay(*date),
                                 DateType::Specific(dt) => {
                                     DateType::Specific(*dt - chrono::Duration::hours(1))
                                 }
-                                DateType::Month(_, _) | DateType::Year(_) => d_start.clone(),
+                                DateType::Month(_, _) | DateType::Year(_) => d_end.clone(),
                             };
 
                             // For Month/Year, use the boundary dates
@@ -1494,8 +1504,22 @@ impl IcsAdapter {
                         }
                         DateType::Month(_, _) | DateType::Year(_) => {
                             results.push((
-                                "".to_string(),
-                                Self::make_single_event_ics(task, "", start_boundary, due_boundary),
+                                "-start".to_string(),
+                                Self::make_single_event_ics(
+                                    task,
+                                    "-start",
+                                    start_boundary.clone(),
+                                    start_boundary,
+                                ),
+                            ));
+                            results.push((
+                                "-due".to_string(),
+                                Self::make_single_event_ics(
+                                    task,
+                                    "-due",
+                                    due_boundary.clone(),
+                                    due_boundary,
+                                ),
                             ));
                         }
                     }
@@ -1532,8 +1556,22 @@ impl IcsAdapter {
                         }
                         DateType::Month(_, _) | DateType::Year(_) => {
                             results.push((
-                                "".to_string(),
-                                Self::make_single_event_ics(task, "", start_boundary, due_boundary),
+                                "-start".to_string(),
+                                Self::make_single_event_ics(
+                                    task,
+                                    "-start",
+                                    start_boundary.clone(),
+                                    start_boundary,
+                                ),
+                            ));
+                            results.push((
+                                "-due".to_string(),
+                                Self::make_single_event_ics(
+                                    task,
+                                    "-due",
+                                    due_boundary.clone(),
+                                    due_boundary,
+                                ),
                             ));
                         }
                     }
