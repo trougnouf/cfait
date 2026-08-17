@@ -911,7 +911,7 @@ impl Default for Config {
             sort_cutoff_days: Some(30),
             sort_standard_by_priority: false,
             sort_paused_higher: true,
-            sort_tiebreak_recent: false,
+            sort_tiebreak_recent: true,
             sort_preset: SortPreset::default(),
             tag_aliases: HashMap::new(),
             language: None,

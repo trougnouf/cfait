@@ -455,7 +455,7 @@ impl Default for GuiApp {
             sort_cutoff_days: Some(30),
             sort_standard_by_priority: false,
             sort_paused_higher: true,
-            sort_tiebreak_recent: false,
+            sort_tiebreak_recent: core_config.sort_tiebreak_recent,
             sort_preset: crate::config::SortPreset::default(),
             ob_sort_days_input: "30".to_string(),
             current_theme: AppTheme::default(),

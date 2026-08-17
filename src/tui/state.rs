@@ -235,7 +235,7 @@ impl AppState {
             sort_cutoff_days: Some(30),
             sort_standard_by_priority: false,
             sort_paused_higher: true,
-            sort_tiebreak_recent: false,
+            sort_tiebreak_recent: config.sort_tiebreak_recent,
             theme: crate::config::AppTheme::default(),
             // Initialize sidebar caches as empty; they will be populated by refresh_filtered_view()
             cached_categories: Vec::new(),
