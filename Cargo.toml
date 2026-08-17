@@ -41,7 +41,7 @@ icalendar = "0.17"
 uuid = { version = "1.24", features = ["v4"] }
 tokio = { version = "1", features = ["full"] }
 camino = "1.2"
-libdav = { git = "https://git.sr.ht/~trougnouf/libdav", branch = "feature/generic-response-bodies" }
+libdav = { git = "https://git.sr.ht/~whynothugo/libdav", rev = "30debd36a52e06cf5e57f3d5a199b4e3f96d353d" }
 http = "1.5"
 hyper-util = { version = "0.1", features = ["client", "client-legacy", "http1", "tokio"] }
 hyper-rustls = { version = "0.27", features = ["native-tokio"] }
