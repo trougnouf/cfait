@@ -363,7 +363,7 @@
     "help_org_estimated_duration": "Geschätzte Dauer (einzeln oder Bereich)",
     "help_org_grouping": "Tag-Namensräume und Schlüssel-Wert Attribute",
     "help_org_inline_tags": "Doppel-Präfix (##, @@@) erhält das Wort im Titel",
-    "help_org_location_hierarchy": "Ort (verwende ':' für Hierarchien)",
+    "help_org_location_hierarchy": "Ort (verwende ':' für Hierarchie, '|' für Alternativen)",
     "help_org_permanent": "Daueraufgabe (protokolliert Zeit anstatt Erledigung)",
     "help_org_priority": "Priorität hoch (1) bis niedrig (9)",
     "help_quick_start": "Schnellstart",
