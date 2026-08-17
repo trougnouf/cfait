@@ -224,8 +224,7 @@ jobs:
 
           sed -i "s/pkgver=.*/pkgver=${CLEAN_VER}/" PKGBUILD
           sed -i "s/'SKIP'/'$HASH'/" PKGBUILD
-          NEW_SOURCE_URL="https://git.disroot.org/trougnouf/cfait/releases/download/${RAW_VERSION}/cfait-source-${RAW_VERSION}.tar.gz"
-          sed -i "s|source=.*|source=(\"cfait-source-${RAW_VERSION}.tar.gz::${NEW_SOURCE_URL}\")|" PKGBUILD
+          sed -i "s|source=.*|source=(\"cfait-source-v\${pkgver}.tar.gz::\${url}/releases/download/v\${pkgver}/cfait-source-v\${pkgver}.tar.gz\")|" PKGBUILD
 
           # Fix ownership so builder user can write .SRCINFO
           chown -R builder:builder .
@@ -244,8 +243,7 @@ jobs:
 
           sed -i "s/pkgver=.*/pkgver=${CLEAN_VER}/" PKGBUILD_bin
           sed -i "s/'SKIP'/'$HASH_BIN'/" PKGBUILD_bin
-          NEW_SOURCE_URL_BIN="https://git.disroot.org/trougnouf/cfait/releases/download/${RAW_VERSION}/${LINUX_TAR}"
-          sed -i "s|source=.*|source=(\"${NEW_SOURCE_URL_BIN}\")|" PKGBUILD_bin
+          sed -i "s|source=.*|source=(\"\${url}/releases/download/v\${pkgver}/cfait-linux-v\${pkgver}.tar.xz\")|" PKGBUILD_bin
 
           su builder -c "makepkg -p PKGBUILD_bin --printsrcinfo > .SRCINFO_bin"
 

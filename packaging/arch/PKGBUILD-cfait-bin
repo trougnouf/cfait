@@ -27,7 +27,7 @@ optdepends=(
 )
 
 options=('!strip' '!emptydirs')
-source=()
+source=("$url/releases/download/v${pkgver}/cfait-linux-v${pkgver}.tar.xz")
 sha256sums=('SKIP')
 replaces=('rustycal' 'rustache' 'fairouille')
 provides=('cfait' 'cfait-gui')
