@@ -374,6 +374,12 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.sort_standard_by_priority)
                     .label(rust_i18n::t!("sort_standard_by_priority_label"))
                     .on_toggle(Message::ToggleSortStandardByPriority),
+                checkbox::<Message, iced::Theme, iced::Renderer>(app.sort_paused_higher)
+                    .label(rust_i18n::t!("sort_paused_higher"))
+                    .on_toggle(Message::ToggleSortPausedHigher),
+                checkbox::<Message, iced::Theme, iced::Renderer>(app.sort_tiebreak_recent)
+                    .label(rust_i18n::t!("sort_tiebreak_recent"))
+                    .on_toggle(Message::ToggleSortTiebreakRecent),
                 text(rust_i18n::t!("settings_sort_behavior")).size(18),
                 row![
                     text(rust_i18n::t!("sorting_preset_label")).width(Length::Fixed(200.0)),

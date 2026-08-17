@@ -80,6 +80,8 @@ fn test_reproduce_android_local_revert_bug() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
+        sort_paused_higher: true,
+        sort_tiebreak_recent: false,
     });
 
     let visible_task = filter_res

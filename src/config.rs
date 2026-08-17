@@ -398,9 +398,9 @@ pub enum SortPreset {
 impl fmt::Display for SortPreset {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SortPreset::UrgentStartedDue => write!(f, "Urgent > Started > Due Soon"),
-            SortPreset::UrgentDueStarted => write!(f, "Urgent > Due Soon > Started"),
-            SortPreset::StartedUrgentDue => write!(f, "Started > Urgent > Due Soon"),
+            SortPreset::UrgentStartedDue => write!(f, "Urgent > Ongoing > Due Soon"),
+            SortPreset::UrgentDueStarted => write!(f, "Urgent > Due Soon > Ongoing"),
+            SortPreset::StartedUrgentDue => write!(f, "Ongoing > Urgent > Due Soon"),
         }
     }
 }
@@ -409,9 +409,15 @@ impl std::str::FromStr for SortPreset {
     type Err = ();
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "Urgent > Started > Due Soon" => Ok(SortPreset::UrgentStartedDue),
-            "Urgent > Due Soon > Started" => Ok(SortPreset::UrgentDueStarted),
-            "Started > Urgent > Due Soon" => Ok(SortPreset::StartedUrgentDue),
+            "Urgent > Started > Due Soon" | "Urgent > Ongoing > Due Soon" => {
+                Ok(SortPreset::UrgentStartedDue)
+            }
+            "Urgent > Due Soon > Started" | "Urgent > Due Soon > Ongoing" => {
+                Ok(SortPreset::UrgentDueStarted)
+            }
+            "Started > Urgent > Due Soon" | "Ongoing > Urgent > Due Soon" => {
+                Ok(SortPreset::StartedUrgentDue)
+            }
             _ => Err(()),
         }
     }
@@ -669,6 +675,10 @@ pub struct Config {
     /// by priority first, then by due date.  Default is `false` (date-first).
     #[serde(default)]
     pub sort_standard_by_priority: bool,
+    #[serde(default = "default_true")]
+    pub sort_paused_higher: bool,
+    #[serde(default)]
+    pub sort_tiebreak_recent: bool,
     /// Priority order for sorting tasks within the urgent/due soon/started ranks.
     /// See `SortPreset` enum for available options.
     #[serde(default)]
@@ -812,6 +822,10 @@ pub struct SyncableConfig {
     pub sort_cutoff_days: Option<u32>,
     #[serde(default)]
     pub sort_standard_by_priority: bool,
+    #[serde(default = "default_true")]
+    pub sort_paused_higher: bool,
+    #[serde(default)]
+    pub sort_tiebreak_recent: bool,
     #[serde(default)]
     pub sort_preset: SortPreset,
     #[serde(default = "default_urgent_days")]
@@ -896,6 +910,8 @@ impl Default for Config {
             ui_scale: 1.0,
             sort_cutoff_days: Some(30),
             sort_standard_by_priority: false,
+            sort_paused_higher: true,
+            sort_tiebreak_recent: false,
             sort_preset: SortPreset::default(),
             tag_aliases: HashMap::new(),
             language: None,
@@ -955,6 +971,8 @@ impl Config {
             show_inline_descriptions: self.show_inline_descriptions,
             sort_cutoff_days: self.sort_cutoff_days,
             sort_standard_by_priority: self.sort_standard_by_priority,
+            sort_paused_higher: self.sort_paused_higher,
+            sort_tiebreak_recent: self.sort_tiebreak_recent,
             sort_preset: self.sort_preset,
             urgent_days_horizon: self.urgent_days_horizon,
             urgent_priority_threshold: self.urgent_priority_threshold,
@@ -1000,6 +1018,8 @@ impl Config {
         self.show_inline_descriptions = sync.show_inline_descriptions;
         self.sort_cutoff_days = sync.sort_cutoff_days;
         self.sort_standard_by_priority = sync.sort_standard_by_priority;
+        self.sort_paused_higher = sync.sort_paused_higher;
+        self.sort_tiebreak_recent = sync.sort_tiebreak_recent;
         self.sort_preset = sync.sort_preset;
         self.urgent_days_horizon = sync.urgent_days_horizon;
         self.urgent_priority_threshold = sync.urgent_priority_threshold;
@@ -1307,6 +1327,16 @@ impl Config {
                 out.push_str(line);
                 out.push_str(
                     " # Boolean: If true, regular tasks sort by priority first, then by date.",
+                );
+            } else if trimmed.starts_with("sort_paused_higher =") {
+                out.push_str(line);
+                out.push_str(
+                    " # Boolean: If true, paused tasks bubble to the top of standard actionable ranks.",
+                );
+            } else if trimmed.starts_with("sort_tiebreak_recent =") {
+                out.push_str(line);
+                out.push_str(
+                    " # Boolean: If true, ties in sorting are broken by recently modified rather than alphabetical.",
                 );
             } else if trimmed.starts_with("sort_preset =") {
                 out.push_str(line);

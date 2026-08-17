@@ -155,6 +155,8 @@ pub enum Message {
     ToggleHideFullyCompletedTags(bool),
     ToggleHideAliasesInSidebar(bool),
     ToggleSortStandardByPriority(bool),
+    ToggleSortPausedHigher(bool),
+    ToggleSortTiebreakRecent(bool),
     SetSortPreset(crate::config::SortPreset),
     CycleFocus(bool),
     OpenHelp(crate::help::HelpTab),

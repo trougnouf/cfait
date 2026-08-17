@@ -33,7 +33,9 @@ fn test_sorting_priority_basic() {
                 default_priority: 5,
                 start_grace_period_days: 1,
                 sort_standard_by_priority: false,
-                sort_preset: SortPreset::default()
+                sort_preset: SortPreset::default(),
+                sort_paused_higher: true,
+                sort_tiebreak_recent: false,
             }
         ), // Pass defaults
         std::cmp::Ordering::Less
@@ -50,7 +52,9 @@ fn test_sorting_priority_basic() {
                 default_priority: 5,
                 start_grace_period_days: 1,
                 sort_standard_by_priority: false,
-                sort_preset: SortPreset::default()
+                sort_preset: SortPreset::default(),
+                sort_paused_higher: true,
+                sort_tiebreak_recent: false,
             }
         ), // Pass defaults
         std::cmp::Ordering::Less
@@ -83,7 +87,9 @@ fn test_sorting_status_trumps_everything() {
                 default_priority: 5,
                 start_grace_period_days: 1,
                 sort_standard_by_priority: false,
-                sort_preset: SortPreset::default()
+                sort_preset: SortPreset::default(),
+                sort_paused_higher: true,
+                sort_tiebreak_recent: false,
             }
         ),
         std::cmp::Ordering::Less
@@ -111,7 +117,9 @@ fn test_sorting_completed_sinks() {
                 default_priority: 5,
                 start_grace_period_days: 1,
                 sort_standard_by_priority: false,
-                sort_preset: SortPreset::default()
+                sort_preset: SortPreset::default(),
+                sort_paused_higher: true,
+                sort_tiebreak_recent: false,
             }
         ),
         std::cmp::Ordering::Less
@@ -142,7 +150,9 @@ fn test_sorting_due_dates() {
                 default_priority: 5,
                 start_grace_period_days: 1,
                 sort_standard_by_priority: false,
-                sort_preset: SortPreset::default()
+                sort_preset: SortPreset::default(),
+                sort_paused_higher: true,
+                sort_tiebreak_recent: false,
             }
         ),
         std::cmp::Ordering::Less
@@ -159,7 +169,9 @@ fn test_sorting_due_dates() {
                 default_priority: 5,
                 start_grace_period_days: 1,
                 sort_standard_by_priority: false,
-                sort_preset: SortPreset::default()
+                sort_preset: SortPreset::default(),
+                sort_paused_higher: true,
+                sort_tiebreak_recent: false,
             }
         ),
         std::cmp::Ordering::Less
@@ -192,6 +204,8 @@ fn test_hierarchy_organization() {
             sort_preset: SortPreset::default(),
             search_collapsed_tasks: &HashSet::new(),
             focused_task_uid: None,
+            sort_paused_higher: true,
+            sort_tiebreak_recent: false,
         },
     );
 
@@ -219,6 +233,7 @@ fn test_sort_standard_date_first() {
         due: Some(DateType::Specific(now + Duration::days(10))),
         start: None,
         is_overdue: false,
+        is_paused: false,
     };
     let low_prio_soon = SortKey {
         rank: 4,
@@ -226,6 +241,7 @@ fn test_sort_standard_date_first() {
         due: Some(DateType::Specific(now + Duration::days(2))),
         start: None,
         is_overdue: false,
+        is_paused: false,
     };
     // date-first: soon (low_prio_soon) should sort BEFORE late (high_prio_late)
     assert_eq!(
@@ -234,7 +250,8 @@ fn test_sort_standard_date_first() {
             &high_prio_late,
             5,
             false,
-            SortPreset::default()
+            SortPreset::default(),
+            true
         ),
         std::cmp::Ordering::Less,
         "date-first: soon task should sort before late task regardless of priority"
@@ -251,6 +268,7 @@ fn test_sort_standard_priority_first() {
         due: Some(DateType::Specific(now + Duration::days(10))),
         start: None,
         is_overdue: false,
+        is_paused: false,
     };
     let low_prio_soon = SortKey {
         rank: 4,
@@ -258,6 +276,7 @@ fn test_sort_standard_priority_first() {
         due: Some(DateType::Specific(now + Duration::days(2))),
         start: None,
         is_overdue: false,
+        is_paused: false,
     };
     // priority-first: high priority (prio=1) should sort BEFORE low priority (prio=9)
     assert_eq!(
@@ -266,7 +285,8 @@ fn test_sort_standard_priority_first() {
             &low_prio_soon,
             5,
             true,
-            SortPreset::default()
+            SortPreset::default(),
+            true
         ),
         std::cmp::Ordering::Less,
         "priority-first: high-priority task should sort before low-priority task regardless of date"
@@ -285,6 +305,7 @@ fn test_sort_merged_rank4_rank5_priority_wins() {
         due: None,
         start: None,
         is_overdue: false,
+        is_paused: false,
     };
     let rank4_low_prio = SortKey {
         rank: 4,
@@ -292,6 +313,7 @@ fn test_sort_merged_rank4_rank5_priority_wins() {
         due: Some(DateType::Specific(now + chrono::Duration::days(3))),
         start: None,
         is_overdue: false,
+        is_paused: false,
     };
     assert_eq!(
         compare_sortkeys(
@@ -299,7 +321,8 @@ fn test_sort_merged_rank4_rank5_priority_wins() {
             &rank4_low_prio,
             5,
             true,
-            SortPreset::default()
+            SortPreset::default(),
+            true
         ),
         std::cmp::Ordering::Less,
         "priority-first: rank-5 high-priority task should sort before rank-4 low-priority task"
@@ -321,6 +344,7 @@ fn test_sort_merged_same_priority_date_wins() {
         due: Some(DateType::Specific(now + chrono::Duration::days(5))),
         start: None,
         is_overdue: false,
+        is_paused: false,
     };
     let rank5_no_date = SortKey {
         rank: 5,
@@ -328,6 +352,7 @@ fn test_sort_merged_same_priority_date_wins() {
         due: None,
         start: None,
         is_overdue: false,
+        is_paused: false,
     };
     // With flag=true: both map to effective_rank=4 (merged group), priority equal → date wins.
     assert_eq!(
@@ -336,7 +361,8 @@ fn test_sort_merged_same_priority_date_wins() {
             &rank5_no_date,
             5,
             true,
-            SortPreset::default()
+            SortPreset::default(),
+            true
         ),
         std::cmp::Ordering::Less,
         "merged (flag=true): same priority → task with date before task without date"
@@ -348,7 +374,8 @@ fn test_sort_merged_same_priority_date_wins() {
             &rank5_no_date,
             5,
             false,
-            SortPreset::default()
+            SortPreset::default(),
+            true
         ),
         std::cmp::Ordering::Less,
         "non-merged (flag=false): rank-5 is already priority-first+date, so ordering is the same"
@@ -365,6 +392,7 @@ fn test_sort_rank4_before_rank5_when_flag_off() {
         due: None,
         start: None,
         is_overdue: false,
+        is_paused: false,
     };
     let rank4_low_prio = SortKey {
         rank: 4,
@@ -372,6 +400,7 @@ fn test_sort_rank4_before_rank5_when_flag_off() {
         due: Some(DateType::Specific(Utc::now() + chrono::Duration::days(3))),
         start: None,
         is_overdue: false,
+        is_paused: false,
     };
     assert_eq!(
         compare_sortkeys(
@@ -379,7 +408,8 @@ fn test_sort_rank4_before_rank5_when_flag_off() {
             &rank5_high_prio,
             5,
             false,
-            SortPreset::default()
+            SortPreset::default(),
+            true
         ),
         std::cmp::Ordering::Less,
         "flag off: rank-4 task must always sort before rank-5 task"
@@ -396,6 +426,7 @@ fn test_sort_urgent_ranks_always_date_first() {
         due: Some(DateType::Specific(now + Duration::days(5))),
         start: None,
         is_overdue: false,
+        is_paused: false,
     };
     let low_prio_soon = SortKey {
         rank: 2,
@@ -403,6 +434,7 @@ fn test_sort_urgent_ranks_always_date_first() {
         due: Some(DateType::Specific(now + Duration::days(1))),
         start: None,
         is_overdue: false,
+        is_paused: false,
     };
     // Rank 2 always date-first, even with the flag set to true
     assert_eq!(
@@ -411,7 +443,8 @@ fn test_sort_urgent_ranks_always_date_first() {
             &high_prio_late,
             5,
             true,
-            SortPreset::default()
+            SortPreset::default(),
+            true
         ),
         std::cmp::Ordering::Less,
         "rank-2 must remain date-first even when sort_standard_by_priority is true"

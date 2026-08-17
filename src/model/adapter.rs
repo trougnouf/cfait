@@ -1168,6 +1168,8 @@ impl IcsAdapter {
             is_due_today: false,
             tree_location_count: 0,
             is_search_context: false,
+            transient_is_paused: false,
+            transient_recent_ts: 0,
         })
     }
 

@@ -448,6 +448,8 @@ pub struct MobileConfig {
     pub sort_cutoff_days: Option<u32>,
     pub sort_standard_by_priority: bool,
     pub sort_preset: String,
+    pub sort_paused_higher: bool,
+    pub sort_tiebreak_recent: bool,
     pub urgent_days: u32,
     pub urgent_prio: u8,
     pub default_priority: u8,
@@ -1182,6 +1184,8 @@ impl CfaitMobile {
             sort_cutoff_days: c.sort_cutoff_days,
             sort_standard_by_priority: c.sort_standard_by_priority,
             sort_preset: c.sort_preset.to_string(),
+            sort_paused_higher: c.sort_paused_higher,
+            sort_tiebreak_recent: c.sort_tiebreak_recent,
             urgent_days: c.urgent_days_horizon,
             urgent_prio: c.urgent_priority_threshold,
             default_priority: c.default_priority,
@@ -1337,6 +1341,8 @@ impl CfaitMobile {
         c.disabled_calendars = config.disabled_calendars;
         c.sort_cutoff_days = config.sort_cutoff_days;
         c.sort_standard_by_priority = config.sort_standard_by_priority;
+        c.sort_paused_higher = config.sort_paused_higher;
+        c.sort_tiebreak_recent = config.sort_tiebreak_recent;
         c.sort_preset = config.sort_preset.parse().unwrap_or_default();
         c.urgent_days_horizon = config.urgent_days;
         c.urgent_priority_threshold = config.urgent_prio;
@@ -2211,6 +2217,8 @@ impl CfaitMobile {
             start_grace_period_days: config.start_grace_period_days,
             sort_standard_by_priority: config.sort_standard_by_priority,
             sort_preset: config.sort_preset,
+            sort_paused_higher: config.sort_paused_higher,
+            sort_tiebreak_recent: config.sort_tiebreak_recent,
             expanded_done_groups: &expanded_set,
             expanded_tags: &expanded_tags_set,
             expanded_locations: &expanded_locations_set,
@@ -2459,6 +2467,8 @@ impl CfaitMobile {
             start_grace_period_days: config.start_grace_period_days,
             sort_standard_by_priority: config.sort_standard_by_priority,
             sort_preset: config.sort_preset,
+            sort_paused_higher: config.sort_paused_higher,
+            sort_tiebreak_recent: config.sort_tiebreak_recent,
             expanded_done_groups: &HashSet::new(),
             expanded_tags: &HashSet::new(),
             expanded_locations: &HashSet::new(),

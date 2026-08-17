@@ -72,6 +72,8 @@ fn parent_inherits_child_priority_and_sorts_before_sibling() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
+        sort_paused_higher: true,
+        sort_tiebreak_recent: false,
     };
 
     let result = store.filter(opts).items;
@@ -166,6 +168,8 @@ fn compare_two_parents_inherited_priorities_determine_order() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
+        sort_paused_higher: true,
+        sort_tiebreak_recent: false,
     };
 
     let result = store.filter(opts).items;
@@ -255,6 +259,8 @@ fn parent_inherits_started_child_over_unset_sibling() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
+        sort_paused_higher: true,
+        sort_tiebreak_recent: false,
     };
 
     let result = store.filter(opts).items;

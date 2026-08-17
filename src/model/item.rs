@@ -403,6 +403,10 @@ pub struct Task {
     pub tree_location_count: usize,
     #[serde(skip)]
     pub is_search_context: bool,
+    #[serde(skip)]
+    pub transient_is_paused: bool,
+    #[serde(skip)]
+    pub transient_recent_ts: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -412,6 +416,7 @@ pub struct SortKey {
     pub due: Option<DateType>,
     pub start: Option<DateType>,
     pub is_overdue: bool,
+    pub is_paused: bool,
 }
 
 /// Options to parameterize a comparison operation. Using a struct keeps the
@@ -425,6 +430,8 @@ pub struct CompareOptions {
     pub start_grace_period_days: u32,
     pub sort_standard_by_priority: bool,
     pub sort_preset: crate::config::SortPreset,
+    pub sort_paused_higher: bool,
+    pub sort_tiebreak_recent: bool,
 }
 
 /// Comparison helper for sort policies. The ordering decision tree is centralized here
@@ -440,6 +447,7 @@ pub fn compare_sortkeys(
     default_prio: u8,
     sort_standard_by_priority: bool,
     sort_preset: crate::config::SortPreset,
+    sort_paused_higher: bool,
 ) -> Ordering {
     let effective_rank = |rank: u8| {
         if sort_standard_by_priority && rank == 5 {
@@ -454,6 +462,13 @@ pub fn compare_sortkeys(
     }
 
     let rank = effective_rank(a.rank);
+
+    if sort_paused_higher && matches!(rank, 4 | 5) {
+        let paused_cmp = b.is_paused.cmp(&a.is_paused);
+        if paused_cmp != Ordering::Equal {
+            return paused_cmp;
+        }
+    }
     let norm_prio = |p: u8| if p == 0 { default_prio } else { p };
     let compare_dates = |d1: &Option<DateType>, d2: &Option<DateType>| -> Ordering {
         match (d1, d2) {
@@ -700,6 +715,8 @@ impl Task {
             is_due_today: false,
             tree_location_count: 0,
             is_search_context: false,
+            transient_is_paused: false,
+            transient_recent_ts: 0,
         };
         task.apply_smart_input(input, aliases, default_reminder_time);
         task
@@ -840,6 +857,8 @@ impl Task {
         default_priority: u8,
         sort_standard_by_priority: bool,
         sort_preset: crate::config::SortPreset,
+        sort_paused_higher: bool,
+        sort_tiebreak_recent: bool,
     ) -> Ordering {
         // Stable ordering for trash and completed groups uses completion date desc.
         if self.sort_rank == 9 && other.sort_rank == 9 {
@@ -862,6 +881,7 @@ impl Task {
             due: self.effective_due.clone(),
             start: self.effective_dtstart.clone(),
             is_overdue: self.is_overdue,
+            is_paused: self.transient_is_paused,
         };
         let b = SortKey {
             rank: other.sort_rank,
@@ -869,6 +889,7 @@ impl Task {
             due: other.effective_due.clone(),
             start: other.effective_dtstart.clone(),
             is_overdue: other.is_overdue,
+            is_paused: other.transient_is_paused,
         };
         compare_sortkeys(
             &a,
@@ -876,8 +897,18 @@ impl Task {
             default_priority,
             sort_standard_by_priority,
             sort_preset,
+            sort_paused_higher,
         )
-        .then_with(|| self.summary.cmp(&other.summary))
+        .then_with(|| {
+            if sort_tiebreak_recent {
+                other
+                    .transient_recent_ts
+                    .cmp(&self.transient_recent_ts)
+                    .then_with(|| self.summary.cmp(&other.summary))
+            } else {
+                self.summary.cmp(&other.summary)
+            }
+        })
     }
 
     /// Compare taking into account cutoff and other global settings.
@@ -907,6 +938,7 @@ impl Task {
             due: self.due.clone(),
             start: self.dtstart.clone(),
             is_overdue: self.is_overdue,
+            is_paused: self.transient_is_paused,
         };
         let b = SortKey {
             rank: rank_other,
@@ -914,6 +946,7 @@ impl Task {
             due: other.due.clone(),
             start: other.dtstart.clone(),
             is_overdue: other.is_overdue,
+            is_paused: other.transient_is_paused,
         };
         compare_sortkeys(
             &a,
@@ -921,8 +954,18 @@ impl Task {
             opts.default_priority,
             opts.sort_standard_by_priority,
             opts.sort_preset,
+            opts.sort_paused_higher,
         )
-        .then_with(|| self.summary.cmp(&other.summary))
+        .then_with(|| {
+            if opts.sort_tiebreak_recent {
+                other
+                    .transient_recent_ts
+                    .cmp(&self.transient_recent_ts)
+                    .then_with(|| self.summary.cmp(&other.summary))
+            } else {
+                self.summary.cmp(&other.summary)
+            }
+        })
     }
 
     /// Build a flattened, display-ordered list that respects parent/child hierarchy

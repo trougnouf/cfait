@@ -90,6 +90,8 @@ pub fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task>
         tree_location_count: _,
         target_collection: _,
         is_search_context: _,
+        transient_is_paused: _,
+        transient_recent_ts: _,
     } = local;
 
     let mut merged = server.clone();

@@ -54,6 +54,8 @@ fn test_search_includes_non_matching_children() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
+        sort_paused_higher: true,
+        sort_tiebreak_recent: false,
     });
 
     let results = filter_res.items;
@@ -127,6 +129,8 @@ fn test_search_includes_deep_hierarchy() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
+        sort_paused_higher: true,
+        sort_tiebreak_recent: false,
     });
 
     let results = filter_res.items;
@@ -180,6 +184,8 @@ fn test_child_match_does_not_force_parent_if_parent_does_not_match() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
+        sort_paused_higher: true,
+        sort_tiebreak_recent: false,
     });
 
     let results = filter_res.items;
@@ -279,6 +285,8 @@ fn test_multiple_parents_with_children() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
+        sort_paused_higher: true,
+        sort_tiebreak_recent: false,
     });
 
     let results = filter_res.items;
@@ -352,6 +360,8 @@ fn test_sibling_match_only_includes_matching_sibling() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
+        sort_paused_higher: true,
+        sort_tiebreak_recent: false,
     });
 
     let results = filter_res.items;
@@ -450,6 +460,8 @@ fn test_empty_search_shows_all_tasks() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
+        sort_paused_higher: true,
+        sort_tiebreak_recent: false,
     });
 
     let results = filter_res.items;
@@ -504,6 +516,8 @@ fn test_hierarchy_expansion_with_completed_tasks() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
+        sort_paused_higher: true,
+        sort_tiebreak_recent: false,
     });
 
     let results = filter_res.items;
@@ -538,6 +552,8 @@ fn test_hierarchy_expansion_with_completed_tasks() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
+        sort_paused_higher: true,
+        sort_tiebreak_recent: false,
     });
 
     let results_hidden = filter_res_hidden.items;

@@ -53,6 +53,8 @@ fun AdvancedSettingsScreen(
     var tlsClientKeyPath by remember { mutableStateOf("") }
 
     var sortStandardByPriority by remember { mutableStateOf(false) }
+    var sortPausedHigher by remember { mutableStateOf(true) }
+    var sortTiebreakRecent by remember { mutableStateOf(false) }
     var sortPreset by remember { mutableStateOf("UrgentStartedDue") }
     var sortDays by remember { mutableStateOf("30") }
     var urgentDays by remember { mutableStateOf("1") }
@@ -77,6 +79,8 @@ fun AdvancedSettingsScreen(
             tlsClientKeyPath = cfg.tlsClientKeyPath ?: ""
 
             sortStandardByPriority = cfg.sortStandardByPriority
+            sortPausedHigher = cfg.sortPausedHigher
+            sortTiebreakRecent = cfg.sortTiebreakRecent
             sortPreset = cfg.sortPreset
             sortDays = cfg.sortCutoffDays?.toString() ?: ""
             urgentDays = cfg.urgentDays.toString()
@@ -107,6 +111,8 @@ fun AdvancedSettingsScreen(
                 tlsClientKeyPath = tlsClientKeyPath.takeIf { it.isNotBlank() },
 
                 sortStandardByPriority = sortStandardByPriority,
+                sortPausedHigher = sortPausedHigher,
+                sortTiebreakRecent = sortTiebreakRecent,
                 sortPreset = sortPreset,
                 sortCutoffDays = sortDays.toUIntOrNull(),
                 urgentDays = urgentDays.toUIntOrNull() ?: 1u,
@@ -220,6 +226,16 @@ fun AdvancedSettingsScreen(
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.sort_standard_by_priority_label))
             }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                Switch(checked = sortPausedHigher, onCheckedChange = { sortPausedHigher = it })
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.sort_paused_higher))
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                Switch(checked = sortTiebreakRecent, onCheckedChange = { sortTiebreakRecent = it })
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.sort_tiebreak_recent))
+            }
             
             Spacer(Modifier.height(16.dp))
             Text(
@@ -233,9 +249,9 @@ fun AdvancedSettingsScreen(
                     label = "",
                     selected = sortPreset,
                     options = listOf(
-                        "UrgentStartedDue" to "Urgent > Started > Due Soon",
-                        "UrgentDueStarted" to "Urgent > Due Soon > Started",
-                        "StartedUrgentDue" to "Started > Urgent > Due Soon"
+                        "UrgentStartedDue" to "Urgent > Ongoing > Due Soon",
+                        "UrgentDueStarted" to "Urgent > Due Soon > Ongoing",
+                        "StartedUrgentDue" to "Ongoing > Urgent > Due Soon"
                     ),
                     onSelect = { sortPreset = it },
                     modifier = Modifier.width(240.dp)

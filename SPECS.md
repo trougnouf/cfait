@@ -133,7 +133,7 @@ The search bar supports a boolean recursive-descent parser.
 ### 3.2. Multi-Stage Sorting Algorithm
 Tasks sort deterministically by rank (0 to 9), then by Overdue -> Priority -> Due Date -> Start Date -> Summary.
 *   **Rank 0:** Pinned (`is:pinned`).
-*   **Ranks 1-3 (Urgent/Started/Due Soon):** Order dictated by `sort_preset` (e.g., Urgent > Started > Due Soon).
+*   **Ranks 1-3 (Urgent/Ongoing/Due Soon):** Order dictated by `sort_preset` (e.g., Urgent > Ongoing > Due Soon).
 *   **Rank 4 (Actionable):** Due date `<=` `sort_cutoff_days`.
 *   **Rank 5 (Deferred):** No due date, or `>` `sort_cutoff_days`.
 *   **Rank 6 (Blocked):** Has unresolved dependencies or parent is blocked.
@@ -338,6 +338,8 @@ All persistent state and settings live here. Unrecognized TOML keys must not be 
 
 **Sorting & Limits:**
 *   `sort_preset`: Enum (`UrgentStartedDue`, `UrgentDueStarted`, `StartedUrgentDue`).
+*   `sort_paused_higher`: Boolean. If true, paused tasks bubble to the top of standard actionable ranks.
+*   `sort_tiebreak_recent`: Boolean. If true, ties in sorting are broken by recently modified rather than alphabetical.
 *   `sort_cutoff_days`: Integer/None. Rank 4 vs 5 divider.
 *   `sort_standard_by_priority`: Boolean. Merge ranks 4/5.
 *   `urgent_days_horizon`: Integer. Tasks due within X days are "Urgent" (Rank 1-3).

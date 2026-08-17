@@ -100,6 +100,8 @@ pub struct GuiApp {
     pub show_inline_descriptions: bool,
     pub sort_cutoff_days: Option<u32>,
     pub sort_standard_by_priority: bool,
+    pub sort_paused_higher: bool,
+    pub sort_tiebreak_recent: bool,
     pub sort_preset: crate::config::SortPreset,
     pub current_theme: AppTheme,
 
@@ -452,6 +454,8 @@ impl Default for GuiApp {
             show_inline_descriptions: true,
             sort_cutoff_days: Some(30),
             sort_standard_by_priority: false,
+            sort_paused_higher: true,
+            sort_tiebreak_recent: false,
             sort_preset: crate::config::SortPreset::default(),
             ob_sort_days_input: "30".to_string(),
             current_theme: AppTheme::default(),

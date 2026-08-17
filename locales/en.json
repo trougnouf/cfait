@@ -440,6 +440,8 @@
     "help_timeline_weekdays": "Next occurrence ('next' optional)",
     "hide": "Hide",
     "hide_completed_and_canceled_tasks": "Hide completed and canceled tasks",
+    "sort_paused_higher": "Sort paused tasks higher than unstarted tasks",
+    "sort_tiebreak_recent": "Break ties by recently modified (instead of alphabetically)",
     "sort_standard_by_priority": "Regular tasks sorted by priority",
     "sort_standard_by_date": "Regular tasks sorted by date",
     "sort_standard_by_priority_label": "Sort regular tasks by priority over date",

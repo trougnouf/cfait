@@ -182,6 +182,8 @@ fn test_is_ready_filters_future_start_dates() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
+        sort_paused_higher: true,
+        sort_tiebreak_recent: false,
     };
 
     let filtered = store.filter(options).items;
@@ -267,6 +269,8 @@ fn test_is_ready_filters_blocked_tasks() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
+        sort_paused_higher: true,
+        sort_tiebreak_recent: false,
     };
 
     let filtered = store.filter(options).items;
@@ -358,6 +362,8 @@ fn test_is_ready_combines_with_other_filters() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
+        sort_paused_higher: true,
+        sort_tiebreak_recent: false,
     };
 
     let filtered = store.filter(options).items;
@@ -436,6 +442,8 @@ fn test_is_ready_filters_implicitly_future_tasks() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
+        sort_paused_higher: true,
+        sort_tiebreak_recent: false,
     };
 
     let filtered = store.filter(options).items;
@@ -497,6 +505,8 @@ fn test_is_ready_filters_implicitly_future_tasks() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
+        sort_paused_higher: true,
+        sort_tiebreak_recent: false,
     };
 
     let all_tasks = store.filter(options_all).items;

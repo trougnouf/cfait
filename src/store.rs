@@ -143,6 +143,8 @@ pub struct HierarchyOptions<'a> {
     pub sort_preset: crate::config::SortPreset,
     pub search_collapsed_tasks: &'a HashSet<String>,
     pub focused_task_uid: Option<&'a str>,
+    pub sort_paused_higher: bool,
+    pub sort_tiebreak_recent: bool,
 }
 
 /// Organize tasks into a hierarchy with proper parent/child relationships and inject
@@ -167,6 +169,8 @@ pub fn organize_hierarchy(
             options.default_priority,
             options.sort_standard_by_priority,
             options.sort_preset,
+            options.sort_paused_higher,
+            options.sort_tiebreak_recent,
         )
     });
 
@@ -477,6 +481,8 @@ pub fn organize_hierarchy(
                 options.default_priority,
                 options.sort_standard_by_priority,
                 options.sort_preset,
+                options.sort_paused_higher,
+                options.sort_tiebreak_recent,
             )
         });
         process_group(
@@ -602,6 +608,8 @@ pub struct FilterOptions<'a> {
     pub tag_aliases: &'a HashMap<String, Vec<String>>,
     pub search_collapsed_tasks: &'a HashSet<String>,
     pub focused_task_uid: Option<&'a str>,
+    pub sort_paused_higher: bool,
+    pub sort_tiebreak_recent: bool,
 }
 
 impl TaskStore {
@@ -3148,6 +3156,12 @@ impl TaskStore {
             .map(|t_ref| {
                 let mut t = t_ref.clone();
                 t.is_search_context = has_filter && !direct_matches.contains(&t.uid);
+                t.transient_is_paused = t.is_paused();
+                t.transient_recent_ts = t
+                    .last_modified_date()
+                    .or_else(|| t.created_date())
+                    .map(|d| d.timestamp())
+                    .unwrap_or(0);
                 // Compute blocked flags: explicit vs implicit
                 t.is_blocked = check_is_blocked_explicit(&t, &completed_uids);
                 t.is_implicitly_blocked =
@@ -3345,6 +3359,7 @@ impl TaskStore {
                             due: child_eff.effective_due.clone(),
                             start: child_eff.effective_dtstart.clone(),
                             is_overdue: child_eff.is_overdue,
+                            is_paused: child_eff.transient_is_paused,
                         };
                         let b = crate::model::item::SortKey {
                             rank: best_child.sort_rank,
@@ -3352,6 +3367,7 @@ impl TaskStore {
                             due: best_child.effective_due.clone(),
                             start: best_child.effective_dtstart.clone(),
                             is_overdue: best_child.is_overdue,
+                            is_paused: best_child.transient_is_paused,
                         };
                         let ordering = crate::model::item::compare_sortkeys(
                             &a,
@@ -3359,7 +3375,18 @@ impl TaskStore {
                             options.default_priority,
                             options.sort_standard_by_priority,
                             options.sort_preset,
-                        );
+                            options.sort_paused_higher,
+                        )
+                        .then_with(|| {
+                            if options.sort_tiebreak_recent {
+                                best_child
+                                    .transient_recent_ts
+                                    .cmp(&child_eff.transient_recent_ts)
+                                    .then_with(|| child_eff.summary.cmp(&best_child.summary))
+                            } else {
+                                child_eff.summary.cmp(&best_child.summary)
+                            }
+                        });
                         if ordering == std::cmp::Ordering::Less {
                             *best_child = child_eff;
                         }
@@ -3374,6 +3401,8 @@ impl TaskStore {
                         best.effective_priority = bc.effective_priority;
                         best.effective_due = bc.effective_due.clone();
                         best.effective_dtstart = bc.effective_dtstart.clone();
+                        best.transient_is_paused = bc.transient_is_paused;
+                        best.transient_recent_ts = bc.transient_recent_ts;
                     } else {
                         let a = crate::model::item::SortKey {
                             rank: bc.sort_rank,
@@ -3381,6 +3410,7 @@ impl TaskStore {
                             due: bc.effective_due.clone(),
                             start: bc.effective_dtstart.clone(),
                             is_overdue: bc.is_overdue,
+                            is_paused: bc.transient_is_paused,
                         };
                         let b = crate::model::item::SortKey {
                             rank: best.sort_rank,
@@ -3388,6 +3418,7 @@ impl TaskStore {
                             due: best.effective_due.clone(),
                             start: best.effective_dtstart.clone(),
                             is_overdue: best.is_overdue,
+                            is_paused: best.transient_is_paused,
                         };
                         let ordering = crate::model::item::compare_sortkeys(
                             &a,
@@ -3395,12 +3426,24 @@ impl TaskStore {
                             options.default_priority,
                             options.sort_standard_by_priority,
                             options.sort_preset,
-                        );
+                            options.sort_paused_higher,
+                        )
+                        .then_with(|| {
+                            if options.sort_tiebreak_recent {
+                                best.transient_recent_ts
+                                    .cmp(&bc.transient_recent_ts)
+                                    .then_with(|| bc.summary.cmp(&best.summary))
+                            } else {
+                                bc.summary.cmp(&best.summary)
+                            }
+                        });
                         if ordering == std::cmp::Ordering::Less {
                             best.sort_rank = bc.sort_rank;
                             best.effective_priority = bc.effective_priority;
                             best.effective_due = bc.effective_due.clone();
                             best.effective_dtstart = bc.effective_dtstart.clone();
+                            best.transient_is_paused = bc.transient_is_paused;
+                            best.transient_recent_ts = bc.transient_recent_ts;
                         }
                     }
                 }
@@ -3437,6 +3480,8 @@ impl TaskStore {
                 t.effective_priority = best.effective_priority;
                 t.effective_due = best.effective_due.clone();
                 t.effective_dtstart = best.effective_dtstart.clone();
+                t.transient_is_paused = best.transient_is_paused;
+                t.transient_recent_ts = best.transient_recent_ts;
             }
         }
 
@@ -3455,6 +3500,8 @@ impl TaskStore {
                 sort_preset: options.sort_preset,
                 search_collapsed_tasks: options.search_collapsed_tasks,
                 focused_task_uid: options.focused_task_uid,
+                sort_paused_higher: options.sort_paused_higher,
+                sort_tiebreak_recent: options.sort_tiebreak_recent,
             },
         );
 
@@ -4076,6 +4123,8 @@ mod tests {
             is_due_today: false,
             tree_location_count: 0,
             is_search_context: false,
+            transient_is_paused: false,
+            transient_recent_ts: 0,
         }
     }
 
@@ -4101,6 +4150,8 @@ mod tests {
                 sort_preset: crate::config::SortPreset::UrgentStartedDue,
                 search_collapsed_tasks: &HashSet::new(),
                 focused_task_uid: None,
+                sort_paused_higher: false,
+                sort_tiebreak_recent: false,
             },
         );
 
@@ -4151,6 +4202,8 @@ mod tests {
                 sort_preset: crate::config::SortPreset::UrgentStartedDue,
                 search_collapsed_tasks: &HashSet::new(),
                 focused_task_uid: None,
+                sort_paused_higher: false,
+                sort_tiebreak_recent: false,
             },
         );
 
@@ -4202,6 +4255,8 @@ mod tests {
                 sort_preset: crate::config::SortPreset::UrgentStartedDue,
                 search_collapsed_tasks: &HashSet::new(),
                 focused_task_uid: None,
+                sort_paused_higher: false,
+                sort_tiebreak_recent: false,
             },
         );
 

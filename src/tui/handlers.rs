@@ -958,6 +958,8 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
             state.show_inline_descriptions = cfg.show_inline_descriptions;
             state.sort_cutoff_days = cfg.sort_cutoff_days;
             state.sort_standard_by_priority = cfg.sort_standard_by_priority;
+            state.sort_paused_higher = cfg.sort_paused_higher;
+            state.sort_tiebreak_recent = cfg.sort_tiebreak_recent;
             state.urgent_days = cfg.urgent_days_horizon;
             state.urgent_prio = cfg.urgent_priority_threshold;
             state.default_priority = cfg.default_priority;

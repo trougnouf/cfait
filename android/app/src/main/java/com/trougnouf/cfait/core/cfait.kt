@@ -4576,6 +4576,8 @@ data class MobileConfig(
     var `sortCutoffDays`: kotlin.UInt?,
     var `sortStandardByPriority`: kotlin.Boolean,
     var `sortPreset`: kotlin.String,
+    var `sortPausedHigher`: kotlin.Boolean,
+    var `sortTiebreakRecent`: kotlin.Boolean,
     var `urgentDays`: kotlin.UInt,
     var `urgentPrio`: kotlin.UByte,
     var `defaultPriority`: kotlin.UByte,
@@ -4628,6 +4630,8 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
             FfiConverterOptionalUInt.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterUByte.read(buf),
             FfiConverterUByte.read(buf),
@@ -4674,6 +4678,8 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
                 FfiConverterOptionalUInt.allocationSize(value.`sortCutoffDays`) +
                 FfiConverterBoolean.allocationSize(value.`sortStandardByPriority`) +
                 FfiConverterString.allocationSize(value.`sortPreset`) +
+                FfiConverterBoolean.allocationSize(value.`sortPausedHigher`) +
+                FfiConverterBoolean.allocationSize(value.`sortTiebreakRecent`) +
                 FfiConverterUInt.allocationSize(value.`urgentDays`) +
                 FfiConverterUByte.allocationSize(value.`urgentPrio`) +
                 FfiConverterUByte.allocationSize(value.`defaultPriority`) +
@@ -4722,6 +4728,8 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
         FfiConverterOptionalUInt.write(value.`sortCutoffDays`, buf)
         FfiConverterBoolean.write(value.`sortStandardByPriority`, buf)
         FfiConverterString.write(value.`sortPreset`, buf)
+        FfiConverterBoolean.write(value.`sortPausedHigher`, buf)
+        FfiConverterBoolean.write(value.`sortTiebreakRecent`, buf)
         FfiConverterUInt.write(value.`urgentDays`, buf)
         FfiConverterUByte.write(value.`urgentPrio`, buf)
         FfiConverterUByte.write(value.`defaultPriority`, buf)

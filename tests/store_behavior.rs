@@ -60,6 +60,8 @@ fn test_filter_by_tag() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
+        sort_paused_higher: true,
+        sort_tiebreak_recent: false,
     });
     let results = filter_res.items;
 
@@ -113,6 +115,8 @@ fn test_filter_hierarchical_tags() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
+        sort_paused_higher: true,
+        sort_tiebreak_recent: false,
     });
     let results = filter_res.items;
 
@@ -172,6 +176,8 @@ fn test_hide_hidden_calendars() {
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
         focused_task_uid: None,
+        sort_paused_higher: true,
+        sort_tiebreak_recent: false,
     });
     let results = filter_res.items;
 
