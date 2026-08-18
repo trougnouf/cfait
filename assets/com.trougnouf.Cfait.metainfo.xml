@@ -78,6 +78,49 @@
   </requires>
 
   <releases>
+    <release version="1.1.5" date="2026-08-18">
+      <description>
+        <p>Features:</p>
+        <ul>
+          <li>(model) Rank overdue notes as completed to drop them to the bottom of the list</li>
+          <li>(parser) Support duration ranges with a unit on the right-hand side only (e.g. ~1-3d)</li>
+          <li>(gui) Introduce TabPressed message for editor auto-complete and focus cycling</li>
+          <li>(gui) Implement Tab-triggered auto-complete and fix editor focus handling</li>
+          <li>Allow multiple (|-separated) locations ( https://github.com/trougnouf/cfait/issues/62 )</li>
+          <li>Sort related tasks (incl. recurrences) by newest first</li>
+          <li>(sorting) Rename Started-&gt;Ongoing ( https://github.com/trougnouf/cfait/issues/54 ), add option to sort paused tasks higher (default-on), add option to sort by last-modified over alphabetical (default-off)</li>
+          <li>Add sorting options for paused tasks ( https://github.com/trougnouf/cfait/issues/54 )</li>
+        </ul>
+        <p>Bug Fixes:</p>
+        <ul>
+          <li>(mobile) Sync session search state, resolve col: target, and expose parse_snooze_target</li>
+          <li>(android) Advance cursor past inserted text upon suggestion selection</li>
+          <li>(android) Use parseSnoozeTarget to handle custom snooze dates and trimmed input</li>
+          <li>Fix calendar fallback to skip hidden/disabled/system collections ( https://codeberg.org/trougnouf/cfait/issues/97 )</li>
+          <li>Missing dependency resolution in mobile and TUI task updates</li>
+          <li>Auto-reveal hidden tasks when following links</li>
+        </ul>
+        <p>Other:</p>
+        <ul>
+          <li>(PKGBUILD) Use pkgver and url variables in source</li>
+        </ul>
+        <p>Refactor:</p>
+        <ul>
+          <li>Sort by last modified over alphabetical by default</li>
+          <li>Generate two separate 1-day events for long fuzzy dated tasks</li>
+        </ul>
+        <p>Styling:</p>
+        <ul>
+          <li>(android) Use translucent inverseSurface styling and rounded borders for undo snackbar</li>
+        </ul>
+        <p>Miscellaneous Tasks:</p>
+        <ul>
+          <li>Fix README screenshots legend</li>
+          <li>Update dependencies, switch libdav back to upstream</li>
+          <li>Remove unused string</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.1.4" date="2026-08-06">
       <description>
         <p>Features:</p>

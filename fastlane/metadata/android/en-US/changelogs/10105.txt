@@ -1,0 +1,40 @@
+## [1.1.5] - 2026-08-18
+
+### 🚀 Features
+
+- *(model)* Rank overdue notes as completed to drop them to the bottom of the list
+- *(parser)* Support duration ranges with a unit on the right-hand side only (e.g. ~1-3d)
+- *(gui)* Introduce TabPressed message for editor auto-complete and focus cycling
+- *(gui)* Implement Tab-triggered auto-complete and fix editor focus handling
+- Allow multiple (|-separated) locations ( https://github.com/trougnouf/cfait/issues/62 )
+- Sort related tasks (incl. recurrences) by newest first
+- *(sorting)* Rename Started->Ongoing ( https://github.com/trougnouf/cfait/issues/54 ), add option to sort paused tasks higher (default-on), add option to sort by last-modified over alphabetical (default-off)
+- Add sorting options for paused tasks ( https://github.com/trougnouf/cfait/issues/54 )
+
+### 🐛 Bug Fixes
+
+- *(mobile)* Sync session search state, resolve col: target, and expose parse_snooze_target
+- *(android)* Advance cursor past inserted text upon suggestion selection
+- *(android)* Use parseSnoozeTarget to handle custom snooze dates and trimmed input
+- Fix calendar fallback to skip hidden/disabled/system collections ( https://codeberg.org/trougnouf/cfait/issues/97 )
+- Missing dependency resolution in mobile and TUI task updates
+- Auto-reveal hidden tasks when following links
+
+### 💼 Other
+
+- *(PKGBUILD)* Use pkgver and url variables in source
+
+### 🚜 Refactor
+
+- Sort by last modified over alphabetical by default
+- Generate two separate 1-day events for long fuzzy dated tasks
+
+### 🎨 Styling
+
+- *(android)* Use translucent inverseSurface styling and rounded borders for undo snackbar
+
+### ⚙️ Miscellaneous Tasks
+
+- Fix README screenshots legend
+- Update dependencies, switch libdav back to upstream
+- Remove unused string

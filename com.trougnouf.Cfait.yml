@@ -40,7 +40,7 @@ modules:
       # Application source
       - type: git
         url: https://git.disroot.org/trougnouf/cfait
-        commit: 3855268b757fcb40216656c677b27f5a540f87fb
+        commit: 3a85d715e1e3f86ea65a6aeb3ce55aeb9ff1a2c1
         x-checker-data:
           type: git
           url: https://git.disroot.org/trougnouf/cfait
