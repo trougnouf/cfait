@@ -984,6 +984,10 @@ pub fn view_sidebar_journal(app: &GuiApp) -> Element<'_, Message> {
     let is_monday_first = app.first_day_of_week == crate::config::FirstDayOfWeek::Monday;
 
     let quick_jumps = row![
+        button(icon::icon(icon::ARROW_LEFT).size(12))
+            .style(button::text)
+            .padding([4, 6])
+            .on_press(Message::SelectJournalDate(sel_date - Duration::days(1))),
         button(text(rust_i18n::t!("journal_yesterday")).size(11))
             .style(button::secondary)
             .padding([4, 6])
@@ -996,6 +1000,10 @@ pub fn view_sidebar_journal(app: &GuiApp) -> Element<'_, Message> {
             .style(button::secondary)
             .padding([4, 6])
             .on_press(Message::SelectJournalDate(today + Duration::days(1))),
+        button(icon::icon(icon::ARROW_RIGHT).size(12))
+            .style(button::text)
+            .padding([4, 6])
+            .on_press(Message::SelectJournalDate(sel_date + Duration::days(1))),
     ]
     .spacing(4)
     .align_y(iced::Alignment::Center);
@@ -1133,7 +1141,7 @@ pub fn view_sidebar_journal(app: &GuiApp) -> Element<'_, Message> {
             .any(|c| app.store.get_journal_entry(&c.href, date).is_some());
 
         let day_text = if has_journal && !is_selected && !is_today {
-            text(d.to_string()).size(11).font(iced::Font {
+            text(d.to_string()).size(12).font(iced::Font {
                 weight: iced::font::Weight::Bold,
                 ..Default::default()
             })
@@ -1166,7 +1174,7 @@ pub fn view_sidebar_journal(app: &GuiApp) -> Element<'_, Message> {
                 }
             } else {
                 let text_col = if has_journal {
-                    palette.background.base.text
+                    Color::from_rgb(0.2, 0.8, 0.2)
                 } else {
                     palette.background.weak.text
                 };

@@ -315,6 +315,7 @@
     "journal_date_placeholder": "YYYY-MM-DD",
     "journal_due_today": "Due this day",
     "journal_started_today": "Started this day",
+    "journal_worked_on_today": "Worked on today",
     "journal_completed_today": "Completed this day",
     "journal_time_tracked": "Time tracked this day",
     "journal_no_activity": "No task activity recorded for this day.",

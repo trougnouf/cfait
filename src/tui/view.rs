@@ -867,14 +867,61 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 crate::model::parser::format_duration_human(day_ctx.total_tracked_mins)
             ));
         }
-        for t in &day_ctx.completed_tasks {
-            activity_lines.push_str(&format!("- ✓ {}\n", t.summary));
-        }
-        for t in &day_ctx.due_tasks {
-            activity_lines.push_str(&format!("- 📅 {}\n", t.summary));
+
+        let mut worked_on_uids = std::collections::HashSet::new();
+        let mut worked_on_tasks = Vec::new();
+        for t in &day_ctx.started_tasks {
+            if worked_on_uids.insert(t.uid.clone()) {
+                worked_on_tasks.push(t.clone());
+            }
         }
         for t in &day_ctx.ongoing_tasks {
-            activity_lines.push_str(&format!("- ▶ {}\n", t.summary));
+            if worked_on_uids.insert(t.uid.clone()) {
+                worked_on_tasks.push(t.clone());
+            }
+        }
+        for (t, _) in &day_ctx.session_tasks {
+            if worked_on_uids.insert(t.uid.clone()) {
+                worked_on_tasks.push(t.clone());
+            }
+        }
+
+        if !worked_on_tasks.is_empty() {
+            activity_lines.push_str(&format!(
+                "- ▶ {}: ",
+                rust_i18n::t!("journal_worked_on_today")
+            ));
+            let links: Vec<String> = worked_on_tasks
+                .iter()
+                .map(|t| format!("[{}](uid:{})", t.summary, t.uid))
+                .collect();
+            activity_lines.push_str(&links.join(", "));
+            activity_lines.push('\n');
+        }
+
+        if !day_ctx.completed_tasks.is_empty() {
+            activity_lines.push_str(&format!(
+                "- ✓ {}: ",
+                rust_i18n::t!("journal_completed_today")
+            ));
+            let links: Vec<String> = day_ctx
+                .completed_tasks
+                .iter()
+                .map(|t| format!("[{}](uid:{})", t.summary, t.uid))
+                .collect();
+            activity_lines.push_str(&links.join(", "));
+            activity_lines.push('\n');
+        }
+
+        if !day_ctx.due_tasks.is_empty() {
+            activity_lines.push_str(&format!("- 📅 {}: ", rust_i18n::t!("journal_due_today")));
+            let links: Vec<String> = day_ctx
+                .due_tasks
+                .iter()
+                .map(|t| format!("[{}](uid:{})", t.summary, t.uid))
+                .collect();
+            activity_lines.push_str(&links.join(", "));
+            activity_lines.push('\n');
         }
 
         if !activity_lines.is_empty() {

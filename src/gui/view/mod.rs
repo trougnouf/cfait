@@ -19,8 +19,8 @@ use iced::alignment::Horizontal;
 use iced::mouse;
 use iced::widget::scrollable::{Direction, Scrollbar};
 use iced::widget::{
-    MouseArea, Space, button, column, container, row, scrollable, stack, svg, text, text_editor,
-    text_input, tooltip,
+    MouseArea, Space, button, column, container, rich_text, row, scrollable, span, stack, svg,
+    text, text_editor, text_input, tooltip,
 };
 use iced::{Color, Element, Length, Theme, Vector};
 
@@ -2134,7 +2134,7 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
             .align_y(iced::Alignment::Center)
     };
 
-    let get_byte_offset = |content: &iced::widget::text_editor::Content| -> usize {
+    let _get_byte_offset = |content: &iced::widget::text_editor::Content| -> usize {
         let cursor_pos = content.cursor().position;
         let line_idx = cursor_pos.line;
         let col_idx = cursor_pos.column;
@@ -2151,236 +2151,13 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
         byte_offset
     };
 
-    let mut context_banner: Option<Element<'_, Message>> = None;
     let is_desc_focused = app.last_edited_field == 1 || app.editing_tree_uid.is_some();
-
-    let (target_text, cursor_pos) = if is_desc_focused {
-        (
-            app.description_value.text(),
-            get_byte_offset(&app.description_value),
-        )
+    let active_content = if is_desc_focused {
+        &app.description_value
     } else {
-        (app.input_value.text(), get_byte_offset(&app.input_value))
+        &app.input_value
     };
-
-    if let Some((range, suggs)) = crate::model::autocomplete::suggest(
-        &target_text,
-        cursor_pos,
-        &app.store,
-        &app.tag_aliases,
-        &app.calendars,
-    ) {
-        let mut sugg_row = row![].spacing(8).padding(iced::Padding {
-            bottom: 8.0,
-            ..Default::default()
-        });
-        for s in suggs {
-            let color = if s.display.starts_with('#') {
-                let (r, g, b) =
-                    crate::color_utils::generate_color(s.display.trim_start_matches('#'));
-                Color::from_rgb(r, g, b)
-            } else if s.display.starts_with("@@") {
-                Color::from_rgb(0.8, 0.5, 0.0)
-            } else if s.display.starts_with(':') {
-                Color::from_rgb(0.9, 0.2, 0.9)
-            } else {
-                Color::from_rgb(0.2, 0.7, 1.0)
-            };
-
-            let btn = button(
-                row![
-                    text(s.display).size(14).color(color).font(iced::Font {
-                        weight: iced::font::Weight::Bold,
-                        ..Default::default()
-                    }),
-                    text(s.description)
-                        .size(12)
-                        .style(move |theme: &Theme| text::Style {
-                            color: Some(theme.extended_palette().background.weak.text),
-                        })
-                ]
-                .spacing(6)
-                .align_y(iced::Alignment::Center),
-            )
-            .style(
-                move |_theme: &Theme, status: iced::widget::button::Status| {
-                    let bg_alpha = match status {
-                        iced::widget::button::Status::Hovered
-                        | iced::widget::button::Status::Pressed => 0.25,
-                        _ => 0.15,
-                    };
-                    iced::widget::button::Style {
-                        background: Some(
-                            Color {
-                                a: bg_alpha,
-                                ..color
-                            }
-                            .into(),
-                        ),
-                        text_color: color,
-                        border: iced::Border {
-                            radius: 8.0.into(),
-                            width: 1.0,
-                            color: Color { a: 0.5, ..color },
-                        },
-                        ..iced::widget::button::Style::default()
-                    }
-                },
-            )
-            .padding([6, 12])
-            .on_press(Message::ApplySuggestion(range.clone(), s.replacement));
-
-            sugg_row = sugg_row.push(btn);
-        }
-        context_banner = Some(
-            container(
-                scrollable(sugg_row).direction(iced::widget::scrollable::Direction::Horizontal(
-                    iced::widget::scrollable::Scrollbar::new()
-                        .width(4)
-                        .scroller_width(4)
-                        .margin(0),
-                )),
-            )
-            .width(Length::Fill)
-            .padding([8, 12])
-            .style(|theme: &Theme| {
-                let palette = theme.extended_palette();
-                container::Style {
-                    background: Some(
-                        Color {
-                            a: 0.5,
-                            ..palette.background.weak.color
-                        }
-                        .into(),
-                    ),
-                    border: iced::Border {
-                        color: Color {
-                            a: 0.5,
-                            ..palette.background.strong.color
-                        },
-                        width: 1.0,
-                        radius: 8.0.into(),
-                    },
-                    ..Default::default()
-                }
-            })
-            .into(),
-        );
-    } else {
-        let mut active_context: Option<(crate::model::parser::SyntaxType, String)> = None;
-        let line_start = target_text[..cursor_pos]
-            .rfind('\n')
-            .map(|i| i + 1)
-            .unwrap_or(0);
-        let line_end = target_text[cursor_pos..]
-            .find('\n')
-            .map(|i| cursor_pos + i)
-            .unwrap_or(target_text.len());
-        let current_line = &target_text[line_start..line_end];
-        let local_cursor = cursor_pos - line_start;
-
-        let tokens = crate::model::parser::tokenize_smart_input(current_line, false);
-        for t in tokens {
-            if local_cursor >= t.start && local_cursor <= t.end {
-                if matches!(
-                    t.kind,
-                    crate::model::parser::SyntaxType::Dependency
-                        | crate::model::parser::SyntaxType::Relation
-                        | crate::model::parser::SyntaxType::WikiLink
-                ) {
-                    active_context = Some((t.kind, current_line[t.start..t.end].to_string()));
-                }
-                break;
-            }
-        }
-
-        if let Some((kind, raw_word)) = active_context {
-            let clean_uid = if kind == crate::model::parser::SyntaxType::WikiLink {
-                crate::model::parser::strip_quotes(
-                    raw_word.trim_start_matches("[[").trim_end_matches("]]"),
-                )
-            } else {
-                let lex_guard = crate::model::parser::LEXICON.read().unwrap();
-                let lower = raw_word.to_lowercase();
-                if let Some((p_str, _, _)) = lex_guard.match_prefix(&lower) {
-                    crate::model::parser::strip_quotes(&raw_word[p_str.len()..])
-                } else {
-                    crate::model::parser::strip_quotes(&raw_word)
-                }
-            };
-
-            if !clean_uid.is_empty() {
-                let (icon_char, color, text_str) =
-                    match app.store.resolve_dependency_ref(&clean_uid) {
-                        Ok(resolved_uid) => {
-                            if let Some(summary) = app.store.get_summary(&resolved_uid) {
-                                let icon = if kind == crate::model::parser::SyntaxType::Dependency {
-                                    icon::BLOCKED
-                                } else {
-                                    icon::LINK
-                                };
-                                let color = if kind == crate::model::parser::SyntaxType::Dependency
-                                {
-                                    Color::from_rgb(0.9, 0.6, 0.2)
-                                } else {
-                                    Color::from_rgb(0.4, 0.6, 0.9)
-                                };
-                                (icon, color, summary)
-                            } else {
-                                (
-                                    icon::INFO,
-                                    Color::from_rgb(0.5, 0.5, 0.5),
-                                    "Resolving...".to_string(),
-                                )
-                            }
-                        }
-                        Err(_) => (
-                            icon::SYNC_ALERT,
-                            Color::from_rgb(0.9, 0.2, 0.2),
-                            format!("Unknown: {}", clean_uid),
-                        ),
-                    };
-
-                context_banner = Some(
-                    container(
-                        row![
-                            icon::icon(icon_char).size(14).color(color),
-                            text(format!("{} ➔ {}", raw_word, text_str))
-                                .size(14)
-                                .font(iced::Font {
-                                    weight: iced::font::Weight::Bold,
-                                    ..Default::default()
-                                })
-                                .color(color)
-                        ]
-                        .spacing(8)
-                        .align_y(iced::Alignment::Center),
-                    )
-                    .padding([6, 12])
-                    .width(Length::Fill)
-                    .style(move |theme: &Theme| {
-                        let palette = theme.extended_palette();
-                        container::Style {
-                            background: Some(
-                                Color {
-                                    a: 0.5,
-                                    ..palette.background.weak.color
-                                }
-                                .into(),
-                            ),
-                            border: iced::Border {
-                                color: Color { a: 0.5, ..color },
-                                width: 1.0,
-                                radius: 8.0.into(),
-                            },
-                            ..Default::default()
-                        }
-                    })
-                    .into(),
-                );
-            }
-        }
-    }
+    let context_banner = build_context_banner(app, active_content);
 
     let inner_content: Element<'_, Message> = if is_expanded {
         let banner_height = if context_banner.is_some() { 65.0 } else { 0.0 };
@@ -3058,7 +2835,15 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
             style
         });
 
-    let editor_container = container(editor)
+    let context_banner = build_context_banner(app, &app.journal_editor_content);
+
+    let mut editor_col = column![];
+    if let Some(banner) = context_banner {
+        editor_col = editor_col.push(banner).push(Space::new().height(4));
+    }
+    editor_col = editor_col.push(editor);
+
+    let editor_container = container(editor_col)
         .width(Length::Fill)
         .height(Length::Fill)
         .style(|theme: &Theme| {
@@ -3123,32 +2908,52 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
         );
     }
 
-    if !owned_day_ctx.ongoing_tasks.is_empty() {
+    let mut worked_on_uids = std::collections::HashSet::new();
+    let mut worked_on_tasks = Vec::new();
+    for t in &owned_day_ctx.started_tasks {
+        if worked_on_uids.insert(t.uid.clone()) {
+            worked_on_tasks.push(t.clone());
+        }
+    }
+    for t in &owned_day_ctx.ongoing_tasks {
+        if worked_on_uids.insert(t.uid.clone()) {
+            worked_on_tasks.push(t.clone());
+        }
+    }
+    for (t, _) in &owned_day_ctx.session_tasks {
+        if worked_on_uids.insert(t.uid.clone()) {
+            worked_on_tasks.push(t.clone());
+        }
+    }
+
+    if !worked_on_tasks.is_empty() {
         has_any_activity = true;
-        let mut on_col = column![].spacing(2);
-        for t in &owned_day_ctx.ongoing_tasks {
-            let summary = t.summary.clone();
-            let uid = t.uid.clone();
-            on_col = on_col.push(
-                row![
-                    icon::icon(icon::PLAY_FA)
-                        .size(12)
-                        .color(Color::from_rgb(0.4, 0.8, 0.4)),
-                    button(text(summary).size(13))
-                        .style(button::text)
-                        .padding(0)
-                        .on_press(Message::JumpToTask(uid))
-                ]
-                .spacing(6)
-                .align_y(iced::Alignment::Center),
+        let mut spans = Vec::new();
+        for (i, t) in worked_on_tasks.iter().enumerate() {
+            if i > 0 {
+                spans.push(span(", ").color(Color::from_rgb(0.6, 0.6, 0.6)));
+            }
+            spans.push(
+                span(t.summary.clone())
+                    .color(Color::from_rgb(0.2, 0.7, 1.0))
+                    .link(t.uid.clone()),
             );
         }
+        let rt = rich_text(spans).size(13).on_link_click(Message::JumpToTask);
+
         activity_col = activity_col.push(
             column![
-                text(rust_i18n::t!("journal_started_today"))
-                    .size(12)
-                    .color(Color::from_rgb(0.6, 0.6, 0.6)),
-                on_col
+                row![
+                    icon::icon(icon::PLAY_FA)
+                        .size(10)
+                        .color(Color::from_rgb(0.4, 0.8, 0.4)),
+                    text(rust_i18n::t!("journal_worked_on_today"))
+                        .size(12)
+                        .color(Color::from_rgb(0.6, 0.6, 0.6))
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+                rt
             ]
             .spacing(2),
         );
@@ -3156,30 +2961,32 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
 
     if !owned_day_ctx.completed_tasks.is_empty() {
         has_any_activity = true;
-        let mut comp_col = column![].spacing(2);
-        for t in &owned_day_ctx.completed_tasks {
-            let summary = t.summary.clone();
-            let uid = t.uid.clone();
-            comp_col = comp_col.push(
-                row![
-                    icon::icon(icon::CHECK)
-                        .size(12)
-                        .color(Color::from_rgb(0.2, 0.8, 0.2)),
-                    button(text(summary).size(13))
-                        .style(button::text)
-                        .padding(0)
-                        .on_press(Message::JumpToTask(uid))
-                ]
-                .spacing(6)
-                .align_y(iced::Alignment::Center),
+        let mut spans = Vec::new();
+        for (i, t) in owned_day_ctx.completed_tasks.iter().enumerate() {
+            if i > 0 {
+                spans.push(span(", ").color(Color::from_rgb(0.6, 0.6, 0.6)));
+            }
+            spans.push(
+                span(t.summary.clone())
+                    .color(Color::from_rgb(0.2, 0.7, 1.0))
+                    .link(t.uid.clone()),
             );
         }
+        let rt = rich_text(spans).size(13).on_link_click(Message::JumpToTask);
+
         activity_col = activity_col.push(
             column![
-                text(rust_i18n::t!("journal_completed_today"))
-                    .size(12)
-                    .color(Color::from_rgb(0.6, 0.6, 0.6)),
-                comp_col
+                row![
+                    icon::icon(icon::CHECK)
+                        .size(10)
+                        .color(Color::from_rgb(0.2, 0.8, 0.2)),
+                    text(rust_i18n::t!("journal_completed_today"))
+                        .size(12)
+                        .color(Color::from_rgb(0.6, 0.6, 0.6))
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+                rt
             ]
             .spacing(2),
         );
@@ -3187,30 +2994,32 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
 
     if !owned_day_ctx.due_tasks.is_empty() {
         has_any_activity = true;
-        let mut due_col = column![].spacing(2);
-        for t in &owned_day_ctx.due_tasks {
-            let summary = t.summary.clone();
-            let uid = t.uid.clone();
-            due_col = due_col.push(
-                row![
-                    icon::icon(icon::CALENDAR)
-                        .size(12)
-                        .color(Color::from_rgb(1.0, 0.6, 0.2)),
-                    button(text(summary).size(13))
-                        .style(button::text)
-                        .padding(0)
-                        .on_press(Message::JumpToTask(uid))
-                ]
-                .spacing(6)
-                .align_y(iced::Alignment::Center),
+        let mut spans = Vec::new();
+        for (i, t) in owned_day_ctx.due_tasks.iter().enumerate() {
+            if i > 0 {
+                spans.push(span(", ").color(Color::from_rgb(0.6, 0.6, 0.6)));
+            }
+            spans.push(
+                span(t.summary.clone())
+                    .color(Color::from_rgb(0.2, 0.7, 1.0))
+                    .link(t.uid.clone()),
             );
         }
+        let rt = rich_text(spans).size(13).on_link_click(Message::JumpToTask);
+
         activity_col = activity_col.push(
             column![
-                text(rust_i18n::t!("journal_due_today"))
-                    .size(12)
-                    .color(Color::from_rgb(0.6, 0.6, 0.6)),
-                due_col
+                row![
+                    icon::icon(icon::CALENDAR)
+                        .size(10)
+                        .color(Color::from_rgb(1.0, 0.6, 0.2)),
+                    text(rust_i18n::t!("journal_due_today"))
+                        .size(12)
+                        .color(Color::from_rgb(0.6, 0.6, 0.6))
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+                rt
             ]
             .spacing(2),
         );
@@ -3269,4 +3078,277 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
     .width(Length::Fill)
     .height(Length::Fill)
     .into()
+}
+
+pub fn build_context_banner<'a>(
+    app: &'a GuiApp,
+    content: &text_editor::Content,
+) -> Option<Element<'a, Message>> {
+    use crate::model::parser::{LEXICON, SyntaxType};
+    let get_byte_offset = |content: &iced::widget::text_editor::Content| -> usize {
+        let cursor_pos = content.cursor().position;
+        let line_idx = cursor_pos.line;
+        let col_idx = cursor_pos.column;
+        let text = content.text();
+        let mut byte_offset = 0;
+
+        for (current_line, line_str) in text.split('\n').enumerate() {
+            if current_line == line_idx {
+                let col_bytes: usize = line_str.chars().take(col_idx).map(|c| c.len_utf8()).sum();
+                return byte_offset + col_bytes;
+            }
+            byte_offset += line_str.len() + 1; // +1 for '\n'
+        }
+        byte_offset
+    };
+
+    let target_text = content.text();
+    let cursor_pos = get_byte_offset(content);
+
+    if let Some((range, suggs)) = crate::model::autocomplete::suggest(
+        &target_text,
+        cursor_pos,
+        &app.store,
+        &app.tag_aliases,
+        &app.calendars,
+    ) {
+        let mut sugg_row = row![].spacing(8).padding(iced::Padding {
+            bottom: 8.0,
+            ..Default::default()
+        });
+        for s in suggs {
+            let color = if s.display.starts_with('#') {
+                let (r, g, b) =
+                    crate::color_utils::generate_color(s.display.trim_start_matches('#'));
+                Color::from_rgb(r, g, b)
+            } else if s.display.starts_with("@@") {
+                Color::from_rgb(0.8, 0.5, 0.0)
+            } else if s.display.starts_with(':') {
+                Color::from_rgb(0.9, 0.2, 0.9)
+            } else {
+                Color::from_rgb(0.2, 0.7, 1.0)
+            };
+
+            let btn = button(
+                row![
+                    text(s.display).size(14).color(color).font(iced::Font {
+                        weight: iced::font::Weight::Bold,
+                        ..Default::default()
+                    }),
+                    text(s.description)
+                        .size(12)
+                        .style(move |theme: &Theme| text::Style {
+                            color: Some(theme.extended_palette().background.weak.text),
+                        })
+                ]
+                .spacing(6)
+                .align_y(iced::Alignment::Center),
+            )
+            .style(
+                move |_theme: &Theme, status: iced::widget::button::Status| {
+                    let bg_alpha = match status {
+                        iced::widget::button::Status::Hovered
+                        | iced::widget::button::Status::Pressed => 0.25,
+                        _ => 0.15,
+                    };
+                    iced::widget::button::Style {
+                        background: Some(
+                            Color {
+                                a: bg_alpha,
+                                ..color
+                            }
+                            .into(),
+                        ),
+                        text_color: color,
+                        border: iced::Border {
+                            radius: 8.0.into(),
+                            width: 1.0,
+                            color: Color { a: 0.5, ..color },
+                        },
+                        ..iced::widget::button::Style::default()
+                    }
+                },
+            )
+            .padding([6, 12])
+            .on_press(Message::ApplySuggestion(range.clone(), s.replacement));
+
+            sugg_row = sugg_row.push(btn);
+        }
+        return Some(
+            container(
+                scrollable(sugg_row).direction(iced::widget::scrollable::Direction::Horizontal(
+                    iced::widget::scrollable::Scrollbar::new()
+                        .width(4)
+                        .scroller_width(4)
+                        .margin(0),
+                )),
+            )
+            .width(Length::Fill)
+            .padding([8, 12])
+            .style(|theme: &Theme| {
+                let palette = theme.extended_palette();
+                container::Style {
+                    background: Some(
+                        Color {
+                            a: 0.5,
+                            ..palette.background.weak.color
+                        }
+                        .into(),
+                    ),
+                    border: iced::Border {
+                        color: Color {
+                            a: 0.5,
+                            ..palette.background.strong.color
+                        },
+                        width: 1.0,
+                        radius: 8.0.into(),
+                    },
+                    ..Default::default()
+                }
+            })
+            .into(),
+        );
+    } else {
+        let mut active_context: Option<(SyntaxType, String)> = None;
+        let line_start = target_text[..cursor_pos]
+            .rfind('\n')
+            .map(|i| i + 1)
+            .unwrap_or(0);
+        let line_end = target_text[cursor_pos..]
+            .find('\n')
+            .map(|i| cursor_pos + i)
+            .unwrap_or(target_text.len());
+        let current_line = &target_text[line_start..line_end];
+        let local_cursor = cursor_pos - line_start;
+
+        let tokens = crate::model::parser::tokenize_smart_input(current_line, false);
+        for t in tokens {
+            if local_cursor >= t.start && local_cursor <= t.end {
+                if matches!(
+                    t.kind,
+                    SyntaxType::Dependency
+                        | SyntaxType::Relation
+                        | SyntaxType::WikiLink
+                        | SyntaxType::Url
+                ) {
+                    active_context = Some((t.kind, current_line[t.start..t.end].to_string()));
+                }
+                break;
+            }
+        }
+
+        if let Some((kind, raw_word)) = active_context {
+            let clean_uid = if kind == SyntaxType::WikiLink {
+                crate::model::parser::strip_quotes(
+                    raw_word.trim_start_matches("[[").trim_end_matches("]]"),
+                )
+            } else if kind == SyntaxType::Url {
+                crate::model::parser::strip_quotes(raw_word.trim_start_matches("url:"))
+            } else {
+                let lex_guard = LEXICON.read().unwrap();
+                let lower = raw_word.to_lowercase();
+                if let Some((p_str, _, _)) = lex_guard.match_prefix(&lower) {
+                    crate::model::parser::strip_quotes(&raw_word[p_str.len()..])
+                } else {
+                    crate::model::parser::strip_quotes(&raw_word)
+                }
+            };
+
+            if !clean_uid.is_empty() {
+                let is_url = clean_uid.contains("://") || clean_uid.starts_with("mailto:");
+
+                let (icon_char, color, text_str, msg) = if is_url {
+                    (
+                        icon::URL_CHECK,
+                        Color::from_rgb(0.2, 0.7, 1.0),
+                        "Open Link".to_string(),
+                        Some(Message::OpenUrl(clean_uid.clone())),
+                    )
+                } else {
+                    match app.store.resolve_dependency_ref(&clean_uid) {
+                        Ok(resolved_uid) => {
+                            if let Some(summary) = app.store.get_summary(&resolved_uid) {
+                                let icon = if kind == SyntaxType::Dependency {
+                                    icon::BLOCKED
+                                } else {
+                                    icon::LINK
+                                };
+                                let color = if kind == SyntaxType::Dependency {
+                                    Color::from_rgb(0.9, 0.6, 0.2)
+                                } else {
+                                    Color::from_rgb(0.4, 0.6, 0.9)
+                                };
+                                (
+                                    icon,
+                                    color,
+                                    summary,
+                                    Some(Message::JumpToTask(resolved_uid)),
+                                )
+                            } else {
+                                (
+                                    icon::INFO,
+                                    Color::from_rgb(0.5, 0.5, 0.5),
+                                    "Resolving...".to_string(),
+                                    None,
+                                )
+                            }
+                        }
+                        Err(_) => (
+                            icon::SYNC_ALERT,
+                            Color::from_rgb(0.9, 0.2, 0.2),
+                            format!("Unknown: {}", clean_uid),
+                            None,
+                        ),
+                    }
+                };
+
+                let mut btn = button(
+                    row![
+                        icon::icon(icon_char).size(14).color(color),
+                        text(format!("{} ➔ {}", raw_word, text_str))
+                            .size(14)
+                            .font(iced::Font {
+                                weight: iced::font::Weight::Bold,
+                                ..Default::default()
+                            })
+                            .color(color)
+                    ]
+                    .spacing(8)
+                    .align_y(iced::Alignment::Center),
+                )
+                .style(iced::widget::button::text)
+                .padding(0);
+
+                if let Some(m) = msg {
+                    btn = btn.on_press(m);
+                }
+
+                return Some(
+                    container(btn)
+                        .padding([6, 12])
+                        .width(Length::Fill)
+                        .style(move |theme: &Theme| {
+                            let palette = theme.extended_palette();
+                            container::Style {
+                                background: Some(
+                                    Color {
+                                        a: 0.5,
+                                        ..palette.background.weak.color
+                                    }
+                                    .into(),
+                                ),
+                                border: iced::Border {
+                                    color: Color { a: 0.5, ..color },
+                                    width: 1.0,
+                                    radius: 8.0.into(),
+                                },
+                                ..Default::default()
+                            }
+                        })
+                        .into(),
+                );
+            }
+        }
+    }
+    None
 }

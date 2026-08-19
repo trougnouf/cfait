@@ -213,6 +213,33 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::ApplySuggestion(range, text) => {
+            if app.sidebar_mode == SidebarMode::Journal {
+                let current = app.journal_editor_content.text();
+                let mut new_text = current[..range.start].to_string();
+                new_text.push_str(&text);
+                if range.end < current.len() {
+                    new_text.push_str(&current[range.end..]);
+                } else {
+                    new_text.push(' ');
+                }
+                app.journal_editor_content = text_editor::Content::with_text(&new_text);
+                app.journal_editor_content
+                    .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
+
+                app.journal_debounce_version = app.journal_debounce_version.wrapping_add(1);
+                let version = app.journal_debounce_version;
+                return Task::batch(vec![
+                    iced::widget::operation::focus(iced::widget::Id::new("journal_editor")),
+                    Task::perform(
+                        async move {
+                            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                            version
+                        },
+                        Message::SaveJournal,
+                    ),
+                ]);
+            }
+
             app.active_focus = Focus::AddTaskInput;
             if let Ok(mut focus) = ACTIVE_FOCUS.write() {
                 *focus = Focus::AddTaskInput;
