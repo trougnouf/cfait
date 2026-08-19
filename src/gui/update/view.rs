@@ -13,6 +13,48 @@ use fastrand;
 use iced::widget::operation;
 use iced::{Task, window};
 
+fn flush_journal_save(app: &mut GuiApp) {
+    // Cancel any pending debounced saves
+    app.journal_debounce_version = app.journal_debounce_version.wrapping_add(1);
+
+    let date = app.journal_date;
+    let href = app
+        .journal_editing_href
+        .clone()
+        .or(app.active_cal_href.clone())
+        .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
+    let new_text = app.journal_editor_content.text();
+
+    let existing_opt = app.store.get_journal_entry(&href, date).cloned();
+    let mut actions = Vec::new();
+
+    if let Some(mut existing) = existing_opt {
+        if new_text.trim().is_empty() {
+            let _ = app.store.delete_task(&existing.uid);
+            actions.push(crate::journal::Action::Delete(existing));
+        } else if existing.description != new_text {
+            existing.description = new_text;
+            existing.sequence += 1;
+            app.store.update_or_add_task(existing.clone());
+            actions.push(crate::journal::Action::Update(existing));
+        }
+    } else if !new_text.trim().is_empty() {
+        let mut new_journal = crate::model::Task::new("", &app.tag_aliases, None);
+        new_journal.is_journal = true;
+        new_journal.calendar_href = href;
+        new_journal.dtstart = Some(crate::model::DateType::AllDay(date));
+        new_journal.description = new_text;
+        app.store.add_task(new_journal.clone());
+        actions.push(crate::journal::Action::Create(new_journal));
+    }
+
+    if !actions.is_empty()
+        && let Some(tx) = &app.bg_tx
+    {
+        let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(actions));
+    }
+}
+
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {
         Message::TaskClick(index, uid) => {
@@ -113,6 +155,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                             return handle(app, Message::FocusLocation(loc.full_key.clone()));
                         }
                     }
+                    SidebarMode::Journal => {}
                     SidebarMode::Goals => {
                         let mut keys: Vec<_> = app.core_config.goals.keys().cloned().collect();
                         keys.sort();
@@ -218,6 +261,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         return handle(app, Message::LocationToggled(loc.full_key.clone()));
                     }
                 }
+                SidebarMode::Journal => {}
                 SidebarMode::Goals => {
                     let mut keys: Vec<_> = app.core_config.goals.keys().cloned().collect();
                     keys.sort();
@@ -258,6 +302,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         return handle(app, Message::LocationToggled(loc.full_key.clone()));
                     }
                 }
+                SidebarMode::Journal => {}
                 SidebarMode::Goals => {
                     let mut keys: Vec<_> = app.core_config.goals.keys().cloned().collect();
                     keys.sort();
@@ -469,6 +514,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         SidebarMode::Calendars => app.get_filtered_calendars().len(),
                         SidebarMode::Categories => app.cached_categories.len(),
                         SidebarMode::Locations => app.cached_locations.len(),
+                        SidebarMode::Journal => 31, // Mini-calendar has ~31 days
                         SidebarMode::Goals => app.core_config.goals.len(),
                     };
                     if max > 0 {
@@ -552,6 +598,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     SidebarMode::Calendars => app.get_filtered_calendars().len(),
                     SidebarMode::Categories => app.cached_categories.len(),
                     SidebarMode::Locations => app.cached_locations.len(),
+                    SidebarMode::Journal => 31, // Mini-calendar has ~31 days
                     SidebarMode::Goals => app.core_config.goals.len(),
                 };
                 if max > 0 {
@@ -663,6 +710,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     SidebarMode::Calendars => app.get_filtered_calendars().len(),
                     SidebarMode::Categories => app.cached_categories.len(),
                     SidebarMode::Locations => app.cached_locations.len(),
+                    SidebarMode::Journal => 31, // Mini-calendar has ~31 days
                     SidebarMode::Goals => app.core_config.goals.len(),
                 };
                 if max > 0 {
@@ -865,13 +913,141 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if mode == SidebarMode::Goals && !app.show_goals_tab {
                 return Task::none();
             }
+            if app.sidebar_mode == SidebarMode::Journal && mode != SidebarMode::Journal {
+                flush_journal_save(app);
+            }
             app.sidebar_mode = mode;
             app.sidebar_selection_idx = 0;
             app.active_focus = Focus::Sidebar;
             if let Ok(mut focus) = ACTIVE_FOCUS.write() {
                 *focus = Focus::Sidebar;
             }
+            if mode == SidebarMode::Journal {
+                let d = app.journal_date;
+                if app.journal_date_input.is_empty() {
+                    app.journal_date_input = d.format("%Y-%m-%d").to_string();
+                }
+                let href = app
+                    .journal_editing_href
+                    .clone()
+                    .or(app.active_cal_href.clone())
+                    .unwrap_or_default();
+                let entry_desc = app
+                    .store
+                    .get_journal_entry(&href, d)
+                    .map(|t| t.description.clone())
+                    .unwrap_or_default();
+                app.journal_editor_content =
+                    iced::widget::text_editor::Content::with_text(&entry_desc);
+            }
             refresh_filtered_tasks(app);
+            Task::none()
+        }
+        Message::SelectJournalDate(date) => {
+            flush_journal_save(app);
+            app.journal_date = date;
+            app.journal_date_input = date.format("%Y-%m-%d").to_string();
+            let href = app
+                .journal_editing_href
+                .clone()
+                .or(app.active_cal_href.clone())
+                .unwrap_or_default();
+            let entry_desc = app
+                .store
+                .get_journal_entry(&href, date)
+                .map(|t| t.description.clone())
+                .unwrap_or_default();
+            app.journal_editor_content = iced::widget::text_editor::Content::with_text(&entry_desc);
+            Task::none()
+        }
+        Message::SelectJournalCollection(href) => {
+            flush_journal_save(app);
+            app.journal_editing_href = Some(href.clone());
+            app.active_cal_href = Some(href.clone());
+            let date = app.journal_date;
+            let entry_desc = app
+                .store
+                .get_journal_entry(&href, date)
+                .map(|t| t.description.clone())
+                .unwrap_or_default();
+            app.journal_editor_content = iced::widget::text_editor::Content::with_text(&entry_desc);
+            Task::none()
+        }
+        Message::JournalDateInputChanged(s) => {
+            app.journal_date_input = s;
+            Task::none()
+        }
+        Message::JournalDateInputSubmit => {
+            if let Ok(parsed) =
+                chrono::NaiveDate::parse_from_str(app.journal_date_input.trim(), "%Y-%m-%d")
+            {
+                app.journal_date = parsed;
+                let href = app
+                    .journal_editing_href
+                    .clone()
+                    .or(app.active_cal_href.clone())
+                    .unwrap_or_default();
+                let entry_desc = app
+                    .store
+                    .get_journal_entry(&href, parsed)
+                    .map(|t| t.description.clone())
+                    .unwrap_or_default();
+                app.journal_editor_content =
+                    iced::widget::text_editor::Content::with_text(&entry_desc);
+            }
+            Task::none()
+        }
+        Message::JournalContentChanged(action) => {
+            app.journal_editor_content.perform(action);
+            app.journal_debounce_version = app.journal_debounce_version.wrapping_add(1);
+            let version = app.journal_debounce_version;
+            Task::perform(
+                async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                    version
+                },
+                Message::SaveJournal,
+            )
+        }
+        Message::SaveJournal(version) => {
+            if version == app.journal_debounce_version {
+                let date = app.journal_date;
+                let href = app
+                    .journal_editing_href
+                    .clone()
+                    .or(app.active_cal_href.clone())
+                    .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
+                let new_text = app.journal_editor_content.text();
+
+                let existing_opt = app.store.get_journal_entry(&href, date).cloned();
+                let mut actions = Vec::new();
+
+                if let Some(mut existing) = existing_opt {
+                    if new_text.trim().is_empty() {
+                        let _ = app.store.delete_task(&existing.uid);
+                        actions.push(crate::journal::Action::Delete(existing));
+                    } else if existing.description != new_text {
+                        existing.description = new_text;
+                        existing.sequence += 1;
+                        app.store.update_or_add_task(existing.clone());
+                        actions.push(crate::journal::Action::Update(existing));
+                    }
+                } else if !new_text.trim().is_empty() {
+                    let mut new_journal = crate::model::Task::new("", &app.tag_aliases, None);
+                    new_journal.is_journal = true;
+                    new_journal.calendar_href = href;
+                    new_journal.dtstart = Some(crate::model::DateType::AllDay(date));
+                    new_journal.description = new_text;
+                    app.store.add_task(new_journal.clone());
+                    actions.push(crate::journal::Action::Create(new_journal));
+                }
+
+                if !actions.is_empty()
+                    && let Some(tx) = &app.bg_tx
+                {
+                    let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(actions));
+                }
+            }
             Task::none()
         }
         Message::CategoryToggled(cat) => {
@@ -1404,6 +1580,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 }
 
                 // 3. Clear filters that might hide the task
+                if app.sidebar_mode == SidebarMode::Journal
+                    || app.sidebar_mode == SidebarMode::Goals
+                {
+                    app.sidebar_mode = SidebarMode::Calendars;
+                    needs_refresh = true;
+                }
                 if !app.search_value.text().is_empty() {
                     app.search_value = iced::widget::text_editor::Content::new();
                     app.session.search_term.clear();

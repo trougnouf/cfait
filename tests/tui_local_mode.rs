@@ -19,11 +19,13 @@ fn test_tui_local_mode_disabled_filters_local_calendars() {
                 name: "Local".to_string(),
                 href: "local://default".to_string(),
                 color: None,
+                supports_vjournal: Some(true),
             },
             CalendarListEntry {
                 name: "Remote".to_string(),
                 href: "https://example.test/cal/".to_string(),
                 color: None,
+                supports_vjournal: Some(true),
             },
         ]),
         &Some("local://default".to_string()),

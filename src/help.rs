@@ -695,7 +695,7 @@ pub fn get_shortcuts_help(is_gui: bool) -> Vec<HelpSection> {
                     example: "".to_string(),
                 },
                 HelpItem {
-                    keys: "1, 2, 3, 4".to_string(),
+                    keys: "1, 2, 3, 4, 5".to_string(),
                     desc: rust_i18n::t!("support_switch_sidebar_tab").to_string(),
                     example: "".to_string(),
                 },

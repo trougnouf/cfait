@@ -974,3 +974,246 @@ pub fn view_sidebar_goals(app: &GuiApp) -> Element<'_, Message> {
         .id(app.sidebar_scrollable_id.clone())
         .into()
 }
+
+// --- JOURNAL SIDEBAR ---
+pub fn view_sidebar_journal(app: &GuiApp) -> Element<'_, Message> {
+    use chrono::{Datelike, Duration, Local, NaiveDate};
+
+    let today = Local::now().date_naive();
+    let sel_date = app.journal_date;
+    let is_monday_first = app.first_day_of_week == crate::config::FirstDayOfWeek::Monday;
+
+    let quick_jumps = row![
+        button(text(rust_i18n::t!("journal_yesterday")).size(11))
+            .style(button::secondary)
+            .padding([4, 6])
+            .on_press(Message::SelectJournalDate(today - Duration::days(1))),
+        button(text(rust_i18n::t!("journal_today")).size(11))
+            .style(button::primary)
+            .padding([4, 6])
+            .on_press(Message::SelectJournalDate(today)),
+        button(text(rust_i18n::t!("journal_tomorrow")).size(11))
+            .style(button::secondary)
+            .padding([4, 6])
+            .on_press(Message::SelectJournalDate(today + Duration::days(1))),
+    ]
+    .spacing(4)
+    .align_y(iced::Alignment::Center);
+
+    let date_input_row = row![
+        iced::widget::text_input(
+            &rust_i18n::t!("journal_date_placeholder"),
+            &app.journal_date_input
+        )
+        .on_input(Message::JournalDateInputChanged)
+        .on_submit(Message::JournalDateInputSubmit)
+        .padding(4)
+        .size(12)
+        .width(Length::Fill),
+        button(icon::icon(icon::CHECK).size(12))
+            .style(button::secondary)
+            .padding(4)
+            .on_press(Message::JournalDateInputSubmit)
+    ]
+    .spacing(4)
+    .align_y(iced::Alignment::Center);
+
+    let year = sel_date.year();
+    let month = sel_date.month();
+    let first_day = NaiveDate::from_ymd_opt(year, month, 1).unwrap();
+
+    let start_offset = if is_monday_first {
+        first_day.weekday().num_days_from_monday() as usize
+    } else {
+        first_day.weekday().num_days_from_sunday() as usize
+    };
+
+    let month_str = first_day.format("%B %Y").to_string();
+
+    let prev_month_date = if month == 1 {
+        NaiveDate::from_ymd_opt(year - 1, 12, 1).unwrap()
+    } else {
+        NaiveDate::from_ymd_opt(year, month - 1, 1).unwrap()
+    };
+    let next_month_date = if month == 12 {
+        NaiveDate::from_ymd_opt(year + 1, 1, 1).unwrap()
+    } else {
+        NaiveDate::from_ymd_opt(year, month + 1, 1).unwrap()
+    };
+
+    let cal_header = row![
+        button(icon::icon(icon::ARROW_LEFT).size(12))
+            .style(button::text)
+            .padding(4)
+            .on_press(Message::SelectJournalDate(prev_month_date)),
+        container(text(month_str).size(13).font(iced::Font {
+            weight: iced::font::Weight::Bold,
+            ..Default::default()
+        }))
+        .width(Length::Fill)
+        .align_x(iced::alignment::Horizontal::Center),
+        button(icon::icon(icon::ARROW_RIGHT).size(12))
+            .style(button::text)
+            .padding(4)
+            .on_press(Message::SelectJournalDate(next_month_date)),
+    ]
+    .align_y(iced::Alignment::Center);
+
+    let weekdays_row = if is_monday_first {
+        row![
+            container(text("Mo").size(10))
+                .width(Length::Fill)
+                .align_x(iced::alignment::Horizontal::Center),
+            container(text("Tu").size(10))
+                .width(Length::Fill)
+                .align_x(iced::alignment::Horizontal::Center),
+            container(text("We").size(10))
+                .width(Length::Fill)
+                .align_x(iced::alignment::Horizontal::Center),
+            container(text("Th").size(10))
+                .width(Length::Fill)
+                .align_x(iced::alignment::Horizontal::Center),
+            container(text("Fr").size(10))
+                .width(Length::Fill)
+                .align_x(iced::alignment::Horizontal::Center),
+            container(text("Sa").size(10))
+                .width(Length::Fill)
+                .align_x(iced::alignment::Horizontal::Center),
+            container(text("Su").size(10))
+                .width(Length::Fill)
+                .align_x(iced::alignment::Horizontal::Center),
+        ]
+    } else {
+        row![
+            container(text("Su").size(10))
+                .width(Length::Fill)
+                .align_x(iced::alignment::Horizontal::Center),
+            container(text("Mo").size(10))
+                .width(Length::Fill)
+                .align_x(iced::alignment::Horizontal::Center),
+            container(text("Tu").size(10))
+                .width(Length::Fill)
+                .align_x(iced::alignment::Horizontal::Center),
+            container(text("We").size(10))
+                .width(Length::Fill)
+                .align_x(iced::alignment::Horizontal::Center),
+            container(text("Th").size(10))
+                .width(Length::Fill)
+                .align_x(iced::alignment::Horizontal::Center),
+            container(text("Fr").size(10))
+                .width(Length::Fill)
+                .align_x(iced::alignment::Horizontal::Center),
+            container(text("Sa").size(10))
+                .width(Length::Fill)
+                .align_x(iced::alignment::Horizontal::Center),
+        ]
+    };
+
+    let mut days_grid = column![].spacing(2);
+    let mut current_row = row![].spacing(2);
+
+    for _ in 0..start_offset {
+        current_row = current_row.push(Space::new().width(Length::Fill));
+    }
+
+    let days_in_month = if month == 12 {
+        31
+    } else {
+        (NaiveDate::from_ymd_opt(year, month + 1, 1).unwrap() - Duration::days(1)).day()
+    };
+
+    for d in 1..=days_in_month {
+        let date = NaiveDate::from_ymd_opt(year, month, d).unwrap();
+        let is_selected = date == sel_date;
+        let is_today = date == today;
+
+        let has_journal = app
+            .calendars
+            .iter()
+            .any(|c| app.store.get_journal_entry(&c.href, date).is_some());
+
+        let day_text = if has_journal && !is_selected && !is_today {
+            text(d.to_string()).size(11).font(iced::Font {
+                weight: iced::font::Weight::Bold,
+                ..Default::default()
+            })
+        } else {
+            text(d.to_string()).size(11)
+        };
+
+        let btn_style = move |theme: &Theme, status: button::Status| {
+            let palette = theme.extended_palette();
+            if is_selected {
+                button::Style {
+                    background: Some(palette.primary.base.color.into()),
+                    text_color: palette.primary.base.text,
+                    border: iced::Border {
+                        radius: 4.0.into(),
+                        ..Default::default()
+                    },
+                    ..button::Style::default()
+                }
+            } else if is_today {
+                button::Style {
+                    background: Some(palette.background.strong.color.into()),
+                    text_color: palette.primary.base.color,
+                    border: iced::Border {
+                        width: 1.0,
+                        color: palette.primary.base.color,
+                        radius: 4.0.into(),
+                    },
+                    ..button::Style::default()
+                }
+            } else {
+                let text_col = if has_journal {
+                    palette.background.base.text
+                } else {
+                    palette.background.weak.text
+                };
+                button::Style {
+                    text_color: text_col,
+                    ..button::text(theme, status)
+                }
+            }
+        };
+
+        let day_btn = button(
+            container(day_text)
+                .width(Length::Fill)
+                .align_x(iced::alignment::Horizontal::Center),
+        )
+        .style(btn_style)
+        .padding(2)
+        .width(Length::Fill)
+        .on_press(Message::SelectJournalDate(date));
+
+        current_row = current_row.push(day_btn);
+
+        let pos = start_offset + d as usize;
+        if pos.is_multiple_of(7) || d == days_in_month {
+            // Pad the last row with empty spaces to fill the week
+            let remaining = if pos.is_multiple_of(7) {
+                0
+            } else {
+                7 - (pos % 7)
+            };
+            for _ in 0..remaining {
+                current_row = current_row.push(Space::new().width(Length::Fill));
+            }
+            days_grid = days_grid.push(current_row);
+            current_row = row![].spacing(2);
+        }
+    }
+
+    column![
+        quick_jumps,
+        date_input_row,
+        Space::new().height(6),
+        cal_header,
+        weekdays_row,
+        days_grid,
+    ]
+    .spacing(6)
+    .padding(6)
+    .into()
+}

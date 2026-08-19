@@ -686,6 +686,7 @@ impl RustyClient {
                                             name: "Local (Recovery)".to_string(),
                                             href: recovery_href.to_string(),
                                             color: Some("#DB4437".to_string()),
+                                            supports_vjournal: Some(true),
                                         });
                                         let _ =
                                             LocalCalendarRegistry::save(self.ctx.as_ref(), &locals);

@@ -137,6 +137,21 @@ pub const FOCUS_OUTLINE: char = '\u{f0f00}'; // nf-md-image_filter_center_focus_
 pub const FOCUS_TELESCOPE: char = '\u{f0b4e}'; // nf-md-telescope
 pub const FOCUS_ICONS: &[char] = &[FOCUS_FIELD, FOCUS_STRONG, FOCUS_OUTLINE, FOCUS_TELESCOPE];
 pub const LIST_CHECK: char = '\u{f0ae}';
+pub const JOURNAL: char = '\u{f02d}'; // nf-fa-book / journal icon
+pub const JOURNAL_ICONS: &[char] = &[
+    '\u{f02d}',
+    '\u{ede2}',
+    '\u{f14f7}',
+    '\u{f05da}',
+    '\u{f125f}',
+    '\u{edf7}',
+    '\u{ee34}',
+    '\u{f06d3}',
+    '\u{e7d8}',
+    '\u{f040}',
+    '\u{f064f}',
+    '\u{f0776}',
+];
 
 // Location Tab Variations
 pub const EARTH_ASIA: char = '\u{ee47}';

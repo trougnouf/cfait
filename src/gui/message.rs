@@ -77,6 +77,10 @@ pub enum Message {
     ArrowLeft,
     SidebarInteractSpace,
     SidebarInteractEnter,
+    SelectJournalDate(chrono::NaiveDate),
+    SelectJournalCollection(String),
+    JournalContentChanged(text_editor::Action),
+    SaveJournal(usize),
     DeleteSelected,
     ToggleSelected,
     EditSelected,
@@ -252,6 +256,9 @@ pub enum Message {
     SetDefaultDurationGoalMins(String),
     SetSessionsCountAsCompletions(bool),
     SetLanguage(String),
+    SetFirstDayOfWeek(crate::config::FirstDayOfWeek),
+    JournalDateInputChanged(String),
+    JournalDateInputSubmit,
 
     // --- Alarms & Reminders ---
     InitAlarmActor(mpsc::Sender<SystemEvent>),
@@ -272,6 +279,7 @@ pub enum Message {
     SetQuickFilterTerm(String),
     SetQuickFilterIcon(String),
     SetShowGoalsTab(bool),
+    SetShowJournalTab(bool),
     SetShowTaskGoalsInSidebar(bool),
     SetSortCollectionsBySize(bool),
 

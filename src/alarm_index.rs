@@ -490,6 +490,7 @@ mod tests {
             is_note: false,
             manual_block: false,
             permanent: false,
+            is_journal: false,
             time_spent_seconds: 0,
             last_started_at: None,
             sessions: vec![],

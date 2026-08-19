@@ -19,6 +19,7 @@ async fn test_tui_creating_tag_only_input_creates_task_instead_of_filtering() {
         name: "Remote".to_string(),
         href: cal_href.clone(),
         color: None,
+        supports_vjournal: Some(true),
     });
     state.active_cal_href = Some(cal_href);
     state.mode = InputMode::Creating;
@@ -65,6 +66,7 @@ async fn test_tui_creating_task_and_alias_simultaneously() {
         name: "Remote".to_string(),
         href: cal_href.clone(),
         color: None,
+        supports_vjournal: Some(true),
     });
     state.active_cal_href = Some(cal_href);
     state.mode = InputMode::Creating;

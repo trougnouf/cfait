@@ -11,6 +11,23 @@ use std::fmt;
 use std::fs;
 use strum::EnumIter;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, EnumIter)]
+#[serde(rename_all = "lowercase")]
+pub enum FirstDayOfWeek {
+    #[default]
+    Monday,
+    Sunday,
+}
+
+impl fmt::Display for FirstDayOfWeek {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FirstDayOfWeek::Monday => write!(f, "{}", rust_i18n::t!("monday")),
+            FirstDayOfWeek::Sunday => write!(f, "{}", rust_i18n::t!("sunday")),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, EnumIter)]
 #[serde(rename_all = "lowercase")]
 pub enum GoalType {
@@ -709,6 +726,9 @@ pub struct Config {
     #[serde(default)]
     pub language: Option<String>,
 
+    #[serde(default)]
+    pub first_day_of_week: FirstDayOfWeek,
+
     #[serde(default = "default_urgent_days")]
     pub urgent_days_horizon: u32,
     #[serde(default = "default_urgent_prio")]
@@ -770,6 +790,9 @@ pub struct Config {
 
     #[serde(default = "default_true")]
     pub show_goals_tab: bool,
+
+    #[serde(default = "default_true")]
+    pub show_journal_tab: bool,
 
     #[serde(default = "default_true")]
     pub show_task_goals_in_sidebar: bool,
@@ -892,11 +915,15 @@ pub struct SyncableConfig {
     #[serde(default = "default_true")]
     pub show_goals_tab: bool,
     #[serde(default = "default_true")]
+    pub show_journal_tab: bool,
+    #[serde(default = "default_true")]
     pub show_task_goals_in_sidebar: bool,
     #[serde(default = "default_true")]
     pub show_undo_snackbar: bool,
     #[serde(default = "default_true")]
     pub sort_collections_by_size: bool,
+    #[serde(default)]
+    pub first_day_of_week: FirstDayOfWeek,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -959,9 +986,11 @@ impl Default for Config {
             quick_filter_icon: default_quick_filter_icon(),
             show_quick_filter: true,
             show_goals_tab: true,
+            show_journal_tab: true,
             show_task_goals_in_sidebar: true,
             show_undo_snackbar: true,
             sidebar_is_hidden: false,
+            first_day_of_week: FirstDayOfWeek::default(),
             description_editor: String::new(),
             log_level: default_log_level(),
             expanded_tags: Vec::new(),
@@ -1015,9 +1044,11 @@ impl Config {
             quick_filter_icon: self.quick_filter_icon.clone(),
             show_quick_filter: self.show_quick_filter,
             show_goals_tab: self.show_goals_tab,
+            show_journal_tab: self.show_journal_tab,
             show_task_goals_in_sidebar: self.show_task_goals_in_sidebar,
             show_undo_snackbar: self.show_undo_snackbar,
             sort_collections_by_size: self.sort_collections_by_size,
+            first_day_of_week: self.first_day_of_week,
         }
     }
 
@@ -1062,9 +1093,11 @@ impl Config {
         self.quick_filter_icon = sync.quick_filter_icon;
         self.show_quick_filter = sync.show_quick_filter;
         self.show_goals_tab = sync.show_goals_tab;
+        self.show_journal_tab = sync.show_journal_tab;
         self.show_task_goals_in_sidebar = sync.show_task_goals_in_sidebar;
         self.show_undo_snackbar = sync.show_undo_snackbar;
         self.sort_collections_by_size = sync.sort_collections_by_size;
+        self.first_day_of_week = sync.first_day_of_week;
     }
 
     pub fn update_sync_timestamp_if_changed(&mut self, old: &Config) {
@@ -1424,6 +1457,9 @@ impl Config {
             } else if trimmed.starts_with("show_goals_tab =") {
                 out.push_str(line);
                 out.push_str(" # Boolean: Display the Goals tab in the sidebar.");
+            } else if trimmed.starts_with("show_journal_tab =") {
+                out.push_str(line);
+                out.push_str(" # Boolean: Display the Journal tab in the sidebar.");
             } else if trimmed.starts_with("show_task_goals_in_sidebar =") {
                 out.push_str(line);
                 out.push_str(" # Boolean: Display task-specific goals alongside global goals.");

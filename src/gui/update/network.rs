@@ -144,6 +144,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     name: LOCAL_CALENDAR_NAME.to_string(),
                     href: LOCAL_CALENDAR_HREF.to_string(),
                     color: None,
+                    supports_vjournal: Some(true),
                 };
                 cals.push(local_entry);
             }

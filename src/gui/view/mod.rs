@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/gui/view/mod.rs
+use std::collections::HashSet;
 use std::time::Duration;
 pub mod focusable;
 pub mod help;
@@ -135,11 +136,27 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         .into(),
         AppState::Onboarding | AppState::Settings => view_settings(app),
         AppState::Help(tab, _) => view_help(tab, app),
+        AppState::Active if app.sidebar_mode == SidebarMode::Journal => {
+            let content_layout = if app.sidebar_is_hidden {
+                row![container(view_journal_main_pane(app)).width(Length::Fill)]
+            } else {
+                row![
+                    view_sidebar(app, false),
+                    iced::widget::rule::vertical(1),
+                    container(view_journal_main_pane(app)).width(Length::Fill)
+                ]
+            };
+            container(content_layout)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into()
+        }
         AppState::Active => {
             let content_height = match app.sidebar_mode {
                 SidebarMode::Calendars => app.get_filtered_calendars().len() as f32 * 44.0,
                 SidebarMode::Categories => app.cached_categories.len() as f32 * 34.0,
                 SidebarMode::Locations => app.cached_locations.len() as f32 * 34.0,
+                SidebarMode::Journal => 300.0, // Mini-calendar height
                 SidebarMode::Goals => app.core_config.goals.len() as f32 * 60.0,
             };
             let available_height = app.current_window_size.height - 110.0;
@@ -1170,10 +1187,31 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         tabs = tabs.push(btn_goals);
     }
 
+    if app.show_journal_tab {
+        let btn_journal = tooltip(
+            button(container(icon::icon(app.journal_icon).size(18)).center_x(Length::Fill))
+                .padding(8)
+                .width(Length::Fill)
+                .style(if app.sidebar_mode == SidebarMode::Journal {
+                    active_style
+                } else {
+                    button::text
+                })
+                .on_press(Message::SidebarModeChanged(SidebarMode::Journal)),
+            text(format!("{} (5)", rust_i18n::t!("journal"))).size(12),
+            tooltip::Position::Bottom,
+        )
+        .style(tooltip_style)
+        .delay(Duration::from_millis(700));
+
+        tabs = tabs.push(btn_journal);
+    }
+
     let content = match app.sidebar_mode {
         SidebarMode::Calendars => view_sidebar_calendars(app),
         SidebarMode::Categories => view_sidebar_categories(app),
         SidebarMode::Locations => crate::gui::view::sidebar::view_sidebar_locations(app),
+        SidebarMode::Journal => crate::gui::view::sidebar::view_sidebar_journal(app),
         SidebarMode::Goals => crate::gui::view::sidebar::view_sidebar_goals(app),
     };
 
@@ -2800,4 +2838,435 @@ fn view_ics_import_overlay<'a>(app: &'a GuiApp) -> Element<'a, Message> {
             ..Default::default()
         })
         .into()
+}
+
+fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
+    let date = app.journal_date;
+    let date_str = date.format("%A, %B %d, %Y").to_string();
+
+    let mut visible_cals_set = HashSet::new();
+    let mut visible_cals = Vec::new();
+
+    for c in &app.calendars {
+        let supports = if c.href.starts_with("local://") {
+            true
+        } else {
+            c.supports_vjournal.unwrap_or(false)
+        };
+
+        if !app.hidden_calendars.contains(&c.href)
+            && !app.disabled_calendars.contains(&c.href)
+            && c.href != crate::storage::LOCAL_TRASH_HREF
+            && c.href != "local://recovery"
+            && supports
+        {
+            visible_cals_set.insert(c.href.clone());
+            visible_cals.push(c.clone());
+        }
+    }
+
+    visible_cals.sort_by_key(|c| {
+        if app.store.get_journal_entry(&c.href, date).is_some() {
+            0
+        } else {
+            1
+        }
+    });
+
+    let active_href = app
+        .journal_editing_href
+        .as_ref()
+        .or(app.active_cal_href.as_ref())
+        .cloned()
+        .unwrap_or_else(|| {
+            visible_cals
+                .first()
+                .map(|c| c.href.clone())
+                .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string())
+        });
+
+    let active_name = app
+        .calendars
+        .iter()
+        .find(|c| c.href == active_href)
+        .map(|c| c.name.clone())
+        .unwrap_or_else(|| active_href.clone());
+
+    let mut cal_buttons = row![].spacing(6).align_y(iced::Alignment::Center);
+    for cal in &visible_cals {
+        let is_selected = cal.href == active_href;
+        let has_entry = app.store.get_journal_entry(&cal.href, date).is_some();
+        let cal_name = cal.name.clone();
+        let cal_href = cal.href.clone();
+        let mut cal_color = cal
+            .color
+            .as_ref()
+            .and_then(|h| crate::color_utils::parse_hex_to_floats(h))
+            .map(|(r, g, b)| Color::from_rgb(r, g, b))
+            .unwrap_or(Color::from_rgb(0.7, 0.7, 0.7));
+
+        if !is_selected && !has_entry {
+            cal_color.a *= 0.4;
+        } else if !is_selected {
+            cal_color.a *= 0.8;
+        }
+
+        let btn_style = move |_theme: &Theme, status: button::Status| {
+            if is_selected {
+                button::Style {
+                    background: Some(
+                        Color {
+                            a: 0.25,
+                            ..cal_color
+                        }
+                        .into(),
+                    ),
+                    text_color: cal_color,
+                    border: iced::Border {
+                        width: 1.5,
+                        color: cal_color,
+                        radius: 6.0.into(),
+                    },
+                    ..button::Style::default()
+                }
+            } else {
+                let bg_alpha = match status {
+                    button::Status::Hovered => 0.1,
+                    _ => 0.0,
+                };
+                button::Style {
+                    background: Some(
+                        Color {
+                            a: bg_alpha,
+                            ..cal_color
+                        }
+                        .into(),
+                    ),
+                    text_color: cal_color,
+                    border: iced::Border {
+                        width: 1.0,
+                        color: Color {
+                            a: cal_color.a * 0.5,
+                            ..cal_color
+                        },
+                        radius: 6.0.into(),
+                    },
+                    ..button::Style::default()
+                }
+            }
+        };
+
+        let btn = button(
+            row![
+                icon::icon(if has_entry {
+                    app.journal_icon
+                } else {
+                    icon::EDIT
+                })
+                .size(12),
+                text(cal_name).size(13),
+            ]
+            .spacing(4)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([4, 10])
+        .style(btn_style)
+        .on_press(Message::SelectJournalCollection(cal_href));
+
+        cal_buttons = cal_buttons.push(btn);
+    }
+
+    let cal_selector = scrollable(cal_buttons)
+        .direction(iced::widget::scrollable::Direction::Horizontal(
+            iced::widget::scrollable::Scrollbar::new()
+                .width(4)
+                .scroller_width(4)
+                .margin(0),
+        ))
+        .width(Length::Fill);
+
+    let window_controls = if app.force_ssd {
+        row![].spacing(0)
+    } else {
+        row![
+            iced::widget::button(icon::icon(icon::WINDOW_MINIMIZE).size(14))
+                .style(iced::widget::button::text)
+                .padding(8)
+                .on_press(Message::MinimizeWindow),
+            iced::widget::button(icon::icon(icon::CROSS).size(14))
+                .style(iced::widget::button::danger)
+                .padding(8)
+                .on_press(Message::CloseWindow)
+        ]
+        .spacing(0)
+    };
+
+    let header_drag_area: Element<_> = if app.force_ssd {
+        let header_top = row![
+            text(date_str).size(22).font(iced::Font {
+                weight: iced::font::Weight::Bold,
+                ..Default::default()
+            }),
+            Space::new().width(Length::Fill),
+            window_controls
+        ]
+        .align_y(iced::Alignment::Center);
+        header_top.into()
+    } else {
+        let header_top = row![
+            text(date_str).size(22).font(iced::Font {
+                weight: iced::font::Weight::Bold,
+                ..Default::default()
+            }),
+            Space::new().width(Length::Fill),
+            window_controls
+        ]
+        .align_y(iced::Alignment::Center);
+        MouseArea::new(header_top)
+            .on_press(Message::WindowDragged)
+            .into()
+    };
+
+    let top_header = column![
+        header_drag_area,
+        container(cal_selector).padding(iced::Padding {
+            left: 10.0,
+            right: 10.0,
+            top: 5.0,
+            bottom: 5.0
+        })
+    ]
+    .spacing(0);
+
+    let is_dark_mode = app.theme().extended_palette().is_dark;
+
+    let editor = text_editor(&app.journal_editor_content)
+        .id("journal_editor")
+        .placeholder(rust_i18n::t!("journal_no_notes", name = active_name))
+        .on_action(Message::JournalContentChanged)
+        .highlight_with::<self::syntax::MarkdownHighlighter>(is_dark_mode, |highlight, _theme| {
+            *highlight
+        })
+        .padding(12)
+        .height(Length::Fill)
+        .style(move |theme: &Theme, status| {
+            let class = <Theme as iced::widget::text_editor::Catalog>::default();
+            let mut style =
+                <Theme as iced::widget::text_editor::Catalog>::style(theme, &class, status);
+            style.background = iced::Background::Color(Color::TRANSPARENT);
+            style.border.width = 0.0;
+            style
+        });
+
+    let editor_container = container(editor)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(|theme: &Theme| {
+            let palette = theme.extended_palette();
+            container::Style {
+                background: Some(palette.background.weak.color.into()),
+                border: iced::Border {
+                    width: 1.0,
+                    color: palette.background.strong.color,
+                    radius: 8.0.into(),
+                },
+                ..Default::default()
+            }
+        });
+
+    let day_ctx = app.store.get_day_context(date, &visible_cals_set);
+    let owned_day_ctx = crate::store::DayContext {
+        date: day_ctx.date,
+        due_tasks: day_ctx.due_tasks.clone(),
+        started_tasks: day_ctx.started_tasks.clone(),
+        ongoing_tasks: day_ctx.ongoing_tasks.clone(),
+        completed_tasks: day_ctx.completed_tasks.clone(),
+        session_tasks: day_ctx.session_tasks.clone(),
+        total_tracked_mins: day_ctx.total_tracked_mins,
+    };
+    let mut activity_col = column![].spacing(6);
+
+    let act_title = row![
+        icon::icon(icon::REFRESH)
+            .size(14)
+            .color(Color::from_rgb(1.0, 0.6, 0.0)),
+        text(rust_i18n::t!("journal_activity"))
+            .size(14)
+            .font(iced::Font {
+                weight: iced::font::Weight::Bold,
+                ..Default::default()
+            })
+    ]
+    .spacing(6)
+    .align_y(iced::Alignment::Center);
+    activity_col = activity_col.push(act_title);
+
+    let mut has_any_activity = false;
+
+    if owned_day_ctx.total_tracked_mins > 0 {
+        has_any_activity = true;
+        activity_col = activity_col.push(
+            row![
+                icon::icon(icon::TIMER_SETTINGS)
+                    .size(12)
+                    .color(Color::from_rgb(0.4, 0.8, 0.4)),
+                text(format!(
+                    "{}: {} ({})",
+                    rust_i18n::t!("journal_time_tracked"),
+                    crate::model::parser::format_duration_human(owned_day_ctx.total_tracked_mins),
+                    owned_day_ctx.session_tasks.len()
+                ))
+                .size(13)
+                .color(Color::from_rgb(0.4, 0.8, 0.4))
+            ]
+            .spacing(6),
+        );
+    }
+
+    if !owned_day_ctx.ongoing_tasks.is_empty() {
+        has_any_activity = true;
+        let mut on_col = column![].spacing(2);
+        for t in &owned_day_ctx.ongoing_tasks {
+            let summary = t.summary.clone();
+            let uid = t.uid.clone();
+            on_col = on_col.push(
+                row![
+                    icon::icon(icon::PLAY_FA)
+                        .size(12)
+                        .color(Color::from_rgb(0.4, 0.8, 0.4)),
+                    button(text(summary).size(13))
+                        .style(button::text)
+                        .padding(0)
+                        .on_press(Message::JumpToTask(uid))
+                ]
+                .spacing(6)
+                .align_y(iced::Alignment::Center),
+            );
+        }
+        activity_col = activity_col.push(
+            column![
+                text(rust_i18n::t!("journal_started_today"))
+                    .size(12)
+                    .color(Color::from_rgb(0.6, 0.6, 0.6)),
+                on_col
+            ]
+            .spacing(2),
+        );
+    }
+
+    if !owned_day_ctx.completed_tasks.is_empty() {
+        has_any_activity = true;
+        let mut comp_col = column![].spacing(2);
+        for t in &owned_day_ctx.completed_tasks {
+            let summary = t.summary.clone();
+            let uid = t.uid.clone();
+            comp_col = comp_col.push(
+                row![
+                    icon::icon(icon::CHECK)
+                        .size(12)
+                        .color(Color::from_rgb(0.2, 0.8, 0.2)),
+                    button(text(summary).size(13))
+                        .style(button::text)
+                        .padding(0)
+                        .on_press(Message::JumpToTask(uid))
+                ]
+                .spacing(6)
+                .align_y(iced::Alignment::Center),
+            );
+        }
+        activity_col = activity_col.push(
+            column![
+                text(rust_i18n::t!("journal_completed_today"))
+                    .size(12)
+                    .color(Color::from_rgb(0.6, 0.6, 0.6)),
+                comp_col
+            ]
+            .spacing(2),
+        );
+    }
+
+    if !owned_day_ctx.due_tasks.is_empty() {
+        has_any_activity = true;
+        let mut due_col = column![].spacing(2);
+        for t in &owned_day_ctx.due_tasks {
+            let summary = t.summary.clone();
+            let uid = t.uid.clone();
+            due_col = due_col.push(
+                row![
+                    icon::icon(icon::CALENDAR)
+                        .size(12)
+                        .color(Color::from_rgb(1.0, 0.6, 0.2)),
+                    button(text(summary).size(13))
+                        .style(button::text)
+                        .padding(0)
+                        .on_press(Message::JumpToTask(uid))
+                ]
+                .spacing(6)
+                .align_y(iced::Alignment::Center),
+            );
+        }
+        activity_col = activity_col.push(
+            column![
+                text(rust_i18n::t!("journal_due_today"))
+                    .size(12)
+                    .color(Color::from_rgb(0.6, 0.6, 0.6)),
+                due_col
+            ]
+            .spacing(2),
+        );
+    }
+
+    if !has_any_activity {
+        activity_col = activity_col.push(
+            text(rust_i18n::t!("journal_no_activity"))
+                .size(12)
+                .color(Color::from_rgb(0.5, 0.5, 0.5)),
+        );
+    }
+
+    let activity_scroll = scrollable(activity_col).height(Length::Shrink).direction(
+        iced::widget::scrollable::Direction::Vertical(
+            iced::widget::scrollable::Scrollbar::new().width(6),
+        ),
+    );
+
+    let activity_container = container(activity_scroll)
+        .width(Length::Fill)
+        .max_height(250.0)
+        .padding(12)
+        .style(|theme: &Theme| {
+            let palette = theme.extended_palette();
+            container::Style {
+                background: Some(palette.background.weak.color.into()),
+                border: iced::Border {
+                    width: 1.0,
+                    color: palette.background.strong.color,
+                    radius: 8.0.into(),
+                },
+                ..Default::default()
+            }
+        });
+
+    column![
+        top_header,
+        container(editor_container)
+            .padding(iced::Padding {
+                left: 10.0,
+                right: 10.0,
+                top: 0.0,
+                bottom: 0.0
+            })
+            .height(Length::Fill),
+        Space::new().height(4),
+        container(activity_container).padding(iced::Padding {
+            left: 10.0,
+            right: 10.0,
+            top: 0.0,
+            bottom: 10.0
+        })
+    ]
+    .spacing(4)
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .into()
 }

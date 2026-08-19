@@ -118,6 +118,7 @@ async fn test_recovery_calendar_visibility() {
             name: "Local (Recovery)".to_string(),
             href: "local://recovery".to_string(),
             color: Some("#DB4437".to_string()),
+            supports_vjournal: Some(true),
         });
         LocalCalendarRegistry::save(ctx.as_ref(), &regs).unwrap();
     }

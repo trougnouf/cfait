@@ -31,6 +31,21 @@ const GOAL_ICONS: &[char] = &[
     '\u{f0995}',
 ];
 
+const JOURNAL_ICONS: &[char] = &[
+    '\u{f02d}',
+    '\u{ede2}',
+    '\u{f14f7}',
+    '\u{f05da}',
+    '\u{f125f}',
+    '\u{edf7}',
+    '\u{ee34}',
+    '\u{f06d3}',
+    '\u{e7d8}',
+    '\u{f040}',
+    '\u{f064f}',
+    '\u{f0776}',
+];
+
 #[derive(PartialEq, Clone, Copy)]
 pub enum Focus {
     Sidebar,
@@ -54,6 +69,7 @@ pub enum InputMode {
     AddingSession,
     ManagingSessions,
     EditingSession(String, usize),
+    JumpingToDate,
     ActionMenu,
     Help(crate::help::HelpTab),
 }
@@ -99,7 +115,9 @@ pub struct AppState {
     pub quick_filter_icon: String,
     pub show_quick_filter: bool,
     pub show_goals_tab: bool,
+    pub show_journal_tab: bool,
     pub goal_icon: char,
+    pub journal_icon: char,
 
     // Cached sidebar values (derived from the last filter result)
     pub cached_categories: Vec<crate::store::AggregateItem>,
@@ -162,7 +180,8 @@ pub struct AppState {
     pub expanded_tags: HashSet<String>,
     pub expanded_locations: HashSet<String>,
     pub search_collapsed_tasks: HashSet<String>,
-
+    pub journal_date: chrono::NaiveDate,
+    pub first_day_of_week: crate::config::FirstDayOfWeek,
     pub goals: HashMap<String, crate::config::Goal>,
     pub cached_goals_progress: HashMap<String, (u32, Vec<f32>)>,
     pub cached_task_goals: Vec<(String, String, crate::config::Goal, u32, Vec<f32>)>,
@@ -231,7 +250,9 @@ impl AppState {
             quick_filter_icon: "f0fa9".to_string(),
             show_quick_filter: true,
             show_goals_tab: config.show_goals_tab,
+            show_journal_tab: config.show_journal_tab,
             goal_icon: GOAL_ICONS[fastrand::usize(..GOAL_ICONS.len())],
+            journal_icon: JOURNAL_ICONS[fastrand::usize(..JOURNAL_ICONS.len())],
             sort_cutoff_days: Some(30),
             sort_standard_by_priority: false,
             paused_sort_behavior: crate::config::PausedSortBehavior::default(),
@@ -290,6 +311,8 @@ impl AppState {
             expanded_tags: HashSet::new(),
             expanded_locations: HashSet::new(),
             search_collapsed_tasks: HashSet::new(),
+            journal_date: chrono::Local::now().date_naive(),
+            first_day_of_week: config.first_day_of_week,
             goals: config.goals,
             cached_goals_progress: HashMap::new(),
             cached_task_goals: Vec::new(),
@@ -606,6 +629,7 @@ impl AppState {
             SidebarMode::Calendars => self.get_filtered_calendars().len(),
             SidebarMode::Categories => self.cached_categories.len(),
             SidebarMode::Locations => self.cached_locations.len(),
+            SidebarMode::Journal => 31, // Mini-calendar has ~31 days
             SidebarMode::Goals => self.goals.len(),
         }
     }

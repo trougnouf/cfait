@@ -25,6 +25,7 @@ async fn test_tui_create_preserves_existing_calendar_tasks() {
             name: "Remote".to_string(),
             href: cal_href.clone(),
             color: None,
+            supports_vjournal: Some(true),
         }],
     )
     .unwrap();

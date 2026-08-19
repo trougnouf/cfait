@@ -16,6 +16,7 @@ pub enum SidebarMode {
     Calendars,
     Categories,
     Locations,
+    Journal,
     Goals,
 }
 

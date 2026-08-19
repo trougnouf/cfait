@@ -114,6 +114,17 @@ impl std::fmt::Display for DependencyWarning {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct DayContext {
+    pub date: chrono::NaiveDate,
+    pub due_tasks: Vec<crate::model::Task>,
+    pub started_tasks: Vec<crate::model::Task>,
+    pub ongoing_tasks: Vec<crate::model::Task>,
+    pub completed_tasks: Vec<crate::model::Task>,
+    pub session_tasks: Vec<(crate::model::Task, u32)>, // task, duration_mins on this day
+    pub total_tracked_mins: u32,
+}
+
 /// Result container returned by the `filter` pipeline.
 pub struct FilterResult {
     pub items: Vec<TaskListItem>,
@@ -2503,6 +2514,102 @@ impl TaskStore {
         self.get_task_ref(uid).map(|t| t.summary.clone())
     }
 
+    /// Finds a VJOURNAL entry for a specific calendar collection and date.
+    pub fn get_journal_entry(&self, calendar_href: &str, date: chrono::NaiveDate) -> Option<&Task> {
+        if let Some(map) = self.calendars.get(calendar_href) {
+            for task in map.values() {
+                if task.is_journal && task.dtstart.as_ref().map(|d| d.to_date_naive()) == Some(date)
+                {
+                    return Some(task);
+                }
+            }
+        }
+        None
+    }
+
+    /// Computes the dynamic activity context for a given day across all visible collections.
+    pub fn get_day_context(
+        &self,
+        date: chrono::NaiveDate,
+        visible_cals: &HashSet<String>,
+    ) -> DayContext {
+        let mut ctx = DayContext {
+            date,
+            ..Default::default()
+        };
+
+        let day_start_utc = crate::model::item::safe_local_to_utc(
+            date,
+            chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+        )
+        .timestamp();
+        let day_end_utc = crate::model::item::safe_local_to_utc(
+            date,
+            chrono::NaiveTime::from_hms_opt(23, 59, 59).unwrap(),
+        )
+        .timestamp();
+
+        for (href, map) in &self.calendars {
+            if !visible_cals.contains(href)
+                || href == crate::storage::LOCAL_TRASH_HREF
+                || href == "local://recovery"
+            {
+                continue;
+            }
+
+            for task in map.values() {
+                if task.is_journal {
+                    continue;
+                }
+
+                // 1. Due today
+                if let Some(due) = &task.due
+                    && due.to_date_naive() == date
+                {
+                    ctx.due_tasks.push(task.clone());
+                }
+
+                // 2. Started today
+                if let Some(start) = &task.dtstart
+                    && start.to_date_naive() == date
+                {
+                    ctx.started_tasks.push(task.clone());
+                }
+
+                // Ongoing (InProcess)
+                if task.status == crate::model::TaskStatus::InProcess {
+                    ctx.ongoing_tasks.push(task.clone());
+                }
+
+                // 3. Completed today
+                if let Some(comp_dt) = task.completion_date() {
+                    let local_comp = comp_dt.with_timezone(&chrono::Local).date_naive();
+                    if local_comp == date {
+                        ctx.completed_tasks.push(task.clone());
+                    }
+                }
+
+                // 4. Work sessions on this day
+                let mut task_mins_today = 0;
+                for session in &task.sessions {
+                    if session.end >= day_start_utc && session.start <= day_end_utc {
+                        let overlap_start = session.start.max(day_start_utc);
+                        let overlap_end = session.end.min(day_end_utc);
+                        if overlap_end > overlap_start {
+                            task_mins_today += ((overlap_end - overlap_start) / 60) as u32;
+                        }
+                    }
+                }
+                if task_mins_today > 0 {
+                    ctx.total_tracked_mins += task_mins_today;
+                    ctx.session_tasks.push((task.clone(), task_mins_today));
+                }
+            }
+        }
+
+        ctx
+    }
+
     /// Main filter pipeline that performs multi-stage filtering and returns
     /// prepared results (cloned tasks and aggregated category/location lists).
     pub fn filter(&self, options: FilterOptions) -> FilterResult {
@@ -2691,6 +2798,7 @@ impl TaskStore {
                     }
                     if t.uid == "cfait-global-settings-v1"
                         || t.summary.starts_with("⚙ Cfait Settings")
+                        || t.is_journal
                     {
                         return false;
                     }
@@ -4094,6 +4202,7 @@ mod tests {
             is_note: false,
             manual_block: false,
             permanent: false,
+            is_journal: false,
             time_spent_seconds: 0,
             last_started_at: None,
             sessions: vec![],

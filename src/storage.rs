@@ -24,7 +24,7 @@ pub const LOCAL_CALENDAR_HREF: &str = "local://default";
 pub const LOCAL_CALENDAR_NAME: &str = "Local";
 pub const LOCAL_TRASH_HREF: &str = "local://trash";
 pub const LOCAL_REGISTRY_FILENAME: &str = "local_calendars.json";
-const LOCAL_STORAGE_VERSION: u32 = 9;
+const LOCAL_STORAGE_VERSION: u32 = 10;
 
 #[derive(Serialize, Deserialize)]
 struct LocalStorageData {
@@ -76,6 +76,7 @@ impl LocalCalendarRegistry {
             name: LOCAL_CALENDAR_NAME.to_string(),
             href: LOCAL_CALENDAR_HREF.to_string(),
             color: None,
+            supports_vjournal: Some(true),
         };
 
         if let Some(path) = Self::get_path(ctx)
@@ -115,6 +116,7 @@ impl LocalCalendarRegistry {
                 href: LOCAL_TRASH_HREF.to_string(),
                 // Use a distinctive color (Gray)
                 color: Some("#808080".to_string()),
+                supports_vjournal: Some(true),
             });
             Self::save(ctx, &locals)?;
             return Ok(true);
@@ -441,7 +443,7 @@ impl LocalStorage {
         }
         let tasks = match old_version {
             0 | 1 => Self::migrate_v1_to_v2(json)?,
-            2..=8 => {
+            2..=9 => {
                 let data: LocalStorageData = serde_json::from_str(json)?;
                 data.tasks
             }

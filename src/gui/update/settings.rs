@@ -54,7 +54,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.quick_filter_icon = config.quick_filter_icon.clone();
             app.show_quick_filter = config.show_quick_filter;
             app.show_goals_tab = config.show_goals_tab;
+            app.show_journal_tab = config.show_journal_tab;
             if !app.show_goals_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Goals {
+                app.sidebar_mode = crate::gui::state::SidebarMode::Calendars;
+            }
+            if !app.show_journal_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Journal
+            {
                 app.sidebar_mode = crate::gui::state::SidebarMode::Calendars;
             }
             app.sidebar_is_hidden = config.sidebar_is_hidden;
@@ -102,6 +107,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.session.expanded_locations = config.expanded_locations.clone();
             app.pinned_actions = config.pinned_actions.clone();
             app.log_level = config.log_level;
+            app.first_day_of_week = config.first_day_of_week;
 
             // Apply the configured log level
             crate::system::set_log_level(config.log_level.to_level_filter());
@@ -204,7 +210,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.quick_filter_icon = config.quick_filter_icon.clone();
             app.show_quick_filter = config.show_quick_filter;
             app.show_goals_tab = config.show_goals_tab;
+            app.show_journal_tab = config.show_journal_tab;
             if !app.show_goals_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Goals {
+                app.sidebar_mode = crate::gui::state::SidebarMode::Calendars;
+            }
+            if !app.show_journal_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Journal
+            {
                 app.sidebar_mode = crate::gui::state::SidebarMode::Calendars;
             }
             app.sidebar_is_hidden = config.sidebar_is_hidden;
@@ -755,6 +766,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
 
+        Message::SetFirstDayOfWeek(val) => {
+            app.first_day_of_week = val;
+            save_config(app);
+            Task::none()
+        }
         Message::SetLanguage(lang) => {
             // Persist the user's language selection in the GUI app state.
             // `lang == "auto"` means follow system/default.
@@ -914,6 +930,15 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::SetShowGoalsTab(val) => {
             app.show_goals_tab = val;
             if !val && app.sidebar_mode == crate::gui::state::SidebarMode::Goals {
+                app.sidebar_mode = crate::gui::state::SidebarMode::Calendars;
+            }
+            save_config(app);
+            crate::gui::update::common::refresh_filtered_tasks(app);
+            Task::none()
+        }
+        Message::SetShowJournalTab(val) => {
+            app.show_journal_tab = val;
+            if !val && app.sidebar_mode == crate::gui::state::SidebarMode::Journal {
                 app.sidebar_mode = crate::gui::state::SidebarMode::Calendars;
             }
             save_config(app);
@@ -1137,6 +1162,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 name: rust_i18n::t!("new_calendar_name").to_string(),
                 href: format!("local://{}", id),
                 color: None,
+                supports_vjournal: Some(true),
             };
             app.local_cals_editing.push(new_cal.clone());
 
@@ -1234,6 +1260,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 name: rust_i18n::t!("new_calendar_name").to_string(),
                 href: format!("new_remote_{}", id),
                 color: None,
+                supports_vjournal: Some(true),
             };
             app.remote_cals_editing.push(new_cal);
             Task::none()

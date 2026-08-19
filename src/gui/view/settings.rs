@@ -379,6 +379,9 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.show_priority_numbers)
                     .label(rust_i18n::t!("show_priority_numbers"))
                     .on_toggle(Message::SetShowPriorityNumbers),
+                checkbox::<Message, iced::Theme, iced::Renderer>(app.show_journal_tab)
+                    .label(rust_i18n::t!("show_journal_tab"))
+                    .on_toggle(Message::SetShowJournalTab),
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.strikethrough_completed)
                     .label(rust_i18n::t!("strikethrough_completed"))
                     .on_toggle(Message::SetStrikethroughCompleted),
@@ -423,6 +426,19 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 text(rust_i18n::t!("settings_sort_preset_explain"))
                     .size(12)
                     .color(Color::from_rgb(0.6, 0.6, 0.6)),
+                Space::new().height(10),
+                row![
+                    text(rust_i18n::t!("first_day_of_week")).width(Length::Fixed(200.0)),
+                    iced::widget::pick_list(
+                        crate::config::FirstDayOfWeek::iter().collect::<Vec<_>>(),
+                        Some(app.first_day_of_week),
+                        Message::SetFirstDayOfWeek
+                    )
+                    .width(Length::Fill)
+                    .padding(5)
+                ]
+                .spacing(10)
+                .align_y(iced::Alignment::Center),
                 Space::new().height(10),
                 text(rust_i18n::t!("settings_urgent_and_timeframes"))
                     .size(16)

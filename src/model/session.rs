@@ -20,6 +20,7 @@ pub struct SessionState {
     pub expanded_locations: Vec<String>,
     pub search_collapsed_tasks: Vec<String>,
     pub focused_task_uid: Option<String>,
+    pub selected_journal_date: String, // YYYY-MM-DD
 }
 
 impl SessionState {
@@ -153,6 +154,9 @@ impl SessionState {
             AppIntent::FocusTaskTree { uid } => {
                 self.focused_task_uid = uid.clone();
             }
+            AppIntent::SelectJournalDate { date } => {
+                self.selected_journal_date = date.clone();
+            }
             _ => {} // Ignore task-specific intents
         }
     }
@@ -262,6 +266,9 @@ pub enum AppIntent {
     },
     FocusTaskTree {
         uid: Option<String>,
+    },
+    SelectJournalDate {
+        date: String,
     },
     CompleteTree {
         uid: String,

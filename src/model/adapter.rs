@@ -84,6 +84,65 @@ impl IcsAdapter {
     }
 
     pub fn to_ics(task: &Task) -> String {
+        if task.is_journal {
+            let mut buffer = String::new();
+            buffer.push_str("BEGIN:VCALENDAR\r\n");
+            buffer.push_str("VERSION:2.0\r\n");
+            buffer.push_str("PRODID:-//Cfait//Cfait//EN\r\n");
+            buffer.push_str("BEGIN:VJOURNAL\r\n");
+
+            let escaped_uid = task
+                .uid
+                .replace('\\', "\\\\")
+                .replace(',', "\\,")
+                .replace(';', "\\;");
+            buffer.push_str(&format!("UID:{}\r\n", escaped_uid));
+
+            let escaped_summary = task
+                .summary
+                .replace('\\', "\\\\")
+                .replace(',', "\\,")
+                .replace(';', "\\;");
+            buffer.push_str(&format!("SUMMARY:{}\r\n", escaped_summary));
+
+            let escaped_desc = task
+                .description
+                .replace('\\', "\\\\")
+                .replace(',', "\\,")
+                .replace(';', "\\;")
+                .replace('\n', "\\n");
+            buffer.push_str(&format!("DESCRIPTION:{}\r\n", escaped_desc));
+
+            buffer.push_str(&format!("SEQUENCE:{}\r\n", task.sequence));
+            buffer.push_str(&format!(
+                "DTSTAMP:{}\r\n",
+                Utc::now().format("%Y%m%dT%H%M%SZ")
+            ));
+
+            if let Some(DateType::AllDay(d)) = &task.dtstart {
+                buffer.push_str(&format!("DTSTART;VALUE=DATE:{}\r\n", d.format("%Y%m%d")));
+            } else if let Some(DateType::Specific(dt)) = &task.dtstart {
+                buffer.push_str(&format!("DTSTART:{}\r\n", dt.format("%Y%m%dT%H%M%SZ")));
+            }
+
+            if !task.categories.is_empty() {
+                let escaped_cats: Vec<String> = task
+                    .categories
+                    .iter()
+                    .map(|c: &String| {
+                        c.replace('\\', "\\\\")
+                            .replace(',', "\\,")
+                            .replace(';', "\\;")
+                    })
+                    .collect();
+                buffer.push_str(&format!("CATEGORIES:{}\r\n", escaped_cats.join(",")));
+            }
+
+            buffer.push_str("END:VJOURNAL\r\n");
+            buffer.push_str("END:VCALENDAR\r\n");
+            return buffer;
+        }
+
         let mut todo = Todo::new();
         todo.add_property("UID", &task.uid);
         todo.summary(&task.summary);
@@ -502,9 +561,28 @@ impl IcsAdapter {
         href: String,
         calendar_href: String,
     ) -> Result<Task, String> {
+        // Helper to extract a property value from a raw component string
+        fn extract_prop(raw: &str, prop_name: &str) -> Option<String> {
+            for line in raw.lines() {
+                if let Some(rest) = line.strip_prefix(prop_name) {
+                    // Handle both "PROP:value" and "PROP;PARAM=val:value" formats
+                    // Make sure it's followed by either : or ; to avoid partial matches
+                    if rest.starts_with(':') || rest.starts_with(';') {
+                        if let Some(idx) = line.find(':') {
+                            return Some(line[idx + 1..].to_string());
+                        } else {
+                            return Some(String::new());
+                        }
+                    }
+                }
+            }
+            None
+        }
+
         let calendar: Calendar = raw_ics.parse().map_err(|e| format!("Parse: {}", e))?;
 
         let mut master_todo: Option<&Todo> = None;
+        let mut master_journal_raw: Option<String> = None;
         let mut raw_components: Vec<String> = Vec::new();
 
         for component in &calendar.components {
@@ -512,7 +590,7 @@ impl IcsAdapter {
                 CalendarComponent::Todo(t) => {
                     if t.properties().contains_key("RECURRENCE-ID") {
                         raw_components.push(t.to_string());
-                    } else if master_todo.is_none() {
+                    } else if master_todo.is_none() && master_journal_raw.is_none() {
                         master_todo = Some(t);
                     } else {
                         raw_components.push(t.to_string());
@@ -520,12 +598,122 @@ impl IcsAdapter {
                 }
                 CalendarComponent::Event(e) => raw_components.push(e.to_string()),
                 CalendarComponent::Venue(v) => raw_components.push(v.to_string()),
-                CalendarComponent::Other(o) => raw_components.push(o.to_string()),
+                CalendarComponent::Other(o) => {
+                    let comp_str = o.to_string();
+                    if comp_str.contains("BEGIN:VJOURNAL") {
+                        if master_todo.is_none() && master_journal_raw.is_none() {
+                            master_journal_raw = Some(comp_str);
+                        } else {
+                            raw_components.push(comp_str);
+                        }
+                    } else {
+                        raw_components.push(comp_str);
+                    }
+                }
                 _ => {}
             }
         }
 
-        let todo = master_todo.ok_or("No Master VTODO found in ICS".to_string())?;
+        if let Some(journal_raw) = master_journal_raw {
+            let uid = extract_prop(&journal_raw, "UID").unwrap_or_default();
+            let summary = extract_prop(&journal_raw, "SUMMARY").unwrap_or_default();
+            let description = extract_prop(&journal_raw, "DESCRIPTION").unwrap_or_default();
+            let sequence = extract_prop(&journal_raw, "SEQUENCE")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0);
+
+            let dtstart = if let Some(dtstart_str) = extract_prop(&journal_raw, "DTSTART") {
+                let clean_value = dtstart_str
+                    .split_once(':')
+                    .map(|x| x.1)
+                    .unwrap_or(dtstart_str.trim());
+                if clean_value.len() == 8 || clean_value.starts_with("VALUE=DATE:") {
+                    let date_val = clean_value.trim_start_matches("VALUE=DATE:");
+                    NaiveDate::parse_from_str(date_val, "%Y%m%d")
+                        .ok()
+                        .map(DateType::AllDay)
+                } else if clean_value.ends_with('Z') {
+                    NaiveDateTime::parse_from_str(clean_value, "%Y%m%dT%H%M%SZ")
+                        .ok()
+                        .map(|d| DateType::Specific(Utc.from_utc_datetime(&d)))
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            let categories = if let Some(cats_str) = extract_prop(&journal_raw, "CATEGORIES") {
+                cats_str.split(',').map(|s| s.trim().to_string()).collect()
+            } else {
+                Vec::new()
+            };
+
+            return Ok(Task {
+                uid,
+                summary,
+                description,
+                status: TaskStatus::NeedsAction,
+                estimated_duration: None,
+                estimated_duration_max: None,
+                due: None,
+                dtstart,
+                alarms: Vec::new(),
+                exdates: Vec::new(),
+                priority: 0,
+                percent_complete: None,
+                parent_uid: None,
+                dependencies: Vec::new(),
+                related_to: Vec::new(),
+                etag,
+                href,
+                calendar_href,
+                categories,
+                depth: 0,
+                rrule: None,
+                locations: Vec::new(),
+                url: None,
+                geo: None,
+                collapsed: false,
+                pinned: false,
+                is_note: false,
+                manual_block: false,
+                permanent: false,
+                is_journal: true,
+                time_spent_seconds: 0,
+                last_started_at: None,
+                sessions: Vec::new(),
+                unmapped_properties: Vec::new(),
+                sequence,
+                raw_alarms: Vec::new(),
+                raw_components,
+                create_event: None,
+                goal: None,
+                target_collection: None,
+                is_blocked: false,
+                is_implicitly_blocked: false,
+                is_implicitly_future: false,
+                has_subtasks: false,
+                has_visible_subtasks: false,
+                sort_rank: 0,
+                effective_priority: 0,
+                effective_due: None,
+                effective_dtstart: None,
+                visible_categories: Vec::new(),
+                visible_locations: Vec::new(),
+                has_blocking_tasks: false,
+                has_related_tasks: false,
+                is_future_start: false,
+                is_overdue: false,
+                is_due_today: false,
+                tree_location_count: 0,
+                is_search_context: false,
+                transient_is_paused: false,
+                transient_recent_ts: 0,
+            });
+        }
+
+        let todo = master_todo.ok_or("No Master VTODO or VJOURNAL found in ICS".to_string())?;
 
         let get_prop = |key: &str| -> Option<String> {
             todo.properties().get(key).map(|p| p.value().to_string())
@@ -1140,6 +1328,7 @@ impl IcsAdapter {
             is_note,
             manual_block,
             permanent,
+            is_journal: false,
             time_spent_seconds,
             last_started_at,
             sessions: manual_sessions, // Use manual parsing result
@@ -1174,6 +1363,10 @@ impl IcsAdapter {
     }
 
     pub fn to_event_ics(task: &Task) -> Vec<(String, String)> {
+        if task.is_journal {
+            return vec![];
+        }
+
         let mut results = Vec::new();
         let base_uid = format!("evt-{}", task.uid);
 

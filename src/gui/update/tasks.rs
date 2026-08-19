@@ -730,6 +730,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                             );
                         }
                     }
+                    SidebarMode::Journal => {}
                     SidebarMode::Goals => {}
                 }
                 return Task::none();

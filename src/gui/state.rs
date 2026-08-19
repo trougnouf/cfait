@@ -31,6 +31,7 @@ pub enum SidebarMode {
     Calendars,
     Categories,
     Locations,
+    Journal,
     Goals,
 }
 
@@ -91,6 +92,10 @@ pub struct GuiApp {
 
     pub active_focus: Focus,
     pub sidebar_selection_idx: usize,
+    pub journal_date: chrono::NaiveDate,
+    pub journal_editor_content: text_editor::Content,
+    pub journal_editing_href: Option<String>,
+    pub journal_debounce_version: usize,
 
     // Preferences
     pub hide_completed: bool,
@@ -117,6 +122,7 @@ pub struct GuiApp {
     pub quick_filter_icon: String,
     pub show_quick_filter: bool,
     pub show_goals_tab: bool,
+    pub show_journal_tab: bool,
     pub cached_goals_progress: HashMap<String, (u32, Vec<f32>)>,
     pub cached_task_goals: Vec<(String, String, crate::config::Goal, u32, Vec<f32>)>,
     pub sidebar_is_hidden: bool,
@@ -160,6 +166,7 @@ pub struct GuiApp {
     pub random_icon: char, // NEW
     pub goal_icon: char,
     pub focus_icon: char,
+    pub journal_icon: char,
 
     // Inputs - Settings (Aliases)
     pub alias_input_key: String,
@@ -271,6 +278,8 @@ pub struct GuiApp {
 
     // ADDED: Auto Refresh
     pub auto_refresh_interval_mins: u32,
+    pub first_day_of_week: crate::config::FirstDayOfWeek,
+    pub journal_date_input: String,
 
     // ADDED: UI Scale (for global zooming)
     pub ui_scale: f32,
@@ -399,6 +408,9 @@ impl Default for GuiApp {
         let focus_icon =
             crate::gui::icon::FOCUS_ICONS[rng.usize(..crate::gui::icon::FOCUS_ICONS.len())];
 
+        let journal_icon =
+            crate::gui::icon::JOURNAL_ICONS[rng.usize(..crate::gui::icon::JOURNAL_ICONS.len())];
+
         // Select a random theme (excluding Random itself)
         let themes: Vec<AppTheme> = AppTheme::iter()
             .filter(|&t| t != AppTheme::Random)
@@ -445,6 +457,10 @@ impl Default for GuiApp {
 
             active_focus: Focus::MainList,
             sidebar_selection_idx: 0,
+            journal_date: chrono::Local::now().date_naive(),
+            journal_editor_content: text_editor::Content::new(),
+            journal_editing_href: None,
+            journal_debounce_version: 0,
 
             hovered_tag_uid: None,
 
@@ -469,6 +485,7 @@ impl Default for GuiApp {
             quick_filter_icon: "f0fa9".to_string(),
             show_quick_filter: true,
             show_goals_tab: true,
+            show_journal_tab: true,
             cached_goals_progress: HashMap::new(),
             cached_task_goals: Vec::new(),
             sidebar_is_hidden: false,
@@ -509,6 +526,7 @@ impl Default for GuiApp {
             random_icon,
             goal_icon,
             focus_icon,
+            journal_icon,
             alias_input_key: String::new(),
             alias_input_values: String::new(),
             editing_alias_key: None,
@@ -594,6 +612,8 @@ impl Default for GuiApp {
             },
 
             auto_refresh_interval_mins: 30,
+            first_day_of_week: crate::config::FirstDayOfWeek::default(),
+            journal_date_input: String::new(),
 
             // Default UI scale
             ui_scale: 1.0,

@@ -27,8 +27,9 @@ Cfait is an offline-first task manager that seamlessly synchronizes with CalDAV 
     *   **Fatal Server Errors (e.g., 400, 403, 415):** The problematic task is rescued into a local `local://recovery` calendar to prevent data loss or sync loop lockups, with the error appended to its description.
     *   **Duplicate UID Resolution:** If a duplicate UID is detected across collections (e.g., during a remote fetch), active collections always take precedence over system collections (`local://trash`, `local://recovery`). Otherwise, the task with the higher sequence number wins, tie-breaking alphabetically by collection HREF.
 
-### 1.2. The Task Entity (`VTODO` Mapping)
-Tasks map strictly to iCalendar `VTODO` components (RFC 5545). Non-standard metadata is stored via `X-CFAIT-` properties.
+### 1.2. The Task & Journal Entity (`VTODO` & `VJOURNAL` Mapping)
+Tasks map strictly to iCalendar `VTODO` components, while daily notes map to `VJOURNAL` components (RFC 5545). Non-standard metadata is stored via `X-CFAIT-` properties.
+*   **VJOURNAL Support:** Each journal entry is a date-anchored note (`DTSTART;VALUE=DATE`). Stored in the active collection.
 *   **Status:** `NeedsAction` (Pending), `InProcess` (Timer running), `Completed`, `Cancelled`.
 *   **Manual Block:** Stored via `X-CFAIT-BLOCKED` (boolean) to explicitly mark a task as blocked without dependencies.
 *   **Dates (`DateType`):** Start (`DTSTART`) and Due (`DUE`). Supported variants:
@@ -259,7 +260,7 @@ Tasks tagged with `is:permanent` act as endless trackers. When checked off (Comp
 
 ## 6. Keyboard Shortcuts (GUI & TUI)
 
-*   **Navigation:** `j`/`k` or `Up`/`Down` (Select), `Tab` (Cycle focus between Sidebar, List, Input). `1..4` (Switch Sidebar tabs).
+*   **Navigation:** `j`/`k` or `Up`/`Down` (Select), `Tab` (Cycle focus between Sidebar, List, Input). `1..5` (Switch Sidebar tabs: 1:Calendars, 2:Tags, 3:Locations, 4:Goals, 5:Journal).
 *   **Main Actions:** 
     *   `Space`: Toggle Done/NeedsAction.
     *   `Shift+Space`: Complete & Shift recurrence (Relative advance).
@@ -333,7 +334,7 @@ All persistent state and settings live here. Unrecognized TOML keys must not be 
 *   `theme`: Enum (RustyDark, Light, Dracula, Nord, Catppuccin variants, etc.).
 *   `language`: String (`en`, `fr`). None = system locale.
 *   `description_editor`: String. CLI command for TUI description editing. `builtin` forces internal UI editor.
-*   `show_ongoing_notifications`, `show_priority_numbers`, `sidebar_is_hidden`, `show_goals_tab`, `show_task_goals_in_sidebar`: Booleans.
+*   `show_ongoing_notifications`, `show_priority_numbers`, `sidebar_is_hidden`, `show_goals_tab`, `show_journal_tab`, `show_task_goals_in_sidebar`: Booleans.
 *   `pinned_actions`: Array of `TaskAction` enums. Dictates buttons pinned directly to GUI task rows.
 
 **Sorting & Limits:**

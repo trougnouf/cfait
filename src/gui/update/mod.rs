@@ -112,6 +112,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::SetQuickFilterTerm(_)
         | Message::SetQuickFilterIcon(_)
         | Message::SetShowGoalsTab(_)
+        | Message::SetShowJournalTab(_)
         | Message::SetShowTaskGoalsInSidebar(_)
         | Message::SetSortCollectionsBySize(_)
         | Message::SetLogLevel(_)
@@ -286,9 +287,15 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::TasksRefreshed(_)
         | Message::MigrationComplete(_) => network::handle(app, message),
 
-        Message::OpenContextMenu(..) | Message::CloseContextMenu | Message::TabPressed(_) => {
-            view::handle(app, message)
-        }
+        Message::OpenContextMenu(..)
+        | Message::CloseContextMenu
+        | Message::TabPressed(_)
+        | Message::SelectJournalDate(_)
+        | Message::SelectJournalCollection(_)
+        | Message::JournalContentChanged(_)
+        | Message::JournalDateInputChanged(_)
+        | Message::JournalDateInputSubmit
+        | Message::SaveJournal(_) => view::handle(app, message),
 
         Message::SnapToSelected { focus } => {
             if let Some(_uid) = &app.selected_uid {
@@ -376,6 +383,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::Undo
         | Message::Redo
         | Message::ApplySuggestion(..) => tasks::handle(app, message),
+        Message::SetFirstDayOfWeek(_) => settings::handle(app, message),
     };
 
     // Prune ringing tasks that are no longer valid (done, canceled, or alarm acknowledged/snoozed/removed)

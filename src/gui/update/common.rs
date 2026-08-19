@@ -187,6 +187,7 @@ pub fn save_config(app: &mut GuiApp) -> Config {
     cfg.sort_collections_by_size = app.sort_collections_by_size;
     cfg.log_level = app.log_level;
     cfg.sync_settings = app.sync_settings;
+    cfg.first_day_of_week = app.first_day_of_week;
 
     cfg.expanded_tags = app.session.expanded_tags.clone();
     cfg.expanded_locations = app.session.expanded_locations.clone();

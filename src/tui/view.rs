@@ -537,6 +537,87 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 items,
             )
         }
+        SidebarMode::Journal => {
+            let mut items: Vec<ListItem> = Vec::new();
+            let date = state.journal_date;
+            use chrono::Datelike;
+
+            let is_monday_first = state.first_day_of_week == crate::config::FirstDayOfWeek::Monday;
+            let month_str = date.format("%B %Y").to_string();
+
+            items.push(ListItem::new(Line::from(vec![Span::styled(
+                format!("  < {} >  ", month_str),
+                Style::default().add_modifier(Modifier::BOLD),
+            )])));
+
+            if is_monday_first {
+                items.push(ListItem::new(" Mo Tu We Th Fr Sa Su"));
+            } else {
+                items.push(ListItem::new(" Su Mo Tu We Th Fr Sa"));
+            }
+
+            let first_day = chrono::NaiveDate::from_ymd_opt(date.year(), date.month(), 1).unwrap();
+            let start_offset = if is_monday_first {
+                first_day.weekday().num_days_from_monday() as usize
+            } else {
+                first_day.weekday().num_days_from_sunday() as usize
+            };
+
+            let days_in_month = if date.month() == 12 {
+                31
+            } else {
+                (chrono::NaiveDate::from_ymd_opt(date.year(), date.month() + 1, 1).unwrap()
+                    - chrono::Duration::days(1))
+                .day()
+            };
+
+            let mut current_spans = vec![];
+            for _ in 0..start_offset {
+                current_spans.push(Span::raw("   "));
+            }
+
+            let today = chrono::Local::now().date_naive();
+            for d in 1..=days_in_month {
+                let current_date =
+                    chrono::NaiveDate::from_ymd_opt(date.year(), date.month(), d).unwrap();
+                let is_selected = current_date == date;
+                let is_today = current_date == today;
+                let has_journal = state.calendars.iter().any(|c| {
+                    state
+                        .store
+                        .get_journal_entry(&c.href, current_date)
+                        .is_some()
+                });
+                let day_str = format!("{:2} ", d);
+
+                let mut style = Style::default();
+                if is_selected {
+                    style = style
+                        .bg(Color::Blue)
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD);
+                } else if is_today {
+                    style = style.fg(Color::Blue).add_modifier(Modifier::BOLD);
+                } else if has_journal {
+                    style = style.fg(Color::Green).add_modifier(Modifier::BOLD);
+                } else {
+                    style = style.fg(Color::Gray);
+                }
+
+                current_spans.push(Span::styled(day_str, style));
+
+                let pos = start_offset + d as usize;
+                if pos.is_multiple_of(7) || d == days_in_month {
+                    items.push(ListItem::new(Line::from(current_spans.clone())));
+                    current_spans.clear();
+                }
+            }
+
+            (
+                format!(" {} {}", state.journal_icon, rust_i18n::t!("journal")).to_string(),
+                items,
+            )
+        }
         SidebarMode::Goals => {
             let mut items: Vec<ListItem> = Vec::new();
             if state.goals.is_empty() && state.cached_task_goals.is_empty() {
@@ -683,851 +764,1019 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         );
     f.render_stateful_widget(sidebar, h_chunks[0], &mut state.cal_state);
 
-    // Build Task list items
-    let list_inner_width = main_chunks[0].width.saturating_sub(2) as usize;
+    // JOURNAL MODE OVERRIDE
+    if state.sidebar_mode == SidebarMode::Journal {
+        let title = format!(
+            " {} {} ({}) ",
+            state.journal_icon,
+            rust_i18n::t!("journal"),
+            state.journal_date.format("%Y-%m-%d")
+        );
+        let target_href = state
+            .active_cal_href
+            .clone()
+            .filter(|href| state.local_mode_enabled || !href.starts_with("local://"))
+            .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
 
-    let task_items: Vec<ListItem> = state
-        .tasks
-        .iter()
-        .enumerate()
-        .map(|(idx, task_item)| {
-            // Handle expand/collapse control items
-            match task_item {
-                TaskListItem::ExpandGroup(_, depth) => {
-                    let indent = "  ".repeat(*depth);
-                    let content = format!("{}  \u{f0796} Expand completed tasks", indent);
-                    ListItem::new(Line::from(Span::styled(
-                        content,
-                        Style::default().fg(Color::Cyan),
-                    )))
-                }
-                TaskListItem::CollapseGroup(_, depth) => {
-                    let indent = "  ".repeat(*depth);
-                    let content = format!("{}  \u{f0799} Collapse completed tasks", indent);
-                    ListItem::new(Line::from(Span::styled(
-                        content,
-                        Style::default().fg(Color::Cyan),
-                    )))
-                }
-                TaskListItem::Task(t) => {
-                    // Parent attributes (for resolving visible tags/location)
-                    let visible_tags = &t.visible_categories;
-                    let visible_locations = &t.visible_locations;
+        let target_name = state
+            .calendars
+            .iter()
+            .find(|c| c.href == target_href)
+            .map(|c| c.name.clone())
+            .unwrap_or_else(|| target_href.clone());
 
-                    // Styling
-                    let is_blocked = t.is_blocked;
+        let mut visible_cals = Vec::new();
+        for c in &state.calendars {
+            let supports = if c.href.starts_with("local://") {
+                true
+            } else {
+                c.supports_vjournal.unwrap_or(false)
+            };
+            if !state.hidden_calendars.contains(&c.href)
+                && !state.disabled_calendars.contains(&c.href)
+                && c.href != crate::storage::LOCAL_TRASH_HREF
+                && c.href != "local://recovery"
+                && supports
+            {
+                visible_cals.push(c);
+            }
+        }
 
-                    // Compute a base color (as Color) based on priority / blocked state.
-                    // We'll build the style from this color so we can dim it for done/cancelled tasks.
-                    let mut base_color = if is_blocked {
-                        Color::DarkGray
-                    } else if t.priority == 0 || t.priority > 9 {
-                        Color::Reset
+        let mut cal_spans = Vec::new();
+        for c in &visible_cals {
+            let has_entry = state
+                .store
+                .get_journal_entry(&c.href, state.journal_date)
+                .is_some();
+            let marker = if has_entry { " 📝" } else { "" };
+            let is_active = c.href == target_href;
+
+            let color = if let Some(hex) = &c.color
+                && let Some((r, g, b)) = crate::color_utils::parse_hex_to_u8(hex)
+            {
+                Color::Rgb(r, g, b)
+            } else {
+                Color::Gray
+            };
+
+            let mut style = Style::default().fg(color);
+            if is_active {
+                style = style
+                    .add_modifier(Modifier::REVERSED)
+                    .add_modifier(Modifier::BOLD);
+            } else if !has_entry {
+                style = style.add_modifier(Modifier::DIM);
+            }
+
+            let text = format!(" {}{} ", c.name, marker);
+            cal_spans.push(Span::styled(text, style));
+            cal_spans.push(Span::raw(" "));
+        }
+        let cal_line = Line::from(cal_spans);
+
+        let entry = state
+            .store
+            .get_journal_entry(&target_href, state.journal_date);
+        let mut desc = entry
+            .map(|e| e.description.clone())
+            .unwrap_or_else(|| rust_i18n::t!("journal_no_notes", name = target_name).to_string());
+
+        // Append Activity Context
+        let visible_cals_set = state
+            .calendars
+            .iter()
+            .filter(|c| {
+                let supports = if c.href.starts_with("local://") {
+                    true
+                } else {
+                    c.supports_vjournal.unwrap_or(false)
+                };
+                !state.hidden_calendars.contains(&c.href) && supports
+            })
+            .map(|c| c.href.clone())
+            .collect();
+        let day_ctx = state
+            .store
+            .get_day_context(state.journal_date, &visible_cals_set);
+
+        let mut activity_lines = String::new();
+        if day_ctx.total_tracked_mins > 0 {
+            activity_lines.push_str(&format!(
+                "- ⏱️ {}: {}\n",
+                rust_i18n::t!("journal_time_tracked"),
+                crate::model::parser::format_duration_human(day_ctx.total_tracked_mins)
+            ));
+        }
+        for t in &day_ctx.completed_tasks {
+            activity_lines.push_str(&format!("- ✓ {}\n", t.summary));
+        }
+        for t in &day_ctx.due_tasks {
+            activity_lines.push_str(&format!("- 📅 {}\n", t.summary));
+        }
+        for t in &day_ctx.ongoing_tasks {
+            activity_lines.push_str(&format!("- ▶ {}\n", t.summary));
+        }
+
+        if !activity_lines.is_empty() {
+            desc.push_str("\n\n---\n**");
+            desc.push_str(&rust_i18n::t!("journal_activity"));
+            desc.push_str("**\n");
+            desc.push_str(&activity_lines);
+        }
+
+        let mut md_text = tui_markdown::from_str(&desc);
+        md_text.lines.insert(0, Line::from(""));
+        md_text.lines.insert(
+            0,
+            Line::from(Span::styled("---", Style::default().fg(Color::DarkGray))),
+        );
+        md_text.lines.insert(0, cal_line);
+
+        let p = Paragraph::new(md_text)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(title)
+                    .border_style(Style::default().fg(if is_dark_theme {
+                        Color::Yellow
                     } else {
-                        let (r, g, b) = color_utils::get_priority_rgb(t.priority, is_dark_theme);
-                        Color::Rgb((r * 255.0) as u8, (g * 255.0) as u8, (b * 255.0) as u8)
-                    };
+                        Color::Rgb(200, 100, 0)
+                    })),
+            )
+            .wrap(Wrap { trim: true });
+        f.render_widget(p, main_chunks[0]);
 
-                    // If task is done or cancelled, dim the color by blending toward the background (black).
-                    // A 25% transparency effect (i.e. 75% opacity) is approximated by scaling RGB by 0.75.
-                    let is_done_or_cancelled =
-                        t.status.is_done() || t.status == crate::model::TaskStatus::Cancelled;
-                    if is_done_or_cancelled {
-                        base_color = match base_color {
-                            Color::Rgb(r, g, b) => Color::Rgb(
-                                ((r as f32) * 0.75) as u8,
-                                ((g as f32) * 0.75) as u8,
-                                ((b as f32) * 0.75) as u8,
-                            ),
-                            // For named/constant colors, approximate by scaling their RGB equivalents.
-                            Color::Reset => Color::DarkGray,
-                            Color::Red => Color::Rgb((255.0 * 0.75) as u8, 0, 0),
-                            Color::Yellow => {
-                                Color::Rgb((255.0 * 0.75) as u8, (255.0 * 0.75) as u8, 0)
-                            }
-                            Color::DarkGray => Color::Rgb(
-                                (105.0 * 0.75) as u8,
-                                (105.0 * 0.75) as u8,
-                                (105.0 * 0.75) as u8,
-                            ),
-                            Color::White => Color::Rgb(
-                                (255.0 * 0.75) as u8,
-                                (255.0 * 0.75) as u8,
-                                (255.0 * 0.75) as u8,
-                            ),
-                            // Fallback: leave as-is if we don't recognize the variant.
-                            other => other,
+        // Render simple footer
+        let footer_area = v_chunks[1];
+        f.render_widget(Clear, footer_area);
+
+        if state.mode == InputMode::EditingDescription || state.mode == InputMode::JumpingToDate {
+            // Let the standard editor popup render over this
+        } else {
+            let help = Paragraph::new(
+                " ←/→/↑/↓: Prev/Next Day/Week | t: Today | g: Jump to Date | e: Edit | Tab: Focus | q: Quit ",
+            )
+            .alignment(Alignment::Right)
+            .block(Block::default().borders(Borders::ALL).title(" Actions "));
+            f.render_widget(help, footer_area);
+        }
+    }
+
+    if state.sidebar_mode != SidebarMode::Journal {
+        // Build Task list items
+        let list_inner_width = main_chunks[0].width.saturating_sub(2) as usize;
+
+        let task_items: Vec<ListItem> = state
+            .tasks
+            .iter()
+            .enumerate()
+            .map(|(idx, task_item)| {
+                // Handle expand/collapse control items
+                match task_item {
+                    TaskListItem::ExpandGroup(_, depth) => {
+                        let indent = "  ".repeat(*depth);
+                        let content = format!("{}  \u{f0796} Expand completed tasks", indent);
+                        ListItem::new(Line::from(Span::styled(
+                            content,
+                            Style::default().fg(Color::Cyan),
+                        )))
+                    }
+                    TaskListItem::CollapseGroup(_, depth) => {
+                        let indent = "  ".repeat(*depth);
+                        let content = format!("{}  \u{f0799} Collapse completed tasks", indent);
+                        ListItem::new(Line::from(Span::styled(
+                            content,
+                            Style::default().fg(Color::Cyan),
+                        )))
+                    }
+                    TaskListItem::Task(t) => {
+                        // Parent attributes (for resolving visible tags/location)
+                        let visible_tags = &t.visible_categories;
+                        let visible_locations = &t.visible_locations;
+
+                        // Styling
+                        let is_blocked = t.is_blocked;
+
+                        // Compute a base color (as Color) based on priority / blocked state.
+                        // We'll build the style from this color so we can dim it for done/cancelled tasks.
+                        let mut base_color = if is_blocked {
+                            Color::DarkGray
+                        } else if t.priority == 0 || t.priority > 9 {
+                            Color::Reset
+                        } else {
+                            let (r, g, b) =
+                                color_utils::get_priority_rgb(t.priority, is_dark_theme);
+                            Color::Rgb((r * 255.0) as u8, (g * 255.0) as u8, (b * 255.0) as u8)
                         };
-                    }
 
-                    let mut base_style = Style::default().fg(base_color);
+                        // If task is done or cancelled, dim the color by blending toward the background (black).
+                        // A 25% transparency effect (i.e. 75% opacity) is approximated by scaling RGB by 0.75.
+                        let is_done_or_cancelled =
+                            t.status.is_done() || t.status == crate::model::TaskStatus::Cancelled;
+                        if is_done_or_cancelled {
+                            base_color = match base_color {
+                                Color::Rgb(r, g, b) => Color::Rgb(
+                                    ((r as f32) * 0.75) as u8,
+                                    ((g as f32) * 0.75) as u8,
+                                    ((b as f32) * 0.75) as u8,
+                                ),
+                                // For named/constant colors, approximate by scaling their RGB equivalents.
+                                Color::Reset => Color::DarkGray,
+                                Color::Red => Color::Rgb((255.0 * 0.75) as u8, 0, 0),
+                                Color::Yellow => {
+                                    Color::Rgb((255.0 * 0.75) as u8, (255.0 * 0.75) as u8, 0)
+                                }
+                                Color::DarkGray => Color::Rgb(
+                                    (105.0 * 0.75) as u8,
+                                    (105.0 * 0.75) as u8,
+                                    (105.0 * 0.75) as u8,
+                                ),
+                                Color::White => Color::Rgb(
+                                    (255.0 * 0.75) as u8,
+                                    (255.0 * 0.75) as u8,
+                                    (255.0 * 0.75) as u8,
+                                ),
+                                // Fallback: leave as-is if we don't recognize the variant.
+                                other => other,
+                            };
+                        }
 
-                    if t.is_search_context {
-                        base_color = Color::DarkGray;
-                        base_style = base_style.fg(base_color).add_modifier(Modifier::DIM);
-                    }
+                        let mut base_style = Style::default().fg(base_color);
 
-                    let is_trash = t.calendar_href == "local://trash";
+                        if t.is_search_context {
+                            base_color = Color::DarkGray;
+                            base_style = base_style.fg(base_color).add_modifier(Modifier::DIM);
+                        }
 
-                    if (t.status.is_done() && state.strikethrough_completed) || is_trash {
-                        base_style = base_style.add_modifier(Modifier::CROSSED_OUT);
-                    }
+                        let is_trash = t.calendar_href == "local://trash";
 
-                    let bracket_style = Style::default();
-                    let full_symbol = t.checkbox_symbol();
-                    let inner_char = full_symbol.trim_start_matches('[').trim_end_matches(']');
+                        if (t.status.is_done() && state.strikethrough_completed) || is_trash {
+                            base_style = base_style.add_modifier(Modifier::CROSSED_OUT);
+                        }
 
-                    let (prefix_bracket_l, prefix_inner, prefix_bracket_r) = if t.is_note {
-                        (
-                            Span::styled("[", bracket_style),
-                            Span::styled("■", base_style),
-                            Span::styled("]", bracket_style),
-                        )
-                    } else {
-                        (
-                            Span::styled("[", bracket_style),
-                            Span::styled(inner_char, base_style),
-                            Span::styled("]", bracket_style),
-                        )
-                    };
+                        let bracket_style = Style::default();
+                        let full_symbol = t.checkbox_symbol();
+                        let inner_char = full_symbol.trim_start_matches('[').trim_end_matches(']');
 
-                    // Date / duration / recurrence
-                    let is_future_start = t.is_future_start;
-
-                    let (date_display_str, date_style) = if t.status.is_done() {
-                        // NEW TUI LOGIC for completion date
-                        if let Some(done_dt) = t.completion_date() {
-                            let local_done = done_dt.with_timezone(&chrono::Local);
-                            let color = Color::DarkGray;
+                        let (prefix_bracket_l, prefix_inner, prefix_bracket_r) = if t.is_note {
                             (
-                                format!(" 🗓️ {}", local_done.format("%Y-%m-%d %H:%M")),
-                                Style::default().fg(color),
+                                Span::styled("[", bracket_style),
+                                Span::styled("■", base_style),
+                                Span::styled("]", bracket_style),
                             )
+                        } else {
+                            (
+                                Span::styled("[", bracket_style),
+                                Span::styled(inner_char, base_style),
+                                Span::styled("]", bracket_style),
+                            )
+                        };
+
+                        // Date / duration / recurrence
+                        let is_future_start = t.is_future_start;
+
+                        let (date_display_str, date_style) = if t.status.is_done() {
+                            // NEW TUI LOGIC for completion date
+                            if let Some(done_dt) = t.completion_date() {
+                                let local_done = done_dt.with_timezone(&chrono::Local);
+                                let color = Color::DarkGray;
+                                (
+                                    format!(" 🗓️ {}", local_done.format("%Y-%m-%d %H:%M")),
+                                    Style::default().fg(color),
+                                )
+                            } else {
+                                (String::new(), Style::default())
+                            }
+                        } else if is_future_start {
+                            let start_ref = t.dtstart.as_ref().unwrap();
+                            let start_str = start_ref.format_smart();
+
+                            if let Some(due) = &t.due {
+                                let is_same_day = start_ref.to_date_naive() == due.to_date_naive();
+                                let due_str = if is_same_day {
+                                    match due {
+                                        crate::model::DateType::Specific(dt) => dt
+                                            .with_timezone(&chrono::Local)
+                                            .format("%H:%M")
+                                            .to_string(),
+                                        crate::model::DateType::AllDay(_) => due.format_smart(),
+                                        crate::model::DateType::Month(_, _) => due.format_smart(),
+                                        crate::model::DateType::Year(_) => due.format_smart(),
+                                    }
+                                } else {
+                                    due.format_smart()
+                                };
+
+                                if start_str == due.format_smart() {
+                                    (
+                                        format!(" ►{}⌛", start_str),
+                                        Style::default().fg(Color::DarkGray),
+                                    )
+                                } else {
+                                    (
+                                        format!(" ►{}-{}⌛", start_str, due_str),
+                                        Style::default().fg(Color::DarkGray),
+                                    )
+                                }
+                            } else {
+                                (
+                                    format!(" ►{}", start_str),
+                                    Style::default().fg(Color::DarkGray),
+                                )
+                            }
+                        } else if let Some(d) = &t.due {
+                            let style = if t.is_overdue {
+                                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+                            } else if t.is_due_today {
+                                Style::default()
+                                    .fg(Color::Yellow)
+                                    .add_modifier(Modifier::BOLD)
+                            } else {
+                                Style::default().fg(if is_dark_theme {
+                                    Color::LightBlue
+                                } else {
+                                    Color::Magenta
+                                })
+                            };
+
+                            (format!(" @{}⌛", d.format_smart()), style)
                         } else {
                             (String::new(), Style::default())
-                        }
-                    } else if is_future_start {
-                        let start_ref = t.dtstart.as_ref().unwrap();
-                        let start_str = start_ref.format_smart();
+                        };
 
-                        if let Some(due) = &t.due {
-                            let is_same_day = start_ref.to_date_naive() == due.to_date_naive();
-                            let due_str = if is_same_day {
-                                match due {
-                                    crate::model::DateType::Specific(dt) => {
-                                        dt.with_timezone(&chrono::Local).format("%H:%M").to_string()
-                                    }
-                                    crate::model::DateType::AllDay(_) => due.format_smart(),
-                                    crate::model::DateType::Month(_, _) => due.format_smart(),
-                                    crate::model::DateType::Year(_) => due.format_smart(),
-                                }
-                            } else {
-                                due.format_smart()
-                            };
+                        let dur_str = t.format_duration_short(Some(&state.store));
+                        let recur_str = if t.rrule.is_some() { " (R)" } else { "" };
 
-                            if start_str == due.format_smart() {
-                                (
-                                    format!(" ►{}⌛", start_str),
-                                    Style::default().fg(Color::DarkGray),
-                                )
-                            } else {
-                                (
-                                    format!(" ►{}-{}⌛", start_str, due_str),
-                                    Style::default().fg(Color::DarkGray),
-                                )
-                            }
+                        // Prefix indentation + checkbox
+                        let prefix_indent = Span::raw(if state.active_cal_href.is_some() {
+                            "  ".repeat(t.depth)
                         } else {
-                            (
-                                format!(" ►{}", start_str),
-                                Style::default().fg(Color::DarkGray),
+                            "".to_string()
+                        });
+
+                        let tree_indicator = if t.has_visible_subtasks && t.collapsed {
+                            Span::styled(
+                                "[+]",
+                                Style::default().fg(if is_dark_theme {
+                                    Color::Yellow
+                                } else {
+                                    Color::Rgb(200, 100, 0)
+                                }),
                             )
+                        } else {
+                            Span::raw("")
+                        };
+
+                        let prefix_blocked = Span::raw(if is_blocked { " [B] " } else { " " });
+
+                        let prefix_width = (if state.active_cal_href.is_some() {
+                            t.depth * 2 + 6
+                        } else {
+                            6
+                        }) + if t.has_visible_subtasks && t.collapsed {
+                            3
+                        } else {
+                            0
+                        };
+
+                        // Build metadata spans
+                        let mut metadata_spans = Vec::new();
+                        if !dur_str.is_empty() {
+                            metadata_spans.push(Span::styled(
+                                format!(" {}", dur_str),
+                                Style::default().fg(Color::DarkGray),
+                            ));
                         }
-                    } else if let Some(d) = &t.due {
-                        let style = if t.is_overdue {
-                            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
-                        } else if t.is_due_today {
-                            Style::default()
-                                .fg(Color::Yellow)
-                                .add_modifier(Modifier::BOLD)
-                        } else {
-                            Style::default().fg(if is_dark_theme {
-                                Color::LightBlue
-                            } else {
+                        if !recur_str.is_empty() {
+                            let r_color = if t.is_relative_recurrence() {
                                 Color::Magenta
-                            })
-                        };
-
-                        (format!(" @{}⌛", d.format_smart()), style)
-                    } else {
-                        (String::new(), Style::default())
-                    };
-
-                    let dur_str = t.format_duration_short(Some(&state.store));
-                    let recur_str = if t.rrule.is_some() { " (R)" } else { "" };
-
-                    // Prefix indentation + checkbox
-                    let prefix_indent = Span::raw(if state.active_cal_href.is_some() {
-                        "  ".repeat(t.depth)
-                    } else {
-                        "".to_string()
-                    });
-
-                    let tree_indicator = if t.has_visible_subtasks && t.collapsed {
-                        Span::styled(
-                            "[+]",
-                            Style::default().fg(if is_dark_theme {
-                                Color::Yellow
                             } else {
-                                Color::Rgb(200, 100, 0)
-                            }),
-                        )
-                    } else {
-                        Span::raw("")
-                    };
+                                Color::DarkGray
+                            };
+                            metadata_spans.push(Span::styled(
+                                recur_str.to_string(),
+                                Style::default().fg(r_color),
+                            ));
+                        }
 
-                    let prefix_blocked = Span::raw(if is_blocked { " [B] " } else { " " });
+                        if t.pinned {
+                            metadata_spans.push(Span::raw(" "));
+                            metadata_spans
+                                .push(Span::styled("📌", Style::default().fg(Color::LightRed)));
+                        }
 
-                    let prefix_width = (if state.active_cal_href.is_some() {
-                        t.depth * 2 + 6
-                    } else {
-                        6
-                    }) + if t.has_visible_subtasks && t.collapsed {
-                        3
-                    } else {
-                        0
-                    };
+                        if state.show_priority_numbers && t.priority > 0 {
+                            metadata_spans.push(Span::raw(" "));
+                            metadata_spans.push(Span::styled(
+                                format!("!{}", t.priority),
+                                base_style.add_modifier(Modifier::BOLD),
+                            ));
+                        }
 
-                    // Build metadata spans
-                    let mut metadata_spans = Vec::new();
-                    if !dur_str.is_empty() {
-                        metadata_spans.push(Span::styled(
-                            format!(" {}", dur_str),
-                            Style::default().fg(Color::DarkGray),
-                        ));
-                    }
-                    if !recur_str.is_empty() {
-                        let r_color = if t.is_relative_recurrence() {
-                            Color::Magenta
-                        } else {
-                            Color::DarkGray
-                        };
-                        metadata_spans.push(Span::styled(
-                            recur_str.to_string(),
-                            Style::default().fg(r_color),
-                        ));
-                    }
-
-                    if t.pinned {
-                        metadata_spans.push(Span::raw(" "));
-                        metadata_spans
-                            .push(Span::styled("📌", Style::default().fg(Color::LightRed)));
-                    }
-
-                    if state.show_priority_numbers && t.priority > 0 {
-                        metadata_spans.push(Span::raw(" "));
-                        metadata_spans.push(Span::styled(
-                            format!("!{}", t.priority),
-                            base_style.add_modifier(Modifier::BOLD),
-                        ));
-                    }
-
-                    if t.alarms
-                        .iter()
-                        .any(|a| a.acknowledged.is_none() && !a.is_snooze())
-                    {
-                        metadata_spans.push(Span::raw(" "));
-                        metadata_spans.push(Span::styled(
-                            "🔔",
-                            Style::default()
-                                .fg(Color::LightRed)
-                                .add_modifier(Modifier::BOLD),
-                        ));
-                    }
-
-                    if !date_display_str.is_empty() {
-                        if !metadata_spans
-                            .last()
-                            .map(|s| s.content.ends_with(' '))
-                            .unwrap_or(true)
+                        if t.alarms
+                            .iter()
+                            .any(|a| a.acknowledged.is_none() && !a.is_snooze())
                         {
                             metadata_spans.push(Span::raw(" "));
-                        }
-                        metadata_spans.push(Span::styled(date_display_str, date_style));
-                    }
-
-                    if t.geo.is_some() {
-                        metadata_spans.push(Span::raw(" "));
-                        metadata_spans.push(Span::styled(
-                            "\u{ee69}",
-                            Style::default().fg(if is_dark_theme {
-                                Color::LightBlue
-                            } else {
-                                Color::Magenta
-                            }),
-                        ));
-                    }
-                    if t.url.is_some() {
-                        metadata_spans.push(Span::raw(" "));
-                        metadata_spans.push(Span::styled(
-                            "\u{f0789}",
-                            Style::default().fg(if is_dark_theme {
-                                Color::LightBlue
-                            } else {
-                                Color::Magenta
-                            }),
-                        ));
-                    }
-
-                    // Right side (locations + visible tags)
-                    let mut right_spans = Vec::new();
-                    for loc in visible_locations {
-                        if !right_spans.is_empty() {
-                            right_spans.push(Span::raw(" "));
-                        }
-                        right_spans.push(Span::styled(
-                            "@@",
-                            Style::default().fg(if is_dark_theme {
-                                Color::Yellow
-                            } else {
-                                Color::Rgb(180, 100, 0)
-                            }),
-                        ));
-                        right_spans.push(Span::styled(
-                            loc.clone(),
-                            Style::default().fg(if is_dark_theme {
-                                Color::Yellow
-                            } else {
-                                Color::Rgb(180, 100, 0)
-                            }),
-                        ));
-                    }
-
-                    for cat in visible_tags {
-                        let (r, g, b) = color_utils::generate_tui_color(cat, is_dark_theme);
-                        if !right_spans.is_empty() {
-                            right_spans.push(Span::raw(" "));
+                            metadata_spans.push(Span::styled(
+                                "🔔",
+                                Style::default()
+                                    .fg(Color::LightRed)
+                                    .add_modifier(Modifier::BOLD),
+                            ));
                         }
 
-                        let display_cat = if cat.contains('=') {
-                            cat.rsplit(':').next().unwrap_or(cat)
-                        } else {
-                            cat.as_str()
-                        };
-                        let label = if cat.contains('=') {
-                            display_cat.to_string()
-                        } else {
-                            format!("#{}", display_cat)
-                        };
-
-                        right_spans.push(Span::styled(
-                            label,
-                            Style::default().fg(Color::Rgb(
-                                (r * 255.0) as u8,
-                                (g * 255.0) as u8,
-                                (b * 255.0) as u8,
-                            )),
-                        ));
-                    }
-
-                    let metadata_width: usize =
-                        metadata_spans.iter().map(|s| s.content.width()).sum();
-                    let right_width: usize = right_spans.iter().map(|s| s.content.width()).sum();
-
-                    let reserved_width = prefix_width + metadata_width + right_width;
-                    let available_for_title = if reserved_width + 10 < list_inner_width {
-                        list_inner_width
-                            .saturating_sub(reserved_width)
-                            .saturating_sub(1)
-                    } else {
-                        30
-                    };
-
-                    let (display_title, is_truncated) = {
-                        let title_width = t.summary.width();
-                        if title_width > available_for_title {
-                            let mut truncated = String::new();
-                            let mut acc = 0usize;
-                            let trunc_target = available_for_title.saturating_sub(3);
-                            for c in t.summary.chars() {
-                                let cw = UnicodeWidthChar::width(c).unwrap_or(0);
-                                if acc + cw > trunc_target {
-                                    break;
-                                }
-                                truncated.push(c);
-                                acc += cw;
+                        if !date_display_str.is_empty() {
+                            if !metadata_spans
+                                .last()
+                                .map(|s| s.content.ends_with(' '))
+                                .unwrap_or(true)
+                            {
+                                metadata_spans.push(Span::raw(" "));
                             }
-                            truncated.push_str("...");
-                            (truncated, true)
-                        } else {
-                            (t.summary.clone(), false)
+                            metadata_spans.push(Span::styled(date_display_str, date_style));
                         }
-                    };
 
-                    if is_truncated && Some(idx) == state.list_state.selected() {
-                        selected_task_was_truncated = true;
-                    }
-
-                    let title_spans =
-                        crate::tui::view::parse_inline_elements(&display_title, base_style, true);
-
-                    let mut spans = vec![
-                        prefix_indent,
-                        prefix_bracket_l,
-                        prefix_inner,
-                        prefix_bracket_r,
-                        tree_indicator,
-                        prefix_blocked,
-                    ];
-                    spans.extend(title_spans);
-                    spans.extend(metadata_spans);
-
-                    if !right_spans.is_empty() {
-                        let left_width: usize = spans.iter().map(|s| s.content.width()).sum();
-                        let total_content = left_width + right_width;
-                        if total_content < list_inner_width {
-                            let padding = list_inner_width - total_content;
-                            spans.push(Span::raw(" ".repeat(padding)));
-                        } else {
-                            spans.push(Span::raw(" "));
+                        if t.geo.is_some() {
+                            metadata_spans.push(Span::raw(" "));
+                            metadata_spans.push(Span::styled(
+                                "\u{ee69}",
+                                Style::default().fg(if is_dark_theme {
+                                    Color::LightBlue
+                                } else {
+                                    Color::Magenta
+                                }),
+                            ));
                         }
-                        spans.extend(right_spans);
-                    }
+                        if t.url.is_some() {
+                            metadata_spans.push(Span::raw(" "));
+                            metadata_spans.push(Span::styled(
+                                "\u{f0789}",
+                                Style::default().fg(if is_dark_theme {
+                                    Color::LightBlue
+                                } else {
+                                    Color::Magenta
+                                }),
+                            ));
+                        }
 
-                    let mut lines = vec![Line::from(spans)];
+                        // Right side (locations + visible tags)
+                        let mut right_spans = Vec::new();
+                        for loc in visible_locations {
+                            if !right_spans.is_empty() {
+                                right_spans.push(Span::raw(" "));
+                            }
+                            right_spans.push(Span::styled(
+                                "@@",
+                                Style::default().fg(if is_dark_theme {
+                                    Color::Yellow
+                                } else {
+                                    Color::Rgb(180, 100, 0)
+                                }),
+                            ));
+                            right_spans.push(Span::styled(
+                                loc.clone(),
+                                Style::default().fg(if is_dark_theme {
+                                    Color::Yellow
+                                } else {
+                                    Color::Rgb(180, 100, 0)
+                                }),
+                            ));
+                        }
 
-                    if state.show_inline_descriptions && !t.description.is_empty() {
-                        let mut line_count = 0;
-                        for desc_line in t.description.lines() {
-                            if desc_line.trim().is_empty() {
-                                continue;
+                        for cat in visible_tags {
+                            let (r, g, b) = color_utils::generate_tui_color(cat, is_dark_theme);
+                            if !right_spans.is_empty() {
+                                right_spans.push(Span::raw(" "));
                             }
 
-                            let indent = if state.active_cal_href.is_some() {
-                                "  ".repeat(t.depth + 3)
+                            let display_cat = if cat.contains('=') {
+                                cat.rsplit(':').next().unwrap_or(cat)
                             } else {
-                                "      ".to_string()
+                                cat.as_str()
+                            };
+                            let label = if cat.contains('=') {
+                                display_cat.to_string()
+                            } else {
+                                format!("#{}", display_cat)
                             };
 
-                            let desc_spans = crate::tui::view::parse_inline_elements(
-                                desc_line,
-                                Style::default().fg(Color::DarkGray),
-                                true,
-                            );
-                            let mut line_spans = vec![Span::raw(indent)];
-                            line_spans.extend(desc_spans);
-                            lines.push(Line::from(line_spans));
-                            line_count += 1;
-                            if line_count >= 3 {
-                                break;
+                            right_spans.push(Span::styled(
+                                label,
+                                Style::default().fg(Color::Rgb(
+                                    (r * 255.0) as u8,
+                                    (g * 255.0) as u8,
+                                    (b * 255.0) as u8,
+                                )),
+                            ));
+                        }
+
+                        let metadata_width: usize =
+                            metadata_spans.iter().map(|s| s.content.width()).sum();
+                        let right_width: usize =
+                            right_spans.iter().map(|s| s.content.width()).sum();
+
+                        let reserved_width = prefix_width + metadata_width + right_width;
+                        let available_for_title = if reserved_width + 10 < list_inner_width {
+                            list_inner_width
+                                .saturating_sub(reserved_width)
+                                .saturating_sub(1)
+                        } else {
+                            30
+                        };
+
+                        let (display_title, is_truncated) = {
+                            let title_width = t.summary.width();
+                            if title_width > available_for_title {
+                                let mut truncated = String::new();
+                                let mut acc = 0usize;
+                                let trunc_target = available_for_title.saturating_sub(3);
+                                for c in t.summary.chars() {
+                                    let cw = UnicodeWidthChar::width(c).unwrap_or(0);
+                                    if acc + cw > trunc_target {
+                                        break;
+                                    }
+                                    truncated.push(c);
+                                    acc += cw;
+                                }
+                                truncated.push_str("...");
+                                (truncated, true)
+                            } else {
+                                (t.summary.clone(), false)
+                            }
+                        };
+
+                        if is_truncated && Some(idx) == state.list_state.selected() {
+                            selected_task_was_truncated = true;
+                        }
+
+                        let title_spans = crate::tui::view::parse_inline_elements(
+                            &display_title,
+                            base_style,
+                            true,
+                        );
+
+                        let mut spans = vec![
+                            prefix_indent,
+                            prefix_bracket_l,
+                            prefix_inner,
+                            prefix_bracket_r,
+                            tree_indicator,
+                            prefix_blocked,
+                        ];
+                        spans.extend(title_spans);
+                        spans.extend(metadata_spans);
+
+                        if !right_spans.is_empty() {
+                            let left_width: usize = spans.iter().map(|s| s.content.width()).sum();
+                            let total_content = left_width + right_width;
+                            if total_content < list_inner_width {
+                                let padding = list_inner_width - total_content;
+                                spans.push(Span::raw(" ".repeat(padding)));
+                            } else {
+                                spans.push(Span::raw(" "));
+                            }
+                            spans.extend(right_spans);
+                        }
+
+                        let mut lines = vec![Line::from(spans)];
+
+                        if state.show_inline_descriptions && !t.description.is_empty() {
+                            let mut line_count = 0;
+                            for desc_line in t.description.lines() {
+                                if desc_line.trim().is_empty() {
+                                    continue;
+                                }
+
+                                let indent = if state.active_cal_href.is_some() {
+                                    "  ".repeat(t.depth + 3)
+                                } else {
+                                    "      ".to_string()
+                                };
+
+                                let desc_spans = crate::tui::view::parse_inline_elements(
+                                    desc_line,
+                                    Style::default().fg(Color::DarkGray),
+                                    true,
+                                );
+                                let mut line_spans = vec![Span::raw(indent)];
+                                line_spans.extend(desc_spans);
+                                lines.push(Line::from(line_spans));
+                                line_count += 1;
+                                if line_count >= 3 {
+                                    break;
+                                }
+                            }
+                        }
+
+                        ListItem::new(Text::from(lines))
+                    }
+                }
+            })
+            .collect();
+
+        // Build details content for selected task
+        if let Some(task) = state.get_selected_task() {
+            if selected_task_was_truncated && !task.summary.is_empty() {
+                details_md.push_str(&task.summary);
+                details_md.push_str("\n\n");
+            }
+
+            if !task.description.is_empty() {
+                let formatted_desc = format_description_for_markdown(&task.description);
+                details_md.push_str(&formatted_desc);
+                details_md.push_str("\n\n");
+            }
+
+            let mut meta = Vec::new();
+            if let Some(url) = &task.url {
+                meta.push(format!("- **URL:** {}", url));
+            }
+            if let Some(geo) = &task.geo {
+                meta.push(format!("- **Geo:** {}", geo));
+            }
+            if !task.locations.is_empty() {
+                meta.push(format!(
+                    "- **{}:** {}",
+                    rust_i18n::t!("cli_view_location").trim_end_matches(':'),
+                    task.locations.join(", ")
+                ));
+            }
+            let mut date_infos = Vec::new();
+            let created_opt = task.created_date();
+            let modified_opt = task.last_modified_date();
+
+            if let Some(created) = created_opt {
+                let local = created.with_timezone(&chrono::Local);
+                date_infos.push(format!(
+                    "**{}**: {}",
+                    rust_i18n::t!("created_label"),
+                    local.format("%Y-%m-%d %H:%M")
+                ));
+            }
+            if let Some(modified) = modified_opt
+                && created_opt != Some(modified)
+            {
+                let local = modified.with_timezone(&chrono::Local);
+                date_infos.push(format!(
+                    "**{}**: {}",
+                    rust_i18n::t!("last_modified_label"),
+                    local.format("%Y-%m-%d %H:%M")
+                ));
+            }
+            if !date_infos.is_empty() {
+                meta.push(format!("- {}", date_infos.join("  |  ")));
+            }
+
+            if !meta.is_empty() {
+                details_md.push_str("---\n");
+                details_md.push_str(&meta.join("\n"));
+                details_md.push_str("\n\n");
+            }
+
+            if !task.dependencies.is_empty() {
+                details_md.push_str(&format!(
+                    "### {}\n",
+                    rust_i18n::t!("blocked_by").trim_end_matches(':')
+                ));
+                for dep_uid in &task.dependencies {
+                    let name = state
+                        .store
+                        .get_summary(dep_uid)
+                        .unwrap_or_else(|| rust_i18n::t!("unknown_task").to_string());
+                    // FIXED: Use is_task_done instead of get_task_status
+                    let is_done = state.store.is_task_done(dep_uid).unwrap_or(false);
+                    let check = if is_done { "[x]" } else { "[ ]" };
+                    details_md.push_str(&format!("- {} {}\n", check, name));
+                }
+                details_md.push('\n');
+            }
+
+            // Blocking Section (Successors) - tasks that are blocked BY this task
+            let blocking_tasks = state.store.get_tasks_blocking(&task.uid);
+            if !blocking_tasks.is_empty() {
+                details_md.push_str(&format!(
+                    "### {}\n",
+                    rust_i18n::t!("blocking_label").trim_end_matches(':')
+                ));
+                for (_uid, name) in blocking_tasks {
+                    details_md.push_str(&format!("- ⬇ {}\n", name));
+                }
+                details_md.push('\n');
+            }
+
+            if !task.related_to.is_empty() {
+                details_md.push_str(&format!(
+                    "### {}\n",
+                    rust_i18n::t!("related_to_label").trim_end_matches(':')
+                ));
+                for related_uid in &task.related_to {
+                    let mut name = rust_i18n::t!("unknown_task").to_string();
+                    if let Some(rel_task) = state.store.get_task_ref(related_uid) {
+                        name = rel_task.summary.clone();
+                        if rel_task.status.is_done() {
+                            if let Some(comp_date) = rel_task.completion_date() {
+                                let local = comp_date.with_timezone(&chrono::Local);
+                                name = format!("{} (✓ {})", name, local.format("%Y-%m-%d %H:%M"));
+                            } else {
+                                name = format!("{} (✓)", name);
                             }
                         }
                     }
-
-                    ListItem::new(Text::from(lines))
+                    details_md.push_str(&format!("- {}\n", name));
                 }
+                details_md.push('\n');
             }
-        })
-        .collect();
 
-    // Build details content for selected task
-    if let Some(task) = state.get_selected_task() {
-        if selected_task_was_truncated && !task.summary.is_empty() {
-            details_md.push_str(&task.summary);
-            details_md.push_str("\n\n");
-        }
-
-        if !task.description.is_empty() {
-            let formatted_desc = format_description_for_markdown(&task.description);
-            details_md.push_str(&formatted_desc);
-            details_md.push_str("\n\n");
-        }
-
-        let mut meta = Vec::new();
-        if let Some(url) = &task.url {
-            meta.push(format!("- **URL:** {}", url));
-        }
-        if let Some(geo) = &task.geo {
-            meta.push(format!("- **Geo:** {}", geo));
-        }
-        if !task.locations.is_empty() {
-            meta.push(format!(
-                "- **{}:** {}",
-                rust_i18n::t!("cli_view_location").trim_end_matches(':'),
-                task.locations.join(", ")
-            ));
-        }
-        let mut date_infos = Vec::new();
-        let created_opt = task.created_date();
-        let modified_opt = task.last_modified_date();
-
-        if let Some(created) = created_opt {
-            let local = created.with_timezone(&chrono::Local);
-            date_infos.push(format!(
-                "**{}**: {}",
-                rust_i18n::t!("created_label"),
-                local.format("%Y-%m-%d %H:%M")
-            ));
-        }
-        if let Some(modified) = modified_opt
-            && created_opt != Some(modified)
-        {
-            let local = modified.with_timezone(&chrono::Local);
-            date_infos.push(format!(
-                "**{}**: {}",
-                rust_i18n::t!("last_modified_label"),
-                local.format("%Y-%m-%d %H:%M")
-            ));
-        }
-        if !date_infos.is_empty() {
-            meta.push(format!("- {}", date_infos.join("  |  ")));
-        }
-
-        if !meta.is_empty() {
-            details_md.push_str("---\n");
-            details_md.push_str(&meta.join("\n"));
-            details_md.push_str("\n\n");
-        }
-
-        if !task.dependencies.is_empty() {
-            details_md.push_str(&format!(
-                "### {}\n",
-                rust_i18n::t!("blocked_by").trim_end_matches(':')
-            ));
-            for dep_uid in &task.dependencies {
-                let name = state
-                    .store
-                    .get_summary(dep_uid)
-                    .unwrap_or_else(|| rust_i18n::t!("unknown_task").to_string());
-                // FIXED: Use is_task_done instead of get_task_status
-                let is_done = state.store.is_task_done(dep_uid).unwrap_or(false);
-                let check = if is_done { "[x]" } else { "[ ]" };
-                details_md.push_str(&format!("- {} {}\n", check, name));
-            }
-            details_md.push('\n');
-        }
-
-        // Blocking Section (Successors) - tasks that are blocked BY this task
-        let blocking_tasks = state.store.get_tasks_blocking(&task.uid);
-        if !blocking_tasks.is_empty() {
-            details_md.push_str(&format!(
-                "### {}\n",
-                rust_i18n::t!("blocking_label").trim_end_matches(':')
-            ));
-            for (_uid, name) in blocking_tasks {
-                details_md.push_str(&format!("- ⬇ {}\n", name));
-            }
-            details_md.push('\n');
-        }
-
-        if !task.related_to.is_empty() {
-            details_md.push_str(&format!(
-                "### {}\n",
-                rust_i18n::t!("related_to_label").trim_end_matches(':')
-            ));
-            for related_uid in &task.related_to {
-                let mut name = rust_i18n::t!("unknown_task").to_string();
-                if let Some(rel_task) = state.store.get_task_ref(related_uid) {
-                    name = rel_task.summary.clone();
-                    if rel_task.status.is_done() {
+            let incoming_related = state.store.get_tasks_related_to(&task.uid);
+            if !incoming_related.is_empty() {
+                details_md.push_str(&format!(
+                    "### {}\n",
+                    rust_i18n::t!("related_from_label").trim_end_matches(':')
+                ));
+                for (related_uid, mut related_name) in incoming_related {
+                    if let Some(rel_task) = state.store.get_task_ref(&related_uid)
+                        && rel_task.status.is_done()
+                    {
                         if let Some(comp_date) = rel_task.completion_date() {
                             let local = comp_date.with_timezone(&chrono::Local);
-                            name = format!("{} (✓ {})", name, local.format("%Y-%m-%d %H:%M"));
+                            related_name =
+                                format!("{} (✓ {})", related_name, local.format("%Y-%m-%d %H:%M"));
                         } else {
-                            name = format!("{} (✓)", name);
+                            related_name = format!("{} (✓)", related_name);
+                        }
+                    }
+                    details_md.push_str(&format!("- {}\n", related_name));
+                }
+                details_md.push('\n');
+            }
+
+            // --- History (for recurring tasks) ---
+            let effective_goal = task.get_effective_goal();
+            let has_rrule = task.rrule.is_some();
+            let has_goal = task.goal.is_some();
+
+            if has_rrule || has_goal {
+                details_md.push_str(&format!("### {}\n", t!("habit_history")));
+
+                if let Some(rrule) = &task.rrule {
+                    let (count, _, key) =
+                        state.store.get_completion_history_stats(&task.uid, rrule);
+                    if count > 0 {
+                        let w1 = rust_i18n::t!(key).to_string();
+                        if count == 1 {
+                            details_md.push_str(&format!(
+                                "- {}\n",
+                                t!("habit_completed_in_past.one", window = w1)
+                            ));
+                        } else {
+                            details_md.push_str(&format!(
+                                "- {}\n",
+                                t!("habit_completed_in_past.other", count = count, window = w1)
+                            ));
                         }
                     }
                 }
-                details_md.push_str(&format!("- {}\n", name));
-            }
-            details_md.push('\n');
-        }
 
-        let incoming_related = state.store.get_tasks_related_to(&task.uid);
-        if !incoming_related.is_empty() {
-            details_md.push_str(&format!(
-                "### {}\n",
-                rust_i18n::t!("related_from_label").trim_end_matches(':')
-            ));
-            for (related_uid, mut related_name) in incoming_related {
-                if let Some(rel_task) = state.store.get_task_ref(&related_uid)
-                    && rel_task.status.is_done()
-                {
-                    if let Some(comp_date) = rel_task.completion_date() {
-                        let local = comp_date.with_timezone(&chrono::Local);
-                        related_name =
-                            format!("{} (✓ {})", related_name, local.format("%Y-%m-%d %H:%M"));
-                    } else {
-                        related_name = format!("{} (✓)", related_name);
-                    }
-                }
-                details_md.push_str(&format!("- {}\n", related_name));
-            }
-            details_md.push('\n');
-        }
-
-        // --- History (for recurring tasks) ---
-        let effective_goal = task.get_effective_goal();
-        let has_rrule = task.rrule.is_some();
-        let has_goal = task.goal.is_some();
-
-        if has_rrule || has_goal {
-            details_md.push_str(&format!("### {}\n", t!("habit_history")));
-
-            if let Some(rrule) = &task.rrule {
-                let (count, _, key) = state.store.get_completion_history_stats(&task.uid, rrule);
-                if count > 0 {
-                    let w1 = rust_i18n::t!(key).to_string();
-                    if count == 1 {
-                        details_md.push_str(&format!(
-                            "- {}\n",
-                            t!("habit_completed_in_past.one", window = w1)
-                        ));
-                    } else {
-                        details_md.push_str(&format!(
-                            "- {}\n",
-                            t!("habit_completed_in_past.other", count = count, window = w1)
-                        ));
-                    }
-                }
-            }
-
-            if let Some(goal) = &task.goal {
-                let progress = state
-                    .store
-                    .calculate_goal_progress(&format!("task:{}", task.uid), goal);
-                let (cur_str, tar_str) = if goal.goal_type == crate::config::GoalType::Duration {
-                    crate::model::parser::format_goal_duration(progress, goal.target)
-                } else {
-                    (progress.to_string(), goal.target.to_string())
-                };
-
-                let target_display = goal.format_target_display(&tar_str);
-                details_md.push_str(&format!(
-                    "- {}: {}\n",
-                    rust_i18n::t!("goal_target_label"),
-                    target_display
-                ));
-                details_md.push_str(&format!(
-                    "- {}: {}\n",
-                    rust_i18n::t!("goal_progress_label"),
-                    cur_str
-                ));
-            }
-
-            if let Some(goal) = &effective_goal {
-                let history =
-                    state
+                if let Some(goal) = &task.goal {
+                    let progress = state
                         .store
-                        .calculate_goal_history(&format!("task:{}", task.uid), goal, 7);
-                let mut heatmap_str = String::new();
-                for pct in history {
-                    if pct >= 1.0 {
-                        heatmap_str.push('🟩');
-                    } else if pct > 0.0 {
-                        heatmap_str.push('🟨');
+                        .calculate_goal_progress(&format!("task:{}", task.uid), goal);
+                    let (cur_str, tar_str) = if goal.goal_type == crate::config::GoalType::Duration
+                    {
+                        crate::model::parser::format_goal_duration(progress, goal.target)
                     } else {
-                        heatmap_str.push('⬛');
-                    }
+                        (progress.to_string(), goal.target.to_string())
+                    };
+
+                    let target_display = goal.format_target_display(&tar_str);
+                    details_md.push_str(&format!(
+                        "- {}: {}\n",
+                        rust_i18n::t!("goal_target_label"),
+                        target_display
+                    ));
+                    details_md.push_str(&format!(
+                        "- {}: {}\n",
+                        rust_i18n::t!("goal_progress_label"),
+                        cur_str
+                    ));
                 }
-                details_md.push_str(&format!(
-                    "- {}: {}\n",
-                    rust_i18n::t!("goal_past_label"),
-                    heatmap_str
-                ));
-            }
 
-            details_md.push('\n');
-        }
+                if let Some(goal) = &effective_goal {
+                    let history =
+                        state
+                            .store
+                            .calculate_goal_history(&format!("task:{}", task.uid), goal, 7);
+                    let mut heatmap_str = String::new();
+                    for pct in history {
+                        if pct >= 1.0 {
+                            heatmap_str.push('🟩');
+                        } else if pct > 0.0 {
+                            heatmap_str.push('🟨');
+                        } else {
+                            heatmap_str.push('⬛');
+                        }
+                    }
+                    details_md.push_str(&format!(
+                        "- {}: {}\n",
+                        rust_i18n::t!("goal_past_label"),
+                        heatmap_str
+                    ));
+                }
 
-        // --- Work Sessions (recent) ---
-        if !task.sessions.is_empty() {
-            let mut total_mins: i64 = 0;
-            let mut session_lines: Vec<String> = Vec::new();
-            // Show most recent sessions first
-            for session in task.sessions.iter().rev() {
-                total_mins += (session.end - session.start) / 60;
-                let s_dt = chrono::DateTime::from_timestamp(session.start, 0)
-                    .unwrap_or_else(|| chrono::DateTime::from_timestamp(0, 0).unwrap())
-                    .with_timezone(&chrono::Local);
-                let e_dt = chrono::DateTime::from_timestamp(session.end, 0)
-                    .unwrap_or_else(|| chrono::DateTime::from_timestamp(0, 0).unwrap())
-                    .with_timezone(&chrono::Local);
-                let dur = (session.end - session.start) / 60;
-                session_lines.push(format!(
-                    "- {} {}-{} *({})*",
-                    s_dt.format("%Y-%m-%d"),
-                    s_dt.format("%H:%M"),
-                    e_dt.format("%H:%M"),
-                    crate::model::parser::format_duration_human(dur as u32)
-                ));
-            }
-            details_md.push_str(&format!(
-                "### {}\n",
-                t!(
-                    "time_tracked_duration",
-                    h = total_mins / 60,
-                    m = total_mins % 60
-                )
-            ));
-            for line in session_lines.into_iter().take(3) {
-                details_md.push_str(&line);
                 details_md.push('\n');
             }
-            if task.sessions.len() > 3 {
-                let count = task.sessions.len() - 3;
-                let text = if count == 1 {
-                    t!("tui_older_sessions_hidden.one").to_string()
+
+            // --- Work Sessions (recent) ---
+            if !task.sessions.is_empty() {
+                let mut total_mins: i64 = 0;
+                let mut session_lines: Vec<String> = Vec::new();
+                // Show most recent sessions first
+                for session in task.sessions.iter().rev() {
+                    total_mins += (session.end - session.start) / 60;
+                    let s_dt = chrono::DateTime::from_timestamp(session.start, 0)
+                        .unwrap_or_else(|| chrono::DateTime::from_timestamp(0, 0).unwrap())
+                        .with_timezone(&chrono::Local);
+                    let e_dt = chrono::DateTime::from_timestamp(session.end, 0)
+                        .unwrap_or_else(|| chrono::DateTime::from_timestamp(0, 0).unwrap())
+                        .with_timezone(&chrono::Local);
+                    let dur = (session.end - session.start) / 60;
+                    session_lines.push(format!(
+                        "- {} {}-{} *({})*",
+                        s_dt.format("%Y-%m-%d"),
+                        s_dt.format("%H:%M"),
+                        e_dt.format("%H:%M"),
+                        crate::model::parser::format_duration_human(dur as u32)
+                    ));
+                }
+                details_md.push_str(&format!(
+                    "### {}\n",
+                    t!(
+                        "time_tracked_duration",
+                        h = total_mins / 60,
+                        m = total_mins % 60
+                    )
+                ));
+                for line in session_lines.into_iter().take(3) {
+                    details_md.push_str(&line);
+                    details_md.push('\n');
+                }
+                if task.sessions.len() > 3 {
+                    let count = task.sessions.len() - 3;
+                    let text = if count == 1 {
+                        t!("tui_older_sessions_hidden.one").to_string()
+                    } else {
+                        t!("tui_older_sessions_hidden.other", count = count).to_string()
+                    };
+                    details_md.push_str(&format!("*{text}*\n"));
+                }
+                details_md.push('\n');
+            }
+        }
+
+        if details_md.is_empty() {
+            details_md = "_No details_".to_string();
+        }
+
+        let active_count = state
+            .tasks
+            .iter()
+            .filter_map(|item| {
+                if let TaskListItem::Task(task) = item {
+                    Some(task.as_ref())
                 } else {
-                    t!("tui_older_sessions_hidden.other", count = count).to_string()
-                };
-                details_md.push_str(&format!("*{text}*\n"));
-            }
-            details_md.push('\n');
-        }
-    }
+                    None
+                }
+            })
+            .filter(|t| !t.status.is_done())
+            .count();
 
-    if details_md.is_empty() {
-        details_md = "_No details_".to_string();
-    }
-
-    let active_count = state
-        .tasks
-        .iter()
-        .filter_map(|item| {
-            if let TaskListItem::Task(task) = item {
-                Some(task.as_ref())
-            } else {
-                None
-            }
-        })
-        .filter(|t| !t.status.is_done())
-        .count();
-
-    // Calculate details height dynamically
-    let details_width = h_chunks[1].width.saturating_sub(2);
-    let mut required_lines: u16 = 0;
-    if details_width > 0 {
-        for line in details_md.lines() {
-            let line_len = line.width() as u16;
-            if line_len == 0 {
-                required_lines += 1;
-            } else {
-                required_lines += line_len.div_ceil(details_width);
+        // Calculate details height dynamically
+        let details_width = h_chunks[1].width.saturating_sub(2);
+        let mut required_lines: u16 = 0;
+        if details_width > 0 {
+            for line in details_md.lines() {
+                let line_len = line.width() as u16;
+                if line_len == 0 {
+                    required_lines += 1;
+                } else {
+                    required_lines += line_len.div_ceil(details_width);
+                }
             }
         }
-    }
 
-    let calculated_height = required_lines + 2;
-    let available_height = v_chunks[0].height;
-    let max_details_height = available_height / 2;
-    let final_details_height = calculated_height.clamp(3, max_details_height);
+        let calculated_height = required_lines + 2;
+        let available_height = v_chunks[0].height;
+        let max_details_height = available_height / 2;
+        let final_details_height = calculated_height.clamp(3, max_details_height);
 
-    // Recalculate layout with final details height
-    let main_chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(0), Constraint::Length(final_details_height)])
-        .split(h_chunks[1]);
+        // Recalculate layout with final details height
+        let main_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(0), Constraint::Length(final_details_height)])
+            .split(h_chunks[1]);
 
-    let mut title = if let Some(focus_uid) = &state.focused_task_uid {
-        if let Some(t) = state.store.get_task_ref(focus_uid) {
-            // Dynamically truncate based on the main panel's actual width
-            let available_width = h_chunks[1].width.saturating_sub(25) as usize;
-            let max_chars = available_width.max(15);
+        let mut title = if let Some(focus_uid) = &state.focused_task_uid {
+            if let Some(t) = state.store.get_task_ref(focus_uid) {
+                // Dynamically truncate based on the main panel's actual width
+                let available_width = h_chunks[1].width.saturating_sub(25) as usize;
+                let max_chars = available_width.max(15);
 
-            let mut trunc = t.summary.clone();
-            if trunc.chars().count() > max_chars {
-                trunc = format!(
-                    "{}...",
-                    trunc
-                        .chars()
-                        .take(max_chars.saturating_sub(3))
-                        .collect::<String>()
-                );
+                let mut trunc = t.summary.clone();
+                if trunc.chars().count() > max_chars {
+                    trunc = format!(
+                        "{}...",
+                        trunc
+                            .chars()
+                            .take(max_chars.saturating_sub(3))
+                            .collect::<String>()
+                    );
+                }
+                format!(" 🔭 {} (Esc) ", trunc)
+            } else {
+                " 🔭 Focused (Esc) ".to_string()
             }
-            format!(" 🔭 {} (Esc) ", trunc)
+        } else if state.loading {
+            format!(
+                " {} ({}) ",
+                rust_i18n::t!("tasks"),
+                rust_i18n::t!("loading")
+            )
         } else {
-            " 🔭 Focused (Esc) ".to_string()
-        }
-    } else if state.loading {
-        format!(
-            " {} ({}) ",
-            rust_i18n::t!("tasks"),
-            rust_i18n::t!("loading")
-        )
-    } else {
-        let tasks_str = match active_count {
-            0 => rust_i18n::t!("tasks_count.zero"),
-            1 => rust_i18n::t!("tasks_count.one"),
-            _ => rust_i18n::t!("tasks_count.other", count = active_count),
+            let tasks_str = match active_count {
+                0 => rust_i18n::t!("tasks_count.zero"),
+                1 => rust_i18n::t!("tasks_count.one"),
+                _ => rust_i18n::t!("tasks_count.other", count = active_count),
+            };
+            format!(" {} ", tasks_str)
         };
-        format!(" {} ", tasks_str)
-    };
-    if state.unsynced_changes {
-        title.push_str(&format!(" [{}] ", rust_i18n::t!("unsynced")));
-    }
-    if !state.active_search_query.is_empty() {
-        title.push_str(&format!(
-            "[{}: '{}']",
-            rust_i18n::t!("search"),
-            state.active_search_query
-        ));
-    }
+        if state.unsynced_changes {
+            title.push_str(&format!(" [{}] ", rust_i18n::t!("unsynced")));
+        }
+        if !state.active_search_query.is_empty() {
+            title.push_str(&format!(
+                "[{}: '{}']",
+                rust_i18n::t!("search"),
+                state.active_search_query
+            ));
+        }
 
-    let main_style = if state.active_focus == Focus::Main {
-        Style::default().fg(if is_dark_theme {
-            Color::Yellow
+        let main_style = if state.active_focus == Focus::Main {
+            Style::default().fg(if is_dark_theme {
+                Color::Yellow
+            } else {
+                Color::Rgb(200, 100, 0)
+            })
+        } else if state.unsynced_changes {
+            Style::default().fg(Color::LightRed)
         } else {
-            Color::Rgb(200, 100, 0)
-        })
-    } else if state.unsynced_changes {
-        Style::default().fg(Color::LightRed)
-    } else {
-        Style::default()
-    };
-
-    let task_list = List::new(task_items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(title)
-                .border_style(main_style),
-        )
-        .highlight_style(
             Style::default()
-                .add_modifier(Modifier::BOLD)
-                .bg(if is_dark_theme {
-                    Color::Green
-                } else {
-                    Color::Rgb(255, 200, 100)
-                })
-                .fg(Color::Black),
-        );
-    f.render_stateful_widget(task_list, main_chunks[0], &mut state.list_state);
+        };
 
-    // Details rendering (markdown)
-    if !matches!(
-        state.mode,
-        InputMode::EditingDescription | InputMode::EditingTree(_)
-    ) {
-        let md_text = tui_markdown::from_str(&details_md);
-        let details_block = Block::default()
-            .borders(Borders::ALL)
-            .title(format!(" {} ", rust_i18n::t!("details")))
-            .border_style(Style::default().fg(Color::Blue));
-        let p = Paragraph::new(md_text)
-            .block(details_block)
-            .wrap(Wrap { trim: true })
-            .scroll((state.details_scroll, 0));
-        f.render_widget(p, main_chunks[1]);
-    } else {
-        let p = Paragraph::new(rust_i18n::t!("editing")).block(
-            Block::default()
+        let task_list = List::new(task_items)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(title)
+                    .border_style(main_style),
+            )
+            .highlight_style(
+                Style::default()
+                    .add_modifier(Modifier::BOLD)
+                    .bg(if is_dark_theme {
+                        Color::Green
+                    } else {
+                        Color::Rgb(255, 200, 100)
+                    })
+                    .fg(Color::Black),
+            );
+        f.render_stateful_widget(task_list, main_chunks[0], &mut state.list_state);
+
+        // Details rendering (markdown)
+        if !matches!(
+            state.mode,
+            InputMode::EditingDescription | InputMode::EditingTree(_)
+        ) {
+            let md_text = tui_markdown::from_str(&details_md);
+            let details_block = Block::default()
                 .borders(Borders::ALL)
                 .title(format!(" {} ", rust_i18n::t!("details")))
-                .style(Style::default().fg(Color::DarkGray)),
-        );
-        f.render_widget(p, main_chunks[1]);
-    }
+                .border_style(Style::default().fg(Color::Blue));
+            let p = Paragraph::new(md_text)
+                .block(details_block)
+                .wrap(Wrap { trim: true })
+                .scroll((state.details_scroll, 0));
+            f.render_widget(p, main_chunks[1]);
+        } else if state.sidebar_mode != SidebarMode::Journal {
+            let p = Paragraph::new(rust_i18n::t!("editing")).block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(format!(" {} ", rust_i18n::t!("details")))
+                    .style(Style::default().fg(Color::DarkGray)),
+            );
+            f.render_widget(p, main_chunks[1]);
+        }
+    } // End of task list rendering block
 
     // Footer area
     let footer_area = v_chunks[1];
@@ -1540,7 +1789,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         | InputMode::EditingDescription
         | InputMode::EditingTree(_)
         | InputMode::AddingSession
-        | InputMode::EditingSession(_, _) => {
+        | InputMode::EditingSession(_, _)
+        | InputMode::JumpingToDate => {
             // Determine input title and color. If filters are the culprit, make search show red.
             let (mut title_str, prefix, color) = match state.mode {
                 InputMode::Searching => {
@@ -1591,6 +1841,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 }
                 InputMode::AddingSession => (" Log Time ".to_string(), "> ", Color::Green),
                 InputMode::EditingSession(_, _) => (" Edit Time ".to_string(), "> ", Color::Yellow),
+                InputMode::JumpingToDate => (" Go to Date ".to_string(), "> ", Color::Yellow),
                 _ => (
                     format!(" {} ", rust_i18n::t!("mode_create")),
                     "> ",
@@ -1773,7 +2024,9 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             let help_text = match state.active_focus {
                 Focus::Sidebar => rust_i18n::t!("tui_sidebar_help").to_string(),
                 Focus::Main => {
-                    if let Some(uid) = &state.yanked_uid {
+                    if state.sidebar_mode == SidebarMode::Journal {
+                        " ←/→/↑/↓: Date | t: Today | g: Go to | e/Enter: Edit | [/]: Cal | Tab: Focus | q: Quit ".to_string()
+                    } else if let Some(uid) = &state.yanked_uid {
                         let mut summary = state
                             .store
                             .get_summary(uid)
@@ -2003,6 +2256,12 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
         let title_str = if matches!(state.mode, InputMode::EditingTree(_)) {
             " Editing Tree ".to_string()
+        } else if state.sidebar_mode == SidebarMode::Journal {
+            format!(
+                " {} ({}) ",
+                rust_i18n::t!("edit_description_title"),
+                state.journal_date.format("%Y-%m-%d")
+            )
         } else {
             format!(" {} ", rust_i18n::t!("edit_description_title"))
         };

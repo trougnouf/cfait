@@ -629,11 +629,15 @@ impl RustyClient {
                 can_write = true;
             }
 
-            if is_calendar && can_write && comps.iter().any(|c| c.eq_ignore_ascii_case("VTODO")) {
+            let supports_vtodo = comps.iter().any(|c| c.eq_ignore_ascii_case("VTODO"));
+            let supports_vjournal = comps.iter().any(|c| c.eq_ignore_ascii_case("VJOURNAL"));
+
+            if is_calendar && can_write && supports_vtodo {
                 calendars.push(CalendarListEntry {
                     name: displayname.unwrap_or_else(|| href.clone()),
                     href,
                     color,
+                    supports_vjournal: Some(supports_vjournal),
                 });
             }
         }
@@ -849,8 +853,8 @@ impl RustyClient {
         is_delete_intent: bool,
         is_create_intent: bool,
     ) -> bool {
-        // Local calendars don't have server-side events
-        if task.calendar_href.starts_with("local://") {
+        // Local calendars don't have server-side events, and Journals don't get events.
+        if task.calendar_href.starts_with("local://") || task.is_journal {
             return false;
         }
 
@@ -1036,6 +1040,10 @@ impl RustyClient {
             let mut futures: Vec<futures::future::BoxFuture<'_, Result<(), ()>>> = Vec::new();
 
             for task in cal_tasks {
+                if task.is_journal {
+                    continue;
+                }
+
                 let should_create_events = task.create_event.unwrap_or(config_enabled);
                 let base_uid = format!("evt-{}", task.uid);
 
@@ -1163,9 +1171,7 @@ impl RustyClient {
     <D:getetag/>
   </D:prop>
   <C:filter>
-    <C:comp-filter name="VCALENDAR">
-      <C:comp-filter name="VTODO"/>
-    </C:comp-filter>
+    <C:comp-filter name="VCALENDAR"/>
   </C:filter>
 </C:calendar-query>"#
             .to_string();

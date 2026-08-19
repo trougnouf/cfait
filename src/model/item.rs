@@ -31,6 +31,8 @@ pub struct CalendarListEntry {
     pub name: String,
     pub href: String,
     pub color: Option<String>,
+    #[serde(default)]
+    pub supports_vjournal: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
@@ -338,6 +340,9 @@ pub struct Task {
     /// When `true`, the task acts as an endless tracker and logs time instead of completing.
     #[serde(default)]
     pub permanent: bool,
+    /// When `true`, this item represents a VJOURNAL note rather than a VTODO task.
+    #[serde(default)]
+    pub is_journal: bool,
 
     // Time-tracking fields:
     // - `time_spent_seconds` accumulates committed seconds of work for this task.
@@ -703,6 +708,7 @@ impl Task {
             is_note: false,
             manual_block: false,
             permanent: false,
+            is_journal: false,
             time_spent_seconds: 0,
             last_started_at: None,
             sessions: Vec::new(),

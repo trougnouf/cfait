@@ -472,6 +472,7 @@ pub struct MobileConfig {
     pub default_duration_goal_mins: u32,
     pub sessions_count_as_completions: bool,
     pub show_goals_tab: bool,
+    pub show_journal_tab: bool,
     pub show_task_goals_in_sidebar: bool,
     pub sort_collections_by_size: bool,
     pub expanded_tags: Vec<String>,
@@ -587,6 +588,7 @@ impl CfaitMobile {
                 name: c.name,
                 href: c.href,
                 color: c.color,
+                supports_vjournal: None,
             })
             .collect();
 
@@ -1319,6 +1321,7 @@ impl CfaitMobile {
             default_duration_goal_mins: c.default_duration_goal_mins,
             sessions_count_as_completions: c.sessions_count_as_completions,
             show_goals_tab: c.show_goals_tab,
+            show_journal_tab: c.show_journal_tab,
             show_task_goals_in_sidebar: c.show_task_goals_in_sidebar,
             sort_collections_by_size: c.sort_collections_by_size,
             expanded_tags: c.expanded_tags,
@@ -1484,6 +1487,7 @@ impl CfaitMobile {
         c.default_duration_goal_mins = config.default_duration_goal_mins;
         c.sessions_count_as_completions = config.sessions_count_as_completions;
         c.show_goals_tab = config.show_goals_tab;
+        c.show_journal_tab = config.show_journal_tab;
         c.sort_collections_by_size = config.sort_collections_by_size;
 
         c.expanded_tags = config.expanded_tags;
@@ -2672,6 +2676,7 @@ impl CfaitMobile {
                 name: c.name,
                 href: c.href,
                 color: c.color,
+                supports_vjournal: None,
             })
             .collect();
         let active_cal = self.session.lock().await.active_calendar_href.clone();
@@ -2804,6 +2809,7 @@ impl CfaitMobile {
                 name: c.name,
                 href: c.href,
                 color: c.color,
+                supports_vjournal: None,
             })
             .collect();
         let active_cal = self.session.lock().await.active_calendar_href.clone();
@@ -3207,6 +3213,7 @@ impl CfaitMobile {
             name,
             href: href.clone(),
             color,
+            supports_vjournal: Some(true),
         });
         LocalCalendarRegistry::save(self.ctx.as_ref(), &locals)
             .map_err(|e| MobileError::from(e.to_string()))?;
@@ -3241,6 +3248,7 @@ impl CfaitMobile {
                 name,
                 href: href.clone(),
                 color,
+                supports_vjournal: Some(true),
             });
             let _ = crate::cache::Cache::save_calendars(self.ctx.as_ref(), &cals);
         }

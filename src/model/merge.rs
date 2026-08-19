@@ -62,6 +62,7 @@ pub fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task>
         is_note: _,
         manual_block: _,
         permanent: _,
+        is_journal: _,
         time_spent_seconds: _,
         last_started_at: _,
         sessions: _,
@@ -127,6 +128,7 @@ pub fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task>
     merge_field!(is_note);
     merge_field!(manual_block);
     merge_field!(permanent);
+    merge_field!(is_journal);
     merge_field!(goal);
     merge_field!(last_started_at);
     merge_field!(parent_uid);
