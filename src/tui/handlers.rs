@@ -323,8 +323,12 @@ async fn execute_task_action(
             state.mode = InputMode::Editing;
         }
         EditTree => {
-            let desc =
-                crate::model::extractor::serialize_task_tree(&state.store, &uid, &state.calendars);
+            let desc = crate::model::extractor::serialize_task_tree(
+                &state.store,
+                &uid,
+                &state.calendars,
+                false,
+            );
             match run_external_editor(&desc, state.ctx.as_ref()) {
                 Ok(Some(new_desc)) => {
                     if new_desc != desc {
@@ -1636,6 +1640,7 @@ pub async fn handle_key_event(
                         &state.store,
                         &uid,
                         &state.calendars,
+                        false,
                     );
                     state.input_buffer = desc;
                     state.cursor_position = state.input_buffer.chars().count();
@@ -2018,6 +2023,7 @@ pub async fn handle_key_event(
                         &state.store,
                         &uid,
                         &state.calendars,
+                        false,
                     );
                     match run_external_editor(&desc, state.ctx.as_ref()) {
                         Ok(Some(new_desc)) => {

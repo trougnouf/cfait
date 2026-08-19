@@ -250,6 +250,18 @@ impl TaskDisplay for Task {
             s.push_str(" is:pinned");
         }
 
+        if self.is_journal {
+            let page_str = rust_i18n::t!("parser_is_page");
+            if page_str == "parser_is_page" || page_str.is_empty() {
+                s.push_str(" is:page");
+            } else {
+                s.push_str(&format!(
+                    " {}",
+                    page_str.split(',').next().unwrap_or("is:page").trim()
+                ));
+            }
+        }
+
         if self.manual_block {
             let block_str = rust_i18n::t!("search_is_blocked");
             if block_str == "search_is_blocked" || block_str.is_empty() {

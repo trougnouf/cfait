@@ -95,6 +95,8 @@ pub struct GuiApp {
     pub journal_date: chrono::NaiveDate,
     pub journal_editor_content: text_editor::Content,
     pub journal_editing_href: Option<String>,
+    pub journal_editing_uid: Option<String>,
+    pub journal_title_input: String,
     pub journal_debounce_version: usize,
 
     // Preferences
@@ -167,6 +169,7 @@ pub struct GuiApp {
     pub goal_icon: char,
     pub focus_icon: char,
     pub journal_icon: char,
+    pub create_journal_icon: char,
 
     // Inputs - Settings (Aliases)
     pub alias_input_key: String,
@@ -411,6 +414,9 @@ impl Default for GuiApp {
         let journal_icon =
             crate::gui::icon::JOURNAL_ICONS[rng.usize(..crate::gui::icon::JOURNAL_ICONS.len())];
 
+        let create_journal_icon = crate::gui::icon::CREATE_JOURNAL_ICONS
+            [rng.usize(..crate::gui::icon::CREATE_JOURNAL_ICONS.len())];
+
         // Select a random theme (excluding Random itself)
         let themes: Vec<AppTheme> = AppTheme::iter()
             .filter(|&t| t != AppTheme::Random)
@@ -460,6 +466,8 @@ impl Default for GuiApp {
             journal_date: chrono::Local::now().date_naive(),
             journal_editor_content: text_editor::Content::new(),
             journal_editing_href: None,
+            journal_editing_uid: None,
+            journal_title_input: String::new(),
             journal_debounce_version: 0,
 
             hovered_tag_uid: None,
@@ -527,6 +535,7 @@ impl Default for GuiApp {
             goal_icon,
             focus_icon,
             journal_icon,
+            create_journal_icon,
             alias_input_key: String::new(),
             alias_input_values: String::new(),
             editing_alias_key: None,

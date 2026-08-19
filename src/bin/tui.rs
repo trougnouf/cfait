@@ -1234,7 +1234,7 @@ async fn main() -> Result<()> {
                 if let Ok(locals) = cfait::storage::LocalCalendarRegistry::load(ctx.as_ref()) {
                     cals.extend(locals);
                 }
-                cfait::model::extractor::serialize_task_tree(&store, &full_uid, &cals)
+                cfait::model::extractor::serialize_task_tree(&store, &full_uid, &cals, false)
             } else {
                 let task = store.get_task_ref(&full_uid).unwrap();
                 let mut content = task.to_smart_string();
@@ -1510,7 +1510,7 @@ async fn main() -> Result<()> {
             if let Ok(locals) = cfait::storage::LocalCalendarRegistry::load(ctx.as_ref()) {
                 cals.extend(locals);
             }
-            let tree_md = cfait::model::extractor::serialize_task_tree(&store, &uid, &cals);
+            let tree_md = cfait::model::extractor::serialize_task_tree(&store, &uid, &cals, false);
             println!("{}", tree_md);
             return Ok(());
         }

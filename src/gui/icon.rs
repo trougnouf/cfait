@@ -138,6 +138,13 @@ pub const FOCUS_TELESCOPE: char = '\u{f0b4e}'; // nf-md-telescope
 pub const FOCUS_ICONS: &[char] = &[FOCUS_FIELD, FOCUS_STRONG, FOCUS_OUTLINE, FOCUS_TELESCOPE];
 pub const LIST_CHECK: char = '\u{f0ae}';
 pub const JOURNAL: char = '\u{f02d}'; // nf-fa-book / journal icon
+pub const NEW_FILE: char = '\u{ea7f}'; // nf-cod-new_file
+pub const NEWSPAPER_PLUS: char = '\u{f0f0d}'; // nf-md-newspaper_plus
+pub const NEWSPAPER_FA: char = '\u{f1ea}'; // nf-fa-newspaper
+pub const NEWSPAPER_MD: char = '\u{f0395}'; // nf-md-newspaper
+
+pub const CREATE_JOURNAL_ICONS: &[char] = &[NEW_FILE, NEWSPAPER_PLUS];
+
 pub const JOURNAL_ICONS: &[char] = &[
     '\u{f02d}',
     '\u{ede2}',
@@ -151,6 +158,8 @@ pub const JOURNAL_ICONS: &[char] = &[
     '\u{f040}',
     '\u{f064f}',
     '\u{f0776}',
+    '\u{f1ea}',
+    '\u{f0395}',
 ];
 
 // Location Tab Variations

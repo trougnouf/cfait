@@ -279,7 +279,9 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ArrowLeft
         | Message::SidebarInteractSpace
         | Message::SidebarInteractEnter
-        | Message::OpenWikiLink(_) => view::handle(app, message),
+        | Message::OpenWikiLink(_)
+        | Message::OpenJournalPage(_)
+        | Message::CreateJournalPage => view::handle(app, message),
 
         Message::Refresh
         | Message::Loaded(_)
@@ -295,6 +297,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::JournalContentChanged(_)
         | Message::JournalDateInputChanged(_)
         | Message::JournalDateInputSubmit
+        | Message::JournalTitleInputChanged(_)
         | Message::SaveJournal(_) => view::handle(app, message),
 
         Message::SnapToSelected { focus } => {

@@ -489,6 +489,12 @@ impl Task {
         if part_lower == "is:note" || lex.search_is_note.contains(&part_lower) {
             return self.is_note;
         }
+        if part_lower == "is:page"
+            || part_lower == "is:journal"
+            || lex.search_is_page.contains(&part_lower)
+        {
+            return self.is_journal;
+        }
         if part_lower == "is:permanent" || lex.search_is_permanent.contains(&part_lower) {
             return self.permanent;
         }

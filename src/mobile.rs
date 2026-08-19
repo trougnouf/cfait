@@ -796,7 +796,7 @@ impl CfaitMobile {
         if let Ok(locals) = crate::storage::LocalCalendarRegistry::load(self.ctx.as_ref()) {
             cals.extend(locals);
         }
-        crate::model::extractor::serialize_task_tree(&store, &uid, &cals)
+        crate::model::extractor::serialize_task_tree(&store, &uid, &cals, false)
     }
 
     pub fn export_locations_gpx(&self, uid: String) -> Result<String, MobileError> {

@@ -319,6 +319,8 @@
     "journal_completed_today": "Completed this day",
     "journal_time_tracked": "Time tracked this day",
     "journal_no_activity": "No task activity recorded for this day.",
+    "wiki_index": "Wiki index",
+    "untitled_page": "Untitled page",
     "goals_empty": "No goals configured. Define them via smart input (e.g. #chore:=goal:1/week or #gaming:=goal:6h/month) or in the settings. You can also hide this tab in the advanced settings.",
     "goal_progress": "Progress: %{current} / %{target}",
     "goal_type_count": "Count",
@@ -785,6 +787,7 @@
     "parser_recur": "rec:",
     "parser_url": "url:",
     "parser_is_note": "is:note",
+    "parser_is_page": "is:page,is:journal",
     "parser_is_pinned": "is:pinned",
     "parser_is_permanent": "is:permanent",
     "parser_dep": "dep:,depends:",
@@ -830,5 +833,6 @@
     "search_is_started": "is:started",
     "search_is_ongoing": "is:ongoing",
     "search_is_note": "is:note",
+    "search_is_page": "is:page,is:journal",
     "search_is_permanent": "is:permanent"
 }

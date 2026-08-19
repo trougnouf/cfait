@@ -283,6 +283,10 @@ pub enum Message {
     SetShowTaskGoalsInSidebar(bool),
     SetSortCollectionsBySize(bool),
 
+    OpenJournalPage(String),
+    CreateJournalPage,
+    JournalTitleInputChanged(String),
+
     // --- Context Menu ---
     OpenContextMenu(String, bool),
     CloseContextMenu,

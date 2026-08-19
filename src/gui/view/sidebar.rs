@@ -984,25 +984,19 @@ pub fn view_sidebar_journal(app: &GuiApp) -> Element<'_, Message> {
     let is_monday_first = app.first_day_of_week == crate::config::FirstDayOfWeek::Monday;
 
     let quick_jumps = row![
-        button(icon::icon(icon::ARROW_LEFT).size(12))
+        button(icon::icon(icon::ARROW_LEFT).size(14))
             .style(button::text)
-            .padding([4, 6])
+            .padding([4, 12])
             .on_press(Message::SelectJournalDate(sel_date - Duration::days(1))),
-        button(text(rust_i18n::t!("journal_yesterday")).size(11))
-            .style(button::secondary)
-            .padding([4, 6])
-            .on_press(Message::SelectJournalDate(today - Duration::days(1))),
-        button(text(rust_i18n::t!("journal_today")).size(11))
+        Space::new().width(Length::Fill),
+        button(text(rust_i18n::t!("journal_today")).size(12))
             .style(button::primary)
-            .padding([4, 6])
+            .padding([4, 16])
             .on_press(Message::SelectJournalDate(today)),
-        button(text(rust_i18n::t!("journal_tomorrow")).size(11))
-            .style(button::secondary)
-            .padding([4, 6])
-            .on_press(Message::SelectJournalDate(today + Duration::days(1))),
-        button(icon::icon(icon::ARROW_RIGHT).size(12))
+        Space::new().width(Length::Fill),
+        button(icon::icon(icon::ARROW_RIGHT).size(14))
             .style(button::text)
-            .padding([4, 6])
+            .padding([4, 12])
             .on_press(Message::SelectJournalDate(sel_date + Duration::days(1))),
     ]
     .spacing(4)
@@ -1213,6 +1207,108 @@ pub fn view_sidebar_journal(app: &GuiApp) -> Element<'_, Message> {
         }
     }
 
+    let mut index_col = column![
+        row![
+            text(rust_i18n::t!("wiki_index", default = "Wiki index"))
+                .size(14)
+                .font(iced::Font {
+                    weight: iced::font::Weight::Bold,
+                    ..Default::default()
+                }),
+            Space::new().width(Length::Fill),
+            tooltip(
+                button(icon::icon(app.create_journal_icon).size(12))
+                    .style(button::secondary)
+                    .padding([2, 6])
+                    .on_press(Message::CreateJournalPage),
+                text("New Page").size(12),
+                tooltip::Position::Left
+            )
+            .style(crate::gui::view::tooltip_style)
+        ]
+        .align_y(iced::Alignment::Center)
+    ]
+    .spacing(4);
+
+    let mut pages = Vec::new();
+    for map in app.store.calendars.values() {
+        for t in map.values() {
+            if t.is_journal
+                && t.is_note
+                && t.calendar_href != crate::storage::LOCAL_TRASH_HREF
+                && t.calendar_href != "local://recovery"
+            {
+                pages.push(t);
+            }
+        }
+    }
+    pages.sort_by(|a, b| a.summary.cmp(&b.summary));
+
+    let mut children_map: std::collections::HashMap<String, Vec<&crate::model::Task>> =
+        std::collections::HashMap::new();
+    let mut roots = Vec::new();
+    let page_uids: std::collections::HashSet<String> =
+        pages.iter().map(|p| p.uid.clone()).collect();
+
+    for p in &pages {
+        if let Some(parent) = &p.parent_uid
+            && page_uids.contains(parent)
+        {
+            children_map.entry(parent.clone()).or_default().push(p);
+            continue;
+        }
+        roots.push(p);
+    }
+
+    fn render_page_tree<'a>(
+        node: &crate::model::Task,
+        children_map: &std::collections::HashMap<String, Vec<&crate::model::Task>>,
+        depth: usize,
+    ) -> Element<'a, Message> {
+        let display_name = if node.summary.is_empty() {
+            rust_i18n::t!("untitled_page", default = "Untitled page").to_string()
+        } else {
+            node.summary.clone()
+        };
+
+        let indent = Space::new().width(Length::Fixed(depth as f32 * 12.0));
+        let btn = button(
+            row![
+                indent,
+                icon::icon(icon::JOURNAL)
+                    .size(12)
+                    .color(Color::from_rgb(0.5, 0.5, 0.5)),
+                text(display_name).size(13)
+            ]
+            .spacing(6)
+            .align_y(iced::Alignment::Center),
+        )
+        .style(button::text)
+        .padding([4, 4])
+        .width(Length::Fill)
+        .on_press(Message::OpenJournalPage(node.uid.clone()));
+
+        if let Some(children) = children_map.get(&node.uid) {
+            let mut col = column![btn];
+            for child in children {
+                col = col.push(render_page_tree(child, children_map, depth + 1));
+            }
+            col.into()
+        } else {
+            btn.into()
+        }
+    }
+
+    for root in roots {
+        index_col = index_col.push(render_page_tree(root, &children_map, 0));
+    }
+
+    let index_scroll = scrollable(index_col).height(Length::Fill).direction(
+        iced::widget::scrollable::Direction::Vertical(
+            iced::widget::scrollable::Scrollbar::new().width(6),
+        ),
+    );
+
     column![
         quick_jumps,
         date_input_row,
@@ -1220,6 +1316,8 @@ pub fn view_sidebar_journal(app: &GuiApp) -> Element<'_, Message> {
         cal_header,
         weekdays_row,
         days_grid,
+        Space::new().height(10),
+        index_scroll,
     ]
     .spacing(6)
     .padding(6)

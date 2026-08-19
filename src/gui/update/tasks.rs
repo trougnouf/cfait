@@ -474,6 +474,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         &app.store,
                         &task_uid,
                         &app.calendars,
+                        false,
                     );
                     app.description_value = text_editor::Content::with_text(&tree_md);
 
@@ -1633,8 +1634,12 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
             app.editing_tree_uid = None;
             app.editor_maximized = false;
         } else {
-            let tree_md =
-                crate::model::extractor::serialize_task_tree(&app.store, tree_uid, &app.calendars);
+            let tree_md = crate::model::extractor::serialize_task_tree(
+                &app.store,
+                tree_uid,
+                &app.calendars,
+                false,
+            );
             app.description_value = text_editor::Content::with_text(&tree_md);
         }
 

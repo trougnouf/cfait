@@ -2798,7 +2798,6 @@ impl TaskStore {
                     }
                     if t.uid == "cfait-global-settings-v1"
                         || t.summary.starts_with("⚙ Cfait Settings")
-                        || t.is_journal
                     {
                         return false;
                     }
@@ -2831,7 +2830,8 @@ impl TaskStore {
                         }
                         // Note-only compromise: If a structural note has children, it is not inherently
                         // actionable. It relies on its ready children to pull it into the view as context.
-                        if t.is_note && self.children_index.contains_key(&t.uid) {
+                        if (t.is_note || t.is_journal) && !self.children_index.contains_key(&t.uid)
+                        {
                             return false;
                         }
                     }

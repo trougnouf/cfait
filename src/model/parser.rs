@@ -62,6 +62,7 @@ pub enum ExactToken {
     Month(u32),
     Number(u32),
     IsNote,
+    IsPage,
     IsPinned,
     IsBlocked,
     IsPermanent,
@@ -105,6 +106,7 @@ pub struct ParserLexicon {
     pub search_is_ready: Vec<String>,
     pub search_is_blocked: Vec<String>,
     pub search_is_note: Vec<String>,
+    pub search_is_page: Vec<String>,
     pub search_is_permanent: Vec<String>,
     pub parser_collection: Vec<String>,
 }
@@ -341,6 +343,7 @@ impl ParserLexicon {
         add_exact("parser_months_dec", "dec,december", ExactToken::Month(12));
 
         add_exact("parser_is_note", "is:note", ExactToken::IsNote);
+        add_exact("parser_is_page", "is:page,is:journal", ExactToken::IsPage);
         add_exact("parser_is_pinned", "is:pinned", ExactToken::IsPinned);
         add_exact(
             "parser_is_permanent",
@@ -431,6 +434,7 @@ impl ParserLexicon {
             search_is_ready: get_all("search_is_ready", "is:ready"),
             search_is_blocked: get_all("search_is_blocked", "is:blocked"),
             search_is_note: get_all("search_is_note", "is:note"),
+            search_is_page: get_all("search_is_page", "is:page,is:journal"),
             search_is_permanent: get_all("parser_is_permanent", "is:permanent"),
             parser_collection: get_all("parser_collection", "col:"),
         }
@@ -1265,7 +1269,7 @@ pub fn tokenize_smart_input(input: &str, is_search_query: bool) -> Vec<SyntaxTok
                 matched_kind = Some(SyntaxType::Calendar);
             } else if exact == Some(&ExactToken::IsPinned) {
                 matched_kind = Some(SyntaxType::Pin);
-            } else if exact == Some(&ExactToken::IsNote) {
+            } else if exact == Some(&ExactToken::IsNote) || exact == Some(&ExactToken::IsPage) {
                 matched_kind = Some(SyntaxType::Note);
             } else if exact == Some(&ExactToken::IsBlocked) {
                 // Color it like a dependency (orange) since it's a blocker state
@@ -2581,6 +2585,7 @@ pub fn is_special_token_with_lex(word: &str, lex: &ParserLexicon) -> bool {
     if matches!(
         exact,
         Some(ExactToken::IsNote)
+            | Some(ExactToken::IsPage)
             | Some(ExactToken::IsPinned)
             | Some(ExactToken::IsBlocked)
             | Some(ExactToken::IsPermanent)
@@ -3143,6 +3148,9 @@ pub fn apply_smart_input(
             task.pinned = true;
         } else if exact == Some(&ExactToken::IsNote) {
             explicit_note_flag = Some(true);
+        } else if exact == Some(&ExactToken::IsPage) {
+            explicit_note_flag = Some(true);
+            task.is_journal = true;
         } else if exact == Some(&ExactToken::IsBlocked) {
             task.manual_block = true;
         } else if exact == Some(&ExactToken::IsPermanent) {

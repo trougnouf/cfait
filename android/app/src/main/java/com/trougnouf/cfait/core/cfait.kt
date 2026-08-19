@@ -4631,6 +4631,7 @@ data class MobileConfig(
     var `defaultDurationGoalMins`: kotlin.UInt,
     var `sessionsCountAsCompletions`: kotlin.Boolean,
     var `showGoalsTab`: kotlin.Boolean,
+    var `showJournalTab`: kotlin.Boolean,
     var `showTaskGoalsInSidebar`: kotlin.Boolean,
     var `sortCollectionsBySize`: kotlin.Boolean,
     var `expandedTags`: List<kotlin.String>,
@@ -4687,6 +4688,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterSequenceString.read(buf),
@@ -4733,6 +4735,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
                 FfiConverterUInt.allocationSize(value.`defaultDurationGoalMins`) +
                 FfiConverterBoolean.allocationSize(value.`sessionsCountAsCompletions`) +
                 FfiConverterBoolean.allocationSize(value.`showGoalsTab`) +
+                FfiConverterBoolean.allocationSize(value.`showJournalTab`) +
                 FfiConverterBoolean.allocationSize(value.`showTaskGoalsInSidebar`) +
                 FfiConverterBoolean.allocationSize(value.`sortCollectionsBySize`) +
                 FfiConverterSequenceString.allocationSize(value.`expandedTags`) +
@@ -4783,6 +4786,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
         FfiConverterUInt.write(value.`defaultDurationGoalMins`, buf)
         FfiConverterBoolean.write(value.`sessionsCountAsCompletions`, buf)
         FfiConverterBoolean.write(value.`showGoalsTab`, buf)
+        FfiConverterBoolean.write(value.`showJournalTab`, buf)
         FfiConverterBoolean.write(value.`showTaskGoalsInSidebar`, buf)
         FfiConverterBoolean.write(value.`sortCollectionsBySize`, buf)
         FfiConverterSequenceString.write(value.`expandedTags`, buf)
@@ -5694,6 +5698,7 @@ data class SessionState(
     var `expandedLocations`: List<kotlin.String>,
     var `searchCollapsedTasks`: List<kotlin.String>,
     var `focusedTaskUid`: kotlin.String?,
+    var `selectedJournalDate`: kotlin.String,
 ) {
     companion object
 }
@@ -5714,6 +5719,7 @@ public object FfiConverterTypeSessionState : FfiConverterRustBuffer<SessionState
             FfiConverterSequenceString.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
         )
 
     override fun allocationSize(value: SessionState) =
@@ -5727,7 +5733,8 @@ public object FfiConverterTypeSessionState : FfiConverterRustBuffer<SessionState
                 FfiConverterSequenceString.allocationSize(value.`expandedTags`) +
                 FfiConverterSequenceString.allocationSize(value.`expandedLocations`) +
                 FfiConverterSequenceString.allocationSize(value.`searchCollapsedTasks`) +
-                FfiConverterOptionalString.allocationSize(value.`focusedTaskUid`)
+                FfiConverterOptionalString.allocationSize(value.`focusedTaskUid`) +
+                FfiConverterString.allocationSize(value.`selectedJournalDate`)
         )
 
     override fun write(
@@ -5744,6 +5751,7 @@ public object FfiConverterTypeSessionState : FfiConverterRustBuffer<SessionState
         FfiConverterSequenceString.write(value.`expandedLocations`, buf)
         FfiConverterSequenceString.write(value.`searchCollapsedTasks`, buf)
         FfiConverterOptionalString.write(value.`focusedTaskUid`, buf)
+        FfiConverterString.write(value.`selectedJournalDate`, buf)
     }
 }
 
@@ -5938,6 +5946,12 @@ sealed class AppIntent {
 
     data class FocusTaskTree(
         val `uid`: kotlin.String?,
+    ) : AppIntent() {
+        companion object
+    }
+
+    data class SelectJournalDate(
+        val `date`: kotlin.String,
     ) : AppIntent() {
         companion object
     }
@@ -6173,12 +6187,18 @@ public object FfiConverterTypeAppIntent : FfiConverterRustBuffer<AppIntent> {
             }
 
             34 -> {
-                AppIntent.CompleteTree(
+                AppIntent.SelectJournalDate(
                     FfiConverterString.read(buf),
                 )
             }
 
             35 -> {
+                AppIntent.CompleteTree(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            36 -> {
                 AppIntent.ReplaceDependency(
                     FfiConverterString.read(buf),
                     FfiConverterString.read(buf),
@@ -6186,7 +6206,7 @@ public object FfiConverterTypeAppIntent : FfiConverterRustBuffer<AppIntent> {
                 )
             }
 
-            36 -> {
+            37 -> {
                 AppIntent.ReplaceRelation(
                     FfiConverterString.read(buf),
                     FfiConverterString.read(buf),
@@ -6470,6 +6490,14 @@ public object FfiConverterTypeAppIntent : FfiConverterRustBuffer<AppIntent> {
                 )
             }
 
+            is AppIntent.SelectJournalDate -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`date`)
+                )
+            }
+
             is AppIntent.CompleteTree -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -6707,14 +6735,20 @@ public object FfiConverterTypeAppIntent : FfiConverterRustBuffer<AppIntent> {
                 Unit
             }
 
-            is AppIntent.CompleteTree -> {
+            is AppIntent.SelectJournalDate -> {
                 buf.putInt(34)
+                FfiConverterString.write(value.`date`, buf)
+                Unit
+            }
+
+            is AppIntent.CompleteTree -> {
+                buf.putInt(35)
                 FfiConverterString.write(value.`uid`, buf)
                 Unit
             }
 
             is AppIntent.ReplaceDependency -> {
-                buf.putInt(35)
+                buf.putInt(36)
                 FfiConverterString.write(value.`uid`, buf)
                 FfiConverterString.write(value.`oldDep`, buf)
                 FfiConverterString.write(value.`newDep`, buf)
@@ -6722,7 +6756,7 @@ public object FfiConverterTypeAppIntent : FfiConverterRustBuffer<AppIntent> {
             }
 
             is AppIntent.ReplaceRelation -> {
-                buf.putInt(36)
+                buf.putInt(37)
                 FfiConverterString.write(value.`uid`, buf)
                 FfiConverterString.write(value.`oldRel`, buf)
                 FfiConverterString.write(value.`newRel`, buf)

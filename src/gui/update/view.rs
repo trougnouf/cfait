@@ -14,44 +14,60 @@ use iced::widget::operation;
 use iced::{Task, window};
 
 fn flush_journal_save(app: &mut GuiApp) {
-    // Cancel any pending debounced saves
     app.journal_debounce_version = app.journal_debounce_version.wrapping_add(1);
 
-    let date = app.journal_date;
-    let href = app
-        .journal_editing_href
-        .clone()
-        .or(app.active_cal_href.clone())
-        .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
     let new_text = app.journal_editor_content.text();
 
-    let existing_opt = app.store.get_journal_entry(&href, date).cloned();
-    let mut actions = Vec::new();
+    let uid_to_sync = if let Some(uid) = &app.journal_editing_uid {
+        Some(uid.clone())
+    } else {
+        let date = app.journal_date;
+        let href = app
+            .journal_editing_href
+            .clone()
+            .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
 
-    if let Some(mut existing) = existing_opt {
-        if new_text.trim().is_empty() {
-            let _ = app.store.delete_task(&existing.uid);
-            actions.push(crate::journal::Action::Delete(existing));
-        } else if existing.description != new_text {
-            existing.description = new_text;
-            existing.sequence += 1;
-            app.store.update_or_add_task(existing.clone());
-            actions.push(crate::journal::Action::Update(existing));
+        let existing_opt = app
+            .store
+            .get_journal_entry(&href, date)
+            .map(|t| t.uid.clone());
+
+        if let Some(uid) = existing_opt {
+            Some(uid)
+        } else if !new_text.trim().is_empty() {
+            let mut new_journal = crate::model::Task::new("", &app.tag_aliases, None);
+            new_journal.is_journal = true;
+            new_journal.calendar_href = href.clone();
+            new_journal.dtstart = Some(crate::model::DateType::AllDay(date));
+            app.store.add_task(new_journal.clone());
+            if let Some(tx) = &app.bg_tx {
+                let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(vec![
+                    crate::journal::Action::Create(new_journal.clone()),
+                ]));
+            }
+            Some(new_journal.uid)
+        } else {
+            None
         }
-    } else if !new_text.trim().is_empty() {
-        let mut new_journal = crate::model::Task::new("", &app.tag_aliases, None);
-        new_journal.is_journal = true;
-        new_journal.calendar_href = href;
-        new_journal.dtstart = Some(crate::model::DateType::AllDay(date));
-        new_journal.description = new_text;
-        app.store.add_task(new_journal.clone());
-        actions.push(crate::journal::Action::Create(new_journal));
-    }
+    };
 
-    if !actions.is_empty()
-        && let Some(tx) = &app.bg_tx
-    {
-        let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(actions));
+    if let Some(uid) = uid_to_sync {
+        let config = crate::config::Config::load(app.ctx.as_ref()).unwrap_or_default();
+        let def_time =
+            chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
+
+        if let Ok((actions, _warnings)) = app.store.sync_tree_from_markdown(
+            &uid,
+            &new_text,
+            &app.tag_aliases,
+            def_time,
+            config.trash_retention_days,
+            &app.calendars,
+        ) && !actions.is_empty()
+            && let Some(tx) = &app.bg_tx
+        {
+            let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(actions));
+        }
     }
 }
 
@@ -932,19 +948,25 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     .clone()
                     .or(app.active_cal_href.clone())
                     .unwrap_or_default();
-                let entry_desc = app
-                    .store
-                    .get_journal_entry(&href, d)
-                    .map(|t| t.description.clone())
-                    .unwrap_or_default();
-                app.journal_editor_content =
-                    iced::widget::text_editor::Content::with_text(&entry_desc);
+                app.journal_editing_uid = None;
+                if let Some(entry) = app.store.get_journal_entry(&href, d) {
+                    let md = crate::model::extractor::serialize_task_tree(
+                        &app.store,
+                        &entry.uid,
+                        &app.calendars,
+                        true,
+                    );
+                    app.journal_editor_content = iced::widget::text_editor::Content::with_text(&md);
+                } else {
+                    app.journal_editor_content = iced::widget::text_editor::Content::new();
+                }
             }
             refresh_filtered_tasks(app);
             Task::none()
         }
         Message::SelectJournalDate(date) => {
             flush_journal_save(app);
+            app.journal_editing_uid = None;
             app.journal_date = date;
             app.journal_date_input = date.format("%Y-%m-%d").to_string();
             let href = app
@@ -952,48 +974,128 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 .clone()
                 .or(app.active_cal_href.clone())
                 .unwrap_or_default();
-            let entry_desc = app
-                .store
-                .get_journal_entry(&href, date)
-                .map(|t| t.description.clone())
-                .unwrap_or_default();
-            app.journal_editor_content = iced::widget::text_editor::Content::with_text(&entry_desc);
+
+            if let Some(entry) = app.store.get_journal_entry(&href, date) {
+                let md = crate::model::extractor::serialize_task_tree(
+                    &app.store,
+                    &entry.uid,
+                    &app.calendars,
+                    true,
+                );
+                app.journal_editor_content = iced::widget::text_editor::Content::with_text(&md);
+            } else {
+                app.journal_editor_content = iced::widget::text_editor::Content::new();
+            }
             Task::none()
         }
         Message::SelectJournalCollection(href) => {
             flush_journal_save(app);
             app.journal_editing_href = Some(href.clone());
             app.active_cal_href = Some(href.clone());
+            app.journal_editing_uid = None;
             let date = app.journal_date;
-            let entry_desc = app
-                .store
-                .get_journal_entry(&href, date)
-                .map(|t| t.description.clone())
-                .unwrap_or_default();
-            app.journal_editor_content = iced::widget::text_editor::Content::with_text(&entry_desc);
+            if let Some(entry) = app.store.get_journal_entry(&href, date) {
+                let md = crate::model::extractor::serialize_task_tree(
+                    &app.store,
+                    &entry.uid,
+                    &app.calendars,
+                    true,
+                );
+                app.journal_editor_content = iced::widget::text_editor::Content::with_text(&md);
+            } else {
+                app.journal_editor_content = iced::widget::text_editor::Content::new();
+            }
             Task::none()
+        }
+        Message::OpenJournalPage(uid) => {
+            flush_journal_save(app);
+            app.journal_editing_uid = Some(uid.clone());
+            if let Some(task) = app.store.get_task_ref(&uid) {
+                app.active_cal_href = Some(task.calendar_href.clone());
+                app.journal_title_input = task.summary.clone();
+                let md = crate::model::extractor::serialize_task_tree(
+                    &app.store,
+                    &uid,
+                    &app.calendars,
+                    true,
+                );
+                app.journal_editor_content = iced::widget::text_editor::Content::with_text(&md);
+                app.editor_maximized = true;
+            }
+            Task::none()
+        }
+        Message::CreateJournalPage => {
+            flush_journal_save(app);
+            let target_href = app
+                .journal_editing_href
+                .clone()
+                .or(app.active_cal_href.clone())
+                .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
+
+            let mut new_page = crate::model::Task::new("", &app.tag_aliases, None);
+            new_page.summary =
+                rust_i18n::t!("untitled_page", default = "Untitled page").to_string();
+            app.journal_title_input = new_page.summary.clone();
+            new_page.is_journal = true;
+            new_page.is_note = true;
+            new_page.calendar_href = target_href.clone();
+            let uid = new_page.uid.clone();
+
+            app.store.add_task(new_page.clone());
+            if let Some(tx) = &app.bg_tx {
+                let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(vec![
+                    crate::journal::Action::Create(new_page),
+                ]));
+            }
+
+            app.active_cal_href = Some(target_href);
+            refresh_filtered_tasks(app);
+            handle(app, Message::OpenJournalPage(uid))
         }
         Message::JournalDateInputChanged(s) => {
             app.journal_date_input = s;
+            Task::none()
+        }
+        Message::JournalTitleInputChanged(s) => {
+            app.journal_title_input = s.clone();
+            if let Some(uid) = &app.journal_editing_uid
+                && let Some((t, _)) = app.store.get_task_mut(uid)
+                && t.summary != s
+            {
+                t.summary = s.clone();
+                t.sequence += 1;
+                let clone = t.clone();
+                if let Some(tx) = &app.bg_tx {
+                    let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(vec![
+                        crate::journal::Action::Update(clone),
+                    ]));
+                }
+            }
             Task::none()
         }
         Message::JournalDateInputSubmit => {
             if let Ok(parsed) =
                 chrono::NaiveDate::parse_from_str(app.journal_date_input.trim(), "%Y-%m-%d")
             {
+                flush_journal_save(app);
+                app.journal_editing_uid = None;
                 app.journal_date = parsed;
                 let href = app
                     .journal_editing_href
                     .clone()
                     .or(app.active_cal_href.clone())
                     .unwrap_or_default();
-                let entry_desc = app
-                    .store
-                    .get_journal_entry(&href, parsed)
-                    .map(|t| t.description.clone())
-                    .unwrap_or_default();
-                app.journal_editor_content =
-                    iced::widget::text_editor::Content::with_text(&entry_desc);
+                if let Some(entry) = app.store.get_journal_entry(&href, parsed) {
+                    let md = crate::model::extractor::serialize_task_tree(
+                        &app.store,
+                        &entry.uid,
+                        &app.calendars,
+                        true,
+                    );
+                    app.journal_editor_content = iced::widget::text_editor::Content::with_text(&md);
+                } else {
+                    app.journal_editor_content = iced::widget::text_editor::Content::new();
+                }
             }
             Task::none()
         }
@@ -1011,42 +1113,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::SaveJournal(version) => {
             if version == app.journal_debounce_version {
-                let date = app.journal_date;
-                let href = app
-                    .journal_editing_href
-                    .clone()
-                    .or(app.active_cal_href.clone())
-                    .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
-                let new_text = app.journal_editor_content.text();
-
-                let existing_opt = app.store.get_journal_entry(&href, date).cloned();
-                let mut actions = Vec::new();
-
-                if let Some(mut existing) = existing_opt {
-                    if new_text.trim().is_empty() {
-                        let _ = app.store.delete_task(&existing.uid);
-                        actions.push(crate::journal::Action::Delete(existing));
-                    } else if existing.description != new_text {
-                        existing.description = new_text;
-                        existing.sequence += 1;
-                        app.store.update_or_add_task(existing.clone());
-                        actions.push(crate::journal::Action::Update(existing));
-                    }
-                } else if !new_text.trim().is_empty() {
-                    let mut new_journal = crate::model::Task::new("", &app.tag_aliases, None);
-                    new_journal.is_journal = true;
-                    new_journal.calendar_href = href;
-                    new_journal.dtstart = Some(crate::model::DateType::AllDay(date));
-                    new_journal.description = new_text;
-                    app.store.add_task(new_journal.clone());
-                    actions.push(crate::journal::Action::Create(new_journal));
-                }
-
-                if !actions.is_empty()
-                    && let Some(tx) = &app.bg_tx
-                {
-                    let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(actions));
-                }
+                flush_journal_save(app);
             }
             Task::none()
         }
@@ -1489,7 +1556,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             // DO NOT scroll sidebar here
             Task::none()
         }
-
         // KEEP: JumpToTag still scrolls (used for tags in task list)
         Message::JumpToTag(tag) => {
             app.sidebar_mode = SidebarMode::Categories;
@@ -1564,6 +1630,24 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::JumpToTask(uid) => {
+            // Check if it's a journal page first
+            if let Some(task) = app.store.get_task_ref(&uid).cloned()
+                && task.is_journal
+            {
+                if app.sidebar_mode != SidebarMode::Journal {
+                    app.sidebar_mode = SidebarMode::Journal;
+                }
+                if app.active_cal_href.as_ref() != Some(&task.calendar_href) {
+                    app.active_cal_href = Some(task.calendar_href.clone());
+                    if app.hidden_calendars.contains(&task.calendar_href) {
+                        app.hidden_calendars.remove(&task.calendar_href);
+                        save_config(app);
+                    }
+                }
+                refresh_filtered_tasks(app);
+                return handle(app, Message::OpenJournalPage(uid));
+            }
+
             // 1. Find which calendar this task belongs to
             if let Some(href) = app.store.index.get(&uid).cloned() {
                 // 2. If it's in a hidden or different active calendar, switch to it

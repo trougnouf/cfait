@@ -49,6 +49,86 @@ fn extract_uid_tag(line: &str) -> (String, Option<String>) {
     (line.trim_end().to_string(), None)
 }
 
+fn compute_task_lines(input: &str) -> Vec<bool> {
+    let lines_vec: Vec<&str> = input.lines().collect();
+    let mut is_task_line = vec![false; lines_vec.len()];
+    let mut indents = vec![0; lines_vec.len()];
+    let mut is_list = vec![false; lines_vec.len()];
+
+    for (i, line) in lines_vec.iter().enumerate() {
+        let mut indent = 0;
+        let mut byte_offset = 0;
+        for c in line.chars() {
+            if c == ' ' {
+                indent += 1;
+                byte_offset += c.len_utf8();
+            } else if c == '\t' {
+                indent += 4;
+                byte_offset += c.len_utf8();
+            } else {
+                break;
+            }
+        }
+        indents[i] = indent;
+        let rest = &line[byte_offset..];
+
+        let mut list_marker = false;
+        let mut after_marker = rest;
+
+        if rest.starts_with("- ") || rest.starts_with("* ") || rest.starts_with("+ ") {
+            list_marker = true;
+            after_marker = &rest[2..];
+        } else {
+            let mut digit_bytes = 0;
+            for c in rest.chars() {
+                if c.is_ascii_digit() {
+                    digit_bytes += c.len_utf8();
+                } else {
+                    break;
+                }
+            }
+            if digit_bytes > 0 && rest[digit_bytes..].starts_with(". ") {
+                list_marker = true;
+                after_marker = &rest[digit_bytes + 2..];
+            }
+        }
+
+        is_list[i] = list_marker;
+
+        if list_marker {
+            let has_checkbox = parse_checkbox(after_marker).is_some();
+            let has_uid = after_marker.contains("<!-- uid:");
+            let has_is_note = after_marker.contains("is:note")
+                || after_marker.contains("is:page")
+                || after_marker.contains("is:journal");
+            if has_checkbox || has_uid || has_is_note {
+                is_task_line[i] = true;
+            }
+        }
+    }
+
+    // Phase 2: Backwards propagate `is_task` to implicit structural parents
+    for i in (0..lines_vec.len()).rev() {
+        if is_list[i] && !is_task_line[i] {
+            let curr_indent = indents[i];
+            for j in (i + 1)..lines_vec.len() {
+                if !lines_vec[j].trim().is_empty() {
+                    // ignore empty lines for indent checks
+                    if indents[j] <= curr_indent {
+                        break; // Hit a sibling or outdent, so no children
+                    }
+                    if is_task_line[j] {
+                        is_task_line[i] = true;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    is_task_line
+}
+
 pub fn extract_list_prefix(line: &str) -> String {
     let mut prefix = String::new();
     let mut byte_offset = 0;
@@ -120,39 +200,8 @@ pub fn extract_list_prefix(line: &str) -> String {
 }
 
 pub fn has_extractable_subtasks(input: &str) -> bool {
-    for line in input.lines() {
-        let mut byte_offset = 0;
-        for c in line.chars() {
-            if c == ' ' || c == '\t' {
-                byte_offset += c.len_utf8();
-            } else {
-                break;
-            }
-        }
-        let rest = &line[byte_offset..];
-
-        // Check for headers
-        if rest.starts_with("# ") || rest.starts_with("## ") || rest.starts_with("### ") {
-            return true;
-        }
-
-        if rest.starts_with("- ") || rest.starts_with("* ") || rest.starts_with("+ ") {
-            return true;
-        } else {
-            let mut digit_bytes = 0;
-            for c in rest.chars() {
-                if c.is_ascii_digit() {
-                    digit_bytes += c.len_utf8();
-                } else {
-                    break;
-                }
-            }
-            if digit_bytes > 0 && rest[digit_bytes..].starts_with(". ") {
-                return true;
-            }
-        }
-    }
-    false
+    let is_task = compute_task_lines(input);
+    is_task.into_iter().any(|b| b)
 }
 
 /// Takes a raw markdown string.
@@ -161,27 +210,18 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
     let mut cleaned_root_desc = String::new();
     let mut extracted: Vec<ExtractedTask> = Vec::new();
 
-    #[derive(PartialEq, Clone, Copy, Debug)]
-    enum StackItemKind {
-        Heading(usize), // level 1, 2, 3...
-        List(usize),    // indent in spaces
-    }
+    let lines_vec: Vec<&str> = input.lines().collect();
+    let is_task_line = compute_task_lines(input);
 
-    #[derive(PartialEq, Clone, Copy, Debug)]
-    enum ItemKind {
-        NumberedTask(usize), // block_id
-        Other,
-    }
-
-    // Stack stores (StackItemKind, task_uid, extracted_idx)
-    let mut indent_stack: Vec<(StackItemKind, String, usize)> = Vec::new();
-    let mut item_kind_at_indent: HashMap<usize, ItemKind> = HashMap::new();
+    let mut indent_stack: Vec<(usize, String, usize)> = Vec::new(); // (indent, uid, extracted_idx)
+    let mut item_kind_at_indent: HashMap<usize, usize> = HashMap::new(); // indent -> block_id
     let mut next_block_id = 0;
     let mut numbered_tasks: Vec<(usize, usize, usize)> = Vec::new(); // (block_id, parsed_num, extracted_idx)
 
     let mut active_task_idx: Option<usize> = None;
+    let mut active_task_indent = 0;
 
-    for line in input.lines() {
+    for (line_idx, line) in lines_vec.into_iter().enumerate() {
         let mut indent = 0;
         let mut byte_offset = 0;
         for c in line.chars() {
@@ -199,7 +239,6 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
         let rest = &line[byte_offset..];
 
         if rest.is_empty() {
-            // Empty line: append to active task if exists, else root
             if let Some(idx) = active_task_idx {
                 extracted[idx].description.push('\n');
             } else {
@@ -210,150 +249,83 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
 
         item_kind_at_indent.retain(|&k, _| k <= indent);
 
-        // Check if it's a valid Markdown task list
-        let mut is_task = false;
-        let mut is_numbered = false;
-        let mut parsed_num = 0;
-        let mut parsed_status = crate::model::TaskStatus::NeedsAction;
-        let mut parsed_pc = None;
-        let mut is_note = false;
-        let mut raw_text = "";
-        let mut header_depth = 0;
+        if is_task_line[line_idx] {
+            let mut is_numbered = false;
+            let mut parsed_num = 0;
+            let mut parsed_status = crate::model::TaskStatus::NeedsAction;
+            let mut parsed_pc = None;
+            let mut is_note = true;
+            let mut raw_text = rest;
 
-        if let Some(stripped) = rest.strip_prefix("# ") {
-            is_task = true;
-            is_note = true;
-            header_depth = 1;
-            raw_text = stripped;
-        } else if let Some(stripped) = rest.strip_prefix("## ") {
-            is_task = true;
-            is_note = true;
-            header_depth = 2;
-            raw_text = stripped;
-        } else if let Some(stripped) = rest.strip_prefix("### ") {
-            is_task = true;
-            is_note = true;
-            header_depth = 3;
-            raw_text = stripped;
-        }
-
-        if is_task {
-            if let Some((status, pc, r)) = parse_checkbox(raw_text) {
-                is_note = false; // Header with a checkbox overrides is_note
-                parsed_status = status;
-                parsed_pc = pc;
-                raw_text = r;
-            }
-        } else if rest.starts_with("- ") || rest.starts_with("* ") || rest.starts_with("+ ") {
-            let after_marker = &rest[2..];
-            if let Some((status, pc, r)) = parse_checkbox(after_marker) {
-                is_task = true;
-                is_note = false;
-                parsed_status = status;
-                parsed_pc = pc;
-                raw_text = r;
-            } else {
-                is_task = true;
-                is_note = true;
-                raw_text = after_marker;
-            }
-        } else {
-            // Check for numbered lists (e.g., "1. [ ] ")
-            let mut digit_bytes = 0;
-            for c in rest.chars() {
-                if c.is_ascii_digit() {
-                    digit_bytes += c.len_utf8();
-                } else {
-                    break;
-                }
-            }
-            if digit_bytes > 0 && rest[digit_bytes..].starts_with(". ") {
-                let after_marker = &rest[digit_bytes + 2..];
+            if rest.starts_with("- ") || rest.starts_with("* ") || rest.starts_with("+ ") {
+                let after_marker = &rest[2..];
                 if let Some((status, pc, r)) = parse_checkbox(after_marker) {
-                    is_task = true;
-                    is_numbered = true;
                     is_note = false;
-                    parsed_num = rest[..digit_bytes].parse::<usize>().unwrap_or(1);
                     parsed_status = status;
                     parsed_pc = pc;
                     raw_text = r;
                 } else {
-                    is_task = true;
-                    is_numbered = true;
-                    is_note = true;
-                    parsed_num = rest[..digit_bytes].parse::<usize>().unwrap_or(1);
                     raw_text = after_marker;
                 }
+            } else {
+                let mut digit_bytes = 0;
+                for c in rest.chars() {
+                    if c.is_ascii_digit() {
+                        digit_bytes += c.len_utf8();
+                    } else {
+                        break;
+                    }
+                }
+                if digit_bytes > 0 && rest[digit_bytes..].starts_with(". ") {
+                    let after_marker = &rest[digit_bytes + 2..];
+                    if let Some((status, pc, r)) = parse_checkbox(after_marker) {
+                        is_numbered = true;
+                        is_note = false;
+                        parsed_num = rest[..digit_bytes].parse::<usize>().unwrap_or(1);
+                        parsed_status = status;
+                        parsed_pc = pc;
+                        raw_text = r;
+                    } else {
+                        is_numbered = true;
+                        parsed_num = rest[..digit_bytes].parse::<usize>().unwrap_or(1);
+                        raw_text = after_marker;
+                    }
+                }
             }
-        }
 
-        if is_task {
             let (clean_text, parsed_uid) = extract_uid_tag(raw_text);
             let uid = parsed_uid
                 .clone()
                 .unwrap_or_else(|| Uuid::new_v4().to_string());
 
-            let current_kind = if header_depth > 0 {
-                StackItemKind::Heading(header_depth)
-            } else {
-                StackItemKind::List(indent)
-            };
-
-            // Pop stack until we find a valid parent
-            while let Some(&(kind, _, _)) = indent_stack.last() {
-                match current_kind {
-                    StackItemKind::Heading(curr_lvl) => {
-                        match kind {
-                            StackItemKind::Heading(stack_lvl) => {
-                                if stack_lvl >= curr_lvl {
-                                    indent_stack.pop();
-                                } else {
-                                    break;
-                                }
-                            }
-                            StackItemKind::List(_) => {
-                                indent_stack.pop(); // Headings always pop lists
-                            }
-                        }
-                    }
-                    StackItemKind::List(curr_indent) => {
-                        match kind {
-                            StackItemKind::Heading(_) => {
-                                break; // Lists nest under headings
-                            }
-                            StackItemKind::List(stack_indent) => {
-                                if stack_indent >= curr_indent {
-                                    indent_stack.pop();
-                                } else {
-                                    break;
-                                }
-                            }
-                        }
-                    }
+            while let Some(&(stack_indent, _, _)) = indent_stack.last() {
+                if stack_indent >= indent {
+                    indent_stack.pop();
+                } else {
+                    break;
                 }
             }
 
             let parent_uid = indent_stack.last().map(|(_, id, _)| id.clone());
-
             let new_idx = extracted.len();
 
             if is_numbered {
                 let block_id = match item_kind_at_indent.get(&indent) {
-                    Some(ItemKind::NumberedTask(b)) => *b,
+                    Some(&b) => b,
                     _ => {
                         let b = next_block_id;
                         next_block_id += 1;
                         b
                     }
                 };
-                item_kind_at_indent.insert(indent, ItemKind::NumberedTask(block_id));
+                item_kind_at_indent.insert(indent, block_id);
                 numbered_tasks.push((block_id, parsed_num, new_idx));
             } else {
-                item_kind_at_indent.insert(indent, ItemKind::Other);
+                // Remove entry to break numbering blocks
+                item_kind_at_indent.remove(&indent);
             }
 
-            // Push ourselves to the stack to become a potential parent for the next lines
-            indent_stack.push((current_kind, uid.clone(), new_idx));
+            indent_stack.push((indent, uid.clone(), new_idx));
 
             extracted.push(ExtractedTask {
                 uid,
@@ -367,25 +339,44 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
                 is_note,
             });
             active_task_idx = Some(new_idx);
+            active_task_indent = indent;
         } else {
-            // Not a task line.
-            item_kind_at_indent.insert(indent, ItemKind::Other);
+            // Not a task line -> treat as plain text.
+            item_kind_at_indent.remove(&indent);
 
-            // Pop any List items from the stack that are at the same or deeper indentation
-            // because text belonging to a List item MUST be indented more than the item itself.
-            while let Some(&(kind, _, _)) = indent_stack.last() {
-                if let StackItemKind::List(stack_indent) = kind {
-                    if stack_indent >= indent {
-                        indent_stack.pop();
-                    } else {
-                        break;
-                    }
+            while let Some(&(stack_indent, _, _)) = indent_stack.last() {
+                if stack_indent >= indent {
+                    indent_stack.pop();
                 } else {
-                    break; // Stop at Headings
+                    break;
                 }
             }
 
             let target_idx = indent_stack.last().map(|&(_, _, idx)| idx);
+
+            let strip_amount = if target_idx.is_some() {
+                active_task_indent + 2
+            } else {
+                0
+            };
+
+            let mut bytes_to_strip = 0;
+            let mut spaces_seen = 0;
+            for c in line.chars() {
+                if spaces_seen >= strip_amount {
+                    break;
+                }
+                if c == ' ' {
+                    spaces_seen += 1;
+                    bytes_to_strip += c.len_utf8();
+                } else if c == '\t' {
+                    spaces_seen += 4;
+                    bytes_to_strip += c.len_utf8();
+                } else {
+                    break;
+                }
+            }
+            let line_content = &line[bytes_to_strip..];
 
             if let Some(idx) = target_idx {
                 if !extracted[idx].description.is_empty()
@@ -393,16 +384,16 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
                 {
                     extracted[idx].description.push('\n');
                 }
-                extracted[idx].description.push_str(rest);
+                extracted[idx].description.push_str(line_content);
                 extracted[idx].description.push('\n');
-                active_task_idx = Some(idx); // Update active_task_idx so empty lines go here
+                active_task_idx = Some(idx);
             } else {
                 if !cleaned_root_desc.is_empty() && !cleaned_root_desc.ends_with('\n') {
                     cleaned_root_desc.push('\n');
                 }
-                cleaned_root_desc.push_str(rest);
+                cleaned_root_desc.push_str(line_content);
                 cleaned_root_desc.push('\n');
-                active_task_idx = None; // Update active_task_idx so empty lines go here
+                active_task_idx = None;
             }
         }
     }
@@ -448,6 +439,7 @@ pub fn serialize_task_tree(
     store: &crate::store::TaskStore,
     root_uid: &str,
     calendars: &[crate::model::CalendarListEntry],
+    hide_root: bool,
 ) -> String {
     let mut out = String::new();
     let root = if let Some(r) = store.get_task_ref(root_uid) {
@@ -719,7 +711,62 @@ pub fn serialize_task_tree(
         store,
         calendars,
     };
-    serialize_node(&ctx, root, 0, &mut out, "-", &root.calendar_href);
+
+    if hide_root {
+        if !root.description.is_empty() {
+            out.push_str(&root.description);
+            out.push('\n');
+        }
+        if let Some(children) = children_map.get(&root.uid) {
+            let mut prefixes = Vec::new();
+            let mut current_number = 1;
+            let mut uses_number_prev = false;
+
+            for i in 0..children.len() {
+                let child = children[i];
+                let mut uses_number = false;
+                if i > 0 {
+                    let prev_child = children[i - 1];
+                    if child.dependencies.contains(&prev_child.uid) {
+                        current_number += 1;
+                        uses_number = true;
+                    } else if prev_child.dependencies == child.dependencies && uses_number_prev {
+                        uses_number = true;
+                    } else {
+                        current_number = 1;
+                        let has_successor = children
+                            .iter()
+                            .skip(i + 1)
+                            .any(|c| c.dependencies.contains(&child.uid));
+                        if has_successor {
+                            uses_number = true;
+                        }
+                    }
+                } else {
+                    let has_successor = children
+                        .iter()
+                        .skip(1)
+                        .any(|c| c.dependencies.contains(&child.uid));
+                    if has_successor {
+                        uses_number = true;
+                    }
+                }
+
+                uses_number_prev = uses_number;
+                if uses_number {
+                    prefixes.push(format!("{}.", current_number));
+                } else {
+                    prefixes.push("-".to_string());
+                }
+            }
+
+            for (child, prefix) in children.iter().zip(prefixes.iter()) {
+                serialize_node(&ctx, child, 0, &mut out, prefix, &root.calendar_href);
+            }
+        }
+    } else {
+        serialize_node(&ctx, root, 0, &mut out, "-", &root.calendar_href);
+    }
 
     out.trim_end().to_string()
 }

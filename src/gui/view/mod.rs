@@ -2387,15 +2387,17 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
             byte_offset
         };
 
-        let mut col = if app.editing_tree_uid.is_some() {
-            column![top_bar, desc_container]
+        let banner_element: Element<_> = if let Some(banner) = context_banner {
+            column![Space::new().height(4), banner].into()
         } else {
-            column![top_bar, title_row, desc_container]
+            Space::new().height(0).into()
         };
 
-        if let Some(banner) = context_banner {
-            col = col.push(banner);
-        }
+        let col = if app.editing_tree_uid.is_some() {
+            column![top_bar, desc_container, banner_element]
+        } else {
+            column![top_bar, title_row, desc_container, banner_element]
+        };
 
         col.spacing(10)
             .height(if app.editor_maximized {
@@ -2778,48 +2780,98 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
         .spacing(0)
     };
 
+    let (header_title, show_activity) = if let Some(uid) = &app.journal_editing_uid {
+        let title = app
+            .store
+            .get_summary(uid)
+            .unwrap_or_else(|| "Untitled Page".to_string());
+        (title, false)
+    } else {
+        (date_str, true)
+    };
+
     let header_drag_area: Element<_> = if app.force_ssd {
-        let header_top = row![
-            text(date_str).size(22).font(iced::Font {
-                weight: iced::font::Weight::Bold,
-                ..Default::default()
-            }),
-            Space::new().width(Length::Fill),
-            window_controls
-        ]
-        .align_y(iced::Alignment::Center);
+        let header_top = if app.journal_editing_uid.is_some() {
+            row![
+                iced::widget::text_input("Page title...", &app.journal_title_input)
+                    .on_input(Message::JournalTitleInputChanged)
+                    .size(22)
+                    .font(iced::Font {
+                        weight: iced::font::Weight::Bold,
+                        ..Default::default()
+                    })
+                    .padding(5)
+                    .width(Length::Fill),
+                window_controls
+            ]
+            .align_y(iced::Alignment::Center)
+        } else {
+            row![
+                text(header_title).size(22).font(iced::Font {
+                    weight: iced::font::Weight::Bold,
+                    ..Default::default()
+                }),
+                Space::new().width(Length::Fill),
+                window_controls
+            ]
+            .align_y(iced::Alignment::Center)
+        };
         header_top.into()
     } else {
-        let header_top = row![
-            text(date_str).size(22).font(iced::Font {
-                weight: iced::font::Weight::Bold,
-                ..Default::default()
-            }),
-            Space::new().width(Length::Fill),
-            window_controls
-        ]
-        .align_y(iced::Alignment::Center);
+        let header_top = if app.journal_editing_uid.is_some() {
+            row![
+                iced::widget::text_input("Page title...", &app.journal_title_input)
+                    .on_input(Message::JournalTitleInputChanged)
+                    .size(22)
+                    .font(iced::Font {
+                        weight: iced::font::Weight::Bold,
+                        ..Default::default()
+                    })
+                    .padding(5)
+                    .width(Length::Fill),
+                window_controls
+            ]
+            .align_y(iced::Alignment::Center)
+        } else {
+            row![
+                text(header_title).size(22).font(iced::Font {
+                    weight: iced::font::Weight::Bold,
+                    ..Default::default()
+                }),
+                Space::new().width(Length::Fill),
+                window_controls
+            ]
+            .align_y(iced::Alignment::Center)
+        };
         MouseArea::new(header_top)
             .on_press(Message::WindowDragged)
             .into()
     };
 
-    let top_header = column![
-        header_drag_area,
-        container(cal_selector).padding(iced::Padding {
-            left: 10.0,
-            right: 10.0,
-            top: 5.0,
-            bottom: 5.0
-        })
-    ]
-    .spacing(0);
+    let top_header = if app.journal_editing_uid.is_some() {
+        column![header_drag_area].spacing(0)
+    } else {
+        column![
+            header_drag_area,
+            container(cal_selector).padding(iced::Padding {
+                left: 10.0,
+                right: 10.0,
+                top: 5.0,
+                bottom: 5.0
+            })
+        ]
+        .spacing(0)
+    };
 
     let is_dark_mode = app.theme().extended_palette().is_dark;
 
     let editor = text_editor(&app.journal_editor_content)
         .id("journal_editor")
-        .placeholder(rust_i18n::t!("journal_no_notes", name = active_name))
+        .placeholder(if app.journal_editing_uid.is_some() {
+            rust_i18n::t!("notes_placeholder").to_string()
+        } else {
+            rust_i18n::t!("journal_no_notes", name = active_name).to_string()
+        })
         .on_action(Message::JournalContentChanged)
         .highlight_with::<self::syntax::MarkdownHighlighter>(is_dark_mode, |highlight, _theme| {
             *highlight
@@ -2837,11 +2889,13 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
 
     let context_banner = build_context_banner(app, &app.journal_editor_content);
 
-    let mut editor_col = column![];
-    if let Some(banner) = context_banner {
-        editor_col = editor_col.push(banner).push(Space::new().height(4));
-    }
-    editor_col = editor_col.push(editor);
+    let banner_element: Element<_> = if let Some(banner) = context_banner {
+        column![banner, Space::new().height(4)].into()
+    } else {
+        Space::new().height(0).into()
+    };
+
+    let editor_col = column![banner_element, editor];
 
     let editor_container = container(editor_col)
         .width(Length::Fill)
@@ -3056,7 +3110,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
             }
         });
 
-    column![
+    let mut main_col = column![
         top_header,
         container(editor_container)
             .padding(iced::Padding {
@@ -3065,19 +3119,26 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
                 top: 0.0,
                 bottom: 0.0
             })
-            .height(Length::Fill),
-        Space::new().height(4),
-        container(activity_container).padding(iced::Padding {
-            left: 10.0,
-            right: 10.0,
-            top: 0.0,
-            bottom: 10.0
-        })
-    ]
-    .spacing(4)
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .into()
+            .height(Length::Fill)
+    ];
+
+    if show_activity {
+        main_col =
+            main_col
+                .push(Space::new().height(4))
+                .push(container(activity_container).padding(iced::Padding {
+                    left: 10.0,
+                    right: 10.0,
+                    top: 0.0,
+                    bottom: 10.0,
+                }));
+    }
+
+    main_col
+        .spacing(4)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
 }
 
 pub fn build_context_banner<'a>(

@@ -94,24 +94,20 @@ Users can define reusable shortcuts that expand into multiple tags, locations, o
 *   *Syntax:* `#gardening := #home:outside, @@garden, !4`
 *   Aliases are resolved retroactively across the database upon creation/edit. Cycle detection is strictly enforced (max depth 10).
 
-### 2.3. Markdown Subtask Extraction & Round-Trip Editing
-If a task's description contains Markdown lists or Headers, Cfait automatically extracts them into distinct child tasks whenever the task is saved. 
+### 2.3. Markdown Subtask Extraction & Round-Trip Editing (Context-Aware)
+If a task's description contains Markdown lists, Cfait extracts actionable items into distinct child tasks whenever the task is saved. 
 Users can also use the "Edit Tree" action (or `Ctrl+E`) to edit an entire existing task tree—including the root task's summary, metadata, and subtasks—as a single unified Markdown document.
-*   **Hierarchy:** Tasks nest based on indentation level (for lists) or header depth (`#`, `##`, `###`).
-*   **Parallel Tasks & Notes:** Unnumbered lists (`- [ ]`) create independent sibling actionable tasks. If a line is a header (`## Pantry`) or a plain bullet (`- eggs`), it is extracted as a "Note" task (`is_note = true`). Notes act as structural elements, hiding their checkboxes in the UI while retaining hierarchy mapping. Supported checkbox states are:
+*   **Document Preservation:** To prevent shredding long-form notes or Wiki pages, Markdown Headers (`# Header`) and plain bullets (`- plain text`) are **never** extracted into components by default. They remain safely inside the `DESCRIPTION` property of the current task or page.
+*   **Actionable Items:** Bullets containing checkboxes (`- [ ] Action item`) are always extracted into distinct actionable `VTODO` components. Supported checkbox states are:
     *   `[ ]` maps to `NeedsAction` (Pending / Unstarted).
     *   `[/]` or `[<]` maps to `NeedsAction` with `percent_complete` at 50% (Paused).
     *   `[>]` or `[▶]` maps to `InProcess` (Timer running).
     *   `[x]`, `[X]`, or `[*]` maps to `Completed`.
     *   `[-]` or `[~]` maps to `Cancelled`.
-*   **Sequential Dependencies:** Numbered lists (`1. [ ]`, `2. [ ]`) create `DEPENDS-ON` blocking relationships. If multiple tasks share the same number at the same indentation level (e.g., two `3. [ ]` tasks), they are extracted as parallel steps that both depend on the previous step (`2. [ ]`). The next step (`4. [ ]`) will automatically depend on *both* parallel tasks. Items do not need to be written in sequential order; out-of-order lists (e.g., `4. [ ]` defined before `1. [ ]`) are resolved systematically on extraction, binding each step to the closest preceding numeric step within the list block.
-*   **Cross-Tree Dependencies:** Dependencies that break standard linear sequence are appended to the task string as wiki-links (e.g. `dep:[[Install foundation]]`). The backend resolves these via fuzzy-matching against task summaries.
-*   **Cross-Collection Subtasks:** Subtasks belonging to a different collection than the root task append a collection token (e.g., `col:CollectionName`) to preserve their location during round-trip editing.
-*   **Serialization & Sorting:** To guarantee deterministic output and minimal Git diffs, serialized markdown trees (e.g., via `cfait tree` or "Edit Tree") sort parallel siblings chronologically by creation date, then alphabetically by summary, before applying the topological sort for sequential dependencies.
-*   **Round-Trip UIDs:** Serialized task trees append an inline HTML comment containing a unique identifier (e.g., `<!-- uid:abc-123 -->`) to the end of each task line.
-    *   **Updates:** To modify an existing task without changing its database identity, the UID comment must remain present on its corresponding line.
-    *   **Creations:** Any line without a valid UID comment is parsed as a new task, generating a new UUID.
-    *   **Deletions:** If a task's UID is omitted from the document, the task is considered deleted and is moved to the local trash.
+*   **The Structural Parent Rule:** If you indent an actionable task (`- [ ] subtask`) underneath a plain bullet point (`- Folder`), Cfait recognizes the plain bullet as a structural block and extracts it as an `is:note` component. This preserves the proper parent/child hierarchy.
+*   **Wiki Sub-pages:** To create an explicit sub-page (a `VJOURNAL` component), append `is:page` to the line, or use wiki-links (`[[Project:Phase 1]]`) to dynamically navigate to and create new pages.
+*   **Sequential Dependencies:** Numbered lists (`1. [ ]`, `2. [ ]`) create `DEPENDS-ON` blocking relationships. If multiple tasks share the same number at the same indentation level (e.g., two `3. [ ]` tasks), they are extracted as parallel steps that both depend on the previous step (`2. [ ]`). Items do not need to be written in sequential order; out-of-order lists are resolved systematically.
+*   **Round-Trip UIDs:** Serialized task trees append an inline HTML comment containing a unique identifier (e.g., `<!-- uid:abc-123 -->`) to the end of each task line. Formatting and text without UID comments are parsed into the `DESCRIPTION`.
 
 ### 2.4. Inline Markdown Formatting
 Cfait natively supports rendering basic inline Markdown across task summaries, descriptions, and the raw text editors.
