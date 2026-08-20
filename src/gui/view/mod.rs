@@ -2387,10 +2387,10 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
             byte_offset
         };
 
-        let banner_element: Element<_> = if let Some(banner) = context_banner {
-            column![Space::new().height(4), banner].into()
+        let banner_element = if let Some(banner) = context_banner {
+            column![Space::new().height(4), banner]
         } else {
-            Space::new().height(0).into()
+            column![]
         };
 
         let col = if app.editing_tree_uid.is_some() {
@@ -2889,13 +2889,13 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
 
     let context_banner = build_context_banner(app, &app.journal_editor_content);
 
-    let banner_element: Element<_> = if let Some(banner) = context_banner {
-        column![banner, Space::new().height(4)].into()
+    let banner_element = if let Some(banner) = context_banner {
+        column![Space::new().height(4), banner]
     } else {
-        Space::new().height(0).into()
+        column![]
     };
 
-    let editor_col = column![banner_element, editor];
+    let editor_col = column![editor, banner_element];
 
     let editor_container = container(editor_col)
         .width(Length::Fill)
