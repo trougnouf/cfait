@@ -223,6 +223,15 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                             .ok();
                     let mut new_task = crate::model::Task::new(&title, &app.tag_aliases, def_time);
 
+                    new_task.is_journal = true;
+                    new_task.is_note = true;
+
+                    if app.sidebar_mode == SidebarMode::Journal
+                        && let Some(parent) = &app.journal_editing_uid
+                    {
+                        new_task.parent_uid = Some(parent.clone());
+                    }
+
                     let warnings = app.store.resolve_dependencies(&mut new_task);
                     if !warnings.is_empty() {
                         for w in warnings {
