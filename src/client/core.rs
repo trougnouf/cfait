@@ -563,6 +563,14 @@ impl RustyClient {
                 if name.eq_ignore_ascii_case("href") {
                     href = child.text().unwrap_or("").to_string();
                 } else if name.eq_ignore_ascii_case("propstat") {
+                    let is_200 = child.children().any(|c| {
+                        c.tag_name().name().eq_ignore_ascii_case("status")
+                            && c.text().map(|s| s.contains("200")).unwrap_or(false)
+                    });
+                    if !is_200 {
+                        continue;
+                    }
+
                     for propstat_child in child.children() {
                         if propstat_child
                             .tag_name()
