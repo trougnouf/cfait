@@ -501,13 +501,15 @@ impl AppState {
         self.cached_task_goals = task_goals;
 
         let mut pages = Vec::new();
-        for map in self.store.calendars.values() {
+        for (href, map) in self.store.calendars.iter() {
+            if effective_hidden.contains(href)
+                || href == crate::storage::LOCAL_TRASH_HREF
+                || href == "local://recovery"
+            {
+                continue;
+            }
             for t in map.values() {
-                if t.is_journal
-                    && t.is_note
-                    && t.calendar_href != crate::storage::LOCAL_TRASH_HREF
-                    && t.calendar_href != "local://recovery"
-                {
+                if t.is_journal && t.is_note {
                     pages.push(t);
                 }
             }

@@ -585,6 +585,19 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 let is_selected = current_date == date;
                 let is_today = current_date == today;
                 let has_journal = state.calendars.iter().any(|c| {
+                    let supports = if c.href.starts_with("local://") {
+                        true
+                    } else {
+                        c.supports_vjournal.unwrap_or(false)
+                    };
+                    if state.hidden_calendars.contains(&c.href)
+                        || state.disabled_calendars.contains(&c.href)
+                        || c.href == crate::storage::LOCAL_TRASH_HREF
+                        || c.href == "local://recovery"
+                        || !supports
+                    {
+                        return false;
+                    }
                     state
                         .store
                         .get_journal_entry(&c.href, current_date)
@@ -952,7 +965,11 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     } else {
                         c.supports_vjournal.unwrap_or(false)
                     };
-                    !state.hidden_calendars.contains(&c.href) && supports
+                    !state.hidden_calendars.contains(&c.href)
+                        && !state.disabled_calendars.contains(&c.href)
+                        && c.href != crate::storage::LOCAL_TRASH_HREF
+                        && c.href != "local://recovery"
+                        && supports
                 })
                 .map(|c| c.href.clone())
                 .collect();

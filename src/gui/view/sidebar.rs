@@ -1132,6 +1132,17 @@ pub fn view_sidebar_journal(app: &GuiApp) -> Element<'_, Message> {
         let has_journal = app
             .calendars
             .iter()
+            .filter(|c| {
+                if c.href.starts_with("local://") {
+                    true
+                } else {
+                    c.supports_vjournal.unwrap_or(false)
+                }
+            })
+            .filter(|c| !app.hidden_calendars.contains(&c.href))
+            .filter(|c| !app.disabled_calendars.contains(&c.href))
+            .filter(|c| c.href != crate::storage::LOCAL_TRASH_HREF)
+            .filter(|c| c.href != "local://recovery")
             .any(|c| app.store.get_journal_entry(&c.href, date).is_some());
 
         let day_text = if has_journal && !is_selected && !is_today {
