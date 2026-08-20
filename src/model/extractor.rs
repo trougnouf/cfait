@@ -74,8 +74,18 @@ fn compute_task_lines(input: &str, is_journal: bool) -> Vec<bool> {
 
         let mut list_marker = false;
         let mut after_marker = rest;
+        let mut is_header = false;
 
-        if rest.starts_with("- ") || rest.starts_with("* ") || rest.starts_with("+ ") {
+        if !is_journal && rest.starts_with("### ") {
+            is_header = true;
+            after_marker = &rest[4..];
+        } else if !is_journal && rest.starts_with("## ") {
+            is_header = true;
+            after_marker = &rest[3..];
+        } else if !is_journal && rest.starts_with("# ") {
+            is_header = true;
+            after_marker = &rest[2..];
+        } else if rest.starts_with("- ") || rest.starts_with("* ") || rest.starts_with("+ ") {
             list_marker = true;
             after_marker = &rest[2..];
         } else {
@@ -93,16 +103,20 @@ fn compute_task_lines(input: &str, is_journal: bool) -> Vec<bool> {
             }
         }
 
-        is_list[i] = list_marker;
+        if is_header {
+            is_task_line[i] = true;
+        } else {
+            is_list[i] = list_marker;
 
-        if list_marker {
-            let has_checkbox = parse_checkbox(after_marker).is_some();
-            let has_uid = after_marker.contains("<!-- uid:");
-            let has_is_note = after_marker.contains("is:note")
-                || after_marker.contains("is:page")
-                || after_marker.contains("is:journal");
-            if has_checkbox || has_uid || has_is_note || (!is_journal && !has_checkbox) {
-                is_task_line[i] = true;
+            if list_marker {
+                let has_checkbox = parse_checkbox(after_marker).is_some();
+                let has_uid = after_marker.contains("<!-- uid:");
+                let has_is_note = after_marker.contains("is:note")
+                    || after_marker.contains("is:page")
+                    || after_marker.contains("is:journal");
+                if has_checkbox || has_uid || has_is_note || (!is_journal && !has_checkbox) {
+                    is_task_line[i] = true;
+                }
             }
         }
     }
@@ -204,6 +218,12 @@ pub fn has_extractable_subtasks(input: &str, is_journal: bool) -> bool {
     is_task.into_iter().any(|b| b)
 }
 
+#[derive(PartialEq, Clone, Copy, Debug)]
+enum StackItemKind {
+    Heading(usize), // level 1, 2, 3...
+    List(usize),    // indent in spaces
+}
+
 /// Takes a raw markdown string.
 /// Returns (Cleaned Root Description, List of Extracted Subtasks).
 pub fn extract_markdown_tasks(input: &str, is_journal: bool) -> (String, Vec<ExtractedTask>) {
@@ -213,13 +233,12 @@ pub fn extract_markdown_tasks(input: &str, is_journal: bool) -> (String, Vec<Ext
     let lines_vec: Vec<&str> = input.lines().collect();
     let is_task_line = compute_task_lines(input, is_journal);
 
-    let mut indent_stack: Vec<(usize, String, usize)> = Vec::new(); // (indent, uid, extracted_idx)
+    let mut indent_stack: Vec<(StackItemKind, String, usize)> = Vec::new();
     let mut item_kind_at_indent: HashMap<usize, usize> = HashMap::new(); // indent -> block_id
     let mut next_block_id = 0;
     let mut numbered_tasks: Vec<(usize, usize, usize)> = Vec::new(); // (block_id, parsed_num, extracted_idx)
 
     let mut active_task_idx: Option<usize> = None;
-    let mut active_task_indent = 0;
 
     for (line_idx, line) in lines_vec.into_iter().enumerate() {
         let mut indent = 0;
@@ -256,8 +275,33 @@ pub fn extract_markdown_tasks(input: &str, is_journal: bool) -> (String, Vec<Ext
             let mut parsed_pc = None;
             let mut is_note = true;
             let mut raw_text = rest;
+            let mut is_header = false;
+            let mut header_depth = 0;
 
-            if rest.starts_with("- ") || rest.starts_with("* ") || rest.starts_with("+ ") {
+            if !is_journal {
+                if let Some(stripped) = rest.strip_prefix("### ") {
+                    is_header = true;
+                    header_depth = 3;
+                    raw_text = stripped;
+                } else if let Some(stripped) = rest.strip_prefix("## ") {
+                    is_header = true;
+                    header_depth = 2;
+                    raw_text = stripped;
+                } else if let Some(stripped) = rest.strip_prefix("# ") {
+                    is_header = true;
+                    header_depth = 1;
+                    raw_text = stripped;
+                }
+            }
+
+            if is_header {
+                if let Some((status, pc, r)) = parse_checkbox(raw_text) {
+                    is_note = false;
+                    parsed_status = status;
+                    parsed_pc = pc;
+                    raw_text = r;
+                }
+            } else if rest.starts_with("- ") || rest.starts_with("* ") || rest.starts_with("+ ") {
                 let after_marker = &rest[2..];
                 if let Some((status, pc, r)) = parse_checkbox(after_marker) {
                     is_note = false;
@@ -298,11 +342,38 @@ pub fn extract_markdown_tasks(input: &str, is_journal: bool) -> (String, Vec<Ext
                 .clone()
                 .unwrap_or_else(|| Uuid::new_v4().to_string());
 
-            while let Some(&(stack_indent, _, _)) = indent_stack.last() {
-                if stack_indent >= indent {
-                    indent_stack.pop();
-                } else {
-                    break;
+            let current_kind = if is_header {
+                StackItemKind::Heading(header_depth)
+            } else {
+                StackItemKind::List(indent)
+            };
+
+            while let Some(&(kind, _, _)) = indent_stack.last() {
+                match current_kind {
+                    StackItemKind::Heading(curr_lvl) => match kind {
+                        StackItemKind::Heading(stack_lvl) => {
+                            if stack_lvl >= curr_lvl {
+                                indent_stack.pop();
+                            } else {
+                                break;
+                            }
+                        }
+                        StackItemKind::List(_) => {
+                            indent_stack.pop();
+                        }
+                    },
+                    StackItemKind::List(curr_indent) => match kind {
+                        StackItemKind::Heading(_) => {
+                            break;
+                        }
+                        StackItemKind::List(stack_indent) => {
+                            if stack_indent >= curr_indent {
+                                indent_stack.pop();
+                            } else {
+                                break;
+                            }
+                        }
+                    },
                 }
             }
 
@@ -325,7 +396,7 @@ pub fn extract_markdown_tasks(input: &str, is_journal: bool) -> (String, Vec<Ext
                 item_kind_at_indent.remove(&indent);
             }
 
-            indent_stack.push((indent, uid.clone(), new_idx));
+            indent_stack.push((current_kind, uid.clone(), new_idx));
 
             extracted.push(ExtractedTask {
                 uid,
@@ -339,23 +410,29 @@ pub fn extract_markdown_tasks(input: &str, is_journal: bool) -> (String, Vec<Ext
                 is_note,
             });
             active_task_idx = Some(new_idx);
-            active_task_indent = indent;
         } else {
             // Not a task line -> treat as plain text.
             item_kind_at_indent.remove(&indent);
 
             while let Some(&(stack_indent, _, _)) = indent_stack.last() {
-                if stack_indent >= indent {
-                    indent_stack.pop();
+                if let StackItemKind::List(list_indent) = stack_indent {
+                    if list_indent >= indent {
+                        indent_stack.pop();
+                    } else {
+                        break;
+                    }
                 } else {
-                    break;
+                    break; // Headings don't get popped by text indentation
                 }
             }
 
             let target_idx = indent_stack.last().map(|&(_, _, idx)| idx);
 
-            let strip_amount = if target_idx.is_some() {
-                active_task_indent + 2
+            let strip_amount = if let Some(&(kind, _, _)) = indent_stack.last() {
+                match kind {
+                    StackItemKind::Heading(_) => 0,
+                    StackItemKind::List(list_indent) => list_indent + 2,
+                }
             } else {
                 0
             };
