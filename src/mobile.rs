@@ -3160,12 +3160,7 @@ impl CfaitMobile {
             calendars: &cals,
         };
 
-        match store.sync_tree_from_markdown(
-            &uid,
-            &markdown,
-            &sync_options,
-            is_journal,
-        ) {
+        match store.sync_tree_from_markdown(&uid, &markdown, &sync_options, is_journal) {
             Ok((actions, warnings)) => {
                 drop(store);
                 if !warnings.is_empty() {

@@ -1653,14 +1653,21 @@ impl TaskStore {
                 let mut actually_changed = false;
 
                 if expected_raw_text.trim() != ext.raw_text.trim() {
-                    clone.apply_smart_input(&ext.raw_text, options.aliases, options.default_reminder_time);
+                    clone.apply_smart_input(
+                        &ext.raw_text,
+                        options.aliases,
+                        options.default_reminder_time,
+                    );
                     if !ext.dependencies.is_empty() {
                         clone.dependencies.extend(ext.dependencies.clone());
                     }
                     actually_changed = true;
                 } else {
-                    let dummy =
-                        crate::model::Task::new(&ext.raw_text, options.aliases, options.default_reminder_time);
+                    let dummy = crate::model::Task::new(
+                        &ext.raw_text,
+                        options.aliases,
+                        options.default_reminder_time,
+                    );
                     let mut new_deps = dummy.dependencies;
                     new_deps.extend(ext.dependencies.clone());
                     clone.dependencies = new_deps;
@@ -1767,8 +1774,11 @@ impl TaskStore {
                     );
                 }
             } else {
-                let mut new_task =
-                    crate::model::Task::new(&ext.raw_text, options.aliases, options.default_reminder_time);
+                let mut new_task = crate::model::Task::new(
+                    &ext.raw_text,
+                    options.aliases,
+                    options.default_reminder_time,
+                );
                 new_task.uid = task_uid.clone();
                 new_task.description = ext.description;
 

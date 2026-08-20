@@ -1619,18 +1619,17 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
             trash_retention_days: app.core_config.trash_retention_days,
             calendars: &app.calendars,
         };
-        let (mut actions, warnings) = match app.store.sync_tree_from_markdown(
-            tree_uid,
-            &desc_text,
-            &sync_options,
-            is_journal,
-        ) {
-            Ok(res) => res,
-            Err(e) => {
-                app.error_msg = Some(e);
-                return Task::none();
-            }
-        };
+        let (mut actions, warnings) =
+            match app
+                .store
+                .sync_tree_from_markdown(tree_uid, &desc_text, &sync_options, is_journal)
+            {
+                Ok(res) => res,
+                Err(e) => {
+                    app.error_msg = Some(e);
+                    return Task::none();
+                }
+            };
 
         if !warnings.is_empty() {
             for w in warnings {
