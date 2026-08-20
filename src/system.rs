@@ -463,7 +463,7 @@ pub fn spawn_alarm_actor(
 
                     // 2. Implicit Alarms (Auto-Reminders)
                     // Only if enabled AND the task doesn't already have an alarm covering this specific moment.
-                    if config.auto_reminders {
+                    if config.auto_reminders && !task.is_journal {
                         // Check Due Date
                         if let Some(due) = &task.due {
                             let trigger_dt = due.to_utc_with_default_time(default_time);

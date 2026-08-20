@@ -24,29 +24,6 @@ use tokio::sync::mpsc::Sender;
 use crate::store::{TaskListItem, select_weighted_random_index};
 use rust_i18n::t;
 
-fn get_journal_sidebar_offset(
-    date: chrono::NaiveDate,
-    first_day: crate::config::FirstDayOfWeek,
-) -> usize {
-    use chrono::Datelike;
-    let year = date.year();
-    let month = date.month();
-    let first_day_date = chrono::NaiveDate::from_ymd_opt(year, month, 1).unwrap();
-    let start_offset = if first_day == crate::config::FirstDayOfWeek::Monday {
-        first_day_date.weekday().num_days_from_monday() as usize
-    } else {
-        first_day_date.weekday().num_days_from_sunday() as usize
-    };
-    let days_in_month = if month == 12 {
-        31
-    } else {
-        (chrono::NaiveDate::from_ymd_opt(year, month + 1, 1).unwrap() - chrono::Duration::days(1))
-            .day()
-    };
-    let rows = (days_in_month as usize + start_offset).div_ceil(7);
-    1 + 1 + rows + 2
-}
-
 fn is_undo(key: &KeyEvent) -> bool {
     matches!(key.code, KeyCode::Char('z') | KeyCode::Char('Z'))
         && key.modifiers.contains(KeyModifiers::CONTROL)
@@ -2388,18 +2365,23 @@ pub async fn handle_key_event(
                         state.refresh_filtered_view();
                     }
                 } else if state.sidebar_mode == SidebarMode::Journal
+                    && state.active_focus == Focus::Sidebar
                     && let Some(idx) = state.cal_state.selected()
+                    && let Some(page) = state.cached_journal_pages.get(idx)
                 {
-                    let offset =
-                        get_journal_sidebar_offset(state.journal_date, state.first_day_of_week);
-                    if idx >= offset {
-                        let page_idx = idx - offset;
-                        if let Some(page) = state.cached_journal_pages.get(page_idx) {
-                            state.journal_editing_uid = Some(page.0.clone());
-                            state.active_focus = Focus::Main;
-                            state.refresh_filtered_view();
-                            return None;
-                        }
+                    let uid = page.0.clone();
+                    let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
+                    let intent = AppIntent::DeleteTaskTree { uid: uid.clone() };
+                    let actions = state.apply_task_intent(&intent, &config);
+                    state.refresh_filtered_view();
+                    if state.journal_editing_uid == Some(uid) {
+                        state.journal_editing_uid = None;
+                    }
+                    if !actions.is_empty() {
+                        let tx = action_tx.clone();
+                        tokio::spawn(async move {
+                            let _ = tx.send(Action::PersistBatch(actions)).await;
+                        });
                     }
                 }
             }
@@ -2479,36 +2461,6 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Char('c') => {
-                if state.sidebar_mode == SidebarMode::Journal
-                    && state.active_focus == Focus::Sidebar
-                {
-                    let target_href = state
-                        .active_cal_href
-                        .clone()
-                        .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
-                    let mut new_page = crate::model::Task::new("", &state.tag_aliases, None);
-                    new_page.summary =
-                        rust_i18n::t!("untitled_page", default = "Untitled page").to_string();
-                    new_page.is_journal = true;
-                    new_page.is_note = true;
-                    new_page.calendar_href = target_href.clone();
-                    let uid = new_page.uid.clone();
-
-                    state.store.add_task(new_page.clone());
-                    let tx = action_tx.clone();
-                    tokio::spawn(async move {
-                        let _ = tx
-                            .send(crate::tui::action::Action::PersistBatch(vec![
-                                crate::journal::Action::Create(new_page),
-                            ]))
-                            .await;
-                    });
-
-                    state.journal_editing_uid = Some(uid);
-                    state.active_focus = Focus::Main;
-                    state.refresh_filtered_view();
-                    return None;
-                }
                 let data = if let Some(parent_uid) = &state.yanked_uid {
                     state
                         .get_selected_task()
@@ -3530,54 +3482,108 @@ pub async fn handle_key_event(
                                 state.refresh_filtered_view();
                             }
                         }
-                        SidebarMode::Journal => {}
+                        SidebarMode::Journal => {
+                            if let Some(idx) = state.cal_state.selected()
+                                && let Some(page) = state.cached_journal_pages.get(idx)
+                            {
+                                state.journal_editing_uid = Some(page.0.clone());
+                                state.active_focus = Focus::Main;
+                                state.details_scroll = 0;
+                                state.refresh_filtered_view();
+                            }
+                        }
                     }
                 }
             }
             KeyCode::Char('/') => {
-                state.mode = InputMode::Searching;
-                state.reset_input();
-            }
-            KeyCode::Char('a') => {
                 if state.sidebar_mode == SidebarMode::Journal
                     && state.active_focus == Focus::Sidebar
                 {
-                    let target_href = state
-                        .active_cal_href
-                        .clone()
-                        .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
-                    let mut new_page = crate::model::Task::new("", &state.tag_aliases, None);
-                    new_page.summary =
-                        rust_i18n::t!("untitled_page", default = "Untitled page").to_string();
-                    new_page.is_journal = true;
-                    new_page.is_note = true;
-                    new_page.calendar_href = target_href.clone();
-                    let uid = new_page.uid.clone();
-
-                    state.store.add_task(new_page.clone());
-                    let tx = action_tx.clone();
-                    tokio::spawn(async move {
-                        let _ = tx
-                            .send(crate::tui::action::Action::PersistBatch(vec![
-                                crate::journal::Action::Create(new_page),
-                            ]))
-                            .await;
-                    });
-
-                    state.journal_editing_uid = Some(uid);
-                    state.active_focus = Focus::Main;
-                    state.refresh_filtered_view();
-                    return None;
+                    if let Some(idx) = state.cal_state.selected()
+                        && let Some(page) = state.cached_journal_pages.get(idx)
+                    {
+                        state.journal_editing_uid = Some(page.0.clone());
+                        state.active_focus = Focus::Main;
+                        state.details_scroll = 0;
+                        state.refresh_filtered_view();
+                    }
+                } else {
+                    state.mode = InputMode::Searching;
+                    state.reset_input();
                 }
-
+            }
+            KeyCode::Char('a') => {
                 state.mode = InputMode::Creating;
                 state.reset_input();
                 state.creating_with_desc = false;
                 state.new_task_title.clear();
+
+                if state.sidebar_mode == SidebarMode::Journal {
+                    state.input_buffer = "is:page ".to_string();
+                    state.cursor_position = state.input_buffer.chars().count();
+                }
+
                 state.message = rust_i18n::t!("new_task_prompt").to_string();
             }
             KeyCode::Char('e') => {
-                if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
+                if state.sidebar_mode == SidebarMode::Journal
+                    && state.active_focus == Focus::Sidebar
+                {
+                    if let Some(idx) = state.cal_state.selected()
+                        && let Some(page) = state.cached_journal_pages.get(idx)
+                    {
+                        let uid = page.0.clone();
+                        let desc = crate::model::extractor::serialize_task_tree(
+                            &state.store,
+                            &uid,
+                            &state.calendars,
+                            true,
+                        );
+                        match run_external_editor(&desc, state.ctx.as_ref()) {
+                            Ok(Some(new_desc)) => {
+                                if new_desc != desc {
+                                    let config =
+                                        Config::load(state.ctx.as_ref()).unwrap_or_default();
+                                    let def_time = chrono::NaiveTime::parse_from_str(
+                                        &config.default_reminder_time,
+                                        "%H:%M",
+                                    )
+                                    .ok();
+                                    let sync_options = crate::store::SyncTreeOptions {
+                                        aliases: &state.tag_aliases,
+                                        default_reminder_time: def_time,
+                                        trash_retention_days: config.trash_retention_days,
+                                        calendars: &state.calendars,
+                                    };
+                                    if let Ok((actions, _warnings)) =
+                                        state.store.sync_tree_from_markdown(
+                                            &uid,
+                                            &new_desc,
+                                            &sync_options,
+                                            true,
+                                        )
+                                    {
+                                        state.refresh_filtered_view();
+                                        let _ = action_tx.try_send(
+                                            crate::tui::action::Action::PersistBatch(actions),
+                                        );
+                                    }
+                                }
+                                state.needs_redraw = true;
+                                return None;
+                            }
+                            Ok(None) | Err(_) => {
+                                state.input_buffer = desc;
+                                state.cursor_position = state.input_buffer.chars().count();
+                                state.mode = InputMode::EditingTree(uid);
+                                state.needs_redraw = true;
+                                return None;
+                            }
+                        }
+                    }
+                } else if state.sidebar_mode == SidebarMode::Journal
+                    && state.active_focus == Focus::Main
+                {
                     let target_href = state
                         .active_cal_href
                         .clone()
@@ -3637,13 +3643,15 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Char('E') => {
-                if state.sidebar_mode == SidebarMode::Journal
-                    && state.active_focus == Focus::Main
-                    && state.journal_editing_uid.is_some()
+                if state.sidebar_mode == SidebarMode::Journal && state.journal_editing_uid.is_some()
                 {
                     let uid = state.journal_editing_uid.clone().unwrap();
                     let t = state.store.get_task_ref(&uid).unwrap();
                     state.input_buffer = t.summary.clone();
+                    if state.input_buffer.starts_with("- ") {
+                        state.input_buffer = state.input_buffer[2..].to_string();
+                    }
+                    state.input_buffer = format!("is:page {}", state.input_buffer);
                     state.cursor_position = state.input_buffer.chars().count();
                     state.editing_uid = Some(uid);
                     state.mode = InputMode::Editing;

@@ -195,7 +195,7 @@ impl AlarmIndex {
                 }
 
                 // Process implicit alarms (auto-reminders)
-                if auto_reminders_enabled {
+                if auto_reminders_enabled && !task.is_journal {
                     // Ensure we count snooze alarms as active explicit alarms
                     // to prevent implicit alarms from firing on top of a snooze.
                     let has_active_explicit = task.alarms.iter().any(|a| a.acknowledged.is_none());

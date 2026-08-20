@@ -697,6 +697,10 @@ impl AppState {
     pub fn next(&mut self) {
         match self.active_focus {
             Focus::Main => {
+                if self.sidebar_mode == SidebarMode::Journal {
+                    self.details_scroll = self.details_scroll.saturating_add(1);
+                    return;
+                }
                 if self.tasks.is_empty() {
                     return;
                 }
@@ -735,6 +739,10 @@ impl AppState {
     pub fn previous(&mut self) {
         match self.active_focus {
             Focus::Main => {
+                if self.sidebar_mode == SidebarMode::Journal {
+                    self.details_scroll = self.details_scroll.saturating_sub(1);
+                    return;
+                }
                 if self.tasks.is_empty() {
                     return;
                 }

@@ -2579,30 +2579,37 @@ impl TaskStore {
                     continue;
                 }
 
-                // 1. Due today
-                if let Some(due) = &task.due
+                let is_done = task.status.is_done();
+                let mut completed_today = false;
+
+                // 1. Completed today
+                if is_done && let Some(comp_dt) = task.completion_date() {
+                    let local_comp = comp_dt.with_timezone(&chrono::Local).date_naive();
+                    if local_comp == date {
+                        ctx.completed_tasks.push(task.clone());
+                        completed_today = true;
+                    }
+                }
+
+                // 2. Due today (exclude done tasks)
+                if !is_done
+                    && let Some(due) = &task.due
                     && due.to_date_naive() == date
                 {
                     ctx.due_tasks.push(task.clone());
                 }
 
-                // 2. Started today
-                if let Some(start) = &task.dtstart
-                    && start.to_date_naive() == date
-                {
-                    ctx.started_tasks.push(task.clone());
-                }
+                // 3. Started today (exclude if completed today to avoid duplicates)
+                if !completed_today {
+                    if let Some(start) = &task.dtstart
+                        && start.to_date_naive() == date
+                    {
+                        ctx.started_tasks.push(task.clone());
+                    }
 
-                // Ongoing (InProcess)
-                if task.status == crate::model::TaskStatus::InProcess {
-                    ctx.ongoing_tasks.push(task.clone());
-                }
-
-                // 3. Completed today
-                if let Some(comp_dt) = task.completion_date() {
-                    let local_comp = comp_dt.with_timezone(&chrono::Local).date_naive();
-                    if local_comp == date {
-                        ctx.completed_tasks.push(task.clone());
+                    // Ongoing (InProcess)
+                    if task.status == crate::model::TaskStatus::InProcess {
+                        ctx.ongoing_tasks.push(task.clone());
                     }
                 }
 
@@ -2619,7 +2626,10 @@ impl TaskStore {
                 }
                 if task_mins_today > 0 {
                     ctx.total_tracked_mins += task_mins_today;
-                    ctx.session_tasks.push((task.clone(), task_mins_today));
+                    // Log to session tasks only if not already summarized in "completed"
+                    if !completed_today {
+                        ctx.session_tasks.push((task.clone(), task_mins_today));
+                    }
                 }
             }
         }

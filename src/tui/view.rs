@@ -353,6 +353,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         Style::default()
     };
 
+    let mut calendar_paragraph: Option<Paragraph> = None;
     let (sidebar_title, sidebar_items) = match state.sidebar_mode {
         SidebarMode::Calendars => {
             let items: Vec<ListItem> = state
@@ -538,6 +539,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             )
         }
         SidebarMode::Journal => {
+            let mut cal_lines: Vec<Line> = Vec::new();
             let mut items: Vec<ListItem> = Vec::new();
             let date = state.journal_date;
             use chrono::Datelike;
@@ -545,15 +547,15 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             let is_monday_first = state.first_day_of_week == crate::config::FirstDayOfWeek::Monday;
             let month_str = date.format("%B %Y").to_string();
 
-            items.push(ListItem::new(Line::from(vec![Span::styled(
+            cal_lines.push(Line::from(vec![Span::styled(
                 format!("  < {} >  ", month_str),
                 Style::default().add_modifier(Modifier::BOLD),
-            )])));
+            )]));
 
             if is_monday_first {
-                items.push(ListItem::new(" Mo Tu We Th Fr Sa Su"));
+                cal_lines.push(Line::from(" Mo Tu We Th Fr Sa Su"));
             } else {
-                items.push(ListItem::new(" Su Mo Tu We Th Fr Sa"));
+                cal_lines.push(Line::from(" Su Mo Tu We Th Fr Sa"));
             }
 
             let first_day = chrono::NaiveDate::from_ymd_opt(date.year(), date.month(), 1).unwrap();
@@ -608,16 +610,12 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
                 let pos = start_offset + d as usize;
                 if pos.is_multiple_of(7) || d == days_in_month {
-                    items.push(ListItem::new(Line::from(current_spans.clone())));
+                    cal_lines.push(Line::from(current_spans.clone()));
                     current_spans.clear();
                 }
             }
 
-            items.push(ListItem::new(Line::from("")));
-            items.push(ListItem::new(Line::from(Span::styled(
-                rust_i18n::t!("wiki_index"),
-                Style::default().add_modifier(Modifier::BOLD),
-            ))));
+            calendar_paragraph = Some(Paragraph::new(cal_lines));
 
             for page in &state.cached_journal_pages {
                 let indent = "  ".repeat(page.2);
@@ -778,19 +776,70 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         }
     };
 
-    let sidebar = List::new(sidebar_items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(sidebar_title)
-                .border_style(sidebar_border_style),
-        )
-        .highlight_style(
+    let sidebar_block = Block::default()
+        .borders(Borders::ALL)
+        .title(sidebar_title)
+        .border_style(sidebar_border_style);
+
+    let sidebar_area = h_chunks[0];
+
+    if let Some(cal_p) = calendar_paragraph {
+        f.render_widget(sidebar_block.clone(), sidebar_area);
+
+        let date = state.journal_date;
+        use chrono::Datelike;
+        let first_day = chrono::NaiveDate::from_ymd_opt(date.year(), date.month(), 1).unwrap();
+        let is_monday_first = state.first_day_of_week == crate::config::FirstDayOfWeek::Monday;
+        let start_offset = if is_monday_first {
+            first_day.weekday().num_days_from_monday() as usize
+        } else {
+            first_day.weekday().num_days_from_sunday() as usize
+        };
+        let days_in_month = if date.month() == 12 {
+            31
+        } else {
+            (chrono::NaiveDate::from_ymd_opt(date.year(), date.month() + 1, 1).unwrap()
+                - chrono::Duration::days(1))
+            .day()
+        };
+        let rows = (days_in_month as usize + start_offset).div_ceil(7) as u16;
+        let cal_height = 2 + rows;
+
+        let inner_area = sidebar_block.inner(sidebar_area);
+        let split = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(cal_height),
+                Constraint::Length(1), // Empty
+                Constraint::Length(1), // Header
+                Constraint::Min(0),
+            ])
+            .split(inner_area);
+
+        f.render_widget(cal_p, split[0]);
+
+        let wiki_header = Paragraph::new(Line::from(Span::styled(
+            rust_i18n::t!("wiki_index"),
+            Style::default().add_modifier(Modifier::BOLD),
+        )));
+        f.render_widget(wiki_header, split[2]);
+
+        let sidebar_list = List::new(sidebar_items).highlight_style(
             Style::default()
                 .add_modifier(Modifier::BOLD)
                 .bg(Color::Blue),
         );
-    f.render_stateful_widget(sidebar, h_chunks[0], &mut state.cal_state);
+        f.render_stateful_widget(sidebar_list, split[3], &mut state.cal_state);
+    } else {
+        let sidebar = List::new(sidebar_items)
+            .block(sidebar_block)
+            .highlight_style(
+                Style::default()
+                    .add_modifier(Modifier::BOLD)
+                    .bg(Color::Blue),
+            );
+        f.render_stateful_widget(sidebar, sidebar_area, &mut state.cal_state);
+    }
 
     // JOURNAL MODE OVERRIDE
     if state.sidebar_mode == SidebarMode::Journal {
@@ -938,10 +987,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     "- ▶ {}: ",
                     rust_i18n::t!("journal_worked_on_today")
                 ));
-                let links: Vec<String> = worked_on_tasks
-                    .iter()
-                    .map(|t| format!("[{}](uid:{})", t.summary, t.uid))
-                    .collect();
+                let links: Vec<String> =
+                    worked_on_tasks.iter().map(|t| t.summary.clone()).collect();
                 activity_lines.push_str(&links.join(", "));
                 activity_lines.push('\n');
             }
@@ -954,7 +1001,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 let links: Vec<String> = day_ctx
                     .completed_tasks
                     .iter()
-                    .map(|t| format!("[{}](uid:{})", t.summary, t.uid))
+                    .map(|t| t.summary.clone())
                     .collect();
                 activity_lines.push_str(&links.join(", "));
                 activity_lines.push('\n');
@@ -965,7 +1012,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 let links: Vec<String> = day_ctx
                     .due_tasks
                     .iter()
-                    .map(|t| format!("[{}](uid:{})", t.summary, t.uid))
+                    .map(|t| t.summary.clone())
                     .collect();
                 activity_lines.push_str(&links.join(", "));
                 activity_lines.push('\n');
@@ -1000,7 +1047,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         Color::Rgb(200, 100, 0)
                     })),
             )
-            .wrap(Wrap { trim: true });
+            .wrap(Wrap { trim: true })
+            .scroll((state.details_scroll, 0));
         f.render_widget(p, main_chunks[0]);
 
         // Render simple footer
@@ -1011,7 +1059,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             // Let the standard editor popup render over this
         } else {
             let help = Paragraph::new(
-                " ←/→/↑/↓: Prev/Next Day/Week | t: Today | g: Jump to Date | e: Edit | Tab: Focus | q: Quit ",
+                " ←/→/↑/↓: Date | Shift+↑/↓: Scroll | t: Today | g: Go to | e/Enter: Edit | Tab: Focus | q: Quit ",
             )
             .alignment(Alignment::Right)
             .block(Block::default().borders(Borders::ALL).title(" Actions "));
@@ -2122,7 +2170,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 Focus::Sidebar => rust_i18n::t!("tui_sidebar_help").to_string(),
                 Focus::Main => {
                     if state.sidebar_mode == SidebarMode::Journal {
-                        " ←/→/↑/↓: Date | t: Today | g: Go to | e/Enter: Edit | [/]: Cal | Tab: Focus | q: Quit ".to_string()
+                        " ←/→/↑/↓: Date | Shift+↑/↓: Scroll | t: Today | g: Go to | e/Enter: Edit | Tab: Focus | q: Quit ".to_string()
                     } else if let Some(uid) = &state.yanked_uid {
                         let mut summary = state
                             .store
