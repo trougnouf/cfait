@@ -733,6 +733,16 @@ impl AppState {
                     None => 0,
                 };
                 self.cal_state.select(Some(i));
+
+                if self.sidebar_mode == SidebarMode::Journal
+                    && let Some(page) = self.cached_journal_pages.get(i)
+                {
+                    let uid = page.0.clone();
+                    self.journal_editing_uid = Some(uid.clone());
+                    if let Some(task) = self.store.get_task_ref(&uid) {
+                        self.active_cal_href = Some(task.calendar_href.clone());
+                    }
+                }
             }
         }
     }
@@ -775,6 +785,16 @@ impl AppState {
                     None => 0,
                 };
                 self.cal_state.select(Some(i));
+
+                if self.sidebar_mode == SidebarMode::Journal
+                    && let Some(page) = self.cached_journal_pages.get(i)
+                {
+                    let uid = page.0.clone();
+                    self.journal_editing_uid = Some(uid.clone());
+                    if let Some(task) = self.store.get_task_ref(&uid) {
+                        self.active_cal_href = Some(task.calendar_href.clone());
+                    }
+                }
             }
         }
     }
@@ -792,7 +812,18 @@ impl AppState {
                 let len = self.get_sidebar_len();
                 if len > 0 {
                     let current = self.cal_state.selected().unwrap_or(0);
-                    self.cal_state.select(Some((current + step).min(len - 1)));
+                    let i = (current + step).min(len - 1);
+                    self.cal_state.select(Some(i));
+
+                    if self.sidebar_mode == SidebarMode::Journal
+                        && let Some(page) = self.cached_journal_pages.get(i)
+                    {
+                        let uid = page.0.clone();
+                        self.journal_editing_uid = Some(uid.clone());
+                        if let Some(task) = self.store.get_task_ref(&uid) {
+                            self.active_cal_href = Some(task.calendar_href.clone());
+                        }
+                    }
                 }
             }
         }
@@ -810,7 +841,18 @@ impl AppState {
                 let len = self.get_sidebar_len();
                 if len > 0 {
                     let current = self.cal_state.selected().unwrap_or(0);
-                    self.cal_state.select(Some(current.saturating_sub(step)));
+                    let i = current.saturating_sub(step);
+                    self.cal_state.select(Some(i));
+
+                    if self.sidebar_mode == SidebarMode::Journal
+                        && let Some(page) = self.cached_journal_pages.get(i)
+                    {
+                        let uid = page.0.clone();
+                        self.journal_editing_uid = Some(uid.clone());
+                        if let Some(task) = self.store.get_task_ref(&uid) {
+                            self.active_cal_href = Some(task.calendar_href.clone());
+                        }
+                    }
                 }
             }
         }

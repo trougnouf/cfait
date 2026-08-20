@@ -2011,6 +2011,7 @@ pub async fn handle_key_event(
                 let input = state.input_buffer.trim();
                 if let Ok(d) = chrono::NaiveDate::parse_from_str(input, "%Y-%m-%d") {
                     state.journal_date = d;
+                    state.journal_editing_uid = None;
                     state.mode = InputMode::Normal;
                     state.input_buffer.clear();
                     state.message = String::new();
@@ -2116,6 +2117,11 @@ pub async fn handle_key_event(
                     state.yanked_uid = None;
                     state.yank_lock_active = false;
                     state.message = rust_i18n::t!("yank_cleared").to_string();
+                } else if state.sidebar_mode == SidebarMode::Journal
+                    && state.journal_editing_uid.is_some()
+                {
+                    state.journal_editing_uid = None;
+                    needs_refresh = true;
                 } else if state.focused_task_uid.is_some() {
                     let intent = AppIntent::FocusTaskTree { uid: None };
                     let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
@@ -2195,6 +2201,7 @@ pub async fn handle_key_event(
             KeyCode::Char('t') => {
                 if state.sidebar_mode == SidebarMode::Journal {
                     state.journal_date = chrono::Local::now().date_naive();
+                    state.journal_editing_uid = None;
                     state.refresh_filtered_view();
                 } else if let Some(summary) = state.get_selected_task().map(|t| t.summary.clone()) {
                     state.mode = InputMode::AddingSession;
@@ -2563,6 +2570,7 @@ pub async fn handle_key_event(
                             current_idx - 1
                         };
                         state.active_cal_href = Some(visible_cals[prev_idx].href.clone());
+                        state.journal_editing_uid = None;
                         state.refresh_filtered_view();
                     }
                 }
@@ -2592,6 +2600,7 @@ pub async fn handle_key_event(
                             .unwrap_or(0);
                         let next_idx = (current_idx + 1) % visible_cals.len();
                         state.active_cal_href = Some(visible_cals[next_idx].href.clone());
+                        state.journal_editing_uid = None;
                         state.refresh_filtered_view();
                     }
                 }
@@ -2901,6 +2910,7 @@ pub async fn handle_key_event(
             KeyCode::Down | KeyCode::Char('j') => {
                 if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
                     state.journal_date += chrono::Duration::days(7);
+                    state.journal_editing_uid = None;
                     state.refresh_filtered_view();
                 } else {
                     state.next();
@@ -2909,6 +2919,7 @@ pub async fn handle_key_event(
             KeyCode::Up | KeyCode::Char('k') => {
                 if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
                     state.journal_date -= chrono::Duration::days(7);
+                    state.journal_editing_uid = None;
                     state.refresh_filtered_view();
                 } else {
                     state.previous();
@@ -3198,6 +3209,7 @@ pub async fn handle_key_event(
             KeyCode::Left => {
                 if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
                     state.journal_date -= chrono::Duration::days(1);
+                    state.journal_editing_uid = None;
                     state.refresh_filtered_view();
                 } else {
                     state.move_cursor_left()
@@ -3206,6 +3218,7 @@ pub async fn handle_key_event(
             KeyCode::Right => {
                 if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
                     state.journal_date += chrono::Duration::days(1);
+                    state.journal_editing_uid = None;
                     state.refresh_filtered_view();
                 } else if state.active_focus == Focus::Sidebar {
                     match state.sidebar_mode {

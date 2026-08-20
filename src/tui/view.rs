@@ -905,6 +905,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         }
 
         let mut cal_spans = Vec::new();
+        cal_spans.push(Span::styled(
+            " [/]: Collection   ",
+            Style::default().fg(Color::DarkGray),
+        ));
         for c in &visible_cals {
             let has_entry = state
                 .store
@@ -918,13 +922,14 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             {
                 Color::Rgb(r, g, b)
             } else {
-                Color::Gray
+                Color::Cyan
             };
 
             let mut style = Style::default().fg(color);
             if is_active {
                 style = style
-                    .add_modifier(Modifier::REVERSED)
+                    .bg(color)
+                    .fg(Color::Black)
                     .add_modifier(Modifier::BOLD);
             } else if !has_entry {
                 style = style.add_modifier(Modifier::DIM);
@@ -1027,14 +1032,13 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         }
 
         let mut md_text = tui_markdown::from_str(&desc);
-        if state.journal_editing_uid.is_none() {
-            md_text.lines.insert(0, Line::from(""));
-            md_text.lines.insert(
-                0,
-                Line::from(Span::styled("---", Style::default().fg(Color::DarkGray))),
-            );
-            md_text.lines.insert(0, cal_line);
-        }
+
+        md_text.lines.insert(0, Line::from(""));
+        md_text.lines.insert(
+            0,
+            Line::from(Span::styled("---", Style::default().fg(Color::DarkGray))),
+        );
+        md_text.lines.insert(0, cal_line);
 
         let p = Paragraph::new(md_text)
             .block(
@@ -1059,7 +1063,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             // Let the standard editor popup render over this
         } else {
             let help = Paragraph::new(
-                " ←/→/↑/↓: Date | Shift+↑/↓: Scroll | t: Today | g: Go to | e/Enter: Edit | Tab: Focus | q: Quit ",
+                " [/]: Collection | ←/→/↑/↓: Date | Shift+↑/↓: Scroll | t: Today | g: Go to | e/Enter: Edit | Tab: Focus | q: Quit ",
             )
             .alignment(Alignment::Right)
             .block(Block::default().borders(Borders::ALL).title(" Actions "));
@@ -2170,7 +2174,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 Focus::Sidebar => rust_i18n::t!("tui_sidebar_help").to_string(),
                 Focus::Main => {
                     if state.sidebar_mode == SidebarMode::Journal {
-                        " ←/→/↑/↓: Date | Shift+↑/↓: Scroll | t: Today | g: Go to | e/Enter: Edit | Tab: Focus | q: Quit ".to_string()
+                        " [/]: Collection | ←/→/↑/↓: Date | Shift+↑/↓: Scroll | t: Today | g: Go to | e/Enter: Edit | Tab: Focus | q: Quit ".to_string()
                     } else if let Some(uid) = &state.yanked_uid {
                         let mut summary = state
                             .store
