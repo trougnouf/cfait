@@ -75,7 +75,7 @@ pub fn suggest(
     }
 
     // 1. Tags
-    if word.starts_with('#') {
+    if word.starts_with('#') && word.len() > 1 {
         let query = &lower[1..];
         let mut tag_counts: HashMap<String, usize> = HashMap::new();
 
