@@ -49,7 +49,7 @@ fn extract_uid_tag(line: &str) -> (String, Option<String>) {
     (line.trim_end().to_string(), None)
 }
 
-fn compute_task_lines(input: &str) -> Vec<bool> {
+fn compute_task_lines(input: &str, is_journal: bool) -> Vec<bool> {
     let lines_vec: Vec<&str> = input.lines().collect();
     let mut is_task_line = vec![false; lines_vec.len()];
     let mut indents = vec![0; lines_vec.len()];
@@ -101,7 +101,7 @@ fn compute_task_lines(input: &str) -> Vec<bool> {
             let has_is_note = after_marker.contains("is:note")
                 || after_marker.contains("is:page")
                 || after_marker.contains("is:journal");
-            if has_checkbox || has_uid || has_is_note {
+            if has_checkbox || has_uid || has_is_note || (!is_journal && !has_checkbox) {
                 is_task_line[i] = true;
             }
         }
@@ -199,19 +199,19 @@ pub fn extract_list_prefix(line: &str) -> String {
     prefix
 }
 
-pub fn has_extractable_subtasks(input: &str) -> bool {
-    let is_task = compute_task_lines(input);
+pub fn has_extractable_subtasks(input: &str, is_journal: bool) -> bool {
+    let is_task = compute_task_lines(input, is_journal);
     is_task.into_iter().any(|b| b)
 }
 
 /// Takes a raw markdown string.
 /// Returns (Cleaned Root Description, List of Extracted Subtasks).
-pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
+pub fn extract_markdown_tasks(input: &str, is_journal: bool) -> (String, Vec<ExtractedTask>) {
     let mut cleaned_root_desc = String::new();
     let mut extracted: Vec<ExtractedTask> = Vec::new();
 
     let lines_vec: Vec<&str> = input.lines().collect();
-    let is_task_line = compute_task_lines(input);
+    let is_task_line = compute_task_lines(input, is_journal);
 
     let mut indent_stack: Vec<(usize, String, usize)> = Vec::new(); // (indent, uid, extracted_idx)
     let mut item_kind_at_indent: HashMap<usize, usize> = HashMap::new(); // indent -> block_id
@@ -439,7 +439,7 @@ pub fn serialize_task_tree(
     store: &crate::store::TaskStore,
     root_uid: &str,
     calendars: &[crate::model::CalendarListEntry],
-    hide_root: bool,
+    is_journal: bool,
 ) -> String {
     let mut out = String::new();
     let root = if let Some(r) = store.get_task_ref(root_uid) {
@@ -712,7 +712,7 @@ pub fn serialize_task_tree(
         calendars,
     };
 
-    if hide_root {
+    if is_journal {
         if !root.description.is_empty() {
             out.push_str(&root.description);
             out.push('\n');

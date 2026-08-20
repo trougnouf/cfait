@@ -1602,17 +1602,28 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
     let config_time = NaiveTime::parse_from_str(&app.default_reminder_time, "%H:%M").ok();
 
     let desc_text = app.description_value.text();
+    let is_journal = app
+        .editing_tree_uid
+        .as_ref()
+        .or(app.editing_uid.as_ref())
+        .and_then(|uid| app.store.get_task_ref(uid))
+        .map(|t| t.is_journal)
+        .unwrap_or(false);
     let (cleaned_desc, extracted_subtasks) =
-        crate::model::extractor::extract_markdown_tasks(&desc_text);
+        crate::model::extractor::extract_markdown_tasks(&desc_text, is_journal);
 
     if let Some(tree_uid) = &app.editing_tree_uid {
+        let sync_options = crate::store::SyncTreeOptions {
+            aliases: &app.tag_aliases,
+            default_reminder_time: config_time,
+            trash_retention_days: app.core_config.trash_retention_days,
+            calendars: &app.calendars,
+        };
         let (mut actions, warnings) = match app.store.sync_tree_from_markdown(
             tree_uid,
             &desc_text,
-            &app.tag_aliases,
-            config_time,
-            app.core_config.trash_retention_days,
-            &app.calendars,
+            &sync_options,
+            is_journal,
         ) {
             Ok(res) => res,
             Err(e) => {

@@ -623,6 +623,14 @@ pub struct FilterOptions<'a> {
     pub sort_tiebreak_recent: bool,
 }
 
+/// Options for synchronizing a tree from markdown.
+pub struct SyncTreeOptions<'a> {
+    pub aliases: &'a std::collections::HashMap<String, Vec<String>>,
+    pub default_reminder_time: Option<chrono::NaiveTime>,
+    pub trash_retention_days: u32,
+    pub calendars: &'a [crate::model::CalendarListEntry],
+}
+
 impl TaskStore {
     /// Construct a new TaskStore with an AppContext reference for persistence.
     pub fn new(ctx: Arc<dyn AppContext>) -> Self {
@@ -1529,14 +1537,13 @@ impl TaskStore {
         &mut self,
         root_uid: &str,
         markdown: &str,
-        aliases: &std::collections::HashMap<String, Vec<String>>,
-        default_reminder_time: Option<chrono::NaiveTime>,
-        trash_retention_days: u32,
-        calendars: &[crate::model::CalendarListEntry],
+        options: &SyncTreeOptions,
+        is_journal: bool,
     ) -> Result<(Vec<crate::journal::Action>, Vec<DependencyWarning>), String> {
         let mut actions = Vec::new();
         let old_descendants = self.get_descendant_uids(root_uid);
-        let (clean_desc, extracted) = crate::model::extractor::extract_markdown_tasks(markdown);
+        let (clean_desc, extracted) =
+            crate::model::extractor::extract_markdown_tasks(markdown, is_journal);
 
         let root_calendar_href = if let Some(root) = self.get_task_ref(root_uid) {
             root.calendar_href.clone()
@@ -1646,14 +1653,14 @@ impl TaskStore {
                 let mut actually_changed = false;
 
                 if expected_raw_text.trim() != ext.raw_text.trim() {
-                    clone.apply_smart_input(&ext.raw_text, aliases, default_reminder_time);
+                    clone.apply_smart_input(&ext.raw_text, options.aliases, options.default_reminder_time);
                     if !ext.dependencies.is_empty() {
                         clone.dependencies.extend(ext.dependencies.clone());
                     }
                     actually_changed = true;
                 } else {
                     let dummy =
-                        crate::model::Task::new(&ext.raw_text, aliases, default_reminder_time);
+                        crate::model::Task::new(&ext.raw_text, options.aliases, options.default_reminder_time);
                     let mut new_deps = dummy.dependencies;
                     new_deps.extend(ext.dependencies.clone());
                     clone.dependencies = new_deps;
@@ -1695,7 +1702,7 @@ impl TaskStore {
                 }
 
                 let final_href = if let Some(target) = clone.target_collection.take() {
-                    crate::model::resolve_collection(&target, calendars, &inherited_href)
+                    crate::model::resolve_collection(&target, options.calendars, &inherited_href)
                 } else {
                     inherited_href.clone()
                 };
@@ -1761,7 +1768,7 @@ impl TaskStore {
                 }
             } else {
                 let mut new_task =
-                    crate::model::Task::new(&ext.raw_text, aliases, default_reminder_time);
+                    crate::model::Task::new(&ext.raw_text, options.aliases, options.default_reminder_time);
                 new_task.uid = task_uid.clone();
                 new_task.description = ext.description;
 
@@ -1798,7 +1805,7 @@ impl TaskStore {
                 new_task.dependencies = ext.dependencies;
 
                 let final_href = if let Some(target) = new_task.target_collection.take() {
-                    crate::model::resolve_collection(&target, calendars, &inherited_href)
+                    crate::model::resolve_collection(&target, options.calendars, &inherited_href)
                 } else {
                     inherited_href.clone()
                 };
@@ -1852,7 +1859,7 @@ impl TaskStore {
         for old_uid in old_descendants {
             if !active_uids.contains(&old_uid)
                 && let Some((deleted, trashed_opt)) =
-                    self.soft_delete_task(&old_uid, trash_retention_days)
+                    self.soft_delete_task(&old_uid, options.trash_retention_days)
             {
                 actions.push(crate::journal::Action::Delete(deleted));
                 if let Some(trashed) = trashed_opt {
@@ -2809,6 +2816,10 @@ impl TaskStore {
                 .iter()
                 .copied()
                 .filter(|t| {
+                    if t.is_journal && !self.children_index.contains_key(&t.uid) {
+                        return false;
+                    }
+
                     // Status-based filtering
                     if !has_status_filter && t.status.is_done() && options.hide_completed_global {
                         return false;

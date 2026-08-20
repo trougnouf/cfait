@@ -585,7 +585,7 @@ fn test_apply_task_intent_comprehensive() {
 #[test]
 fn test_extract_markdown_tasks_full() {
     let input = "Root description.\n\n- [ ] Subtask 1\n  Details for subtask 1\n* [x] Subtask 2\n1. [ ] Numbered 1\n2. [ ] Numbered 2\n";
-    let (root_desc, tasks) = cfait::model::extract_markdown_tasks(input);
+    let (root_desc, tasks) = cfait::model::extract_markdown_tasks(input, false);
 
     assert_eq!(root_desc, "Root description.");
     assert_eq!(tasks.len(), 4);

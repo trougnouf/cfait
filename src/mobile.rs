@@ -2776,7 +2776,7 @@ impl CfaitMobile {
             chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
 
         let (cleaned_desc, extracted_subtasks) =
-            crate::model::extractor::extract_markdown_tasks(&description);
+            crate::model::extractor::extract_markdown_tasks(&description, false);
 
         let mut task = Task::new(&clean_input, &config.tag_aliases, def_time);
 
@@ -2979,9 +2979,14 @@ impl CfaitMobile {
         let def_time =
             chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
 
-        let (clean_desc, extracted) = crate::model::extractor::extract_markdown_tasks(&description);
-
         let mut store = self.controller.store.lock().await;
+        let is_journal = store
+            .get_task_ref(&uid)
+            .map(|t| t.is_journal)
+            .unwrap_or(false);
+        let (clean_desc, extracted) =
+            crate::model::extractor::extract_markdown_tasks(&description, is_journal);
+
         let mut actions = Vec::new();
         let mut resolved_props = std::collections::HashMap::new();
 
@@ -3144,14 +3149,22 @@ impl CfaitMobile {
         }
 
         let mut store = self.controller.store.lock().await;
+        let is_journal = store
+            .get_task_ref(&uid)
+            .map(|t| t.is_journal)
+            .unwrap_or(false);
+        let sync_options = crate::store::SyncTreeOptions {
+            aliases: &config.tag_aliases,
+            default_reminder_time: def_time,
+            trash_retention_days: config.trash_retention_days,
+            calendars: &cals,
+        };
 
         match store.sync_tree_from_markdown(
             &uid,
             &markdown,
-            &config.tag_aliases,
-            def_time,
-            config.trash_retention_days,
-            &cals,
+            &sync_options,
+            is_journal,
         ) {
             Ok((actions, warnings)) => {
                 drop(store);

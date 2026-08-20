@@ -574,7 +574,7 @@ impl Task {
     }
 
     pub fn has_extractable_subtasks(&self) -> bool {
-        crate::model::extractor::has_extractable_subtasks(&self.description)
+        crate::model::extractor::has_extractable_subtasks(&self.description, self.is_journal)
     }
 
     pub fn is_relative_recurrence(&self) -> bool {

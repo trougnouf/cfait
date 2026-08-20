@@ -145,13 +145,21 @@ async fn apply_markdown_update(
         if let Ok(locals) = cfait::storage::LocalCalendarRegistry::load(ctx.as_ref()) {
             cals.extend(locals);
         }
+        let is_journal = store
+            .get_task_ref(full_uid)
+            .map(|t| t.is_journal)
+            .unwrap_or(false);
+        let sync_options = cfait::store::SyncTreeOptions {
+            aliases: &config.tag_aliases,
+            default_reminder_time: def_time,
+            trash_retention_days: config.trash_retention_days,
+            calendars: &cals,
+        };
         match store.sync_tree_from_markdown(
             full_uid,
             new_content,
-            &config.tag_aliases,
-            def_time,
-            config.trash_retention_days,
-            &cals,
+            &sync_options,
+            is_journal,
         ) {
             Ok((acts, warns)) => {
                 actions.extend(acts);
@@ -164,7 +172,12 @@ async fn apply_markdown_update(
         let smart_input = first_line.trim();
         let description = rest.trim();
 
-        let (clean_desc, extracted) = cfait::model::extractor::extract_markdown_tasks(description);
+        let is_journal = store
+            .get_task_ref(full_uid)
+            .map(|t| t.is_journal)
+            .unwrap_or(false);
+        let (clean_desc, extracted) =
+            cfait::model::extractor::extract_markdown_tasks(description, is_journal);
 
         let mut task = store.get_task_ref(full_uid).unwrap().clone();
         task.description = clean_desc.to_string();

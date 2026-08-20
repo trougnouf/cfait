@@ -83,6 +83,7 @@ Evaluated instantly during text input. Supported across all clients.
 | `+cal` / `-cal` | Force/prevent companion Calendar Event. | `+cal` |
 | `is:pinned` | Pin task to the top of the list. | `is:pinned` |
 | `is:permanent` | Mark task as a permanent/continuous tracker. | `is:permanent` |
+| `is:page` | Create a Wiki sub-page (VJOURNAL component). | `is:page`, `is:journal` |
 | `goal:` | Goal tracking target. | `goal:5/w`, `goal:2h/daily`, `goal:weekly` |
 
 *Rules:* 
@@ -122,7 +123,7 @@ Cfait natively supports rendering basic inline Markdown across task summaries, d
 The search bar supports a boolean recursive-descent parser.
 *   **Logic:** Implicit `AND` (space), `OR` (`|`), `NOT` (`-`), and Grouping `()`.
 *   **Primitives:**
-    *   *State:* `is:done`, `is:active`, `is:started` / `is:ongoing`, `is:blocked`, `is:note`.
+    *   *State:* `is:done`, `is:active`, `is:started` / `is:ongoing`, `is:blocked`, `is:note`, `is:page`.
     *   *Actionable:* `is:ready` (Excludes completed tasks, explicitly/implicitly blocked tasks, tasks starting in the future, and Notes whose children are all unready. `InProcess` bypasses this).
     *   *Comparison:* `~<30m` (duration < 30m), `!<4` (priority < 4).
     *   *Dates:* `@<today` (Overdue), `^>1w` (Starts in > 1 week).

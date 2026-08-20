@@ -182,6 +182,8 @@ pub struct AppState {
     pub search_collapsed_tasks: HashSet<String>,
     pub journal_date: chrono::NaiveDate,
     pub first_day_of_week: crate::config::FirstDayOfWeek,
+    pub journal_editing_uid: Option<String>,
+    pub cached_journal_pages: Vec<(String, String, usize)>,
     pub goals: HashMap<String, crate::config::Goal>,
     pub cached_goals_progress: HashMap<String, (u32, Vec<f32>)>,
     pub cached_task_goals: Vec<(String, String, crate::config::Goal, u32, Vec<f32>)>,
@@ -313,6 +315,8 @@ impl AppState {
             search_collapsed_tasks: HashSet::new(),
             journal_date: chrono::Local::now().date_naive(),
             first_day_of_week: config.first_day_of_week,
+            journal_editing_uid: None,
+            cached_journal_pages: Vec::new(),
             goals: config.goals,
             cached_goals_progress: HashMap::new(),
             cached_task_goals: Vec::new(),
@@ -495,6 +499,61 @@ impl AppState {
         }
         task_goals.sort_by(|a, b| a.1.cmp(&b.1));
         self.cached_task_goals = task_goals;
+
+        let mut pages = Vec::new();
+        for map in self.store.calendars.values() {
+            for t in map.values() {
+                if t.is_journal
+                    && t.is_note
+                    && t.calendar_href != crate::storage::LOCAL_TRASH_HREF
+                    && t.calendar_href != "local://recovery"
+                {
+                    pages.push(t);
+                }
+            }
+        }
+        pages.sort_by(|a, b| a.summary.cmp(&b.summary));
+
+        let mut children_map: std::collections::HashMap<String, Vec<&crate::model::Task>> =
+            std::collections::HashMap::new();
+        let mut roots = Vec::new();
+        let page_uids: std::collections::HashSet<String> =
+            pages.iter().map(|p| p.uid.clone()).collect();
+
+        for p in &pages {
+            if let Some(parent) = &p.parent_uid
+                && page_uids.contains(parent)
+            {
+                children_map.entry(parent.clone()).or_default().push(p);
+                continue;
+            }
+            roots.push(p);
+        }
+
+        let mut flat_pages = Vec::new();
+        fn flatten_pages(
+            node: &crate::model::Task,
+            children_map: &std::collections::HashMap<String, Vec<&crate::model::Task>>,
+            depth: usize,
+            out: &mut Vec<(String, String, usize)>,
+        ) {
+            let title = if node.summary.is_empty() {
+                rust_i18n::t!("untitled_page", default = "Untitled page").to_string()
+            } else {
+                node.summary.clone()
+            };
+            out.push((node.uid.clone(), title, depth));
+            if let Some(children) = children_map.get(&node.uid) {
+                for child in children {
+                    flatten_pages(child, children_map, depth + 1, out);
+                }
+            }
+        }
+
+        for root in roots {
+            flatten_pages(root, &children_map, 0, &mut flat_pages);
+        }
+        self.cached_journal_pages = flat_pages;
     }
 
     pub fn get_selected_task(&self) -> Option<&Task> {

@@ -613,6 +613,34 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 }
             }
 
+            items.push(ListItem::new(Line::from("")));
+            items.push(ListItem::new(Line::from(Span::styled(
+                rust_i18n::t!("wiki_index"),
+                Style::default().add_modifier(Modifier::BOLD),
+            ))));
+
+            for page in &state.cached_journal_pages {
+                let indent = "  ".repeat(page.2);
+                let prefix = if Some(&page.0) == state.journal_editing_uid.as_ref() {
+                    "> "
+                } else {
+                    "  "
+                };
+                let span = Span::raw(format!("{}{}📔 {}", prefix, indent, page.1));
+                let style = if Some(&page.0) == state.journal_editing_uid.as_ref() {
+                    Style::default()
+                        .fg(if is_dark_theme {
+                            Color::Yellow
+                        } else {
+                            Color::Rgb(200, 100, 0)
+                        })
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::Cyan)
+                };
+                items.push(ListItem::new(Line::from(span)).style(style));
+            }
+
             (
                 format!(" {} {}", state.journal_icon, rust_i18n::t!("journal")).to_string(),
                 items,
@@ -766,12 +794,6 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
     // JOURNAL MODE OVERRIDE
     if state.sidebar_mode == SidebarMode::Journal {
-        let title = format!(
-            " {} {} ({}) ",
-            state.journal_icon,
-            rust_i18n::t!("journal"),
-            state.journal_date.format("%Y-%m-%d")
-        );
         let target_href = state
             .active_cal_href
             .clone()
@@ -784,6 +806,37 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             .find(|c| c.href == target_href)
             .map(|c| c.name.clone())
             .unwrap_or_else(|| target_href.clone());
+
+        let (title, mut desc) = if let Some(uid) = &state.journal_editing_uid {
+            let t = state.store.get_task_ref(uid);
+            let title = format!(
+                " {} (Esc) ",
+                t.map(|t| t.summary.as_str()).unwrap_or("Untitled Page")
+            );
+            let md = crate::model::extractor::serialize_task_tree(
+                &state.store,
+                uid,
+                &state.calendars,
+                true,
+            );
+            (title, md)
+        } else {
+            let entry = state
+                .store
+                .get_journal_entry(&target_href, state.journal_date);
+            let desc = entry.map(|e| e.description.clone()).unwrap_or_else(|| {
+                rust_i18n::t!("journal_no_notes", name = target_name).to_string()
+            });
+            (
+                format!(
+                    " {} {} ({}) ",
+                    state.journal_icon,
+                    rust_i18n::t!("journal"),
+                    state.journal_date.format("%Y-%m-%d")
+                ),
+                desc,
+            )
+        };
 
         let mut visible_cals = Vec::new();
         for c in &state.calendars {
@@ -834,110 +887,107 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         }
         let cal_line = Line::from(cal_spans);
 
-        let entry = state
-            .store
-            .get_journal_entry(&target_href, state.journal_date);
-        let mut desc = entry
-            .map(|e| e.description.clone())
-            .unwrap_or_else(|| rust_i18n::t!("journal_no_notes", name = target_name).to_string());
-
         // Append Activity Context
-        let visible_cals_set = state
-            .calendars
-            .iter()
-            .filter(|c| {
-                let supports = if c.href.starts_with("local://") {
-                    true
-                } else {
-                    c.supports_vjournal.unwrap_or(false)
-                };
-                !state.hidden_calendars.contains(&c.href) && supports
-            })
-            .map(|c| c.href.clone())
-            .collect();
-        let day_ctx = state
-            .store
-            .get_day_context(state.journal_date, &visible_cals_set);
-
-        let mut activity_lines = String::new();
-        if day_ctx.total_tracked_mins > 0 {
-            activity_lines.push_str(&format!(
-                "- ⏱️ {}: {}\n",
-                rust_i18n::t!("journal_time_tracked"),
-                crate::model::parser::format_duration_human(day_ctx.total_tracked_mins)
-            ));
-        }
-
-        let mut worked_on_uids = std::collections::HashSet::new();
-        let mut worked_on_tasks = Vec::new();
-        for t in &day_ctx.started_tasks {
-            if worked_on_uids.insert(t.uid.clone()) {
-                worked_on_tasks.push(t.clone());
-            }
-        }
-        for t in &day_ctx.ongoing_tasks {
-            if worked_on_uids.insert(t.uid.clone()) {
-                worked_on_tasks.push(t.clone());
-            }
-        }
-        for (t, _) in &day_ctx.session_tasks {
-            if worked_on_uids.insert(t.uid.clone()) {
-                worked_on_tasks.push(t.clone());
-            }
-        }
-
-        if !worked_on_tasks.is_empty() {
-            activity_lines.push_str(&format!(
-                "- ▶ {}: ",
-                rust_i18n::t!("journal_worked_on_today")
-            ));
-            let links: Vec<String> = worked_on_tasks
+        if state.journal_editing_uid.is_none() {
+            let visible_cals_set = state
+                .calendars
                 .iter()
-                .map(|t| format!("[{}](uid:{})", t.summary, t.uid))
+                .filter(|c| {
+                    let supports = if c.href.starts_with("local://") {
+                        true
+                    } else {
+                        c.supports_vjournal.unwrap_or(false)
+                    };
+                    !state.hidden_calendars.contains(&c.href) && supports
+                })
+                .map(|c| c.href.clone())
                 .collect();
-            activity_lines.push_str(&links.join(", "));
-            activity_lines.push('\n');
-        }
+            let day_ctx = state
+                .store
+                .get_day_context(state.journal_date, &visible_cals_set);
 
-        if !day_ctx.completed_tasks.is_empty() {
-            activity_lines.push_str(&format!(
-                "- ✓ {}: ",
-                rust_i18n::t!("journal_completed_today")
-            ));
-            let links: Vec<String> = day_ctx
-                .completed_tasks
-                .iter()
-                .map(|t| format!("[{}](uid:{})", t.summary, t.uid))
-                .collect();
-            activity_lines.push_str(&links.join(", "));
-            activity_lines.push('\n');
-        }
+            let mut activity_lines = String::new();
+            if day_ctx.total_tracked_mins > 0 {
+                activity_lines.push_str(&format!(
+                    "- ⏱️ {}: {}\n",
+                    rust_i18n::t!("journal_time_tracked"),
+                    crate::model::parser::format_duration_human(day_ctx.total_tracked_mins)
+                ));
+            }
 
-        if !day_ctx.due_tasks.is_empty() {
-            activity_lines.push_str(&format!("- 📅 {}: ", rust_i18n::t!("journal_due_today")));
-            let links: Vec<String> = day_ctx
-                .due_tasks
-                .iter()
-                .map(|t| format!("[{}](uid:{})", t.summary, t.uid))
-                .collect();
-            activity_lines.push_str(&links.join(", "));
-            activity_lines.push('\n');
-        }
+            let mut worked_on_uids = std::collections::HashSet::new();
+            let mut worked_on_tasks = Vec::new();
+            for t in &day_ctx.started_tasks {
+                if worked_on_uids.insert(t.uid.clone()) {
+                    worked_on_tasks.push(t.clone());
+                }
+            }
+            for t in &day_ctx.ongoing_tasks {
+                if worked_on_uids.insert(t.uid.clone()) {
+                    worked_on_tasks.push(t.clone());
+                }
+            }
+            for (t, _) in &day_ctx.session_tasks {
+                if worked_on_uids.insert(t.uid.clone()) {
+                    worked_on_tasks.push(t.clone());
+                }
+            }
 
-        if !activity_lines.is_empty() {
-            desc.push_str("\n\n---\n**");
-            desc.push_str(&rust_i18n::t!("journal_activity"));
-            desc.push_str("**\n");
-            desc.push_str(&activity_lines);
+            if !worked_on_tasks.is_empty() {
+                activity_lines.push_str(&format!(
+                    "- ▶ {}: ",
+                    rust_i18n::t!("journal_worked_on_today")
+                ));
+                let links: Vec<String> = worked_on_tasks
+                    .iter()
+                    .map(|t| format!("[{}](uid:{})", t.summary, t.uid))
+                    .collect();
+                activity_lines.push_str(&links.join(", "));
+                activity_lines.push('\n');
+            }
+
+            if !day_ctx.completed_tasks.is_empty() {
+                activity_lines.push_str(&format!(
+                    "- ✓ {}: ",
+                    rust_i18n::t!("journal_completed_today")
+                ));
+                let links: Vec<String> = day_ctx
+                    .completed_tasks
+                    .iter()
+                    .map(|t| format!("[{}](uid:{})", t.summary, t.uid))
+                    .collect();
+                activity_lines.push_str(&links.join(", "));
+                activity_lines.push('\n');
+            }
+
+            if !day_ctx.due_tasks.is_empty() {
+                activity_lines.push_str(&format!("- 📅 {}: ", rust_i18n::t!("journal_due_today")));
+                let links: Vec<String> = day_ctx
+                    .due_tasks
+                    .iter()
+                    .map(|t| format!("[{}](uid:{})", t.summary, t.uid))
+                    .collect();
+                activity_lines.push_str(&links.join(", "));
+                activity_lines.push('\n');
+            }
+
+            if !activity_lines.is_empty() {
+                desc.push_str("\n\n---\n**");
+                desc.push_str(&rust_i18n::t!("journal_activity"));
+                desc.push_str("**\n");
+                desc.push_str(&activity_lines);
+            }
         }
 
         let mut md_text = tui_markdown::from_str(&desc);
-        md_text.lines.insert(0, Line::from(""));
-        md_text.lines.insert(
-            0,
-            Line::from(Span::styled("---", Style::default().fg(Color::DarkGray))),
-        );
-        md_text.lines.insert(0, cal_line);
+        if state.journal_editing_uid.is_none() {
+            md_text.lines.insert(0, Line::from(""));
+            md_text.lines.insert(
+                0,
+                Line::from(Span::styled("---", Style::default().fg(Color::DarkGray))),
+            );
+            md_text.lines.insert(0, cal_line);
+        }
 
         let p = Paragraph::new(md_text)
             .block(

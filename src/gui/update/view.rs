@@ -39,6 +39,7 @@ fn flush_journal_save(app: &mut GuiApp) {
             new_journal.is_journal = true;
             new_journal.calendar_href = href.clone();
             new_journal.dtstart = Some(crate::model::DateType::AllDay(date));
+            new_journal.summary = date.format("%Y-%m-%d").to_string();
             app.store.add_task(new_journal.clone());
             if let Some(tx) = &app.bg_tx {
                 let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(vec![
@@ -55,14 +56,18 @@ fn flush_journal_save(app: &mut GuiApp) {
         let config = crate::config::Config::load(app.ctx.as_ref()).unwrap_or_default();
         let def_time =
             chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
+        let sync_options = crate::store::SyncTreeOptions {
+            aliases: &app.tag_aliases,
+            default_reminder_time: def_time,
+            trash_retention_days: config.trash_retention_days,
+            calendars: &app.calendars,
+        };
 
         if let Ok((actions, _warnings)) = app.store.sync_tree_from_markdown(
             &uid,
             &new_text,
-            &app.tag_aliases,
-            def_time,
-            config.trash_retention_days,
-            &app.calendars,
+            &sync_options,
+            true, // is_journal is always true here
         ) && !actions.is_empty()
             && let Some(tx) = &app.bg_tx
         {

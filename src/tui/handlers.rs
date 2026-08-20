@@ -24,6 +24,29 @@ use tokio::sync::mpsc::Sender;
 use crate::store::{TaskListItem, select_weighted_random_index};
 use rust_i18n::t;
 
+fn get_journal_sidebar_offset(
+    date: chrono::NaiveDate,
+    first_day: crate::config::FirstDayOfWeek,
+) -> usize {
+    use chrono::Datelike;
+    let year = date.year();
+    let month = date.month();
+    let first_day_date = chrono::NaiveDate::from_ymd_opt(year, month, 1).unwrap();
+    let start_offset = if first_day == crate::config::FirstDayOfWeek::Monday {
+        first_day_date.weekday().num_days_from_monday() as usize
+    } else {
+        first_day_date.weekday().num_days_from_sunday() as usize
+    };
+    let days_in_month = if month == 12 {
+        31
+    } else {
+        (chrono::NaiveDate::from_ymd_opt(year, month + 1, 1).unwrap() - chrono::Duration::days(1))
+            .day()
+    };
+    let rows = (days_in_month as usize + start_offset).div_ceil(7);
+    1 + 1 + rows + 2
+}
+
 fn is_undo(key: &KeyEvent) -> bool {
     matches!(key.code, KeyCode::Char('z') | KeyCode::Char('Z'))
         && key.modifiers.contains(KeyModifiers::CONTROL)
@@ -338,13 +361,18 @@ async fn execute_task_action(
                             "%H:%M",
                         )
                         .ok();
+                        let is_journal = task.is_journal;
+                        let sync_options = crate::store::SyncTreeOptions {
+                            aliases: &state.tag_aliases,
+                            default_reminder_time: def_time,
+                            trash_retention_days: config.trash_retention_days,
+                            calendars: &state.calendars,
+                        };
                         match state.store.sync_tree_from_markdown(
                             &uid,
                             &new_desc,
-                            &state.tag_aliases,
-                            def_time,
-                            config.trash_retention_days,
-                            &state.calendars,
+                            &sync_options,
+                            is_journal,
                         ) {
                             Ok((actions, warnings)) => {
                                 if !warnings.is_empty() {
@@ -581,6 +609,7 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
             new_journal.is_journal = true;
             new_journal.calendar_href = target_href;
             new_journal.dtstart = Some(crate::model::DateType::AllDay(state.journal_date));
+            new_journal.summary = state.journal_date.format("%Y-%m-%d").to_string();
             new_journal.description = new_text;
             state.store.add_task(new_journal.clone());
             actions.push(crate::journal::Action::Create(new_journal));
@@ -603,13 +632,22 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
         let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
         let def_time = NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
 
+        let is_journal = state
+            .store
+            .get_task_ref(&uid)
+            .map(|t| t.is_journal)
+            .unwrap_or(false);
+        let sync_options = crate::store::SyncTreeOptions {
+            aliases: &state.tag_aliases,
+            default_reminder_time: def_time,
+            trash_retention_days: config.trash_retention_days,
+            calendars: &state.calendars,
+        };
         match state.store.sync_tree_from_markdown(
             &uid,
             &state.input_buffer,
-            &state.tag_aliases,
-            def_time,
-            config.trash_retention_days,
-            &state.calendars,
+            &sync_options,
+            is_journal,
         ) {
             Ok((actions, warnings)) => {
                 if !warnings.is_empty() {
@@ -631,7 +669,8 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
 
     if state.creating_with_desc {
         let desc_text = state.input_buffer.clone();
-        let (clean_desc, extracted) = crate::model::extractor::extract_markdown_tasks(&desc_text);
+        let (clean_desc, extracted) =
+            crate::model::extractor::extract_markdown_tasks(&desc_text, false);
 
         let (clean_input_1, new_goals) =
             crate::model::parser::extract_inline_goals(&state.new_task_title);
@@ -830,8 +869,13 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
 
         if let Some(uid) = target_uid {
             let desc_text = state.input_buffer.clone();
+            let is_journal = state
+                .store
+                .get_task_ref(&uid)
+                .map(|t| t.is_journal)
+                .unwrap_or(false);
             let (clean_desc, extracted) =
-                crate::model::extractor::extract_markdown_tasks(&desc_text);
+                crate::model::extractor::extract_markdown_tasks(&desc_text, is_journal);
 
             let mut actions = Vec::new();
             let mut parent_href = String::new();
@@ -1636,11 +1680,16 @@ pub async fn handle_key_event(
                         state.mode = InputMode::EditingDescription;
                     }
                 } else {
+                    let is_journal = state
+                        .store
+                        .get_task_ref(&uid)
+                        .map(|t| t.is_journal)
+                        .unwrap_or(false);
                     let desc = crate::model::extractor::serialize_task_tree(
                         &state.store,
                         &uid,
                         &state.calendars,
-                        false,
+                        is_journal,
                     );
                     state.input_buffer = desc;
                     state.cursor_position = state.input_buffer.chars().count();
@@ -2019,6 +2068,7 @@ pub async fn handle_key_event(
             {
                 if let Some(t) = state.get_selected_task() {
                     let uid = t.uid.clone();
+                    let is_journal = t.is_journal;
                     let desc = crate::model::extractor::serialize_task_tree(
                         &state.store,
                         &uid,
@@ -2034,13 +2084,17 @@ pub async fn handle_key_event(
                                     "%H:%M",
                                 )
                                 .ok();
+                                let sync_options = crate::store::SyncTreeOptions {
+                                    aliases: &state.tag_aliases,
+                                    default_reminder_time: def_time,
+                                    trash_retention_days: config.trash_retention_days,
+                                    calendars: &state.calendars,
+                                };
                                 match state.store.sync_tree_from_markdown(
                                     &uid,
                                     &new_desc,
-                                    &state.tag_aliases,
-                                    def_time,
-                                    config.trash_retention_days,
-                                    &state.calendars,
+                                    &sync_options,
+                                    is_journal,
                                 ) {
                                     Ok((actions, warnings)) => {
                                         if !warnings.is_empty() {
@@ -2333,6 +2387,20 @@ pub async fn handle_key_event(
                         }
                         state.refresh_filtered_view();
                     }
+                } else if state.sidebar_mode == SidebarMode::Journal
+                    && let Some(idx) = state.cal_state.selected()
+                {
+                    let offset =
+                        get_journal_sidebar_offset(state.journal_date, state.first_day_of_week);
+                    if idx >= offset {
+                        let page_idx = idx - offset;
+                        if let Some(page) = state.cached_journal_pages.get(page_idx) {
+                            state.journal_editing_uid = Some(page.0.clone());
+                            state.active_focus = Focus::Main;
+                            state.refresh_filtered_view();
+                            return None;
+                        }
+                    }
                 }
             }
             KeyCode::Char('+') => {
@@ -2411,6 +2479,36 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Char('c') => {
+                if state.sidebar_mode == SidebarMode::Journal
+                    && state.active_focus == Focus::Sidebar
+                {
+                    let target_href = state
+                        .active_cal_href
+                        .clone()
+                        .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
+                    let mut new_page = crate::model::Task::new("", &state.tag_aliases, None);
+                    new_page.summary =
+                        rust_i18n::t!("untitled_page", default = "Untitled page").to_string();
+                    new_page.is_journal = true;
+                    new_page.is_note = true;
+                    new_page.calendar_href = target_href.clone();
+                    let uid = new_page.uid.clone();
+
+                    state.store.add_task(new_page.clone());
+                    let tx = action_tx.clone();
+                    tokio::spawn(async move {
+                        let _ = tx
+                            .send(crate::tui::action::Action::PersistBatch(vec![
+                                crate::journal::Action::Create(new_page),
+                            ]))
+                            .await;
+                    });
+
+                    state.journal_editing_uid = Some(uid);
+                    state.active_focus = Focus::Main;
+                    state.refresh_filtered_view();
+                    return None;
+                }
                 let data = if let Some(parent_uid) = &state.yanked_uid {
                     state
                         .get_selected_task()
@@ -3441,6 +3539,37 @@ pub async fn handle_key_event(
                 state.reset_input();
             }
             KeyCode::Char('a') => {
+                if state.sidebar_mode == SidebarMode::Journal
+                    && state.active_focus == Focus::Sidebar
+                {
+                    let target_href = state
+                        .active_cal_href
+                        .clone()
+                        .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
+                    let mut new_page = crate::model::Task::new("", &state.tag_aliases, None);
+                    new_page.summary =
+                        rust_i18n::t!("untitled_page", default = "Untitled page").to_string();
+                    new_page.is_journal = true;
+                    new_page.is_note = true;
+                    new_page.calendar_href = target_href.clone();
+                    let uid = new_page.uid.clone();
+
+                    state.store.add_task(new_page.clone());
+                    let tx = action_tx.clone();
+                    tokio::spawn(async move {
+                        let _ = tx
+                            .send(crate::tui::action::Action::PersistBatch(vec![
+                                crate::journal::Action::Create(new_page),
+                            ]))
+                            .await;
+                    });
+
+                    state.journal_editing_uid = Some(uid);
+                    state.active_focus = Focus::Main;
+                    state.refresh_filtered_view();
+                    return None;
+                }
+
                 state.mode = InputMode::Creating;
                 state.reset_input();
                 state.creating_with_desc = false;
@@ -3508,7 +3637,18 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Char('E') => {
-                if state.active_focus == Focus::Main
+                if state.sidebar_mode == SidebarMode::Journal
+                    && state.active_focus == Focus::Main
+                    && state.journal_editing_uid.is_some()
+                {
+                    let uid = state.journal_editing_uid.clone().unwrap();
+                    let t = state.store.get_task_ref(&uid).unwrap();
+                    state.input_buffer = t.summary.clone();
+                    state.cursor_position = state.input_buffer.chars().count();
+                    state.editing_uid = Some(uid);
+                    state.mode = InputMode::Editing;
+                    return None;
+                } else if state.active_focus == Focus::Main
                     && let Some(t) = state.get_selected_task()
                 {
                     let desc = t.description.clone();

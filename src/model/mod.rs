@@ -22,7 +22,7 @@ pub use parser::{
 };
 
 // Re-export extractor for markdown task extraction
-pub use extractor::{ExtractedTask, extract_markdown_tasks};
+pub use extractor::{ExtractedTask, extract_markdown_tasks, has_extractable_subtasks};
 
 // Re-export adapter/display/recurrence helpers for external use.
 pub use adapter::IcsAdapter;
