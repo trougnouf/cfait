@@ -75,44 +75,49 @@ pub fn suggest(
     }
 
     // 1. Tags
-    if word.starts_with('#') && word.len() > 1 {
-        let query = &lower[1..];
-        let mut tag_counts: HashMap<String, usize> = HashMap::new();
+    if word.starts_with('#') {
+        let query = lower.trim_start_matches('#');
+        if !query.is_empty() {
+            let prefix_len = word.len() - word.trim_start_matches('#').len();
+            let prefix = &word[..prefix_len];
 
-        for k in aliases.keys() {
-            if let Some(clean) = k.strip_prefix('#')
-                && clean.to_lowercase().starts_with(query)
-                && clean != "cfait-internal"
-            {
-                tag_counts.insert(clean.to_string(), 0);
+            let mut tag_counts: HashMap<String, usize> = HashMap::new();
+
+            for k in aliases.keys() {
+                if let Some(clean) = k.strip_prefix('#')
+                    && clean.to_lowercase().starts_with(query)
+                    && clean != "cfait-internal"
+                {
+                    tag_counts.insert(clean.to_string(), 0);
+                }
             }
-        }
-        for map in store.calendars.values() {
-            for t in map.values() {
-                for c in &t.categories {
-                    let c_lower = c.to_lowercase();
-                    if c_lower.starts_with(query) {
-                        *tag_counts.entry(c.clone()).or_insert(0) += 1;
+            for map in store.calendars.values() {
+                for t in map.values() {
+                    for c in &t.categories {
+                        let c_lower = c.to_lowercase();
+                        if c_lower.starts_with(query) {
+                            *tag_counts.entry(c.clone()).or_insert(0) += 1;
+                        }
                     }
                 }
             }
-        }
 
-        let mut tags: Vec<_> = tag_counts.into_iter().collect();
-        tags.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+            let mut tags: Vec<_> = tag_counts.into_iter().collect();
+            tags.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
 
-        let suggestions: Vec<_> = tags
-            .into_iter()
-            .take(10)
-            .map(|(t, _)| Suggestion {
-                replacement: format!("#{}", quote_value(&t)),
-                display: format!("#{}", t),
-                description: String::new(),
-            })
-            .collect();
+            let suggestions: Vec<_> = tags
+                .into_iter()
+                .take(10)
+                .map(|(t, _)| Suggestion {
+                    replacement: format!("{}{}", prefix, quote_value(&t)),
+                    display: format!("#{}", t),
+                    description: String::new(),
+                })
+                .collect();
 
-        if !suggestions.is_empty() {
-            return Some((start..end, suggestions));
+            if !suggestions.is_empty() {
+                return Some((start..end, suggestions));
+            }
         }
     }
 
