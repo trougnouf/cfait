@@ -98,6 +98,7 @@ fun SettingsScreen(
     var showTagsTab by remember { mutableStateOf(true) }
     var showLocationsTab by remember { mutableStateOf(true) }
     var showGoalsTab by remember { mutableStateOf(true) }
+    var showJournalTab by remember { mutableStateOf(true) }
     var showTaskGoalsInSidebar by remember { mutableStateOf(true) }
     var sortCollectionsBySize by remember { mutableStateOf(true) }
 
@@ -225,6 +226,7 @@ fun SettingsScreen(
         showTagsTab = cfg.showTagsTab
         showLocationsTab = cfg.showLocationsTab
         showGoalsTab = cfg.showGoalsTab
+        showJournalTab = cfg.showJournalTab
         showTaskGoalsInSidebar = cfg.showTaskGoalsInSidebar
         sortCollectionsBySize = cfg.sortCollectionsBySize
 
@@ -298,6 +300,7 @@ fun SettingsScreen(
             showTagsTab = finalShowTagsTab,
             showLocationsTab = finalShowLocationsTab,
             showGoalsTab = finalShowGoalsTab,
+            showJournalTab = finalShowJournalTab,
             showTaskGoalsInSidebar = showTaskGoalsInSidebar,
             sortCollectionsBySize = sortCollectionsBySize
         )
