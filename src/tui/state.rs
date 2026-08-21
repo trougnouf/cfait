@@ -696,7 +696,7 @@ impl AppState {
             SidebarMode::Calendars => self.get_filtered_calendars().len(),
             SidebarMode::Categories => self.cached_categories.len(),
             SidebarMode::Locations => self.cached_locations.len(),
-            SidebarMode::Journal => 31, // Mini-calendar has ~31 days
+            SidebarMode::Journal => self.cached_journal_pages.len(),
             SidebarMode::Goals => self.goals.len(),
         }
     }

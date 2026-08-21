@@ -208,7 +208,7 @@ pub fn init_keyring() {
 // --- LINUX OO7 WRAPPER & ASYNC HELPER ---
 
 #[cfg(target_os = "linux")]
-async fn get_keyring() -> Result<std::sync::Arc<oo7::Keyring>, oo7::Error> {
+async fn get_keyring() -> Result<std::sync::Arc<oo7::Keyring>, Box<oo7::Error>> {
     // Generate a fresh D-Bus connection per request. This avoids carrying
     // stale connection states across dropped temporary Tokio executors.
     Ok(std::sync::Arc::new(oo7::Keyring::new().await?))

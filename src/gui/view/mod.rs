@@ -2804,6 +2804,13 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
 
     let header_drag_area: Element<_> = if app.force_ssd {
         let header_top = if app.journal_editing_uid.is_some() {
+            let delete_btn = iced::widget::button(icon::icon(icon::TRASH).size(14))
+                .style(iced::widget::button::danger)
+                .padding(8)
+                .on_press(Message::DeleteTaskTree(
+                    app.journal_editing_uid.clone().unwrap(),
+                ));
+
             row![
                 iced::widget::text_input("Page title...", &app.journal_title_input)
                     .on_input(Message::JournalTitleInputChanged)
@@ -2814,6 +2821,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
                     })
                     .padding(5)
                     .width(Length::Fill),
+                delete_btn,
                 window_controls
             ]
             .align_y(iced::Alignment::Center)
@@ -2831,6 +2839,13 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
         header_top.into()
     } else {
         let header_top = if app.journal_editing_uid.is_some() {
+            let delete_btn = iced::widget::button(icon::icon(icon::TRASH).size(14))
+                .style(iced::widget::button::danger)
+                .padding(8)
+                .on_press(Message::DeleteTaskTree(
+                    app.journal_editing_uid.clone().unwrap(),
+                ));
+
             row![
                 iced::widget::text_input("Page title...", &app.journal_title_input)
                     .on_input(Message::JournalTitleInputChanged)
@@ -2841,6 +2856,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
                     })
                     .padding(5)
                     .width(Length::Fill),
+                delete_btn,
                 window_controls
             ]
             .align_y(iced::Alignment::Center)

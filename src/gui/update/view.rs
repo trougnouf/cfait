@@ -853,6 +853,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             {
                 return crate::gui::update::tasks::handle(app, Message::DeleteTask(idx));
             }
+            if app.sidebar_mode == SidebarMode::Journal
+                && let Some(uid) = app.journal_editing_uid.clone()
+            {
+                return crate::gui::update::tasks::handle(app, Message::DeleteTaskTree(uid));
+            }
             Task::none()
         }
         Message::ToggleSelected => {

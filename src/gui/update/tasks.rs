@@ -808,12 +808,22 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some(uid) = app.selected_uid.clone() {
                 return handle(app, Message::DeleteTaskTree(uid));
             }
+            if app.sidebar_mode == SidebarMode::Journal
+                && let Some(uid) = app.journal_editing_uid.clone()
+            {
+                return handle(app, Message::DeleteTaskTree(uid));
+            }
             Task::none()
         }
 
         Message::DeleteTaskTree(uid) => {
             app.yanked_uid = None;
             app.yank_lock_active = false;
+
+            if app.journal_editing_uid.as_ref() == Some(&uid) {
+                app.journal_editing_uid = None;
+            }
+
             dispatch_and_maintain_selection(
                 app,
                 AppIntent::DeleteTaskTree { uid: uid.clone() },

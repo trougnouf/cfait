@@ -2573,6 +2573,25 @@ pub async fn handle_key_event(
                         }
                         state.refresh_filtered_view();
                     }
+                } else if state.active_focus == Focus::Sidebar
+                    && state.sidebar_mode == SidebarMode::Journal
+                    && let Some(idx) = state.cal_state.selected()
+                    && let Some(page) = state.cached_journal_pages.get(idx)
+                {
+                    let uid = page.0.clone();
+                    let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
+                    let intent = AppIntent::DeleteTaskTree { uid: uid.clone() };
+                    let actions = state.apply_task_intent(&intent, &config);
+                    state.refresh_filtered_view();
+                    if state.journal_editing_uid == Some(uid) {
+                        state.journal_editing_uid = None;
+                    }
+                    if !actions.is_empty() {
+                        let tx = action_tx.clone();
+                        tokio::spawn(async move {
+                            let _ = tx.send(Action::PersistBatch(actions)).await;
+                        });
+                    }
                 }
             }
             KeyCode::Char('c') => {
@@ -3270,8 +3289,20 @@ pub async fn handle_key_event(
                     needs_refresh = true;
                 }
 
-                match state.sidebar_mode {
-                    SidebarMode::Calendars => {
+                if !state.selected_categories.is_empty() {
+                    state.selected_categories.clear();
+                    needs_refresh = true;
+                }
+
+                if !state.selected_locations.is_empty() {
+                    state.selected_locations.clear();
+                    needs_refresh = true;
+                }
+
+                if needs_refresh {
+                    state.refresh_filtered_view();
+                } else {
+                    if state.sidebar_mode == SidebarMode::Calendars {
                         let are_all_visible = state
                             .get_filtered_calendars()
                             .iter()
@@ -3285,7 +3316,6 @@ pub async fn handle_key_event(
                             for cal in &state.calendars {
                                 if state.active_cal_href.as_ref() != Some(&cal.href) {
                                     state.hidden_calendars.insert(cal.href.clone());
-                                    needs_refresh = true;
                                 }
                             }
                         } else {
@@ -3294,30 +3324,12 @@ pub async fn handle_key_event(
                             if state.active_cal_href.as_deref() != Some("local://trash") {
                                 state.hidden_calendars.insert("local://trash".to_string());
                             }
-                            needs_refresh = true;
                             let _ = action_tx.send(Action::Refresh).await;
                         }
-                    }
-                    SidebarMode::Categories => {
-                        if !state.selected_categories.is_empty() {
-                            state.selected_categories.clear();
-                            needs_refresh = true;
-                        }
-                    }
-                    SidebarMode::Locations => {
-                        if !state.selected_locations.is_empty() {
-                            state.selected_locations.clear();
-                            needs_refresh = true;
-                        }
-                    }
-                    SidebarMode::Goals => {}
-                    SidebarMode::Journal => {
+                        state.refresh_filtered_view();
+                    } else if state.sidebar_mode == SidebarMode::Journal {
                         state.active_focus = Focus::Main;
                     }
-                }
-
-                if needs_refresh {
-                    state.refresh_filtered_view();
                 }
             }
             KeyCode::Left => {

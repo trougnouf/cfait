@@ -3073,7 +3073,7 @@ pub fn apply_smart_input(
                             }
                         }
 
-                        if !is_alias_key || !task.locations.contains(&v) {
+                        if !is_alias_key && !task.locations.contains(&v) {
                             task.locations.push(v);
                         }
                     }
@@ -3116,7 +3116,7 @@ pub fn apply_smart_input(
                             }
                         }
 
-                        if !is_alias_key || !task.locations.contains(&v) {
+                        if !is_alias_key && !task.locations.contains(&v) {
                             task.locations.push(v);
                         }
                     }
@@ -3203,13 +3203,32 @@ pub fn apply_smart_input(
                 for cat in expanded_cats {
                     let clean_cat = strip_quotes(&cat);
                     if !clean_cat.is_empty() && !task.categories.contains(&clean_cat) {
-                        // MIGRATION: Convert legacy `#blocked` tags into the native property
-                        if clean_cat.eq_ignore_ascii_case("blocked") {
-                            task.manual_block = true;
-                        } else if clean_cat.eq_ignore_ascii_case("permanent") {
-                            task.permanent = true;
-                        } else {
-                            task.categories.push(clean_cat);
+                        let mut is_alias_key = false;
+                        if !is_bg {
+                            let cat_key = format!("#{}", clean_cat);
+                            let mut search = cat_key.as_str();
+                            loop {
+                                if visited.contains(search) {
+                                    is_alias_key = true;
+                                    break;
+                                }
+                                if let Some(idx) = search.rfind(':') {
+                                    search = &search[..idx];
+                                } else {
+                                    break;
+                                }
+                            }
+                        }
+
+                        if !is_alias_key {
+                            // MIGRATION: Convert legacy `#blocked` tags into the native property
+                            if clean_cat.eq_ignore_ascii_case("blocked") {
+                                task.manual_block = true;
+                            } else if clean_cat.eq_ignore_ascii_case("permanent") {
+                                task.permanent = true;
+                            } else {
+                                task.categories.push(clean_cat);
+                            }
                         }
                     }
                 }
