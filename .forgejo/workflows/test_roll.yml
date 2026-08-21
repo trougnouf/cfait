@@ -142,7 +142,7 @@ jobs:
           mkdir -p /flatpak-cache /home/builder/.local/share/flatpak
           chown -R builder:builder . /flatpak-cache /home/builder/.local/share/flatpak
           su builder -c "flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo"
-          su builder -c "flatpak-builder --user --disable-rofiles-fuse --install-deps-from=flathub --force-clean --state-dir=/flatpak-cache --repo=repo build-dir com.trougnouf.Cfait.yml"
+          su builder -c "flatpak-builder --user --disable-rofiles-fuse --force-clean --state-dir=/flatpak-cache --repo=repo build-dir com.trougnouf.Cfait.yml"
           su builder -c "flatpak build-bundle repo cfait-rolling.flatpak com.trougnouf.Cfait"
 
       - name: Prepare Artifact
