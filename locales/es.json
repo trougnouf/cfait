@@ -640,7 +640,10 @@
     "show_all": "Mostrar todo",
     "show_all_collections": "Mostrar todas las colecciones",
     "show_details": "Mostrar detalles",
+    "show_calendars_tab": "Mostrar la pestaña Calendarios en el menú lateral",
     "show_goals_tab": "Mostrar la pestaña Objetivos en el menú lateral",
+    "show_tags_tab": "Mostrar la pestaña Etiquetas en el menú lateral",
+    "show_locations_tab": "Mostrar la pestaña Ubicaciones en el menú lateral",
     "show_less": "Ver menos",
     "show_older_sessions": {
         "one": "Ver 1 sesión más antigua…",

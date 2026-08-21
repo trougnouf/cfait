@@ -379,6 +379,15 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.show_priority_numbers)
                     .label(rust_i18n::t!("show_priority_numbers"))
                     .on_toggle(Message::SetShowPriorityNumbers),
+                checkbox::<Message, iced::Theme, iced::Renderer>(app.show_calendars_tab)
+                    .label(rust_i18n::t!("show_calendars_tab"))
+                    .on_toggle(Message::SetShowCalendarsTab),
+                checkbox::<Message, iced::Theme, iced::Renderer>(app.show_tags_tab)
+                    .label(rust_i18n::t!("show_tags_tab"))
+                    .on_toggle(Message::SetShowTagsTab),
+                checkbox::<Message, iced::Theme, iced::Renderer>(app.show_locations_tab)
+                    .label(rust_i18n::t!("show_locations_tab"))
+                    .on_toggle(Message::SetShowLocationsTab),
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.show_journal_tab)
                     .label(rust_i18n::t!("show_journal_tab"))
                     .on_toggle(Message::SetShowJournalTab),

@@ -940,7 +940,19 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::SidebarModeChanged(mode) => {
+            if mode == SidebarMode::Calendars && !app.show_calendars_tab {
+                return Task::none();
+            }
+            if mode == SidebarMode::Categories && !app.show_tags_tab {
+                return Task::none();
+            }
+            if mode == SidebarMode::Locations && !app.show_locations_tab {
+                return Task::none();
+            }
             if mode == SidebarMode::Goals && !app.show_goals_tab {
+                return Task::none();
+            }
+            if mode == SidebarMode::Journal && !app.show_journal_tab {
                 return Task::none();
             }
             if app.sidebar_mode == SidebarMode::Journal && mode != SidebarMode::Journal {

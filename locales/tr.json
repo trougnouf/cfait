@@ -186,6 +186,11 @@
     "error_invalid_tls": "Bağlantı başarısız oldu: Geçersiz TLS Sertifikası. %{error}",
     "last_modified_label": "Son Değişim Zamanı",
     "remote_collections": "Uzak listeler",
+    "show_calendars_tab": "Yan çubukta Takvimler sekmesini göster",
+    "show_tags_tab": "Yan çubukta Etiketler sekmesini göster",
+    "show_locations_tab": "Yan çubukta Konumlar sekmesini göster",
+    "show_goals_tab": "Yan çubukta Hedefler sekmesini göster",
+    "show_journal_tab": "Yan çubukta Günlük sekmesini göster",
     "warning_background_sync_failed": "Uyarı: Eşitleme başarısız oldu: %{error}",
     "warning_calendar_not_found": "Uyarı: \"%{calendar}\" takvimi bulunamadı. Görev, yereldeki kurtarma takvimine kaydedilecek.",
     "window_title": "Cfait | 🗹 Yapılacaklar listenin dizginlerini ele geçir"

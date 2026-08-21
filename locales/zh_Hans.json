@@ -628,7 +628,10 @@
     "show_all": "全部显示",
     "show_all_collections": "显示所有集合",
     "show_details": "显示详情",
+    "show_calendars_tab": "在侧边栏中显示日历标签页",
     "show_goals_tab": "在侧边栏中显示目标标签页",
+    "show_tags_tab": "在侧边栏中显示标签标签页",
+    "show_locations_tab": "在侧边栏中显示位置标签页",
     "show_less": "显示更少",
     "show_older_sessions": {
         "one": "显示 1 个旧会话…",

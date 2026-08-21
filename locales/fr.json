@@ -631,7 +631,10 @@
     "show_all": "Tout afficher",
     "show_all_collections": "Afficher toutes les collections",
     "show_details": "Afficher les détails",
+    "show_calendars_tab": "Afficher l'onglet Calendriers dans la barre latérale",
     "show_goals_tab": "Afficher l'onglet Objectifs dans la barre latérale",
+    "show_tags_tab": "Afficher l'onglet Tags dans la barre latérale",
+    "show_locations_tab": "Afficher l'onglet Lieux dans la barre latérale",
     "show_less": "Voir moins",
     "show_older_sessions": {
         "one": "Afficher 1 ancienne session…",

@@ -600,7 +600,10 @@
     "show_all": "Hiện tất cả",
     "show_all_collections": "Hiện tất cả bộ sưu tầm",
     "show_details": "Hiện chi tiết",
+    "show_calendars_tab": "Hiện phần lịch ở thanh bên",
     "show_goals_tab": "Hiện phần mục tiêu ở thanh bên",
+    "show_tags_tab": "Hiện phần thẻ ở thanh bên",
+    "show_locations_tab": "Hiện phần vị trí ở thanh bên",
     "show_less": "Ẩn bớt",
     "show_older_sessions": {
         "one": "Hiện 1 phiên làm việc trước…",

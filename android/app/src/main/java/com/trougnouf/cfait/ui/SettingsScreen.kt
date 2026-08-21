@@ -94,6 +94,9 @@ fun SettingsScreen(
     var editingGoalKey by remember { mutableStateOf<String?>(null) }
     var defaultDurationGoalMins by remember { mutableStateOf("60") }
     var sessionsCountAsCompletions by remember { mutableStateOf(false) }
+    var showCalendarsTab by remember { mutableStateOf(true) }
+    var showTagsTab by remember { mutableStateOf(true) }
+    var showLocationsTab by remember { mutableStateOf(true) }
     var showGoalsTab by remember { mutableStateOf(true) }
     var showTaskGoalsInSidebar by remember { mutableStateOf(true) }
     var sortCollectionsBySize by remember { mutableStateOf(true) }
@@ -218,6 +221,9 @@ fun SettingsScreen(
         goals = cfg.goals
         defaultDurationGoalMins = cfg.defaultDurationGoalMins.toString()
         sessionsCountAsCompletions = cfg.sessionsCountAsCompletions
+        showCalendarsTab = cfg.showCalendarsTab
+        showTagsTab = cfg.showTagsTab
+        showLocationsTab = cfg.showLocationsTab
         showGoalsTab = cfg.showGoalsTab
         showTaskGoalsInSidebar = cfg.showTaskGoalsInSidebar
         sortCollectionsBySize = cfg.sortCollectionsBySize
@@ -261,6 +267,14 @@ fun SettingsScreen(
         val cfg = api.getConfig()
         val sShort = cfg.snoozeShort
         val aRefresh = api.parseDurationString(autoRefresh) ?: 30u
+        
+        // Ensure at least one tab is visible
+        val atLeastOneTab = showCalendarsTab || showTagsTab || showLocationsTab || showGoalsTab || showJournalTab
+        val finalShowCalendarsTab = if (!showCalendarsTab && !atLeastOneTab) true else showCalendarsTab
+        val finalShowTagsTab = if (!showTagsTab && !atLeastOneTab) true else showTagsTab
+        val finalShowLocationsTab = if (!showLocationsTab && !atLeastOneTab) true else showLocationsTab
+        val finalShowGoalsTab = if (!showGoalsTab && !atLeastOneTab) true else showGoalsTab
+        val finalShowJournalTab = if (!showJournalTab && !atLeastOneTab) true else showJournalTab
 
         val newCfg = cfg.copy(
             url = url,
@@ -280,7 +294,10 @@ fun SettingsScreen(
             goals = goals,
             defaultDurationGoalMins = defaultDurationGoalMins.toUIntOrNull() ?: 60u,
             sessionsCountAsCompletions = sessionsCountAsCompletions,
-            showGoalsTab = showGoalsTab,
+            showCalendarsTab = finalShowCalendarsTab,
+            showTagsTab = finalShowTagsTab,
+            showLocationsTab = finalShowLocationsTab,
+            showGoalsTab = finalShowGoalsTab,
             showTaskGoalsInSidebar = showTaskGoalsInSidebar,
             sortCollectionsBySize = sortCollectionsBySize
         )
@@ -784,6 +801,46 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.primary,
                 )
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
+                    Switch(
+                        checked = showCalendarsTab,
+                        onCheckedChange = { showCalendarsTab = it; saveToDisk() }
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.show_calendars_tab))
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
+                    Switch(
+                        checked = showTagsTab,
+                        onCheckedChange = { showTagsTab = it; saveToDisk() }
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.show_tags_tab))
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
+                    Switch(
+                        checked = showLocationsTab,
+                        onCheckedChange = { showLocationsTab = it; saveToDisk() }
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.show_locations_tab))
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
+                    Switch(
+                        checked = showGoalsTab,
+                        onCheckedChange = { showGoalsTab = it; saveToDisk() }
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.show_goals_tab))
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
+                    Switch(
+                        checked = showJournalTab,
+                        onCheckedChange = { showJournalTab = it; saveToDisk() }
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.show_journal_tab))
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
                     Checkbox(
                         checked = sortCollectionsBySize,
                         onCheckedChange = { sortCollectionsBySize = it; saveToDisk() }
@@ -1022,14 +1079,6 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Switch(
-                        checked = showGoalsTab,
-                        onCheckedChange = { showGoalsTab = it; saveToDisk() }
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.show_goals_tab))
-                }
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 16.dp)) {
                     Switch(
                         checked = showTaskGoalsInSidebar,

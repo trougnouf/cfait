@@ -636,7 +636,10 @@
     "show_all": "Alle anzeigen",
     "show_all_collections": "Alle Sammlungen anzeigen",
     "show_details": "Details anzeigen",
+    "show_calendars_tab": "Zeige den Kalender-Tab in der Seitenleiste",
     "show_goals_tab": "Zeige den Ziele-Tab in der Seitenleiste",
+    "show_tags_tab": "Zeige den Tags-Tab in der Seitenleiste",
+    "show_locations_tab": "Zeige den Orte-Tab in der Seitenleiste",
     "show_less": "Weniger anzeigen",
     "show_older_sessions": {
         "one": "Zeige 1 ältere Sitzung…",

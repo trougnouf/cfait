@@ -789,6 +789,15 @@ pub struct Config {
     pub show_quick_filter: bool,
 
     #[serde(default = "default_true")]
+    pub show_calendars_tab: bool,
+
+    #[serde(default = "default_true")]
+    pub show_tags_tab: bool,
+
+    #[serde(default = "default_true")]
+    pub show_locations_tab: bool,
+
+    #[serde(default = "default_true")]
     pub show_goals_tab: bool,
 
     #[serde(default = "default_true")]
@@ -913,6 +922,12 @@ pub struct SyncableConfig {
     #[serde(default = "default_true")]
     pub show_quick_filter: bool,
     #[serde(default = "default_true")]
+    pub show_calendars_tab: bool,
+    #[serde(default = "default_true")]
+    pub show_tags_tab: bool,
+    #[serde(default = "default_true")]
+    pub show_locations_tab: bool,
+    #[serde(default = "default_true")]
     pub show_goals_tab: bool,
     #[serde(default = "default_true")]
     pub show_journal_tab: bool,
@@ -985,6 +1000,9 @@ impl Default for Config {
             quick_filter_term: default_quick_filter_term(),
             quick_filter_icon: default_quick_filter_icon(),
             show_quick_filter: true,
+            show_calendars_tab: true,
+            show_tags_tab: true,
+            show_locations_tab: true,
             show_goals_tab: true,
             show_journal_tab: true,
             show_task_goals_in_sidebar: true,
@@ -1043,6 +1061,9 @@ impl Config {
             quick_filter_term: self.quick_filter_term.clone(),
             quick_filter_icon: self.quick_filter_icon.clone(),
             show_quick_filter: self.show_quick_filter,
+            show_calendars_tab: self.show_calendars_tab,
+            show_tags_tab: self.show_tags_tab,
+            show_locations_tab: self.show_locations_tab,
             show_goals_tab: self.show_goals_tab,
             show_journal_tab: self.show_journal_tab,
             show_task_goals_in_sidebar: self.show_task_goals_in_sidebar,
@@ -1092,6 +1113,9 @@ impl Config {
         self.quick_filter_term = sync.quick_filter_term;
         self.quick_filter_icon = sync.quick_filter_icon;
         self.show_quick_filter = sync.show_quick_filter;
+        self.show_calendars_tab = sync.show_calendars_tab;
+        self.show_tags_tab = sync.show_tags_tab;
+        self.show_locations_tab = sync.show_locations_tab;
         self.show_goals_tab = sync.show_goals_tab;
         self.show_journal_tab = sync.show_journal_tab;
         self.show_task_goals_in_sidebar = sync.show_task_goals_in_sidebar;
@@ -1454,6 +1478,15 @@ impl Config {
             } else if trimmed.starts_with("show_quick_filter =") {
                 out.push_str(line);
                 out.push_str(" # Boolean: Display the quick filter button in the search bar.");
+            } else if trimmed.starts_with("show_calendars_tab =") {
+                out.push_str(line);
+                out.push_str(" # Boolean: Display the Calendars tab in the sidebar.");
+            } else if trimmed.starts_with("show_tags_tab =") {
+                out.push_str(line);
+                out.push_str(" # Boolean: Display the Tags tab in the sidebar.");
+            } else if trimmed.starts_with("show_locations_tab =") {
+                out.push_str(line);
+                out.push_str(" # Boolean: Display the Locations tab in the sidebar.");
             } else if trimmed.starts_with("show_goals_tab =") {
                 out.push_str(line);
                 out.push_str(" # Boolean: Display the Goals tab in the sidebar.");

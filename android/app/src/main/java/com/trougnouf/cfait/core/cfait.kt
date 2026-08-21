@@ -4630,6 +4630,9 @@ data class MobileConfig(
     var `goals`: Map<kotlin.String, MobileGoal>,
     var `defaultDurationGoalMins`: kotlin.UInt,
     var `sessionsCountAsCompletions`: kotlin.Boolean,
+    var `showCalendarsTab`: kotlin.Boolean,
+    var `showTagsTab`: kotlin.Boolean,
+    var `showLocationsTab`: kotlin.Boolean,
     var `showGoalsTab`: kotlin.Boolean,
     var `showJournalTab`: kotlin.Boolean,
     var `showTaskGoalsInSidebar`: kotlin.Boolean,
@@ -4689,6 +4692,9 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterSequenceString.read(buf),
@@ -4734,6 +4740,9 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
                 FfiConverterMapStringTypeMobileGoal.allocationSize(value.`goals`) +
                 FfiConverterUInt.allocationSize(value.`defaultDurationGoalMins`) +
                 FfiConverterBoolean.allocationSize(value.`sessionsCountAsCompletions`) +
+                FfiConverterBoolean.allocationSize(value.`showCalendarsTab`) +
+                FfiConverterBoolean.allocationSize(value.`showTagsTab`) +
+                FfiConverterBoolean.allocationSize(value.`showLocationsTab`) +
                 FfiConverterBoolean.allocationSize(value.`showGoalsTab`) +
                 FfiConverterBoolean.allocationSize(value.`showJournalTab`) +
                 FfiConverterBoolean.allocationSize(value.`showTaskGoalsInSidebar`) +
@@ -4785,6 +4794,9 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
         FfiConverterMapStringTypeMobileGoal.write(value.`goals`, buf)
         FfiConverterUInt.write(value.`defaultDurationGoalMins`, buf)
         FfiConverterBoolean.write(value.`sessionsCountAsCompletions`, buf)
+        FfiConverterBoolean.write(value.`showCalendarsTab`, buf)
+        FfiConverterBoolean.write(value.`showTagsTab`, buf)
+        FfiConverterBoolean.write(value.`showLocationsTab`, buf)
         FfiConverterBoolean.write(value.`showGoalsTab`, buf)
         FfiConverterBoolean.write(value.`showJournalTab`, buf)
         FfiConverterBoolean.write(value.`showTaskGoalsInSidebar`, buf)

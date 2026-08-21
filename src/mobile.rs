@@ -471,6 +471,9 @@ pub struct MobileConfig {
     pub goals: HashMap<String, MobileGoal>,
     pub default_duration_goal_mins: u32,
     pub sessions_count_as_completions: bool,
+    pub show_calendars_tab: bool,
+    pub show_tags_tab: bool,
+    pub show_locations_tab: bool,
     pub show_goals_tab: bool,
     pub show_journal_tab: bool,
     pub show_task_goals_in_sidebar: bool,
@@ -1320,6 +1323,9 @@ impl CfaitMobile {
                 .collect(),
             default_duration_goal_mins: c.default_duration_goal_mins,
             sessions_count_as_completions: c.sessions_count_as_completions,
+            show_calendars_tab: c.show_calendars_tab,
+            show_tags_tab: c.show_tags_tab,
+            show_locations_tab: c.show_locations_tab,
             show_goals_tab: c.show_goals_tab,
             show_journal_tab: c.show_journal_tab,
             show_task_goals_in_sidebar: c.show_task_goals_in_sidebar,
@@ -1486,6 +1492,9 @@ impl CfaitMobile {
             .collect();
         c.default_duration_goal_mins = config.default_duration_goal_mins;
         c.sessions_count_as_completions = config.sessions_count_as_completions;
+        c.show_calendars_tab = config.show_calendars_tab;
+        c.show_tags_tab = config.show_tags_tab;
+        c.show_locations_tab = config.show_locations_tab;
         c.show_goals_tab = config.show_goals_tab;
         c.show_journal_tab = config.show_journal_tab;
         c.sort_collections_by_size = config.sort_collections_by_size;

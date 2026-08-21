@@ -182,6 +182,9 @@ pub fn save_config(app: &mut GuiApp) -> Config {
     cfg.quick_filter_term = app.quick_filter_term.clone();
     cfg.quick_filter_icon = app.quick_filter_icon.clone();
     cfg.show_quick_filter = app.show_quick_filter;
+    cfg.show_calendars_tab = app.show_calendars_tab;
+    cfg.show_tags_tab = app.show_tags_tab;
+    cfg.show_locations_tab = app.show_locations_tab;
     cfg.show_goals_tab = app.show_goals_tab;
     cfg.sidebar_is_hidden = app.sidebar_is_hidden;
     cfg.sort_collections_by_size = app.sort_collections_by_size;

@@ -284,6 +284,11 @@
     "show_all_collections": "Mostra tutte le collezioni",
     "show_details": "Mostra dettagli",
     "show_less": "Mostra meno",
+    "show_calendars_tab": "Mostra la scheda Calendari nella barra laterale",
+    "show_tags_tab": "Mostra la scheda Tag nella barra laterale",
+    "show_locations_tab": "Mostra la scheda Posizioni nella barra laterale",
+    "show_goals_tab": "Mostra la scheda Obiettivi nella barra laterale",
+    "show_journal_tab": "Mostra la scheda Diario nella barra laterale",
     "show_older_sessions": {
         "one": "Mostra 1 sessione più vecchia…",
         "other": "Mostra %{count} sessioni più vecchie…"

@@ -53,14 +53,74 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.quick_filter_term = config.quick_filter_term.clone();
             app.quick_filter_icon = config.quick_filter_icon.clone();
             app.show_quick_filter = config.show_quick_filter;
+            app.show_calendars_tab = config.show_calendars_tab;
+            app.show_tags_tab = config.show_tags_tab;
+            app.show_locations_tab = config.show_locations_tab;
             app.show_goals_tab = config.show_goals_tab;
             app.show_journal_tab = config.show_journal_tab;
+            
+            // Ensure at least one tab is visible
+            let at_least_one_tab = app.show_calendars_tab || app.show_tags_tab || app.show_locations_tab || app.show_goals_tab || app.show_journal_tab;
+            if !at_least_one_tab {
+                // If all tabs are hidden, default to showing calendars
+                app.show_calendars_tab = true;
+            }
+            
+            if !app.show_calendars_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Calendars {
+                app.sidebar_mode = if app.show_tags_tab {
+                    crate::gui::state::SidebarMode::Categories
+                } else if app.show_locations_tab {
+                    crate::gui::state::SidebarMode::Locations
+                } else if app.show_goals_tab {
+                    crate::gui::state::SidebarMode::Goals
+                } else {
+                    crate::gui::state::SidebarMode::Journal
+                };
+            }
+            if !app.show_tags_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Categories {
+                app.sidebar_mode = if app.show_calendars_tab {
+                    crate::gui::state::SidebarMode::Calendars
+                } else if app.show_locations_tab {
+                    crate::gui::state::SidebarMode::Locations
+                } else if app.show_goals_tab {
+                    crate::gui::state::SidebarMode::Goals
+                } else {
+                    crate::gui::state::SidebarMode::Journal
+                };
+            }
+            if !app.show_locations_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Locations {
+                app.sidebar_mode = if app.show_calendars_tab {
+                    crate::gui::state::SidebarMode::Calendars
+                } else if app.show_tags_tab {
+                    crate::gui::state::SidebarMode::Categories
+                } else if app.show_goals_tab {
+                    crate::gui::state::SidebarMode::Goals
+                } else {
+                    crate::gui::state::SidebarMode::Journal
+                };
+            }
             if !app.show_goals_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Goals {
-                app.sidebar_mode = crate::gui::state::SidebarMode::Calendars;
+                app.sidebar_mode = if app.show_calendars_tab {
+                    crate::gui::state::SidebarMode::Calendars
+                } else if app.show_tags_tab {
+                    crate::gui::state::SidebarMode::Categories
+                } else if app.show_locations_tab {
+                    crate::gui::state::SidebarMode::Locations
+                } else {
+                    crate::gui::state::SidebarMode::Journal
+                };
             }
             if !app.show_journal_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Journal
             {
-                app.sidebar_mode = crate::gui::state::SidebarMode::Calendars;
+                app.sidebar_mode = if app.show_calendars_tab {
+                    crate::gui::state::SidebarMode::Calendars
+                } else if app.show_tags_tab {
+                    crate::gui::state::SidebarMode::Categories
+                } else if app.show_locations_tab {
+                    crate::gui::state::SidebarMode::Locations
+                } else {
+                    crate::gui::state::SidebarMode::Goals
+                };
             }
             app.sidebar_is_hidden = config.sidebar_is_hidden;
             app.sort_collections_by_size = config.sort_collections_by_size;
@@ -209,14 +269,74 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.quick_filter_term = config.quick_filter_term.clone();
             app.quick_filter_icon = config.quick_filter_icon.clone();
             app.show_quick_filter = config.show_quick_filter;
+            app.show_calendars_tab = config.show_calendars_tab;
+            app.show_tags_tab = config.show_tags_tab;
+            app.show_locations_tab = config.show_locations_tab;
             app.show_goals_tab = config.show_goals_tab;
             app.show_journal_tab = config.show_journal_tab;
+            
+            // Ensure at least one tab is visible
+            let at_least_one_tab = app.show_calendars_tab || app.show_tags_tab || app.show_locations_tab || app.show_goals_tab || app.show_journal_tab;
+            if !at_least_one_tab {
+                // If all tabs are hidden, default to showing calendars
+                app.show_calendars_tab = true;
+            }
+            
+            if !app.show_calendars_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Calendars {
+                app.sidebar_mode = if app.show_tags_tab {
+                    crate::gui::state::SidebarMode::Categories
+                } else if app.show_locations_tab {
+                    crate::gui::state::SidebarMode::Locations
+                } else if app.show_goals_tab {
+                    crate::gui::state::SidebarMode::Goals
+                } else {
+                    crate::gui::state::SidebarMode::Journal
+                };
+            }
+            if !app.show_tags_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Categories {
+                app.sidebar_mode = if app.show_calendars_tab {
+                    crate::gui::state::SidebarMode::Calendars
+                } else if app.show_locations_tab {
+                    crate::gui::state::SidebarMode::Locations
+                } else if app.show_goals_tab {
+                    crate::gui::state::SidebarMode::Goals
+                } else {
+                    crate::gui::state::SidebarMode::Journal
+                };
+            }
+            if !app.show_locations_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Locations {
+                app.sidebar_mode = if app.show_calendars_tab {
+                    crate::gui::state::SidebarMode::Calendars
+                } else if app.show_tags_tab {
+                    crate::gui::state::SidebarMode::Categories
+                } else if app.show_goals_tab {
+                    crate::gui::state::SidebarMode::Goals
+                } else {
+                    crate::gui::state::SidebarMode::Journal
+                };
+            }
             if !app.show_goals_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Goals {
-                app.sidebar_mode = crate::gui::state::SidebarMode::Calendars;
+                app.sidebar_mode = if app.show_calendars_tab {
+                    crate::gui::state::SidebarMode::Calendars
+                } else if app.show_tags_tab {
+                    crate::gui::state::SidebarMode::Categories
+                } else if app.show_locations_tab {
+                    crate::gui::state::SidebarMode::Locations
+                } else {
+                    crate::gui::state::SidebarMode::Journal
+                };
             }
             if !app.show_journal_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Journal
             {
-                app.sidebar_mode = crate::gui::state::SidebarMode::Calendars;
+                app.sidebar_mode = if app.show_calendars_tab {
+                    crate::gui::state::SidebarMode::Calendars
+                } else if app.show_tags_tab {
+                    crate::gui::state::SidebarMode::Categories
+                } else if app.show_locations_tab {
+                    crate::gui::state::SidebarMode::Locations
+                } else {
+                    crate::gui::state::SidebarMode::Goals
+                };
             }
             app.sidebar_is_hidden = config.sidebar_is_hidden;
             app.sort_collections_by_size = config.sort_collections_by_size;
@@ -399,8 +519,49 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::CancelSettings => {
             app.ob_password_visible = false;
+            if !app.show_calendars_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Calendars {
+                app.sidebar_mode = if app.show_tags_tab {
+                    crate::gui::state::SidebarMode::Categories
+                } else if app.show_locations_tab {
+                    crate::gui::state::SidebarMode::Locations
+                } else if app.show_goals_tab {
+                    crate::gui::state::SidebarMode::Goals
+                } else {
+                    crate::gui::state::SidebarMode::Journal
+                };
+            }
+            if !app.show_tags_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Categories {
+                app.sidebar_mode = if app.show_calendars_tab {
+                    crate::gui::state::SidebarMode::Calendars
+                } else if app.show_locations_tab {
+                    crate::gui::state::SidebarMode::Locations
+                } else if app.show_goals_tab {
+                    crate::gui::state::SidebarMode::Goals
+                } else {
+                    crate::gui::state::SidebarMode::Journal
+                };
+            }
+            if !app.show_locations_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Locations {
+                app.sidebar_mode = if app.show_calendars_tab {
+                    crate::gui::state::SidebarMode::Calendars
+                } else if app.show_tags_tab {
+                    crate::gui::state::SidebarMode::Categories
+                } else if app.show_goals_tab {
+                    crate::gui::state::SidebarMode::Goals
+                } else {
+                    crate::gui::state::SidebarMode::Journal
+                };
+            }
             if !app.show_goals_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Goals {
-                app.sidebar_mode = crate::gui::state::SidebarMode::Calendars;
+                app.sidebar_mode = if app.show_calendars_tab {
+                    crate::gui::state::SidebarMode::Calendars
+                } else if app.show_tags_tab {
+                    crate::gui::state::SidebarMode::Categories
+                } else if app.show_locations_tab {
+                    crate::gui::state::SidebarMode::Locations
+                } else {
+                    crate::gui::state::SidebarMode::Journal
+                };
             }
             app.calendars.retain(|c| !c.href.starts_with("local://"));
             app.calendars.extend(app.local_cals_editing.clone());
@@ -927,19 +1088,126 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             save_config(app);
             Task::none()
         }
+        Message::SetShowCalendarsTab(val) => {
+            // Check if we can disable calendars tab (at least one other tab must be visible)
+            if !val {
+                let at_least_one_other_tab = app.show_tags_tab || app.show_locations_tab || app.show_goals_tab || app.show_journal_tab;
+                if !at_least_one_other_tab {
+                    // Cannot disable calendars if it's the last visible tab
+                    return Task::none();
+                }
+            }
+            app.show_calendars_tab = val;
+            if !val && app.sidebar_mode == crate::gui::state::SidebarMode::Calendars {
+                app.sidebar_mode = if app.show_tags_tab {
+                    crate::gui::state::SidebarMode::Categories
+                } else if app.show_locations_tab {
+                    crate::gui::state::SidebarMode::Locations
+                } else if app.show_goals_tab {
+                    crate::gui::state::SidebarMode::Goals
+                } else {
+                    crate::gui::state::SidebarMode::Journal
+                };
+            }
+            save_config(app);
+            crate::gui::update::common::refresh_filtered_tasks(app);
+            Task::none()
+        }
+        Message::SetShowTagsTab(val) => {
+            // Check if we can disable tags tab (at least one other tab must be visible)
+            if !val {
+                let at_least_one_other_tab = app.show_calendars_tab || app.show_locations_tab || app.show_goals_tab || app.show_journal_tab;
+                if !at_least_one_other_tab {
+                    // Cannot disable tags if it's the last visible tab
+                    return Task::none();
+                }
+            }
+            app.show_tags_tab = val;
+            if !val && app.sidebar_mode == crate::gui::state::SidebarMode::Categories {
+                app.sidebar_mode = if app.show_calendars_tab {
+                    crate::gui::state::SidebarMode::Calendars
+                } else if app.show_locations_tab {
+                    crate::gui::state::SidebarMode::Locations
+                } else if app.show_goals_tab {
+                    crate::gui::state::SidebarMode::Goals
+                } else {
+                    crate::gui::state::SidebarMode::Journal
+                };
+            }
+            save_config(app);
+            crate::gui::update::common::refresh_filtered_tasks(app);
+            Task::none()
+        }
+        Message::SetShowLocationsTab(val) => {
+            // Check if we can disable locations tab (at least one other tab must be visible)
+            if !val {
+                let at_least_one_other_tab = app.show_calendars_tab || app.show_tags_tab || app.show_goals_tab || app.show_journal_tab;
+                if !at_least_one_other_tab {
+                    // Cannot disable locations if it's the last visible tab
+                    return Task::none();
+                }
+            }
+            app.show_locations_tab = val;
+            if !val && app.sidebar_mode == crate::gui::state::SidebarMode::Locations {
+                app.sidebar_mode = if app.show_calendars_tab {
+                    crate::gui::state::SidebarMode::Calendars
+                } else if app.show_tags_tab {
+                    crate::gui::state::SidebarMode::Categories
+                } else if app.show_goals_tab {
+                    crate::gui::state::SidebarMode::Goals
+                } else {
+                    crate::gui::state::SidebarMode::Journal
+                };
+            }
+            save_config(app);
+            crate::gui::update::common::refresh_filtered_tasks(app);
+            Task::none()
+        }
         Message::SetShowGoalsTab(val) => {
+            // Check if we can disable goals tab (at least one other tab must be visible)
+            if !val {
+                let at_least_one_other_tab = app.show_calendars_tab || app.show_tags_tab || app.show_locations_tab || app.show_journal_tab;
+                if !at_least_one_other_tab {
+                    // Cannot disable goals if it's the last visible tab
+                    return Task::none();
+                }
+            }
             app.show_goals_tab = val;
             if !val && app.sidebar_mode == crate::gui::state::SidebarMode::Goals {
-                app.sidebar_mode = crate::gui::state::SidebarMode::Calendars;
+                app.sidebar_mode = if app.show_calendars_tab {
+                    crate::gui::state::SidebarMode::Calendars
+                } else if app.show_tags_tab {
+                    crate::gui::state::SidebarMode::Categories
+                } else if app.show_locations_tab {
+                    crate::gui::state::SidebarMode::Locations
+                } else {
+                    crate::gui::state::SidebarMode::Journal
+                };
             }
             save_config(app);
             crate::gui::update::common::refresh_filtered_tasks(app);
             Task::none()
         }
         Message::SetShowJournalTab(val) => {
+            // Check if we can disable journal tab (at least one other tab must be visible)
+            if !val {
+                let at_least_one_other_tab = app.show_calendars_tab || app.show_tags_tab || app.show_locations_tab || app.show_goals_tab;
+                if !at_least_one_other_tab {
+                    // Cannot disable journal if it's the last visible tab
+                    return Task::none();
+                }
+            }
             app.show_journal_tab = val;
             if !val && app.sidebar_mode == crate::gui::state::SidebarMode::Journal {
-                app.sidebar_mode = crate::gui::state::SidebarMode::Calendars;
+                app.sidebar_mode = if app.show_calendars_tab {
+                    crate::gui::state::SidebarMode::Calendars
+                } else if app.show_tags_tab {
+                    crate::gui::state::SidebarMode::Categories
+                } else if app.show_locations_tab {
+                    crate::gui::state::SidebarMode::Locations
+                } else {
+                    crate::gui::state::SidebarMode::Goals
+                };
             }
             save_config(app);
             crate::gui::update::common::refresh_filtered_tasks(app);
