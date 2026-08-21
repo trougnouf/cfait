@@ -2242,6 +2242,9 @@ pub async fn handle_key_event(
                 } else if !state.selected_categories.is_empty() {
                     state.selected_categories.clear();
                     needs_refresh = true;
+                } else if !state.selected_locations.is_empty() {
+                    state.selected_locations.clear();
+                    needs_refresh = true;
                 }
                 if needs_refresh {
                     state.refresh_filtered_view();

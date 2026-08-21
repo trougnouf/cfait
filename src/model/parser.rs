@@ -3052,30 +3052,8 @@ pub fn apply_smart_input(
                         continue;
                     }
                     let v = loc_val.to_string();
-                    if is_bg {
+                    if !task.locations.contains(&v) {
                         task.locations.push(v);
-                    } else {
-                        let loc_key = format!("@@{}", v);
-                        let mut is_alias_key = false;
-                        let mut search = loc_key.as_str();
-                        loop {
-                            if visited.contains(search) {
-                                is_alias_key = true;
-                                break;
-                            }
-                            if let Some(idx) = search.rfind(':') {
-                                if idx < 2 {
-                                    break;
-                                }
-                                search = &search[..idx];
-                            } else {
-                                break;
-                            }
-                        }
-
-                        if !is_alias_key && !task.locations.contains(&v) {
-                            task.locations.push(v);
-                        }
                     }
                 }
 
@@ -3095,30 +3073,8 @@ pub fn apply_smart_input(
                         continue;
                     }
                     let v = loc_val.to_string();
-                    if is_bg {
+                    if !task.locations.contains(&v) {
                         task.locations.push(v);
-                    } else {
-                        let loc_key = format!("@@{}", v);
-                        let mut is_alias_key = false;
-                        let mut search = loc_key.as_str();
-                        loop {
-                            if visited.contains(search) {
-                                is_alias_key = true;
-                                break;
-                            }
-                            if let Some(idx) = search.rfind(':') {
-                                if idx < 2 {
-                                    break;
-                                }
-                                search = &search[..idx];
-                            } else {
-                                break;
-                            }
-                        }
-
-                        if !is_alias_key && !task.locations.contains(&v) {
-                            task.locations.push(v);
-                        }
                     }
                 }
             }
