@@ -58,15 +58,21 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.show_locations_tab = config.show_locations_tab;
             app.show_goals_tab = config.show_goals_tab;
             app.show_journal_tab = config.show_journal_tab;
-            
+
             // Ensure at least one tab is visible
-            let at_least_one_tab = app.show_calendars_tab || app.show_tags_tab || app.show_locations_tab || app.show_goals_tab || app.show_journal_tab;
+            let at_least_one_tab = app.show_calendars_tab
+                || app.show_tags_tab
+                || app.show_locations_tab
+                || app.show_goals_tab
+                || app.show_journal_tab;
             if !at_least_one_tab {
                 // If all tabs are hidden, default to showing calendars
                 app.show_calendars_tab = true;
             }
-            
-            if !app.show_calendars_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Calendars {
+
+            if !app.show_calendars_tab
+                && app.sidebar_mode == crate::gui::state::SidebarMode::Calendars
+            {
                 app.sidebar_mode = if app.show_tags_tab {
                     crate::gui::state::SidebarMode::Categories
                 } else if app.show_locations_tab {
@@ -77,7 +83,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     crate::gui::state::SidebarMode::Journal
                 };
             }
-            if !app.show_tags_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Categories {
+            if !app.show_tags_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Categories
+            {
                 app.sidebar_mode = if app.show_calendars_tab {
                     crate::gui::state::SidebarMode::Calendars
                 } else if app.show_locations_tab {
@@ -88,7 +95,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     crate::gui::state::SidebarMode::Journal
                 };
             }
-            if !app.show_locations_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Locations {
+            if !app.show_locations_tab
+                && app.sidebar_mode == crate::gui::state::SidebarMode::Locations
+            {
                 app.sidebar_mode = if app.show_calendars_tab {
                     crate::gui::state::SidebarMode::Calendars
                 } else if app.show_tags_tab {
@@ -274,15 +283,21 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.show_locations_tab = config.show_locations_tab;
             app.show_goals_tab = config.show_goals_tab;
             app.show_journal_tab = config.show_journal_tab;
-            
+
             // Ensure at least one tab is visible
-            let at_least_one_tab = app.show_calendars_tab || app.show_tags_tab || app.show_locations_tab || app.show_goals_tab || app.show_journal_tab;
+            let at_least_one_tab = app.show_calendars_tab
+                || app.show_tags_tab
+                || app.show_locations_tab
+                || app.show_goals_tab
+                || app.show_journal_tab;
             if !at_least_one_tab {
                 // If all tabs are hidden, default to showing calendars
                 app.show_calendars_tab = true;
             }
-            
-            if !app.show_calendars_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Calendars {
+
+            if !app.show_calendars_tab
+                && app.sidebar_mode == crate::gui::state::SidebarMode::Calendars
+            {
                 app.sidebar_mode = if app.show_tags_tab {
                     crate::gui::state::SidebarMode::Categories
                 } else if app.show_locations_tab {
@@ -293,7 +308,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     crate::gui::state::SidebarMode::Journal
                 };
             }
-            if !app.show_tags_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Categories {
+            if !app.show_tags_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Categories
+            {
                 app.sidebar_mode = if app.show_calendars_tab {
                     crate::gui::state::SidebarMode::Calendars
                 } else if app.show_locations_tab {
@@ -304,7 +320,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     crate::gui::state::SidebarMode::Journal
                 };
             }
-            if !app.show_locations_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Locations {
+            if !app.show_locations_tab
+                && app.sidebar_mode == crate::gui::state::SidebarMode::Locations
+            {
                 app.sidebar_mode = if app.show_calendars_tab {
                     crate::gui::state::SidebarMode::Calendars
                 } else if app.show_tags_tab {
@@ -519,7 +537,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::CancelSettings => {
             app.ob_password_visible = false;
-            if !app.show_calendars_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Calendars {
+            if !app.show_calendars_tab
+                && app.sidebar_mode == crate::gui::state::SidebarMode::Calendars
+            {
                 app.sidebar_mode = if app.show_tags_tab {
                     crate::gui::state::SidebarMode::Categories
                 } else if app.show_locations_tab {
@@ -530,7 +550,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     crate::gui::state::SidebarMode::Journal
                 };
             }
-            if !app.show_tags_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Categories {
+            if !app.show_tags_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Categories
+            {
                 app.sidebar_mode = if app.show_calendars_tab {
                     crate::gui::state::SidebarMode::Calendars
                 } else if app.show_locations_tab {
@@ -541,7 +562,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     crate::gui::state::SidebarMode::Journal
                 };
             }
-            if !app.show_locations_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Locations {
+            if !app.show_locations_tab
+                && app.sidebar_mode == crate::gui::state::SidebarMode::Locations
+            {
                 app.sidebar_mode = if app.show_calendars_tab {
                     crate::gui::state::SidebarMode::Calendars
                 } else if app.show_tags_tab {
@@ -1091,7 +1114,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::SetShowCalendarsTab(val) => {
             // Check if we can disable calendars tab (at least one other tab must be visible)
             if !val {
-                let at_least_one_other_tab = app.show_tags_tab || app.show_locations_tab || app.show_goals_tab || app.show_journal_tab;
+                let at_least_one_other_tab = app.show_tags_tab
+                    || app.show_locations_tab
+                    || app.show_goals_tab
+                    || app.show_journal_tab;
                 if !at_least_one_other_tab {
                     // Cannot disable calendars if it's the last visible tab
                     return Task::none();
@@ -1116,7 +1142,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::SetShowTagsTab(val) => {
             // Check if we can disable tags tab (at least one other tab must be visible)
             if !val {
-                let at_least_one_other_tab = app.show_calendars_tab || app.show_locations_tab || app.show_goals_tab || app.show_journal_tab;
+                let at_least_one_other_tab = app.show_calendars_tab
+                    || app.show_locations_tab
+                    || app.show_goals_tab
+                    || app.show_journal_tab;
                 if !at_least_one_other_tab {
                     // Cannot disable tags if it's the last visible tab
                     return Task::none();
@@ -1141,7 +1170,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::SetShowLocationsTab(val) => {
             // Check if we can disable locations tab (at least one other tab must be visible)
             if !val {
-                let at_least_one_other_tab = app.show_calendars_tab || app.show_tags_tab || app.show_goals_tab || app.show_journal_tab;
+                let at_least_one_other_tab = app.show_calendars_tab
+                    || app.show_tags_tab
+                    || app.show_goals_tab
+                    || app.show_journal_tab;
                 if !at_least_one_other_tab {
                     // Cannot disable locations if it's the last visible tab
                     return Task::none();
@@ -1166,7 +1198,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::SetShowGoalsTab(val) => {
             // Check if we can disable goals tab (at least one other tab must be visible)
             if !val {
-                let at_least_one_other_tab = app.show_calendars_tab || app.show_tags_tab || app.show_locations_tab || app.show_journal_tab;
+                let at_least_one_other_tab = app.show_calendars_tab
+                    || app.show_tags_tab
+                    || app.show_locations_tab
+                    || app.show_journal_tab;
                 if !at_least_one_other_tab {
                     // Cannot disable goals if it's the last visible tab
                     return Task::none();
@@ -1191,7 +1226,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::SetShowJournalTab(val) => {
             // Check if we can disable journal tab (at least one other tab must be visible)
             if !val {
-                let at_least_one_other_tab = app.show_calendars_tab || app.show_tags_tab || app.show_locations_tab || app.show_goals_tab;
+                let at_least_one_other_tab = app.show_calendars_tab
+                    || app.show_tags_tab
+                    || app.show_locations_tab
+                    || app.show_goals_tab;
                 if !at_least_one_other_tab {
                     // Cannot disable journal if it's the last visible tab
                     return Task::none();

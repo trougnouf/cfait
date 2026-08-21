@@ -1166,15 +1166,15 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     .delay(Duration::from_millis(700));
 
     let mut tabs = row![].spacing(2);
-    
+
     if app.show_calendars_tab {
         tabs = tabs.push(btn_cals);
     }
-    
+
     if app.show_tags_tab {
         tabs = tabs.push(btn_tags);
     }
-    
+
     if app.show_locations_tab {
         tabs = tabs.push(btn_locs);
     }
