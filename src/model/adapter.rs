@@ -825,7 +825,7 @@ impl IcsAdapter {
                 geo,
                 collapsed: false,
                 pinned: false,
-                is_note: false,
+                is_note: true,
                 manual_block: false,
                 permanent: false,
                 is_journal: true,

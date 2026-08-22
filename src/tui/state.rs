@@ -567,6 +567,9 @@ impl AppState {
     }
 
     pub fn get_selected_task(&self) -> Option<&Task> {
+        if self.sidebar_mode == SidebarMode::Journal && self.active_focus == Focus::Main {
+            return None;
+        }
         if let Some(idx) = self.list_state.selected() {
             match &self.tasks.get(idx) {
                 Some(TaskListItem::Task(task)) => Some(task),

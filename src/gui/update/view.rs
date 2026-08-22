@@ -122,7 +122,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::SelectNextPage => {
-            if app.tasks.is_empty() {
+            if app.sidebar_mode == SidebarMode::Journal || app.tasks.is_empty() {
                 return Task::none();
             }
             let current_idx = app
@@ -707,7 +707,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 return Task::none();
             }
 
-            if app.tasks.is_empty() {
+            if app.sidebar_mode == SidebarMode::Journal || app.tasks.is_empty() {
                 return Task::none();
             }
 
@@ -843,15 +843,16 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::DeleteSelected => {
+            if app.sidebar_mode == SidebarMode::Journal {
+                if let Some(uid) = app.journal_editing_uid.clone() {
+                    return crate::gui::update::tasks::handle(app, Message::DeleteTaskTree(uid));
+                }
+                return Task::none();
+            }
             if let Some(uid) = &app.selected_uid
                 && let Some(idx) = app.find_task_index_by_uid(uid)
             {
                 return crate::gui::update::tasks::handle(app, Message::DeleteTask(idx));
-            }
-            if app.sidebar_mode == SidebarMode::Journal
-                && let Some(uid) = app.journal_editing_uid.clone()
-            {
-                return crate::gui::update::tasks::handle(app, Message::DeleteTaskTree(uid));
             }
             Task::none()
         }

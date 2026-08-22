@@ -1653,11 +1653,21 @@ impl TaskStore {
                 let mut actually_changed = false;
 
                 if expected_raw_text.trim() != ext.raw_text.trim() {
+                    let preserved_alarms: Vec<_> = existing
+                        .alarms
+                        .iter()
+                        .filter(|a| a.is_snooze() || a.acknowledged.is_some())
+                        .cloned()
+                        .collect();
+
                     clone.apply_smart_input(
                         &ext.raw_text,
                         options.aliases,
                         options.default_reminder_time,
                     );
+
+                    clone.alarms.extend(preserved_alarms);
+
                     if !ext.dependencies.is_empty() {
                         clone.dependencies.extend(ext.dependencies.clone());
                     }

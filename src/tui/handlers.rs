@@ -2451,7 +2451,9 @@ pub async fn handle_key_event(
             }
             KeyCode::Char('x') => {
                 if state.active_focus == Focus::Main {
-                    if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone()) {
+                    if state.sidebar_mode == SidebarMode::Journal {
+                        // Safe ignore
+                    } else if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone()) {
                         let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                         let intent = AppIntent::CancelTask { uid: uid.clone() };
 
@@ -2541,7 +2543,34 @@ pub async fn handle_key_event(
             }
             KeyCode::Delete => {
                 if state.active_focus == Focus::Main {
-                    if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone()) {
+                    if state.sidebar_mode == SidebarMode::Journal {
+                        let uid_opt = state.journal_editing_uid.clone().or_else(|| {
+                            let active_href = state
+                                .active_cal_href
+                                .clone()
+                                .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
+                            state
+                                .store
+                                .get_journal_entry(&active_href, state.journal_date)
+                                .map(|t| t.uid.clone())
+                        });
+
+                        if let Some(uid) = uid_opt {
+                            let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
+                            let intent = AppIntent::DeleteTaskTree { uid: uid.clone() };
+                            let actions = state.apply_task_intent(&intent, &config);
+                            state.refresh_filtered_view();
+                            if state.journal_editing_uid == Some(uid) {
+                                state.journal_editing_uid = None;
+                            }
+                            if !actions.is_empty() {
+                                let tx = action_tx.clone();
+                                tokio::spawn(async move {
+                                    let _ = tx.send(Action::PersistBatch(actions)).await;
+                                });
+                            }
+                        }
+                    } else if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone()) {
                         let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                         let intent = if key.modifiers.contains(KeyModifiers::CONTROL) {
                             AppIntent::DeleteTaskTree { uid: uid.clone() }
