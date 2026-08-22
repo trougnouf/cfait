@@ -901,15 +901,22 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             let intent = if app.moving_task_is_tree {
                 AppIntent::MoveTaskTree {
                     uid: uid.clone(),
-                    target_href,
+                    target_href: target_href.clone(),
                 }
             } else {
                 AppIntent::MoveTask {
                     uid: uid.clone(),
-                    target_href,
+                    target_href: target_href.clone(),
                 }
             };
             dispatch_and_maintain_selection(app, intent, &uid);
+
+            if app.sidebar_mode == SidebarMode::Journal {
+                app.journal_editing_href = Some(target_href.clone());
+                app.active_cal_href = Some(target_href);
+                crate::gui::update::common::refresh_filtered_tasks(app);
+            }
+
             Task::none()
         }
 
@@ -1143,9 +1150,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.moving_task_uid = Some(uid.clone());
             app.move_target_idx = 0;
             app.active_context_menu = None; // Hide context menu if open
-            if let Some(idx) = app.find_task_index_by_uid(&uid)
-                && let Some(task) = app.get_task_at_index(idx)
-            {
+            if let Some(task) = app.store.get_task_ref(&uid) {
                 let calendar_href = task.calendar_href.clone();
                 let has_subtasks = task.has_subtasks;
                 app.moving_task_is_tree = has_subtasks;
@@ -1162,8 +1167,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::ToggleMoveTree(is_tree) => {
             app.moving_task_is_tree = is_tree;
             if let Some(uid) = &app.moving_task_uid
-                && let Some(idx) = app.find_task_index_by_uid(uid)
-                && let Some(task) = app.get_task_at_index(idx)
+                && let Some(task) = app.store.get_task_ref(uid)
             {
                 let targets = app.get_move_targets(&task.calendar_href, is_tree);
                 if app.move_target_idx >= targets.len() {

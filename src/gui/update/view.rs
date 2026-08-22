@@ -585,9 +585,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::EnterPressed => {
             if let Some(uid) = &app.moving_task_uid {
-                if let Some(idx) = app.find_task_index_by_uid(uid)
-                    && let Some(task) = app.get_task_at_index(idx)
-                {
+                if let Some(task) = app.store.get_task_ref(uid) {
                     let targets =
                         app.get_move_targets(&task.calendar_href, app.moving_task_is_tree);
                     if let Some(target) = targets.get(app.move_target_idx) {
@@ -647,9 +645,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
 
             if let Some(uid) = &app.moving_task_uid {
-                if let Some(idx) = app.find_task_index_by_uid(uid)
-                    && let Some(task) = app.get_task_at_index(idx)
-                {
+                if let Some(task) = app.store.get_task_ref(uid) {
                     let targets =
                         app.get_move_targets(&task.calendar_href, app.moving_task_is_tree);
                     let targets_len = targets.len();
@@ -766,8 +762,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.move_target_idx = app.move_target_idx.saturating_sub(1);
 
                 if let Some(uid) = &app.moving_task_uid
-                    && let Some(idx) = app.find_task_index_by_uid(uid)
-                    && let Some(task) = app.get_task_at_index(idx)
+                    && let Some(task) = app.store.get_task_ref(uid)
                 {
                     let targets =
                         app.get_move_targets(&task.calendar_href, app.moving_task_is_tree);

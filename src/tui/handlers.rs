@@ -3004,7 +3004,26 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Char('M') => {
-                if let Some(task) = state.get_selected_task() {
+                let task_opt = if state.sidebar_mode == SidebarMode::Journal
+                    && state.active_focus == Focus::Main
+                {
+                    let active_href = state
+                        .active_cal_href
+                        .clone()
+                        .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
+                    if let Some(uid) = &state.journal_editing_uid {
+                        state.store.get_task_ref(uid).cloned()
+                    } else {
+                        state
+                            .store
+                            .get_journal_entry(&active_href, state.journal_date)
+                            .cloned()
+                    }
+                } else {
+                    state.get_selected_task().cloned()
+                };
+
+                if let Some(task) = task_opt {
                     let current_href = task.calendar_href.clone();
                     let has_subtasks = task.has_subtasks;
                     let include_current = has_subtasks;
@@ -3024,6 +3043,7 @@ pub async fn handle_key_event(
                         state.move_selection_state.select(Some(0));
                         state.mode = InputMode::Moving;
                         state.moving_tree = has_subtasks;
+                        state.moving_task_uid = Some(task.uid.clone());
 
                         state.message = if has_subtasks {
                             format!(
@@ -3979,9 +3999,11 @@ pub async fn handle_key_event(
             KeyCode::Esc => {
                 state.mode = InputMode::Normal;
                 state.message = String::new();
+                state.moving_task_uid = None;
             }
             KeyCode::Char('t') | KeyCode::Char('T') => {
-                if let Some(task) = state.get_selected_task()
+                if let Some(uid) = &state.moving_task_uid
+                    && let Some(task) = state.store.get_task_ref(uid)
                     && task.has_subtasks
                 {
                     let current_href = task.calendar_href.clone();
@@ -4013,12 +4035,12 @@ pub async fn handle_key_event(
             KeyCode::Down | KeyCode::Char('j') => state.next_move_target(),
             KeyCode::Up | KeyCode::Char('k') => state.previous_move_target(),
             KeyCode::Enter => {
-                let data = if let Some(task) = state.get_selected_task() {
+                let data = if let Some(uid) = &state.moving_task_uid {
                     if let Some(idx) = state.move_selection_state.selected() {
                         state
                             .move_targets
                             .get(idx)
-                            .map(|target_cal| (task.uid.clone(), target_cal.href.clone()))
+                            .map(|target_cal| (uid.clone(), target_cal.href.clone()))
                     } else {
                         None
                     }
@@ -4041,6 +4063,11 @@ pub async fn handle_key_event(
                     };
 
                     let actions = state.apply_task_intent(&intent, &config);
+
+                    if state.sidebar_mode == SidebarMode::Journal {
+                        state.active_cal_href = Some(target_href.clone());
+                    }
+
                     state.refresh_filtered_view();
                     // Update alarms immediately if needed (task moved, though move doesn't clear completion)
                     // Moving a task keeps its alarms but might change visibility.
@@ -4049,6 +4076,7 @@ pub async fn handle_key_event(
 
                     state.message = rust_i18n::t!("moving_task").to_string();
                     state.mode = InputMode::Normal;
+                    state.moving_task_uid = None;
 
                     if !actions.is_empty() {
                         let tx = action_tx.clone();
@@ -4056,8 +4084,10 @@ pub async fn handle_key_event(
                             let _ = tx.send(Action::PersistBatch(actions)).await;
                         });
                     }
+                } else {
+                    state.mode = InputMode::Normal;
+                    state.moving_task_uid = None;
                 }
-                state.mode = InputMode::Normal;
             }
             _ => {}
         },

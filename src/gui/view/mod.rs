@@ -2802,29 +2802,63 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
         (date_str, true)
     };
 
-    let header_drag_area: Element<_> = if app.force_ssd {
-        let header_top = if app.journal_editing_uid.is_some() {
-            let delete_btn = iced::widget::button(icon::icon(icon::TRASH).size(14))
-                .style(iced::widget::button::danger)
-                .padding(8)
-                .on_press(Message::DeleteTaskTree(
-                    app.journal_editing_uid.clone().unwrap(),
-                ));
+    let current_day_uid = app.journal_editing_uid.clone().or_else(|| {
+        app.store
+            .get_journal_entry(&active_href, date)
+            .map(|t| t.uid.clone())
+    });
 
-            row![
-                iced::widget::text_input("Page title...", &app.journal_title_input)
-                    .on_input(Message::JournalTitleInputChanged)
-                    .size(22)
-                    .font(iced::Font {
+    let header_drag_area: Element<_> = if app.force_ssd {
+        let header_top = if let Some(uid) = current_day_uid.clone() {
+            let delete_btn = tooltip(
+                iced::widget::button(icon::icon(icon::TRASH).size(14))
+                    .style(iced::widget::button::danger)
+                    .padding(8)
+                    .on_press(Message::DeleteTaskTree(uid.clone())),
+                text(rust_i18n::t!("delete_task_tree")).size(12),
+                tooltip::Position::Bottom,
+            )
+            .style(crate::gui::view::tooltip_style);
+
+            let move_btn = tooltip(
+                iced::widget::button(icon::icon(icon::MOVE).size(14))
+                    .style(iced::widget::button::secondary)
+                    .padding(8)
+                    .on_press(Message::StartMoveTask(uid.clone())),
+                text(rust_i18n::t!("menu_move")).size(12),
+                tooltip::Position::Bottom,
+            )
+            .style(crate::gui::view::tooltip_style);
+
+            if app.journal_editing_uid.is_some() {
+                row![
+                    iced::widget::text_input("Page title...", &app.journal_title_input)
+                        .on_input(Message::JournalTitleInputChanged)
+                        .size(22)
+                        .font(iced::Font {
+                            weight: iced::font::Weight::Bold,
+                            ..Default::default()
+                        })
+                        .padding(5)
+                        .width(Length::Fill),
+                    move_btn,
+                    delete_btn,
+                    window_controls
+                ]
+                .align_y(iced::Alignment::Center)
+            } else {
+                row![
+                    text(header_title).size(22).font(iced::Font {
                         weight: iced::font::Weight::Bold,
                         ..Default::default()
-                    })
-                    .padding(5)
-                    .width(Length::Fill),
-                delete_btn,
-                window_controls
-            ]
-            .align_y(iced::Alignment::Center)
+                    }),
+                    Space::new().width(Length::Fill),
+                    move_btn,
+                    delete_btn,
+                    window_controls
+                ]
+                .align_y(iced::Alignment::Center)
+            }
         } else {
             row![
                 text(header_title).size(22).font(iced::Font {
@@ -2838,28 +2872,56 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
         };
         header_top.into()
     } else {
-        let header_top = if app.journal_editing_uid.is_some() {
-            let delete_btn = iced::widget::button(icon::icon(icon::TRASH).size(14))
-                .style(iced::widget::button::danger)
-                .padding(8)
-                .on_press(Message::DeleteTaskTree(
-                    app.journal_editing_uid.clone().unwrap(),
-                ));
+        let header_top = if let Some(uid) = current_day_uid.clone() {
+            let delete_btn = tooltip(
+                iced::widget::button(icon::icon(icon::TRASH).size(14))
+                    .style(iced::widget::button::danger)
+                    .padding(8)
+                    .on_press(Message::DeleteTaskTree(uid.clone())),
+                text(rust_i18n::t!("delete_task_tree")).size(12),
+                tooltip::Position::Bottom,
+            )
+            .style(crate::gui::view::tooltip_style);
 
-            row![
-                iced::widget::text_input("Page title...", &app.journal_title_input)
-                    .on_input(Message::JournalTitleInputChanged)
-                    .size(22)
-                    .font(iced::Font {
+            let move_btn = tooltip(
+                iced::widget::button(icon::icon(icon::MOVE).size(14))
+                    .style(iced::widget::button::secondary)
+                    .padding(8)
+                    .on_press(Message::StartMoveTask(uid.clone())),
+                text(rust_i18n::t!("menu_move")).size(12),
+                tooltip::Position::Bottom,
+            )
+            .style(crate::gui::view::tooltip_style);
+
+            if app.journal_editing_uid.is_some() {
+                row![
+                    iced::widget::text_input("Page title...", &app.journal_title_input)
+                        .on_input(Message::JournalTitleInputChanged)
+                        .size(22)
+                        .font(iced::Font {
+                            weight: iced::font::Weight::Bold,
+                            ..Default::default()
+                        })
+                        .padding(5)
+                        .width(Length::Fill),
+                    move_btn,
+                    delete_btn,
+                    window_controls
+                ]
+                .align_y(iced::Alignment::Center)
+            } else {
+                row![
+                    text(header_title).size(22).font(iced::Font {
                         weight: iced::font::Weight::Bold,
                         ..Default::default()
-                    })
-                    .padding(5)
-                    .width(Length::Fill),
-                delete_btn,
-                window_controls
-            ]
-            .align_y(iced::Alignment::Center)
+                    }),
+                    Space::new().width(Length::Fill),
+                    move_btn,
+                    delete_btn,
+                    window_controls
+                ]
+                .align_y(iced::Alignment::Center)
+            }
         } else {
             row![
                 text(header_title).size(22).font(iced::Font {
