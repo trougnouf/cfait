@@ -1064,7 +1064,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 rust_i18n::t!("untitled_page", default = "Untitled page").to_string();
             app.journal_title_input = new_page.summary.clone();
             new_page.is_journal = true;
-            new_page.is_note = true;
             new_page.calendar_href = target_href.clone();
             let uid = new_page.uid.clone();
 

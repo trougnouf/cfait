@@ -365,8 +365,10 @@ pub fn view_task_row<'a>(
             let visible_tags = &task.visible_categories;
             let visible_locations = &task.visible_locations;
 
+            let is_note_visually = task.is_note || task.is_journal;
+
             let mut font_size = 20;
-            if task.is_note {
+            if is_note_visually {
                 font_size = if task.parent_uid.is_none() { 22 } else { 20 };
             }
 
@@ -1329,7 +1331,7 @@ pub fn view_task_row<'a>(
                 custom_border_color = Color::from_rgba(r, g, b, dim_factor);
             }
 
-            let status_btn_element: Element<'a, Message> = if task.is_note {
+            let status_btn_element: Element<'a, Message> = if is_note_visually {
                 let note_bg = Color {
                     a: dim_factor * 0.5,
                     ..custom_border_color

@@ -1180,11 +1180,14 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                             base_style = base_style.add_modifier(Modifier::CROSSED_OUT);
                         }
 
+                        let is_note_visually = t.is_note || t.is_journal;
+
                         let bracket_style = Style::default();
                         let full_symbol = t.checkbox_symbol();
                         let inner_char = full_symbol.trim_start_matches('[').trim_end_matches(']');
 
-                        let (prefix_bracket_l, prefix_inner, prefix_bracket_r) = if t.is_note {
+                        let (prefix_bracket_l, prefix_inner, prefix_bracket_r) = if is_note_visually
+                        {
                             (
                                 Span::styled("[", bracket_style),
                                 Span::styled("■", base_style),

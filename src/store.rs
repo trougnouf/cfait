@@ -2849,7 +2849,12 @@ impl TaskStore {
                     let is_system_cal = t.calendar_href == crate::storage::LOCAL_TRASH_HREF
                         || t.calendar_href == "local://recovery";
 
-                    if t.is_journal && !self.children_index.contains_key(&t.uid) && !is_system_cal {
+                    if t.is_journal
+                        && !self.children_index.contains_key(&t.uid)
+                        && !is_system_cal
+                        && !t.is_note
+                        && !t.pinned
+                    {
                         return false;
                     }
 
@@ -2874,7 +2879,10 @@ impl TaskStore {
                         }
                         // Note-only compromise: If a structural note has children, it is not inherently
                         // actionable. It relies on its ready children to pull it into the view as context.
-                        if (t.is_note || t.is_journal) && !self.children_index.contains_key(&t.uid)
+                        // Journals with is_note or pinned are always visible even without children.
+                        if (t.is_note || t.is_journal)
+                            && !self.children_index.contains_key(&t.uid)
+                            && !(t.is_journal && (t.is_note || t.pinned))
                         {
                             return false;
                         }

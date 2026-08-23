@@ -3105,7 +3105,6 @@ pub fn apply_smart_input(
         } else if exact == Some(&ExactToken::IsNote) {
             explicit_note_flag = Some(true);
         } else if exact == Some(&ExactToken::IsPage) {
-            explicit_note_flag = Some(true);
             task.is_journal = true;
         } else if exact == Some(&ExactToken::IsBlocked) {
             task.manual_block = true;

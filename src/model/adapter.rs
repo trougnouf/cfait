@@ -157,6 +157,16 @@ impl IcsAdapter {
                 buffer.push_str(&format!("GEO:{}\r\n", g.replace(',', ";")));
             }
 
+            if task.collapsed {
+                buffer.push_str("X-CFAIT-COLLAPSED:TRUE\r\n");
+            }
+            if task.pinned {
+                buffer.push_str("X-CFAIT-PINNED:TRUE\r\n");
+            }
+            if task.is_note {
+                buffer.push_str("X-CFAIT-KIND:NOTE\r\n");
+            }
+
             buffer.push_str("END:VJOURNAL\r\n");
             buffer.push_str("END:VCALENDAR\r\n");
             return buffer;
@@ -798,6 +808,16 @@ impl IcsAdapter {
 
             let geo = extract_prop(&journal_raw, "GEO").map(|s| s.replace(';', ","));
 
+            let collapsed = extract_prop(&journal_raw, "X-CFAIT-COLLAPSED")
+                .map(|v| v.trim().to_uppercase() == "TRUE")
+                .unwrap_or(false);
+            let pinned = extract_prop(&journal_raw, "X-CFAIT-PINNED")
+                .map(|v| v.trim().to_uppercase() == "TRUE")
+                .unwrap_or(false);
+            let is_note = extract_prop(&journal_raw, "X-CFAIT-KIND")
+                .map(|v| v.trim().to_uppercase() == "NOTE")
+                .unwrap_or(false);
+
             return Ok(Task {
                 uid,
                 summary,
@@ -823,9 +843,9 @@ impl IcsAdapter {
                 locations,
                 url,
                 geo,
-                collapsed: false,
-                pinned: false,
-                is_note: true,
+                collapsed,
+                pinned,
+                is_note,
                 manual_block: false,
                 permanent: false,
                 is_journal: true,
