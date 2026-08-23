@@ -25,6 +25,7 @@ fn flush_journal_save(app: &mut GuiApp) {
         let href = app
             .journal_editing_href
             .clone()
+            .or(app.active_cal_href.clone())
             .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
 
         let existing_opt = app
