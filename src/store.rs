@@ -2848,13 +2848,8 @@ impl TaskStore {
                 .filter(|t| {
                     let is_system_cal = t.calendar_href == crate::storage::LOCAL_TRASH_HREF
                         || t.calendar_href == "local://recovery";
-                    let is_explicit_search = !options.search_term.is_empty();
 
-                    if t.is_journal
-                        && !self.children_index.contains_key(&t.uid)
-                        && !is_system_cal
-                        && !is_explicit_search
-                    {
+                    if t.is_journal && !self.children_index.contains_key(&t.uid) && !is_system_cal {
                         return false;
                     }
 
