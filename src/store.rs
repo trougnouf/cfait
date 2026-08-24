@@ -2854,6 +2854,7 @@ impl TaskStore {
                         && !is_system_cal
                         && !t.is_note
                         && !t.pinned
+                        && options.search_term.trim().is_empty()
                     {
                         return false;
                     }
