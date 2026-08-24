@@ -1080,7 +1080,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             // Let the standard editor popup render over this
         } else {
             let help = Paragraph::new(
-                " [/]: Collection | ←/→/↑/↓: Date | Shift+↑/↓: Scroll | t: Today | g: Go to | e/Enter: Edit | Tab: Focus | q: Quit ",
+                " [/]: Collection | ←/→/↑/↓: Date | Shift+↑/↓: Scroll | t: Today | g: Go to | a/e/Enter: Edit | Tab: Focus | q: Quit ",
             )
             .alignment(Alignment::Right)
             .block(Block::default().borders(Borders::ALL).title(" Actions "));
@@ -2194,7 +2194,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 Focus::Sidebar => rust_i18n::t!("tui_sidebar_help").to_string(),
                 Focus::Main => {
                     if state.sidebar_mode == SidebarMode::Journal {
-                        " [/]: Collection | ←/→/↑/↓: Date | Shift+↑/↓: Scroll | t: Today | g: Go to | e/Enter: Edit | Tab: Focus | q: Quit ".to_string()
+                        " [/]: Collection | ←/→/↑/↓: Date | Shift+↑/↓: Scroll | t: Today | g: Go to | a/e/Enter: Edit | Tab: Focus | q: Quit ".to_string()
                     } else if let Some(uid) = &state.yanked_uid {
                         let mut summary = state
                             .store

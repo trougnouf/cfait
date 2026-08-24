@@ -3727,43 +3727,73 @@ pub async fn handle_key_event(
                 state.reset_input();
             }
             KeyCode::Char('a') => {
-                state.mode = InputMode::Creating;
-                state.reset_input();
-                state.new_task_title.clear();
-
                 if state.sidebar_mode == SidebarMode::Journal {
-                    state.creating_with_desc = true;
-                    state.input_buffer = "is:page ".to_string();
+                    let target_href = state
+                        .active_cal_href
+                        .clone()
+                        .filter(|href| state.local_mode_enabled || !href.starts_with("local://"))
+                        .or_else(|| {
+                            state
+                                .get_filtered_calendars()
+                                .first()
+                                .map(|c| c.href.clone())
+                        })
+                        .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
 
-                    // Emulate Ctrl+N behavior for journal pages
-                    state.new_task_title = state.input_buffer.clone();
-                    state.input_buffer.clear();
-                    state.cursor_position = 0;
+                    let (desc, is_daily) = if let Some(uid) = &state.journal_editing_uid {
+                        let t = state.store.get_task_ref(uid).unwrap();
+                        (t.description.clone(), false)
+                    } else {
+                        let entry = state
+                            .store
+                            .get_journal_entry(&target_href, state.journal_date);
+                        (
+                            entry.map(|e| e.description.clone()).unwrap_or_default(),
+                            true,
+                        )
+                    };
 
-                    match run_external_editor("", state.ctx.as_ref()) {
+                    match run_external_editor(&desc, state.ctx.as_ref()) {
                         Ok(Some(new_desc)) => {
-                            state.input_buffer = new_desc;
-                            save_description(state, action_tx);
+                            if new_desc != desc {
+                                state.input_buffer = new_desc;
+                                if !is_daily {
+                                    state.editing_uid = state.journal_editing_uid.clone();
+                                }
+                                state.mode = InputMode::EditingDescription;
+                                save_description(state, action_tx);
+                            }
                             state.needs_redraw = true;
                             return None;
                         }
                         Ok(None) => {
+                            state.input_buffer = desc;
+                            state.cursor_position = state.input_buffer.chars().count();
+                            if !is_daily {
+                                state.editing_uid = state.journal_editing_uid.clone();
+                            }
                             state.mode = InputMode::EditingDescription;
-                            state.message =
-                                rust_i18n::t!("edit_description_instructions").to_string();
                             return None;
                         }
                         Err(e) => {
                             state.message = e;
+                            state.input_buffer = desc;
+                            state.cursor_position = state.input_buffer.chars().count();
+                            if !is_daily {
+                                state.editing_uid = state.journal_editing_uid.clone();
+                            }
                             state.mode = InputMode::EditingDescription;
                             state.needs_redraw = true;
                             return None;
                         }
                     }
-                } else {
-                    state.creating_with_desc = false;
-                    state.message = rust_i18n::t!("new_task_prompt").to_string();
                 }
+
+                state.mode = InputMode::Creating;
+                state.reset_input();
+                state.new_task_title.clear();
+                state.creating_with_desc = false;
+                state.message = rust_i18n::t!("new_task_prompt").to_string();
             }
             KeyCode::Char('e') => {
                 if state.sidebar_mode == SidebarMode::Journal
