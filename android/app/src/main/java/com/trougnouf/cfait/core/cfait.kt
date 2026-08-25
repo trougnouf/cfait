@@ -4981,6 +4981,8 @@ data class MobileFilterOptions(
     var `matchAllCategories`: kotlin.Boolean,
     var `expandedTags`: List<kotlin.String>,
     var `expandedLocations`: List<kotlin.String>,
+    var `offset`: kotlin.UInt,
+    var `limit`: kotlin.UInt,
 ) {
     companion object
 }
@@ -4998,6 +5000,8 @@ public object FfiConverterTypeMobileFilterOptions : FfiConverterRustBuffer<Mobil
             FfiConverterBoolean.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterSequenceString.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
         )
 
     override fun allocationSize(value: MobileFilterOptions) =
@@ -5008,7 +5012,9 @@ public object FfiConverterTypeMobileFilterOptions : FfiConverterRustBuffer<Mobil
                 FfiConverterSequenceString.allocationSize(value.`expandedGroups`) +
                 FfiConverterBoolean.allocationSize(value.`matchAllCategories`) +
                 FfiConverterSequenceString.allocationSize(value.`expandedTags`) +
-                FfiConverterSequenceString.allocationSize(value.`expandedLocations`)
+                FfiConverterSequenceString.allocationSize(value.`expandedLocations`) +
+                FfiConverterUInt.allocationSize(value.`offset`) +
+                FfiConverterUInt.allocationSize(value.`limit`)
         )
 
     override fun write(
@@ -5022,6 +5028,8 @@ public object FfiConverterTypeMobileFilterOptions : FfiConverterRustBuffer<Mobil
         FfiConverterBoolean.write(value.`matchAllCategories`, buf)
         FfiConverterSequenceString.write(value.`expandedTags`, buf)
         FfiConverterSequenceString.write(value.`expandedLocations`, buf)
+        FfiConverterUInt.write(value.`offset`, buf)
+        FfiConverterUInt.write(value.`limit`, buf)
     }
 }
 
@@ -5793,6 +5801,194 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
     }
 }
 
+data class MobileTaskSummary(
+    var `uid`: kotlin.String,
+    var `summary`: kotlin.String,
+    var `statusString`: kotlin.String,
+    var `priority`: kotlin.UByte,
+    var `isDone`: kotlin.Boolean,
+    var `isPaused`: kotlin.Boolean,
+    var `isNote`: kotlin.Boolean,
+    var `isJournal`: kotlin.Boolean,
+    var `depth`: kotlin.UInt,
+    var `calendarHref`: kotlin.String,
+    var `visibleCategories`: List<kotlin.String>,
+    var `visibleLocations`: List<kotlin.String>,
+    var `dueDateIso`: kotlin.String?,
+    var `isAlldayDue`: kotlin.Boolean,
+    var `isDueToday`: kotlin.Boolean,
+    var `completedDateIso`: kotlin.String?,
+    var `startDateIso`: kotlin.String?,
+    var `isAlldayStart`: kotlin.Boolean,
+    var `isFutureStart`: kotlin.Boolean,
+    var `hasAlarms`: kotlin.Boolean,
+    var `durationMins`: kotlin.UInt?,
+    var `durationMaxMins`: kotlin.UInt?,
+    var `percentComplete`: kotlin.UByte?,
+    var `isBlocked`: kotlin.Boolean,
+    var `hasSubtasks`: kotlin.Boolean,
+    var `hasBlockingTasks`: kotlin.Boolean,
+    var `hasRelatedTasks`: kotlin.Boolean,
+    var `hasVisibleSubtasks`: kotlin.Boolean,
+    var `treeLocationCount`: kotlin.UInt,
+    var `url`: kotlin.String?,
+    var `geo`: kotlin.String?,
+    var `timeSpentSeconds`: kotlin.ULong,
+    var `lastStartedAt`: kotlin.Long?,
+    var `isRecurring`: kotlin.Boolean,
+    var `isRelativeRecurrence`: kotlin.Boolean,
+    var `parentUid`: kotlin.String?,
+    var `hasDescription`: kotlin.Boolean,
+    var `hasRelatedTo`: kotlin.Boolean,
+    var `isSearchContext`: kotlin.Boolean,
+    var `visible`: kotlin.Boolean,
+    var `isCollapsed`: kotlin.Boolean,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMobileTaskSummary : FfiConverterRustBuffer<MobileTaskSummary> {
+    override fun read(buf: ByteBuffer): MobileTaskSummary =
+        MobileTaskSummary(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterUByte.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterSequenceString.read(buf),
+            FfiConverterSequenceString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterOptionalUInt.read(buf),
+            FfiConverterOptionalUInt.read(buf),
+            FfiConverterOptionalUByte.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterOptionalLong.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+
+    override fun allocationSize(value: MobileTaskSummary) =
+        (
+            FfiConverterString.allocationSize(value.`uid`) +
+                FfiConverterString.allocationSize(value.`summary`) +
+                FfiConverterString.allocationSize(value.`statusString`) +
+                FfiConverterUByte.allocationSize(value.`priority`) +
+                FfiConverterBoolean.allocationSize(value.`isDone`) +
+                FfiConverterBoolean.allocationSize(value.`isPaused`) +
+                FfiConverterBoolean.allocationSize(value.`isNote`) +
+                FfiConverterBoolean.allocationSize(value.`isJournal`) +
+                FfiConverterUInt.allocationSize(value.`depth`) +
+                FfiConverterString.allocationSize(value.`calendarHref`) +
+                FfiConverterSequenceString.allocationSize(value.`visibleCategories`) +
+                FfiConverterSequenceString.allocationSize(value.`visibleLocations`) +
+                FfiConverterOptionalString.allocationSize(value.`dueDateIso`) +
+                FfiConverterBoolean.allocationSize(value.`isAlldayDue`) +
+                FfiConverterBoolean.allocationSize(value.`isDueToday`) +
+                FfiConverterOptionalString.allocationSize(value.`completedDateIso`) +
+                FfiConverterOptionalString.allocationSize(value.`startDateIso`) +
+                FfiConverterBoolean.allocationSize(value.`isAlldayStart`) +
+                FfiConverterBoolean.allocationSize(value.`isFutureStart`) +
+                FfiConverterBoolean.allocationSize(value.`hasAlarms`) +
+                FfiConverterOptionalUInt.allocationSize(value.`durationMins`) +
+                FfiConverterOptionalUInt.allocationSize(value.`durationMaxMins`) +
+                FfiConverterOptionalUByte.allocationSize(value.`percentComplete`) +
+                FfiConverterBoolean.allocationSize(value.`isBlocked`) +
+                FfiConverterBoolean.allocationSize(value.`hasSubtasks`) +
+                FfiConverterBoolean.allocationSize(value.`hasBlockingTasks`) +
+                FfiConverterBoolean.allocationSize(value.`hasRelatedTasks`) +
+                FfiConverterBoolean.allocationSize(value.`hasVisibleSubtasks`) +
+                FfiConverterUInt.allocationSize(value.`treeLocationCount`) +
+                FfiConverterOptionalString.allocationSize(value.`url`) +
+                FfiConverterOptionalString.allocationSize(value.`geo`) +
+                FfiConverterULong.allocationSize(value.`timeSpentSeconds`) +
+                FfiConverterOptionalLong.allocationSize(value.`lastStartedAt`) +
+                FfiConverterBoolean.allocationSize(value.`isRecurring`) +
+                FfiConverterBoolean.allocationSize(value.`isRelativeRecurrence`) +
+                FfiConverterOptionalString.allocationSize(value.`parentUid`) +
+                FfiConverterBoolean.allocationSize(value.`hasDescription`) +
+                FfiConverterBoolean.allocationSize(value.`hasRelatedTo`) +
+                FfiConverterBoolean.allocationSize(value.`isSearchContext`) +
+                FfiConverterBoolean.allocationSize(value.`visible`) +
+                FfiConverterBoolean.allocationSize(value.`isCollapsed`)
+        )
+
+    override fun write(
+        value: MobileTaskSummary,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`uid`, buf)
+        FfiConverterString.write(value.`summary`, buf)
+        FfiConverterString.write(value.`statusString`, buf)
+        FfiConverterUByte.write(value.`priority`, buf)
+        FfiConverterBoolean.write(value.`isDone`, buf)
+        FfiConverterBoolean.write(value.`isPaused`, buf)
+        FfiConverterBoolean.write(value.`isNote`, buf)
+        FfiConverterBoolean.write(value.`isJournal`, buf)
+        FfiConverterUInt.write(value.`depth`, buf)
+        FfiConverterString.write(value.`calendarHref`, buf)
+        FfiConverterSequenceString.write(value.`visibleCategories`, buf)
+        FfiConverterSequenceString.write(value.`visibleLocations`, buf)
+        FfiConverterOptionalString.write(value.`dueDateIso`, buf)
+        FfiConverterBoolean.write(value.`isAlldayDue`, buf)
+        FfiConverterBoolean.write(value.`isDueToday`, buf)
+        FfiConverterOptionalString.write(value.`completedDateIso`, buf)
+        FfiConverterOptionalString.write(value.`startDateIso`, buf)
+        FfiConverterBoolean.write(value.`isAlldayStart`, buf)
+        FfiConverterBoolean.write(value.`isFutureStart`, buf)
+        FfiConverterBoolean.write(value.`hasAlarms`, buf)
+        FfiConverterOptionalUInt.write(value.`durationMins`, buf)
+        FfiConverterOptionalUInt.write(value.`durationMaxMins`, buf)
+        FfiConverterOptionalUByte.write(value.`percentComplete`, buf)
+        FfiConverterBoolean.write(value.`isBlocked`, buf)
+        FfiConverterBoolean.write(value.`hasSubtasks`, buf)
+        FfiConverterBoolean.write(value.`hasBlockingTasks`, buf)
+        FfiConverterBoolean.write(value.`hasRelatedTasks`, buf)
+        FfiConverterBoolean.write(value.`hasVisibleSubtasks`, buf)
+        FfiConverterUInt.write(value.`treeLocationCount`, buf)
+        FfiConverterOptionalString.write(value.`url`, buf)
+        FfiConverterOptionalString.write(value.`geo`, buf)
+        FfiConverterULong.write(value.`timeSpentSeconds`, buf)
+        FfiConverterOptionalLong.write(value.`lastStartedAt`, buf)
+        FfiConverterBoolean.write(value.`isRecurring`, buf)
+        FfiConverterBoolean.write(value.`isRelativeRecurrence`, buf)
+        FfiConverterOptionalString.write(value.`parentUid`, buf)
+        FfiConverterBoolean.write(value.`hasDescription`, buf)
+        FfiConverterBoolean.write(value.`hasRelatedTo`, buf)
+        FfiConverterBoolean.write(value.`isSearchContext`, buf)
+        FfiConverterBoolean.write(value.`visible`, buf)
+        FfiConverterBoolean.write(value.`isCollapsed`, buf)
+    }
+}
+
 data class MobileVersionInfo(
     var `version`: kotlin.String,
     var `commit`: kotlin.String,
@@ -5826,7 +6022,7 @@ public object FfiConverterTypeMobileVersionInfo : FfiConverterRustBuffer<MobileV
 }
 
 data class MobileViewData(
-    var `tasks`: List<MobileTask>,
+    var `tasks`: List<MobileTaskSummary>,
     var `tags`: List<MobileTag>,
     var `locations`: List<MobileLocation>,
     var `goals`: List<MobileGoalProgress>,
@@ -5843,7 +6039,7 @@ data class MobileViewData(
 public object FfiConverterTypeMobileViewData : FfiConverterRustBuffer<MobileViewData> {
     override fun read(buf: ByteBuffer): MobileViewData =
         MobileViewData(
-            FfiConverterSequenceTypeMobileTask.read(buf),
+            FfiConverterSequenceTypeMobileTaskSummary.read(buf),
             FfiConverterSequenceTypeMobileTag.read(buf),
             FfiConverterSequenceTypeMobileLocation.read(buf),
             FfiConverterSequenceTypeMobileGoalProgress.read(buf),
@@ -5854,7 +6050,7 @@ public object FfiConverterTypeMobileViewData : FfiConverterRustBuffer<MobileView
 
     override fun allocationSize(value: MobileViewData) =
         (
-            FfiConverterSequenceTypeMobileTask.allocationSize(value.`tasks`) +
+            FfiConverterSequenceTypeMobileTaskSummary.allocationSize(value.`tasks`) +
                 FfiConverterSequenceTypeMobileTag.allocationSize(value.`tags`) +
                 FfiConverterSequenceTypeMobileLocation.allocationSize(value.`locations`) +
                 FfiConverterSequenceTypeMobileGoalProgress.allocationSize(value.`goals`) +
@@ -5867,7 +6063,7 @@ public object FfiConverterTypeMobileViewData : FfiConverterRustBuffer<MobileView
         value: MobileViewData,
         buf: ByteBuffer,
     ) {
-        FfiConverterSequenceTypeMobileTask.write(value.`tasks`, buf)
+        FfiConverterSequenceTypeMobileTaskSummary.write(value.`tasks`, buf)
         FfiConverterSequenceTypeMobileTag.write(value.`tags`, buf)
         FfiConverterSequenceTypeMobileLocation.write(value.`locations`, buf)
         FfiConverterSequenceTypeMobileGoalProgress.write(value.`goals`, buf)
@@ -7832,6 +8028,34 @@ public object FfiConverterSequenceTypeMobileTask : FfiConverterRustBuffer<List<M
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeMobileTask.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeMobileTaskSummary : FfiConverterRustBuffer<List<MobileTaskSummary>> {
+    override fun read(buf: ByteBuffer): List<MobileTaskSummary> {
+        val len = buf.getInt()
+        return List<MobileTaskSummary>(len) {
+            FfiConverterTypeMobileTaskSummary.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<MobileTaskSummary>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeMobileTaskSummary.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<MobileTaskSummary>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeMobileTaskSummary.write(it, buf)
         }
     }
 }

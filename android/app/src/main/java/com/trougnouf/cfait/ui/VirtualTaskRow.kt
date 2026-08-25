@@ -12,7 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.trougnouf.cfait.core.MobileTask
+import com.trougnouf.cfait.core.MobileTaskSummary
 
 /**
  * A simple row used to render the lightweight virtual tasks injected by the Rust core
@@ -21,7 +21,7 @@ import com.trougnouf.cfait.core.MobileTask
  * The row renders an icon with descriptive text and is clickable to toggle the group state.
  */
 @Composable
-fun VirtualTaskRow(task: MobileTask, onClick: () -> Unit) {
+fun VirtualTaskRow(task: MobileTaskSummary, onClick: () -> Unit) {
     // Indent by depth * 12dp
     val startPadding = (task.depth.toInt() * 12).dp
 
@@ -30,7 +30,8 @@ fun VirtualTaskRow(task: MobileTask, onClick: () -> Unit) {
     val expandCodepoint = 0xF0796
     val collapseCodepoint = 0xF0799
 
-    val iconStr = if (task.virtualType == "expand") {
+    val isExpand = task.uid.startsWith("virtual-expand-")
+    val iconStr = if (isExpand) {
         String(Character.toChars(expandCodepoint))
     } else {
         String(Character.toChars(collapseCodepoint))
@@ -51,7 +52,7 @@ fun VirtualTaskRow(task: MobileTask, onClick: () -> Unit) {
             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
         )
         Text(
-            text = if (task.virtualType == "expand") androidx.compose.ui.res.stringResource(com.trougnouf.cfait.R.string.expand_completed_tasks) else androidx.compose.ui.res.stringResource(com.trougnouf.cfait.R.string.collapse_completed_tasks),
+            text = if (isExpand) androidx.compose.ui.res.stringResource(com.trougnouf.cfait.R.string.expand_completed_tasks) else androidx.compose.ui.res.stringResource(com.trougnouf.cfait.R.string.collapse_completed_tasks),
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
             modifier = Modifier.padding(start = 8.dp)

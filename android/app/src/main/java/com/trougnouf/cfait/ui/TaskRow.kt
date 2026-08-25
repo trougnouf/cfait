@@ -24,7 +24,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.trougnouf.cfait.core.MobileTask
+import com.trougnouf.cfait.core.MobileTaskSummary
+import com.trougnouf.cfait.ui.StableTaskSummary
 import com.trougnouf.cfait.R
 import java.time.Instant
 import java.time.LocalDate
@@ -85,7 +86,7 @@ fun TaskCheckbox(
 @OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun TaskRow(
-    task: MobileTask,
+    task: StableTaskSummary,
     calColor: Color,
     onToggle: () -> Unit,
     onAction: (String) -> Unit,
@@ -96,13 +97,13 @@ fun TaskRow(
     isCollapsed: Boolean = false,
     onToggleCollapse: () -> Unit = {}
 ) {
-    val startPadding = (task.depth.toInt() * 12).dp
+    val startPadding = (task.task.depth.toInt() * 12).dp
     var expanded by remember { mutableStateOf(false) }
 
     // Use the native Android dark mode state detection here if not provided directly
     val isDark = androidx.compose.foundation.isSystemInDarkTheme()
 
-    val textColor = getTaskTextColor(task.priority.toInt(), task.isDone, isDark)
+    val textColor = getTaskTextColor(task.task.priority.toInt(), task.task.isDone, isDark)
     val highlightColor = Color(0xFFffe600).copy(alpha = 0.1f)
     val containerColor = if (isHighlighted || expanded) highlightColor else MaterialTheme.colorScheme.surface
     val uriHandler = LocalUriHandler.current
@@ -113,32 +114,32 @@ fun TaskRow(
                 .fillMaxWidth()
                 .padding(start = 12.dp + startPadding, end = 12.dp, top = 0.5.dp, bottom = 0.5.dp)
                 .combinedClickable(
-                    onClick = { onClick(task.uid) },
+                    onClick = { onClick(task.task.uid) },
                     onLongClick = { expanded = true },
                 ),
         colors = CardDefaults.cardColors(containerColor = containerColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
-        Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp).alpha(if (task.isSearchContext) 0.35f else 1.0f), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp).alpha(if (task.task.isSearchContext) 0.35f else 1.0f), verticalAlignment = Alignment.CenterVertically) {
             TaskCheckbox(
-                isDone = task.isDone,
-                status = task.statusString,
-                isPaused = task.isPaused,
-                isNote = task.isNote,
+                isDone = task.task.isDone,
+                status = task.task.statusString,
+                isPaused = task.task.isPaused,
+                isNote = task.task.isNote,
                 calColor = calColor,
                 onClick = onToggle
             )
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
-                val isTrash = task.calendarHref == "local://trash"
-                val isStrikethrough = task.isDone || isTrash
+                val isTrash = task.task.calendarHref == "local://trash"
+                val isStrikethrough = task.task.isDone || isTrash
                 val baseStyle = MaterialTheme.typography.bodyMedium.copy(
                     color = textColor,
-                    fontWeight = if (task.priority > 0.toUByte()) FontWeight.Medium else FontWeight.Normal,
+                    fontWeight = if (task.task.priority > 0.toUByte()) FontWeight.Medium else FontWeight.Normal,
                     lineHeight = 18.sp
                 )
-                val annotatedSummary = remember(task.summary, textColor, isStrikethrough) {
-                    com.trougnouf.cfait.ui.parseInlineMarkdown(task.summary, textColor, isStrikethrough)
+                val annotatedSummary = remember(task.task.summary, textColor, isStrikethrough) {
+                    com.trougnouf.cfait.ui.parseInlineMarkdown(task.task.summary, textColor, isStrikethrough)
                 }
                 
                 Text(
@@ -150,13 +151,12 @@ fun TaskRow(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalArrangement = Arrangement.spacedBy(1.dp),
                 ) {
-                    if (task.description.isNotEmpty() || task.hasBlockingTasks || task.blockedByUids.isNotEmpty()) {
+                    if (task.task.hasDescription || task.task.hasBlockingTasks) {
                         NfIcon(NfIcons.INFO, size = 10.sp, color = Color.Gray, lineHeight = 10.sp)
                     }
 
-                    if (task.relatedToUids.isNotEmpty() || task.hasRelatedTasks) {
-                        val relatedUid = task.relatedToUids.firstOrNull()
-                        val iconName = if (relatedUid != null) getRandomRelatedIcon(task.uid, relatedUid) else NfIcons.LINK
+                    if (task.task.hasRelatedTo || task.task.hasRelatedTasks) {
+                        val iconName = getRandomRelatedIcon(task.task.uid, "")
                         NfIcon(
                             iconName,
                             size = 10.sp,
@@ -165,28 +165,28 @@ fun TaskRow(
                         )
                     }
 
-                    if (task.isBlocked) NfIcon(
+                    if (task.task.isBlocked) NfIcon(
                         NfIcons.BLOCKED,
                         size = 10.sp,
                         color = MaterialTheme.colorScheme.error,
                         lineHeight = 10.sp
                     )
 
-                    if (task.hasAlarms) {
+                    if (task.task.hasAlarms) {
                         NfIcon(NfIcons.BELL, size = 10.sp, color = Color(0xFFFF7043), lineHeight = 10.sp)
                     }
 
                     // --- PRIORITY BOX ---
-                    if (task.priority.toInt() > 0) {
-                        val pColor = getTaskTextColor(task.priority.toInt(), task.isDone, isDark)
+                    if (task.task.priority.toInt() > 0) {
+                        val pColor = getTaskTextColor(task.task.priority.toInt(), task.task.isDone, isDark)
                         Box(modifier = Modifier.border(1.dp, pColor.copy(alpha=0.5f), RoundedCornerShape(4.dp)).padding(horizontal=4.dp, vertical=2.dp)) {
-                            Text("!${task.priority}", color = pColor, fontSize = 10.sp, lineHeight = 10.sp, fontWeight = FontWeight.Bold)
+                            Text("!${task.task.priority}", color = pColor, fontSize = 10.sp, lineHeight = 10.sp, fontWeight = FontWeight.Bold)
                         }
                     }
 
                     // Date Display Logic
-                    if (task.isDone && task.completedDateIso != null) {
-                        val (done_icon, doneColor) = if (task.statusString == "Completed") {
+                    if (task.task.isDone && task.task.completedDateIso != null) {
+                        val (done_icon, doneColor) = if (task.task.statusString == "Completed") {
                             Pair(NfIcons.CALENDAR_CHECK, Color(0xFF66BB6A)) // Greenish
                         } else { // Cancelled
                             Pair(NfIcons.CALENDAR_XMARK, MaterialTheme.colorScheme.error) // Red
@@ -194,34 +194,34 @@ fun TaskRow(
 
                         NfIcon(done_icon, size = 10.sp, color = doneColor, lineHeight = 10.sp)
 
-                        val dateStr = remember(task.completedDateIso) {
+                        val dateStr = remember(task.task.completedDateIso) {
                             try {
-                                formatIsoToLocal(task.completedDateIso!!)
+                                formatIsoToLocal(task.task.completedDateIso!!)
                             } catch (e: Exception) {
-                                val safeIso = task.completedDateIso ?: ""
+                                val safeIso = task.task.completedDateIso ?: ""
                                 if (safeIso.length >= 16) safeIso.substring(0, 16).replace("T", " ") else safeIso
                             }
                         }
                         Text(dateStr, fontSize = 10.sp, color = doneColor, lineHeight = 10.sp)
 
-                    } else if (task.isFutureStart && task.startDateIso != null) {
+                    } else if (task.task.isFutureStart && task.task.startDateIso != null) {
                         val dimColor = Color(0xFFBDBDBD) // Lighter Gray
                         NfIcon(NfIcons.HOURGLASS_START, size = 10.sp, color = dimColor, lineHeight = 10.sp)
 
-                        val startStr = remember(task.startDateIso, task.isAlldayStart) {
-                            if (task.isAlldayStart) {
-                                task.startDateIso!!.take(10)
+                        val startStr = remember(task.task.startDateIso, task.task.isAlldayStart) {
+                            if (task.task.isAlldayStart) {
+                                task.task.startDateIso!!.take(10)
                             } else {
-                                formatIsoToLocal(task.startDateIso!!)
+                                formatIsoToLocal(task.task.startDateIso!!)
                             }
                         }
 
-                        if (task.dueDateIso != null) {
-                            val rawDueStr = remember(task.dueDateIso, task.isAlldayDue) {
-                                if (task.isAlldayDue) {
-                                    task.dueDateIso!!.take(10)
+                        if (task.task.dueDateIso != null) {
+                            val rawDueStr = remember(task.task.dueDateIso, task.task.isAlldayDue) {
+                                if (task.task.isAlldayDue) {
+                                    task.task.dueDateIso!!.take(10)
                                 } else {
-                                    formatIsoToLocal(task.dueDateIso!!)
+                                    formatIsoToLocal(task.task.dueDateIso!!)
                                 }
                             }
 
@@ -229,7 +229,7 @@ fun TaskRow(
                                 startStr.length >= 10 &&
                                 rawDueStr.length >= 10 &&
                                 startStr.substring(0, 10) == rawDueStr.substring(0, 10) &&
-                                !task.isAlldayDue
+                                !task.task.isAlldayDue
                             ) {
                                 if (rawDueStr.length > 11) rawDueStr.substring(11) else rawDueStr
                             } else {
@@ -250,19 +250,19 @@ fun TaskRow(
                         } else {
                             Text(startStr, fontSize = 10.sp, color = dimColor, lineHeight = 10.sp)
                         }
-                    } else if (!task.dueDateIso.isNullOrEmpty()) {
-                        val isOverdue = remember(task.dueDateIso, task.isDone, task.isAlldayDue) {
-                            if (task.isDone || task.dueDateIso == null) {
+                    } else if (!task.task.dueDateIso.isNullOrEmpty()) {
+                        val isOverdue = remember(task.task.dueDateIso, task.task.isDone, task.task.isAlldayDue) {
+                            if (task.task.isDone || task.task.dueDateIso == null) {
                                 false
                             } else {
                                 try {
-                                    val dueInstant = if (task.isAlldayDue) {
-                                        val localDate = LocalDate.parse(task.dueDateIso)
+                                    val dueInstant = if (task.task.isAlldayDue) {
+                                        val localDate = LocalDate.parse(task.task.dueDateIso)
                                         localDate.plusDays(1)
                                             .atStartOfDay(ZoneId.systemDefault())
                                             .toInstant()
                                     } else {
-                                        OffsetDateTime.parse(task.dueDateIso).toInstant()
+                                        OffsetDateTime.parse(task.task.dueDateIso).toInstant()
                                     }
                                     dueInstant.isBefore(Instant.now())
                                 } catch (e: Exception) {
@@ -273,17 +273,17 @@ fun TaskRow(
 
                         val dueColor = if (isOverdue) {
                             MaterialTheme.colorScheme.error // Red
-                        } else if (task.isDueToday) {
+                        } else if (task.task.isDueToday) {
                             Color(0xFFFFA726) // Orange
                         } else {
                             Color.Gray
                         };
 
-                        val displayStr = remember(task.dueDateIso, task.isAlldayDue) {
-                            if (task.isAlldayDue) {
-                                task.dueDateIso!!.take(10)
+                        val displayStr = remember(task.task.dueDateIso, task.task.isAlldayDue) {
+                            if (task.task.isAlldayDue) {
+                                task.task.dueDateIso!!.take(10)
                             } else {
-                                formatIsoToLocal(task.dueDateIso!!)
+                                formatIsoToLocal(task.task.dueDateIso!!)
                             }
                         }
 
@@ -291,32 +291,32 @@ fun TaskRow(
                         NfIcon(NfIcons.HOURGLASS_END, size = 10.sp, color = dueColor, lineHeight = 10.sp)
                     }
 
-                    var liveDurationMins by remember(task.timeSpentSeconds, task.lastStartedAt) {
-                        mutableStateOf((task.timeSpentSeconds / 60u).toInt())
+                    var liveDurationMins by remember(task.task.timeSpentSeconds, task.task.lastStartedAt) {
+                        mutableStateOf((task.task.timeSpentSeconds / 60u).toInt())
                     }
 
-                    if (task.lastStartedAt != null) {
-                        LaunchedEffect(task.lastStartedAt) {
+                    if (task.task.lastStartedAt != null) {
+                        LaunchedEffect(task.task.lastStartedAt) {
                             while (true) {
                                 val now = System.currentTimeMillis() / 1000
-                                val start = task.lastStartedAt!!
+                                val start = task.task.lastStartedAt!!
                                 val currentSession = if (now > start) now - start else 0
-                                val totalSeconds = task.timeSpentSeconds.toLong() + currentSession
+                                val totalSeconds = task.task.timeSpentSeconds.toLong() + currentSession
                                 liveDurationMins = (totalSeconds / 60).toInt()
                                 kotlinx.coroutines.delay(60000)
                             }
                         }
                     }
 
-                    val pc = task.percentComplete
-                    val showPc = !task.isDone && pc != null && pc > 0u
+                    val pc = task.task.percentComplete
+                    val showPc = !task.task.isDone && pc != null && pc > 0u
 
-                    if (liveDurationMins > 0 || task.durationMins != null || task.lastStartedAt != null || showPc) {
-                        val timeLabel = if (task.durationMins != null) {
-                            val min = task.durationMins!!.toInt()
-                            val max = task.durationMaxMins?.toInt()?.coerceAtLeast(min) ?: min
+                    if (liveDurationMins > 0 || task.task.durationMins != null || task.task.lastStartedAt != null || showPc) {
+                        val timeLabel = if (task.task.durationMins != null) {
+                            val min = task.task.durationMins!!.toInt()
+                            val max = task.task.durationMaxMins?.toInt()?.coerceAtLeast(min) ?: min
                             
-                            if (liveDurationMins > 0 || task.lastStartedAt != null) {
+                            if (liveDurationMins > 0 || task.task.lastStartedAt != null) {
                                 val (cStr, maxStr) = formatPairedDuration(liveDurationMins, max)
                                 val estDisplay = if (max > min) {
                                     val (_, minStr) = formatPairedDuration(liveDurationMins, min)
@@ -333,7 +333,7 @@ fun TaskRow(
                                 }
                             }
                         } else {
-                            if (liveDurationMins > 0 || task.lastStartedAt != null) {
+                            if (liveDurationMins > 0 || task.task.lastStartedAt != null) {
                                 formatDuration(liveDurationMins.toUInt())
                             } else {
                                 ""
@@ -348,19 +348,19 @@ fun TaskRow(
                             else -> timeLabel
                         }
 
-                        val durColor = if (task.lastStartedAt != null) Color(0xFF66BB6A) else Color.Gray
+                        val durColor = if (task.task.lastStartedAt != null) Color(0xFF66BB6A) else Color.Gray
 
                         Text(label, fontSize = 10.sp, color = durColor, lineHeight = 10.sp)
                     }
 
-                    if (task.isRecurring) {
-                        val rColor = if (task.isRelativeRecurrence) Color(0xFFAB47BC) else Color.Gray
+                    if (task.task.isRecurring) {
+                        val rColor = if (task.task.isRelativeRecurrence) Color(0xFFAB47BC) else Color.Gray
                         NfIcon(NfIcons.REPEAT, size = 10.sp, color = rColor, lineHeight = 10.sp)
                     }
 
-                    if (task.geo != null) {
+                    if (task.task.geo != null) {
                         IconButton(
-                            onClick = { uriHandler.openUri("geo:${task.geo}") },
+                            onClick = { uriHandler.openUri("geo:${task.task.geo}") },
                             modifier = Modifier.size(14.dp).padding(0.dp),
                         ) {
                             NfIcon(
@@ -373,7 +373,7 @@ fun TaskRow(
                     }
 
                     // Locations - prefixed with @@ to match user expectation
-                    task.visibleLocations.forEach { loc ->
+                    task.task.visibleLocations.forEach { loc ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             val locationColor = Color(0xFFFFB300)
                             Text(
@@ -387,16 +387,16 @@ fun TaskRow(
                         }
                     }
 
-                    if (task.url != null) {
+                    if (task.task.url != null) {
                         IconButton(
-                            onClick = { uriHandler.openUri(task.url!!) },
+                            onClick = { uriHandler.openUri(task.task.url!!) },
                             modifier = Modifier.size(14.dp).padding(0.dp),
                         ) {
                             NfIcon(NfIcons.WEB_CHECK, size = 10.sp, color = Color(0xFF4FC3F7), lineHeight = 10.sp)
                         }
                     }
 
-                    task.visibleCategories.forEach { tag ->
+                    task.task.visibleCategories.forEach { tag ->
                         val bg = getTagColor(tag, isDark)
                         val displayTag = if (tag.contains("=")) tag.substringAfterLast(":") else tag
                         val prefix = if (tag.contains("=")) "" else "#"
@@ -411,7 +411,7 @@ fun TaskRow(
                 }
             }
 
-            if (yankedUid != null && yankedUid != task.uid) {
+            if (yankedUid != null && yankedUid != task.task.uid) {
                 IconButton(onClick = { onAction("block") }, modifier = Modifier.size(32.dp)) {
                     NfIcon(NfIcons.BLOCKED, 18.sp, MaterialTheme.colorScheme.secondary)
                 }
@@ -419,13 +419,13 @@ fun TaskRow(
                     NfIcon(NfIcons.CHILD, 18.sp, MaterialTheme.colorScheme.secondary)
                 }
                 IconButton(onClick = { onAction("related") }, modifier = Modifier.size(32.dp)) {
-                    NfIcon(getRandomRelatedIcon(task.uid, yankedUid), 18.sp, MaterialTheme.colorScheme.secondary)
+                    NfIcon(getRandomRelatedIcon(task.task.uid, yankedUid), 18.sp, MaterialTheme.colorScheme.secondary)
                 }
             }
 
-            if (task.hasVisibleSubtasks || isCollapsed) {
+            if (task.task.hasVisibleSubtasks || isCollapsed) {
                 val trees = listOf(NfIcons.TREE_FA, NfIcons.TREE_FAE, NfIcons.TREE_MD, NfIcons.PALM_TREE, NfIcons.PINE_TREE)
-                val hash = kotlin.math.abs(task.uid.hashCode())
+                val hash = kotlin.math.abs(task.task.uid.hashCode())
                 val iconChar = if (isCollapsed) {
                     NfIcons.FAMILY_TREE
                 } else {
@@ -454,23 +454,23 @@ fun TaskRow(
                 DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                     DropdownMenuItem(
                         text = { Text(androidx.compose.ui.res.stringResource(R.string.edit)) },
-                        onClick = { expanded = false; onClick(task.uid) },
+                        onClick = { expanded = false; onClick(task.task.uid) },
                         leadingIcon = { NfIcon(NfIcons.EDIT, 16.sp) })
 
-                    if (!task.isNote) {
+                    if (!task.task.isNote) {
                         DropdownMenuItem(
                             text = {
                                 Text(
-                                    if (task.statusString == "InProcess") androidx.compose.ui.res.stringResource(R.string.pause)
-                                    else if (task.isPaused) androidx.compose.ui.res.stringResource(R.string.menu_resume)
+                                    if (task.task.statusString == "InProcess") androidx.compose.ui.res.stringResource(R.string.pause)
+                                    else if (task.task.isPaused) androidx.compose.ui.res.stringResource(R.string.menu_resume)
                                     else androidx.compose.ui.res.stringResource(R.string.start)
                                 )
                             },
                             onClick = { expanded = false; onAction("playpause") },
-                            leadingIcon = { NfIcon(if (task.statusString == "InProcess") NfIcons.PAUSE else NfIcons.PLAY, 16.sp) }
+                            leadingIcon = { NfIcon(if (task.task.statusString == "InProcess") NfIcons.PAUSE else NfIcons.PLAY, 16.sp) }
                         )
 
-                        if (task.statusString == "InProcess" || task.isPaused) {
+                        if (task.task.statusString == "InProcess" || task.task.isPaused) {
                             DropdownMenuItem(
                                 text = { Text(androidx.compose.ui.res.stringResource(R.string.stop_reset)) },
                                 onClick = { expanded = false; onAction("stop") },
@@ -507,7 +507,7 @@ fun TaskRow(
                         leadingIcon = { NfIcon(NfIcons.THUMB_TACK, 16.sp) }
                     )
 
-                    if (!task.isDone && task.statusString != "Cancelled" && !task.isNote) {
+                    if (!task.task.isDone && task.task.statusString != "Cancelled" && !task.task.isNote) {
                         DropdownMenuItem(
                             text = { Text(androidx.compose.ui.res.stringResource(R.string.help_metadata_log_time)) },
                             onClick = { expanded = false; onAction("add_session") },
@@ -521,7 +521,7 @@ fun TaskRow(
                         leadingIcon = { NfIcon(NfIcons.CHILD, 16.sp) }
                     )
 
-                    if (task.parentUid != null) {
+                    if (task.task.parentUid != null) {
                         DropdownMenuItem(
                             text = { Text(androidx.compose.ui.res.stringResource(R.string.promote_remove_parent)) },
                             onClick = { expanded = false; onAction("promote") },
@@ -529,7 +529,7 @@ fun TaskRow(
                         )
                     }
 
-                    if (task.isRecurring && !task.isRelativeRecurrence && !task.isDone && task.statusString != "Cancelled" && !task.isNote) {
+                    if (task.task.isRecurring && !task.task.isRelativeRecurrence && !task.task.isDone && task.task.statusString != "Cancelled" && !task.task.isNote) {
                         DropdownMenuItem(
                             text = { Text(androidx.compose.ui.res.stringResource(R.string.action_complete_and_shift)) },
                             onClick = { expanded = false; onAction("complete_and_shift") },
@@ -537,7 +537,7 @@ fun TaskRow(
                         )
                     }
 
-                    val duplicateLabel = if (task.hasSubtasks) androidx.compose.ui.res.stringResource(R.string.duplicate_task)
+                    val duplicateLabel = if (task.task.hasSubtasks) androidx.compose.ui.res.stringResource(R.string.duplicate_task)
                     else androidx.compose.ui.res.stringResource(R.string.duplicate_single_task)
 
                     DropdownMenuItem(
@@ -546,7 +546,7 @@ fun TaskRow(
                         leadingIcon = { NfIcon(NfIcons.CLONE, 16.sp) }
                     )
 
-                    if (task.hasSubtasks) {
+                    if (task.task.hasSubtasks) {
                         DropdownMenuItem(
                             text = { Text(androidx.compose.ui.res.stringResource(R.string.action_complete_tree)) },
                             onClick = { expanded = false; onAction("complete_tree") },
@@ -561,31 +561,31 @@ fun TaskRow(
                             leadingIcon = { NfIcon(NfIcons.MOVE, 16.sp) })
                     }
 
-                    if (task.statusString != "Cancelled") {
+                    if (task.task.statusString != "Cancelled") {
                         DropdownMenuItem(
                             text = { Text(androidx.compose.ui.res.stringResource(R.string.cancel)) },
                             onClick = { expanded = false; onAction("cancel") },
                             leadingIcon = { NfIcon(NfIcons.CROSS, 16.sp) })
                     }
 
-                    if (task.geo != null) {
+                    if (task.task.geo != null) {
                         DropdownMenuItem(
                             text = { Text(androidx.compose.ui.res.stringResource(R.string.menu_open_location)) },
-                            onClick = { expanded = false; uriHandler.openUri("geo:${task.geo}") },
+                            onClick = { expanded = false; uriHandler.openUri("geo:${task.task.geo}") },
                             leadingIcon = { NfIcon(NfIcons.MAP_LOCATION_DOT, 16.sp) })
                     }
 
-                    if (task.treeLocationCount.toInt() > 1) {
+                    if (task.task.treeLocationCount.toInt() > 1) {
                         DropdownMenuItem(
                             text = { Text(androidx.compose.ui.res.stringResource(R.string.action_open_locations)) },
                             onClick = { expanded = false; onAction("open_locations_gpx") },
                             leadingIcon = { NfIcon(NfIcons.MAP_MARKER_MULTIPLE, 16.sp) })
                     }
 
-                    if (task.url != null) {
+                    if (task.task.url != null) {
                         DropdownMenuItem(
                             text = { Text(androidx.compose.ui.res.stringResource(R.string.menu_open_link)) },
-                            onClick = { expanded = false; uriHandler.openUri(task.url!!) },
+                            onClick = { expanded = false; uriHandler.openUri(task.task.url!!) },
                             leadingIcon = { NfIcon(NfIcons.WEB_CHECK, 16.sp) })
                     }
 
@@ -593,7 +593,7 @@ fun TaskRow(
                         onClick = { expanded = false; onAction("delete") },
                         leadingIcon = { NfIcon(NfIcons.DELETE, 16.sp, MaterialTheme.colorScheme.error) })
 
-                    if (task.hasSubtasks) {
+                    if (task.task.hasSubtasks) {
                         DropdownMenuItem(text = { Text(androidx.compose.ui.res.stringResource(R.string.delete_task_tree), color = MaterialTheme.colorScheme.error) },
                             onClick = { expanded = false; onAction("delete_tree") },
                             leadingIcon = { NfIcon(NfIcons.DELETE, 16.sp, MaterialTheme.colorScheme.error) })

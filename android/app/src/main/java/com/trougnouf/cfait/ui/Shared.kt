@@ -45,9 +45,11 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.runtime.Immutable
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.core.MobileSyntaxType
+import com.trougnouf.cfait.core.MobileTaskSummary
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Spacer
@@ -69,6 +71,9 @@ import java.time.format.DateTimeFormatter
 import kotlin.coroutines.resume
 
 val NerdFont = FontFamily(Font(R.font.symbols_nerd_font))
+
+@Immutable
+data class StableTaskSummary(val task: MobileTaskSummary)
 
 fun parseInlineMarkdown(textStr: String, baseColor: androidx.compose.ui.graphics.Color, isStrikethrough: Boolean): androidx.compose.ui.text.AnnotatedString {
     val builder = androidx.compose.ui.text.AnnotatedString.Builder()

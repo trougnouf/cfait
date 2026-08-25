@@ -207,12 +207,107 @@ pub struct MobileFilterOptions {
     pub match_all_categories: bool,
     pub expanded_tags: Vec<String>,
     pub expanded_locations: Vec<String>,
+    pub offset: u32,
+    pub limit: u32,
 }
 
 #[derive(uniffi::Record)]
 pub struct MobileWorkSession {
     pub start_ms: i64,
     pub end_ms: i64,
+}
+
+#[derive(uniffi::Record)]
+pub struct MobileTaskSummary {
+    pub uid: String,
+    pub summary: String,
+    pub status_string: String,
+    pub priority: u8,
+    pub is_done: bool,
+    pub is_paused: bool,
+    pub is_note: bool,
+    pub is_journal: bool,
+    pub depth: u32,
+    pub calendar_href: String,
+    pub visible_categories: Vec<String>,
+    pub visible_locations: Vec<String>,
+    pub due_date_iso: Option<String>,
+    pub is_allday_due: bool,
+    pub is_due_today: bool,
+    pub completed_date_iso: Option<String>,
+    pub start_date_iso: Option<String>,
+    pub is_allday_start: bool,
+    pub is_future_start: bool,
+    pub has_alarms: bool,
+    pub duration_mins: Option<u32>,
+    pub duration_max_mins: Option<u32>,
+    pub percent_complete: Option<u8>,
+    pub is_blocked: bool,
+    pub has_subtasks: bool,
+    pub has_blocking_tasks: bool,
+    pub has_related_tasks: bool,
+    pub has_visible_subtasks: bool,
+    pub tree_location_count: u32,
+    pub url: Option<String>,
+    pub geo: Option<String>,
+    pub time_spent_seconds: u64,
+    pub last_started_at: Option<i64>,
+    pub is_recurring: bool,
+    pub is_relative_recurrence: bool,
+    pub parent_uid: Option<String>,
+    pub has_description: bool,
+    pub has_related_to: bool,
+    pub is_search_context: bool,
+    pub visible: bool,
+    pub is_collapsed: bool,
+}
+
+impl MobileTaskSummary {
+    fn empty_virtual(vtype: &str, payload: &str, depth: u32) -> Self {
+        Self {
+            uid: format!("virtual-{}-{}", vtype, payload),
+            summary: String::new(),
+            status_string: String::new(),
+            priority: 0,
+            is_done: false,
+            is_paused: false,
+            is_note: false,
+            is_journal: false,
+            depth,
+            calendar_href: String::new(),
+            visible_categories: vec![],
+            visible_locations: vec![],
+            due_date_iso: None,
+            is_allday_due: false,
+            is_due_today: false,
+            completed_date_iso: None,
+            start_date_iso: None,
+            is_allday_start: false,
+            is_future_start: false,
+            has_alarms: false,
+            duration_mins: None,
+            duration_max_mins: None,
+            percent_complete: None,
+            is_blocked: false,
+            has_subtasks: false,
+            has_blocking_tasks: false,
+            has_related_tasks: false,
+            has_visible_subtasks: false,
+            tree_location_count: 0,
+            url: None,
+            geo: None,
+            time_spent_seconds: 0,
+            last_started_at: None,
+            is_recurring: false,
+            is_relative_recurrence: false,
+            parent_uid: None,
+            has_description: false,
+            has_related_to: false,
+            is_search_context: false,
+            visible: true,
+            is_collapsed: false,
+        }
+    }
 }
 
 #[derive(uniffi::Record)]
@@ -282,73 +377,6 @@ pub struct MobileTask {
     pub is_journal: bool,
 }
 
-impl MobileTask {
-    fn empty_virtual(vtype: &str, payload: &str, depth: u32) -> Self {
-        Self {
-            uid: format!("virtual-{}-{}", vtype, payload),
-            summary: String::new(),
-            description: String::new(),
-            is_done: false,
-            percent_complete: None,
-            priority: 0,
-            due_date_iso: None,
-            completed_date_iso: None,
-            is_allday_due: false,
-            start_date_iso: None,
-            is_allday_start: false,
-            has_alarms: false,
-            is_future_start: false,
-            is_due_today: false,
-            duration_mins: None,
-            duration_max_mins: None,
-            calendar_href: String::new(),
-            categories: vec![],
-            is_recurring: false,
-            is_relative_recurrence: false,
-            parent_uid: None,
-            smart_string: String::new(),
-            depth,
-            is_blocked: false,
-            status_string: String::new(),
-            blocked_by_names: vec![],
-            blocked_by_uids: vec![],
-            blocking_uids: vec![],
-            blocking_names: vec![],
-            related_to_uids: vec![],
-            related_to_names: vec![],
-            is_paused: false,
-            has_subtasks: false,
-            has_blocking_tasks: false,
-            has_related_tasks: false,
-            has_visible_subtasks: false,
-            tree_location_count: 0,
-            locations: vec![],
-            url: None,
-            geo: None,
-            time_spent_seconds: 0,
-            last_started_at: None,
-            sessions: vec![],
-            virtual_type: vtype.to_string(),
-            virtual_payload: payload.to_string(),
-            is_collapsed: false,
-            pinned: false,
-            has_extractable_subtasks: false,
-            is_permanent: false,
-            created_date_iso: None,
-            last_modified_date_iso: None,
-            goal_progress_str: None,
-            goal_target_str: None,
-            goal_history: vec![],
-            rrule_history_stat: None,
-            visible_categories: vec![],
-            visible_locations: vec![],
-            is_search_context: false,
-            is_note: false,
-            is_journal: false,
-        }
-    }
-}
-
 #[derive(uniffi::Record, Clone)]
 pub struct MobileCalendar {
     pub name: String,
@@ -406,7 +434,7 @@ pub struct MobileJournalPage {
 
 #[derive(uniffi::Record)]
 pub struct MobileViewData {
-    pub tasks: Vec<MobileTask>,
+    pub tasks: Vec<MobileTaskSummary>,
     pub tags: Vec<MobileTag>,
     pub locations: Vec<MobileLocation>,
     pub goals: Vec<MobileGoalProgress>,
@@ -1059,6 +1087,79 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
         is_search_context: t.is_search_context,
         is_note: t.is_note || t.is_journal,
         is_journal: t.is_journal,
+    }
+}
+
+fn task_to_summary(t: &Task, store: &TaskStore) -> MobileTaskSummary {
+    let status_str = format!("{:?}", t.status);
+
+    let (due_iso, due_allday) = match &t.due {
+        Some(DateType::AllDay(d)) => (Some(d.format("%Y-%m-%d").to_string()), true),
+        Some(DateType::Specific(dt)) => (Some(dt.to_rfc3339()), false),
+        Some(DateType::Month(y, m)) => (Some(format!("{:04}-{:02}", y, m)), true),
+        Some(DateType::Year(y)) => (Some(format!("{:04}", y)), true),
+        None => (None, false),
+    };
+
+    let (start_iso, start_allday) = match &t.dtstart {
+        Some(DateType::AllDay(d)) => (Some(d.format("%Y-%m-%d").to_string()), true),
+        Some(DateType::Specific(dt)) => (Some(dt.to_rfc3339()), false),
+        Some(DateType::Month(y, m)) => (Some(format!("{:04}-{:02}", y, m)), true),
+        Some(DateType::Year(y)) => (Some(format!("{:04}", y)), true),
+        None => (None, false),
+    };
+
+    let has_alarms = !t
+        .alarms
+        .iter()
+        .all(|a| a.acknowledged.is_some() || a.is_snooze());
+
+    let tree_location_count = store.count_tree_locations(&t.uid) as u32;
+
+    let completed_date_iso = t.completion_date().map(|d| d.to_rfc3339());
+
+    MobileTaskSummary {
+        uid: t.uid.clone(),
+        summary: t.summary.clone(),
+        status_string: status_str,
+        priority: t.priority,
+        is_done: t.status.is_done(),
+        is_paused: t.is_paused(),
+        is_note: t.is_note || t.is_journal,
+        is_journal: t.is_journal,
+        depth: t.depth as u32,
+        calendar_href: t.calendar_href.clone(),
+        visible_categories: t.visible_categories.clone(),
+        visible_locations: t.visible_locations.clone(),
+        due_date_iso: due_iso,
+        is_allday_due: due_allday,
+        is_due_today: t.is_due_today,
+        completed_date_iso,
+        start_date_iso: start_iso,
+        is_allday_start: start_allday,
+        is_future_start: t.is_future_start,
+        has_alarms,
+        duration_mins: t.estimated_duration,
+        duration_max_mins: t.estimated_duration_max,
+        percent_complete: t.percent_complete,
+        is_blocked: t.is_blocked,
+        has_subtasks: t.has_subtasks,
+        has_blocking_tasks: t.has_blocking_tasks,
+        has_related_tasks: t.has_related_tasks,
+        has_visible_subtasks: t.has_visible_subtasks,
+        tree_location_count,
+        url: t.url.clone(),
+        geo: t.geo.clone(),
+        time_spent_seconds: t.time_spent_seconds,
+        last_started_at: t.last_started_at,
+        is_recurring: t.rrule.is_some(),
+        is_relative_recurrence: t.is_relative_recurrence(),
+        parent_uid: t.parent_uid.clone(),
+        has_description: !t.description.is_empty(),
+        has_related_to: !t.related_to.is_empty(),
+        is_search_context: t.is_search_context,
+        visible: true,
+        is_collapsed: t.collapsed,
     }
 }
 
@@ -2376,11 +2477,11 @@ impl CfaitMobile {
             .into_iter()
             .filter_map(|item| {
                 if let crate::store::TaskListItem::Task(t) = item {
-                    let mt = task_to_mobile(&t, &store);
+                    let mt = task_to_summary(&t, &store);
                     last_calendar_href = mt.calendar_href.clone();
                     Some(mt)
                 } else if let crate::store::TaskListItem::ExpandGroup(p_uid, depth) = item {
-                    let mut vt = MobileTask::empty_virtual("expand", &p_uid, depth as u32);
+                    let mut vt = MobileTaskSummary::empty_virtual("expand", &p_uid, depth as u32);
                     vt.calendar_href = if p_uid.is_empty() {
                         last_calendar_href.clone()
                     } else if let Some(p) = store.get_task_ref(&p_uid) {
@@ -2390,7 +2491,7 @@ impl CfaitMobile {
                     };
                     Some(vt)
                 } else if let crate::store::TaskListItem::CollapseGroup(p_uid, depth) = item {
-                    let mut vt = MobileTask::empty_virtual("collapse", &p_uid, depth as u32);
+                    let mut vt = MobileTaskSummary::empty_virtual("collapse", &p_uid, depth as u32);
                     vt.calendar_href = if p_uid.is_empty() {
                         last_calendar_href.clone()
                     } else if let Some(p) = store.get_task_ref(&p_uid) {
@@ -2403,6 +2504,8 @@ impl CfaitMobile {
                     None
                 }
             })
+            .skip(options.offset as usize)
+            .take(options.limit as usize)
             .collect();
 
         let tags = filtered

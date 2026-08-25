@@ -70,6 +70,7 @@ import androidx.compose.ui.unit.sp
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.*
 import com.trougnouf.cfait.core.MobileGoalType
+import com.trougnouf.cfait.ui.StableTaskSummary
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -139,7 +140,9 @@ fun HomeScreen(
     onMigrateLocal: (String, String) -> Unit,
     onAutoScrollComplete: () -> Unit = {},
 ) {
-    val tasks = viewData?.tasks ?: emptyList()
+    val tasks = remember(viewData?.tasks) { 
+        viewData?.tasks?.map { StableTaskSummary(it) } ?: emptyList() 
+    }
     val tags = viewData?.tags ?: emptyList()
     val locations = viewData?.locations ?: emptyList()
     val viewGoals = viewData?.goals ?: emptyList()
@@ -242,10 +245,10 @@ fun HomeScreen(
     val showTabs = enabledCals.size > 1 && (!tabAutoHide || isTabsTemporarilyVisible)
 
     // Local cache for instant swiping: Accumulate over time
-    var taskCache by remember { mutableStateOf<Map<String, List<MobileTask>>>(emptyMap()) }
+    var taskCache by remember { mutableStateOf<Map<String, List<StableTaskSummary>>>(emptyMap()) }
     LaunchedEffect(tasks) {
         val newCache = taskCache.toMutableMap()
-        val groupedTasks = tasks.groupBy { it.calendarHref }
+        val groupedTasks = tasks.groupBy { it.task.calendarHref }
 
         // Update populated calendars
         groupedTasks.forEach { (href, hrefTasks) ->
@@ -297,7 +300,7 @@ fun HomeScreen(
     var isSearchActive by rememberSaveable { mutableStateOf(false) }
     val searchFocusRequester = remember { FocusRequester() }
 
-    var taskToMove by remember { mutableStateOf<MobileTask?>(null) }
+    var taskToMove by remember { mutableStateOf<StableTaskSummary?>(null) }
     var childLockActive by rememberSaveable { mutableStateOf(false) }
     var yankLockActive by rememberSaveable { mutableStateOf(false) }
 
@@ -314,9 +317,9 @@ fun HomeScreen(
     var exportSourceHref by remember { mutableStateOf<String?>(null) }
 
     var yankedUid by rememberSaveable { mutableStateOf<String?>(null) }
-    val yankedTask = remember(tasks, yankedUid) { tasks.find { it.uid == yankedUid } }
+    val yankedTask = remember(tasks, yankedUid) { tasks.find { it.task.uid == yankedUid } }
     var creatingChildUid by rememberSaveable { mutableStateOf<String?>(null) }
-    val creatingChildTask = remember(tasks, creatingChildUid) { tasks.find { it.uid == creatingChildUid } }
+    val creatingChildTask = remember(tasks, creatingChildUid) { tasks.find { it.task.uid == creatingChildUid } }
 
     val activeListState = remember(pagerState.currentPage, tabs) {
         val key = tabs.getOrNull(pagerState.currentPage)?.id ?: "ALL_TASKS"
@@ -361,7 +364,7 @@ fun HomeScreen(
     val calColorMap = remember(calendars) {
         calendars.associate { it.href to (it.color?.let { hex -> parseHexColor(hex) } ?: Color.Gray) }
     }
-    val taskMap = remember(tasks) { tasks.associateBy { it.uid } }
+    val taskMap = remember(tasks) { tasks.associateBy { it.task.uid } }
 
     var hasSetDefaultTab by rememberSaveable { mutableStateOf(false) }
 
@@ -388,7 +391,9 @@ fun HomeScreen(
                     expandedGroups = expandedGroups.toList(),
                     matchAllCategories = matchAllCategories,
                     expandedTags = expandedTags.toList(),
-                    expandedLocations = expandedLocations.toList()
+                    expandedLocations = expandedLocations.toList(),
+                    offset = 0u,
+                    limit = 10000u
                 )
                 val newViewData = api.getViewTasks(options)
                 onUpdateViewData(newViewData, api.getConfig().tagAliases)
@@ -414,18 +419,18 @@ fun HomeScreen(
         scope.launch {
             val currentTab = tabs.getOrNull(pagerState.currentPage) ?: return@launch
             val validTasks = tasks.filter {
-                it.calendarHref in currentTab.hrefs && !it.isDone && !it.isBlocked && !it.isFutureStart
+                it.task.calendarHref in currentTab.hrefs && !it.task.isDone && !it.task.isBlocked && !it.task.isFutureStart
             }
             if (validTasks.isEmpty()) return@launch
 
             val totalWeight = validTasks.sumOf {
-                val p = if (it.priority.toInt() == 0) defaultPriority else it.priority.toInt()
+                val p = if (it.task.priority.toInt() == 0) defaultPriority else it.task.priority.toInt()
                 (10 - p).coerceIn(1, 9)
             }
             var rnd = (0 until totalWeight).random()
             var targetTask = validTasks.last()
             for (t in validTasks) {
-                val p = if (t.priority.toInt() == 0) defaultPriority else t.priority.toInt()
+                val p = if (t.task.priority.toInt() == 0) defaultPriority else t.task.priority.toInt()
                 val w = (10 - p).coerceIn(1, 9)
                 if (rnd < w) {
                     targetTask = t
@@ -433,12 +438,12 @@ fun HomeScreen(
                 }
                 rnd -= w
             }
-            highlightedUid = targetTask.uid
+            highlightedUid = targetTask.task.uid
             scrollTrigger++
         }
     }
 
-    fun toggleTask(task: MobileTask) {
+    fun toggleTask(task: MobileTaskSummary) {
         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
         scope.launch {
             activeOpCount++
@@ -603,7 +608,9 @@ fun HomeScreen(
                             expandedGroups = expandedGroups.toList(),
                             matchAllCategories = matchAllCategories,
                             expandedTags = expandedTags.toList(),
-                            expandedLocations = expandedLocations.toList()
+                            expandedLocations = expandedLocations.toList(),
+                            offset = 0u,
+                            limit = 10000u
                         )
                         val newViewData = api.getViewTasks(options)
                         onUpdateViewData(newViewData, api.getConfig().tagAliases)
@@ -709,7 +716,7 @@ fun HomeScreen(
         }
     }
 
-    fun onTaskAction(action: String, task: MobileTask) {
+    fun onTaskAction(action: String, task: MobileTaskSummary) {
         if (action == "open_locations_gpx") {
             scope.launch {
                 try {
@@ -735,20 +742,14 @@ fun HomeScreen(
             }
             return
         }
-        if (action == "move") { taskToMove = task; return }
+        if (action == "move") { taskToMove = StableTaskSummary(task); return }
         if (action == "add_session") { sessionTaskUid = task.uid; return }
         if (action == "create_child") {
             creatingChildUid = task.uid
             yankedUid = null
-            val sb = StringBuilder()
-            fun quote(s: String): String =
-                if (s.contains(" ") || s.contains("\"")) "\"${s.replace("\"", "\\\"")}\"" else s
-            if (task.priority.toInt() > 0) {
-                sb.append("!${task.priority} ")
-            }
-            task.categories.forEach { cat -> sb.append("#${quote(cat)} ") }
-            task.locations.forEach { loc -> sb.append("@@${quote(loc)} ") }
-            newTaskText = androidx.compose.ui.text.input.TextFieldValue(sb.toString())
+            // For create_child, we need the full task to get categories, locations, etc.
+            // We'll set the uid and let the actual creation fetch the full task when needed
+            newTaskText = androidx.compose.ui.text.input.TextFieldValue("")
             return
         }
 
@@ -782,15 +783,29 @@ fun HomeScreen(
                     "prio_down" -> AppIntent.ChangePriority(task.uid, -1)
                     "yank" -> {
                         yankedUid = task.uid
-                        val textToCopy =
-                            if (task.description.isEmpty()) task.smartString else "${task.smartString}\n\n${task.description}"
-                        clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("task_details", textToCopy)))
+                        // For yank, we need the full task to get description and smartString
+                        // We'll fetch it asynchronously
+                        scope.launch {
+                            try {
+                                val fullTask = api.getTaskByUid(task.uid)
+                                if (fullTask != null) {
+                                    val textToCopy = if (fullTask.description.isEmpty()) fullTask.smartString 
+                                    else "${fullTask.smartString}\n\n${fullTask.description}"
+                                    clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("task_details", textToCopy)))
+                                }
+                            } catch (e: Exception) {
+                                // Ignore
+                            }
+                        }
                         null
                     }
                     "block" -> if (currentYankedUid != null) AppIntent.AddDependency(task.uid, currentYankedUid) else null
                     "child" -> if (currentYankedUid != null) AppIntent.MakeChild(task.uid, currentYankedUid) else null
                     "related" -> if (currentYankedUid != null) AppIntent.AddRelatedTo(task.uid, currentYankedUid) else null
-                    "toggle_collapse" -> AppIntent.SetTreeCollapse(task.uid, !task.isCollapsed)
+                    "toggle_collapse" -> {
+                        val collapsedState = task.isCollapsed
+                        AppIntent.SetTreeCollapse(task.uid, !collapsedState)
+                    }
                     else -> null
                 }
 
@@ -936,14 +951,14 @@ fun HomeScreen(
         if (scrollTrigger == 0L && autoScrollUid == null) return@LaunchedEffect
 
         try {
-            val targetTask = tasks.find { it.uid == highlightedUid } ?: return@LaunchedEffect
+            val targetTask = tasks.find { it.task.uid == highlightedUid } ?: return@LaunchedEffect
 
             val currentTab = tabs.getOrNull(pagerState.currentPage)
-            val needsTabSwitch = currentTab != null && !currentTab.hrefs.contains(targetTask.calendarHref)
+            val needsTabSwitch = currentTab != null && !currentTab.hrefs.contains(targetTask.task.calendarHref)
 
             // 1. Jump Tab if needed
             if (needsTabSwitch) {
-                val tabIndex = tabs.indexOfFirst { it.isWriteTarget == targetTask.calendarHref }
+                val tabIndex = tabs.indexOfFirst { it.isWriteTarget == targetTask.task.calendarHref }
                 if (tabIndex >= 0) {
                     // This naturally suspends the coroutine until the animation completes
                     pagerState.animateScrollToPage(tabIndex)
@@ -955,10 +970,10 @@ fun HomeScreen(
             // 2. Find the index in the new tab's list
             val activeTab = tabs.getOrNull(pagerState.currentPage)
             val currentList = if (activeTab != null) {
-                tasks.filter { it.calendarHref in activeTab.hrefs }
+                tasks.filter { it.task.calendarHref in activeTab.hrefs }
             } else tasks
 
-            val index = currentList.indexOfFirst { it.uid == highlightedUid }
+            val index = currentList.indexOfFirst { it.task.uid == highlightedUid }
 
             // 3. Scroll the list
             if (index >= 0) {
@@ -1010,7 +1025,10 @@ fun HomeScreen(
                 yankedUid = null; yankLockActive = false
             }
 
-            searchQuery.isNotBlank() -> searchQuery = ""
+            searchQuery.isNotBlank() -> {
+                searchQuery = ""
+                updateTaskList()
+            }
             filterTags.isNotEmpty() || filterLocations.isNotEmpty() -> {
                 filterTags = emptySet()
                 filterLocations = emptySet()
@@ -1026,15 +1044,15 @@ fun HomeScreen(
     }
 
     if (taskToMove != null) {
-        var moveTree by remember(taskToMove) { mutableStateOf(taskToMove?.hasSubtasks ?: false) }
+        var moveTree by remember(taskToMove) { mutableStateOf(taskToMove?.task?.hasSubtasks ?: false) }
         val targetCals =
             remember(calendars, taskToMove, moveTree) {
-                val taskCalHref = taskToMove?.calendarHref ?: return@remember emptyList<MobileCalendar>()
+                val taskCalHref = taskToMove?.task?.calendarHref ?: return@remember emptyList<MobileCalendar>()
                 calendars.filter { (moveTree || it.href != taskCalHref) && !it.isDisabled && it.href != "local://trash" && it.href != "local://recovery" }
             }
         AlertDialog(
             onDismissRequest = { taskToMove = null },
-            title = { Text(stringResource(if (moveTree && taskToMove?.hasSubtasks == true) R.string.move_task_tree else R.string.move_task_title)) },
+            title = { Text(stringResource(if (moveTree && taskToMove?.task?.hasSubtasks == true) R.string.move_task_tree else R.string.move_task_title)) },
             text = {
                 Column {
                     LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
@@ -1043,7 +1061,7 @@ fun HomeScreen(
                                 headlineContent = { Text(cal.name) },
                                 leadingContent = { NfIcon(NfIcons.CALENDAR, 16.sp) },
                                 modifier = Modifier.clickable {
-                                    val uid = taskToMove?.uid ?: return@clickable
+                                    val uid = (taskToMove?.task)?.uid ?: return@clickable
                                     scope.launch {
                                         try {
                                             val actionDesc = if (moveTree) {
@@ -1085,7 +1103,7 @@ fun HomeScreen(
                             )
                         }
                     }
-                    if (taskToMove?.hasSubtasks == true) {
+                    if (taskToMove?.task?.hasSubtasks == true) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth().clickable { moveTree = !moveTree }.padding(top = 8.dp)
@@ -2007,7 +2025,7 @@ fun HomeScreen(
 
                 val activeCount = remember(tasks, currentTab) {
                     if (currentTab != null) {
-                        tasks.count { !it.isDone && it.calendarHref in currentTab.hrefs }
+                        tasks.count { !it.task.isDone && it.task.calendarHref in currentTab.hrefs }
                     } else 0
                 }
                 val countText = if (tasks.isNotEmpty() && activeCount > 0) "($activeCount)" else ""
@@ -2119,8 +2137,8 @@ fun HomeScreen(
                         TopAppBar(
                             title = {
                                 if (focusedTaskUid != null) {
-                                    val focusedTask = tasks.find { it.uid == focusedTaskUid }
-                                    val titleText = focusedTask?.summary ?: stringResource(R.string.focus_hide_others)
+                                    val focusedTask = tasks.find { it.task.uid == focusedTaskUid }
+                                    val titleText = focusedTask?.task?.summary ?: stringResource(R.string.focus_hide_others)
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         NfIcon(NfIcons.FOCUS_FIELD, 20.sp, MaterialTheme.colorScheme.primary)
                                         Spacer(Modifier.width(8.dp))
@@ -2163,6 +2181,7 @@ fun HomeScreen(
                                             }
                                             isSearchActive = true
                                             keyboardController?.hide()
+                                            updateTaskList()
                                         }) {
                                             NfIcon(parseIcon(quickFilterIcon), 18.sp, color = qfColor)
                                         }
@@ -2172,6 +2191,7 @@ fun HomeScreen(
                                         if (!isSearchActive) {
                                             searchQuery = ""
                                             keyboardController?.hide()
+                                            updateTaskList()
                                         }
                                     }) {
                                         val searchIconColor = when {
@@ -2229,7 +2249,10 @@ fun HomeScreen(
                                 }
                             }
                             TextField(
-                                value = searchQuery, onValueChange = { searchQuery = it },
+                                value = searchQuery, onValueChange = { 
+                                    searchQuery = it
+                                    updateTaskList()
+                                },
                                 placeholder = { Text(stringResource(R.string.search_placeholder), fontSize = 14.sp) },
                                 singleLine = true, textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
                                 visualTransformation = remember(isDark) {
@@ -2280,7 +2303,7 @@ fun HomeScreen(
                                     NfIcon(NfIcons.CHILD, 16.sp, MaterialTheme.colorScheme.onTertiaryContainer)
                                     Spacer(Modifier.width(8.dp))
                                     Text(
-                                        stringResource(R.string.new_child_of, creatingChildTask.summary),
+                                        stringResource(R.string.new_child_of, creatingChildTask?.task?.summary ?: ""),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onTertiaryContainer,
                                         maxLines = 1,
@@ -2315,7 +2338,7 @@ fun HomeScreen(
                                     NfIcon(NfIcons.LINK, 16.sp, MaterialTheme.colorScheme.onSecondaryContainer)
                                     Spacer(Modifier.width(8.dp))
                                     Text(
-                                        stringResource(R.string.yanked_label) + " " + yankedTask.summary,
+                                        stringResource(R.string.yanked_label) + " " + (yankedTask?.task?.summary ?: ""),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                                         maxLines = 1,
@@ -2518,14 +2541,14 @@ fun HomeScreen(
                                 val pageTasks = remember(tasks, taskCache, currentTab) {
                                     if (currentTab == null) return@remember emptyList()
 
-                                    val liveTasks = ArrayList<MobileTask>()
+                                    val liveTasks = ArrayList<StableTaskSummary>()
                                     val presentHrefs = HashSet<String>()
 
                                     // 1. Single-pass filter: O(N) time, zero intermediate list allocations
                                     for (task in tasks) {
-                                        if (currentTab.hrefs.contains(task.calendarHref)) {
+                                        if (currentTab.hrefs.contains(task.task.calendarHref)) {
                                             liveTasks.add(task)
-                                            presentHrefs.add(task.calendarHref)
+                                            presentHrefs.add(task.task.calendarHref)
                                         }
                                     }
 
@@ -2536,19 +2559,19 @@ fun HomeScreen(
                                     } else {
                                         // 3. Slow-path: User just swiped, backend hasn't fetched the new calendar yet (~50ms window).
                                         // We append the cached tasks to the bottom to prevent a blank screen.
-                                        val result = ArrayList<MobileTask>(liveTasks.size + 50)
+                                        val result = ArrayList<StableTaskSummary>(liveTasks.size + 50)
                                         result.addAll(liveTasks)
                                         
                                         val seenUids = HashSet<String>()
                                         for (t in liveTasks) {
-                                            seenUids.add(t.uid)
+                                            seenUids.add(t.task.uid)
                                         }
 
                                         val missingHrefs = currentTab.hrefs - presentHrefs
                                         for (href in missingHrefs) {
                                             taskCache[href]?.let { cached -> 
                                                 for (t in cached) {
-                                                    if (seenUids.add(t.uid)) {
+                                                    if (seenUids.add(t.task.uid)) {
                                                         result.add(t)
                                                     }
                                                 }
@@ -2563,26 +2586,28 @@ fun HomeScreen(
                                     contentPadding = PaddingValues(bottom = 80.dp),
                                     modifier = Modifier.fillMaxSize(),
                                 ) {
-                                    items(pageTasks, key = { it.uid }) { task ->
-                                        if (task.virtualType == "none") {
-                                            val calColor = calColorMap[task.calendarHref] ?: Color.Gray
+                                    items(pageTasks, key = { it.task.uid }) { stableTask ->
+                                        if (!stableTask.task.uid.startsWith("virtual-")) {
+                                            val calColor = calColorMap[stableTask.task.calendarHref] ?: Color.Gray
                                             TaskRow(
-                                                task = task,
+                                                task = stableTask,
                                                 calColor = calColor,
-                                                onToggle = { toggleTask(task) },
-                                                onAction = { act -> onTaskAction(act, task) },
+                                                onToggle = { toggleTask(stableTask.task) },
+                                                onAction = { act -> onTaskAction(act, stableTask.task) },
                                                 onClick = onTaskClick,
                                                 yankedUid = yankedUid,
                                                 enabledCalendarCount = enabledCalendarCount,
-                                                isHighlighted = task.uid == highlightedUid,
-                                                isCollapsed = task.isCollapsed,
+                                                isHighlighted = stableTask.task.uid == highlightedUid,
+                                                isCollapsed = stableTask.task.isCollapsed,
                                                 onToggleCollapse = {
-                                                    onTaskAction("toggle_collapse", task)
+                                                    onTaskAction("toggle_collapse", stableTask.task)
                                                 }
                                             )
                                         } else {
-                                            VirtualTaskRow(task = task) {
-                                                val key = task.virtualPayload
+                                            // Extract payload from uid: "virtual-expand-{payload}" or "virtual-collapse-{payload}"
+                                            val parts = stableTask.task.uid.split("-", limit = 3)
+                                            val key = if (parts.size >= 3) parts[2] else stableTask.task.uid
+                                            VirtualTaskRow(task = stableTask.task) {
                                                 expandedGroups =
                                                     if (expandedGroups.contains(key)) expandedGroups - key else expandedGroups + key
                                             }
