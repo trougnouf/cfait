@@ -137,7 +137,9 @@ fun TaskRow(
                     fontWeight = if (task.priority > 0.toUByte()) FontWeight.Medium else FontWeight.Normal,
                     lineHeight = 18.sp
                 )
-                val annotatedSummary = com.trougnouf.cfait.ui.parseInlineMarkdown(task.summary, textColor, isStrikethrough)
+                val annotatedSummary = remember(task.summary, textColor, isStrikethrough) {
+                    com.trougnouf.cfait.ui.parseInlineMarkdown(task.summary, textColor, isStrikethrough)
+                }
                 
                 Text(
                     text = annotatedSummary,
