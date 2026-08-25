@@ -187,8 +187,12 @@ fun CfaitNavHost(
     var goals by remember { mutableStateOf<Map<String, com.trougnouf.cfait.core.MobileGoal>>(emptyMap()) }
     var defaultDurationGoalMins by remember { mutableIntStateOf(60) }
     var sessionsCountAsCompletions by remember { mutableStateOf(false) }
+    var showCalendarsTab by remember { mutableStateOf(true) }
+    var showTagsTab by remember { mutableStateOf(true) }
+    var showLocationsTab by remember { mutableStateOf(true) }
     var showGoalsTab by remember { mutableStateOf(true) }
     var showJournalTab by remember { mutableStateOf(true) }
+    var firstDayOfWeek by remember { mutableStateOf(com.trougnouf.cfait.core.MobileFirstDayOfWeek.MONDAY) }
     var viewData by remember { mutableStateOf<com.trougnouf.cfait.core.MobileViewData?>(null) }
     var aliases by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
     var defaultCalHref by remember { mutableStateOf<String?>(null) }
@@ -301,8 +305,12 @@ fun CfaitNavHost(
                 goals = config.goals
                 defaultDurationGoalMins = config.defaultDurationGoalMins.toInt()
                 sessionsCountAsCompletions = config.sessionsCountAsCompletions
+                showCalendarsTab = config.showCalendarsTab
+                showTagsTab = config.showTagsTab
+                showLocationsTab = config.showLocationsTab
                 showGoalsTab = config.showGoalsTab
                 showJournalTab = config.showJournalTab
+                firstDayOfWeek = config.firstDayOfWeek
 
                 hasUnsynced = api.hasUnsyncedChanges()
                 showQuickFilter = config.showQuickFilter
@@ -525,8 +533,12 @@ fun CfaitNavHost(
                 tabAutoHide = tabAutoHide, // <-- ADD THIS LINE
                 listStates = listStates,
                 goals = goals,
+                showCalendarsTab = showCalendarsTab,
+                showTagsTab = showTagsTab,
+                showLocationsTab = showLocationsTab,
                 showGoalsTab = showGoalsTab,
                 showJournalTab = showJournalTab,
+                firstDayOfWeek = firstDayOfWeek,
                 defaultDurationGoalMins = defaultDurationGoalMins,
                 sessionsCountAsCompletions = sessionsCountAsCompletions,
                 onGlobalRefresh = { fastStart() },

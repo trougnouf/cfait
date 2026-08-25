@@ -2,6 +2,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Mobile bindings and FFI interface for the Rust core.
 
+#[derive(uniffi::Enum)]
+pub enum MobileFirstDayOfWeek {
+    Monday,
+    Sunday,
+}
+
 use crate::alarm_index::AlarmIndex;
 use crate::cache::Cache;
 use crate::client::RustyClient;
@@ -273,6 +279,7 @@ pub struct MobileTask {
     pub visible_locations: Vec<String>,
     pub is_search_context: bool,
     pub is_note: bool,
+    pub is_journal: bool,
 }
 
 impl MobileTask {
@@ -337,6 +344,7 @@ impl MobileTask {
             visible_locations: vec![],
             is_search_context: false,
             is_note: false,
+            is_journal: false,
         }
     }
 }
@@ -386,6 +394,7 @@ pub struct MobileDayContext {
     pub started_tasks: Vec<MobileRelatedTask>,
     pub ongoing_tasks: Vec<MobileRelatedTask>,
     pub completed_tasks: Vec<MobileRelatedTask>,
+    pub journal_days_in_month: Vec<u32>,
 }
 
 #[derive(uniffi::Record)]
@@ -501,6 +510,7 @@ pub struct MobileConfig {
     pub expanded_locations: Vec<String>,
     pub expanded_done_groups: Vec<String>,
     pub show_undo_snackbar: bool,
+    pub first_day_of_week: MobileFirstDayOfWeek,
 }
 
 #[derive(uniffi::Record)]
@@ -1048,6 +1058,7 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
         visible_locations: t.visible_locations.clone(),
         is_search_context: t.is_search_context,
         is_note: t.is_note || t.is_journal,
+        is_journal: t.is_journal,
     }
 }
 
@@ -1353,6 +1364,10 @@ impl CfaitMobile {
             expanded_locations: c.expanded_locations,
             expanded_done_groups: Vec::new(),
             show_undo_snackbar: c.show_undo_snackbar,
+            first_day_of_week: match c.first_day_of_week {
+                crate::config::FirstDayOfWeek::Monday => MobileFirstDayOfWeek::Monday,
+                crate::config::FirstDayOfWeek::Sunday => MobileFirstDayOfWeek::Sunday,
+            },
         }
     }
 
@@ -1517,6 +1532,10 @@ impl CfaitMobile {
         c.show_goals_tab = config.show_goals_tab;
         c.show_journal_tab = config.show_journal_tab;
         c.sort_collections_by_size = config.sort_collections_by_size;
+        c.first_day_of_week = match config.first_day_of_week {
+            MobileFirstDayOfWeek::Monday => crate::config::FirstDayOfWeek::Monday,
+            MobileFirstDayOfWeek::Sunday => crate::config::FirstDayOfWeek::Sunday,
+        };
 
         c.expanded_tags = config.expanded_tags;
         c.expanded_locations = config.expanded_locations;
@@ -2508,6 +2527,29 @@ impl CfaitMobile {
 
         let day_ctx = store.get_day_context(selected_journal_date, &visible_cals_set);
 
+        use chrono::Datelike;
+        let mut journal_days_in_month = std::collections::HashSet::new();
+        let target_month = selected_journal_date.month();
+        let target_year = selected_journal_date.year();
+
+        for (href, map) in store.calendars.iter() {
+            if !visible_cals_set.contains(href) {
+                continue;
+            }
+            for t in map.values() {
+                if t.is_journal
+                    && let Some(dt) = &t.dtstart
+                {
+                    let d = dt.to_date_naive();
+                    if d.year() == target_year && d.month() == target_month {
+                        journal_days_in_month.insert(d.day());
+                    }
+                }
+            }
+        }
+        let mut journal_days_vec: Vec<u32> = journal_days_in_month.into_iter().collect();
+        journal_days_vec.sort();
+
         let map_related = |tasks: Vec<crate::model::Task>| -> Vec<MobileRelatedTask> {
             tasks
                 .into_iter()
@@ -2525,6 +2567,7 @@ impl CfaitMobile {
             started_tasks: map_related(day_ctx.started_tasks),
             ongoing_tasks: map_related(day_ctx.ongoing_tasks),
             completed_tasks: map_related(day_ctx.completed_tasks),
+            journal_days_in_month: journal_days_vec,
         };
 
         let mut pages: Vec<&crate::model::Task> = Vec::new();

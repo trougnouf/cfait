@@ -244,7 +244,13 @@ fun TaskDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.edit_task_title)) },
+                title = { 
+                    if (task != null && task!!.isJournal && task!!.summary.matches(Regex("""^\\d{4}-\\d{2}-\\d{2}$"""))) {
+                        Text(task!!.summary)
+                    } else {
+                        Text(stringResource(R.string.edit_task_title))
+                    }
+                },
                 navigationIcon = { IconButton(onClick = onBack) { NfIcon(NfIcons.BACK, 20.sp) } },
                 actions = {
                     if (task!!.geo != null) {
@@ -348,34 +354,46 @@ fun TaskDetailScreen(
                 .padding(start = 16.dp, top = 16.dp, end = 16.dp)
                 .verticalScroll(scrollState)
         ) {
-            OutlinedTextField(
-                value = smartInput,
-                onValueChange = { 
-                    val replaced = it.copy(text = it.text.replace("\n", ""))
-                    if (replaced.text != smartInput.text) {
-                        smartUndoStack = (smartUndoStack + it).takeLast(50)
-                        smartRedoStack = emptyList()
-                        lastEdited = "smart"
-                    }
-                    smartInput = replaced
-                }, // Manually block newlines
-                label = { Text(stringResource(R.string.task_smart_syntax_label)) },
-                modifier = Modifier.fillMaxWidth(),
-                visualTransformation = remember(isDark) { SmartSyntaxTransformation(api, isDark) },
-                // Removed singleLine = true to avoid cursor handle positioning issues on high DPI tablets
-                maxLines = 5,
-                keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = {
-                    handleSaveWithGeo(smartInput.text, description.text)
-                }),
-            )
-            com.trougnouf.cfait.ui.CursorContextBanner(api, smartInput) { smartInput = it }
-            Text(
-                stringResource(R.string.help_syntax_short),
-                style = MaterialTheme.typography.bodySmall,
-                color = androidx.compose.ui.graphics.Color.Gray,
-                modifier = Modifier.padding(start = 4.dp, bottom = 16.dp),
-            )
+            val isJournal = task!!.isJournal
+            val isDateBasedJournal = isJournal && task!!.summary.matches(Regex("""^\\d{4}-\\d{2}-\\d{2}$"""))
+
+            if (!isDateBasedJournal) {
+                OutlinedTextField(
+                    value = smartInput,
+                    onValueChange = { 
+                        val replaced = it.copy(text = it.text.replace("\n", ""))
+                        if (replaced.text != smartInput.text) {
+                            smartUndoStack = (smartUndoStack + it).takeLast(50)
+                            smartRedoStack = emptyList()
+                            lastEdited = "smart"
+                        }
+                        smartInput = replaced
+                    }, // Manually block newlines
+                    label = { Text(stringResource(R.string.task_smart_syntax_label)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    visualTransformation = remember(isDark) { SmartSyntaxTransformation(api, isDark) },
+                    // Removed singleLine = true to avoid cursor handle positioning issues on high DPI tablets
+                    maxLines = 5,
+                    keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = {
+                        handleSaveWithGeo(smartInput.text, description.text)
+                    }),
+                )
+                com.trougnouf.cfait.ui.CursorContextBanner(api, smartInput) { smartInput = it }
+                Text(
+                    stringResource(R.string.help_syntax_short),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = androidx.compose.ui.graphics.Color.Gray,
+                    modifier = Modifier.padding(start = 4.dp, bottom = 16.dp),
+                )
+            } else {
+                Text(
+                    text = task!!.summary,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+            }
 
             if (task!!.parentUid != null) {
                 val pUid = task!!.parentUid!!
@@ -634,7 +652,8 @@ fun TaskDetailScreen(
                 }
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
             }
-
+            
+            if (!task!!.isJournal) {
             // --- Work Sessions Block ---
             var showAddSession by remember { mutableStateOf(false) }
             var sessionInput by remember { mutableStateOf("") }
@@ -846,6 +865,7 @@ fun TaskDetailScreen(
                 }
             }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            } // Ends the !task!!.isJournal check
 
             var incomingRelated by remember { mutableStateOf<List<MobileRelatedTask>>(emptyList()) }
 

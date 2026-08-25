@@ -61,6 +61,7 @@ fun AdvancedSettingsScreen(
     var urgentPrio by remember { mutableStateOf("1") }
     var defaultPriority by remember { mutableStateOf("5") }
     var startGracePeriodDays by remember { mutableStateOf("1") }
+    var firstDayOfWeek by remember { mutableStateOf(com.trougnouf.cfait.core.MobileFirstDayOfWeek.MONDAY) }
     var status by remember { mutableStateOf("") }
 
     fun reload() {
@@ -87,6 +88,7 @@ fun AdvancedSettingsScreen(
             urgentPrio = cfg.urgentPrio.toString()
             defaultPriority = cfg.defaultPriority.toString()
             startGracePeriodDays = cfg.startGracePeriodDays.toString()
+            firstDayOfWeek = cfg.firstDayOfWeek
         } catch (e: Exception) {
             // Ignore on load
         }
@@ -118,7 +120,8 @@ fun AdvancedSettingsScreen(
                 urgentDays = urgentDays.toUIntOrNull() ?: 1u,
                 urgentPrio = urgentPrio.toUByteOrNull() ?: 1u,
                 defaultPriority = defaultPriority.toUByteOrNull() ?: 5u,
-                startGracePeriodDays = startGracePeriodDays.toUIntOrNull() ?: 1u
+                startGracePeriodDays = startGracePeriodDays.toUIntOrNull() ?: 1u,
+                firstDayOfWeek = firstDayOfWeek
             )
             api.saveConfig(newCfg)
         } catch (e: Exception) {
@@ -254,6 +257,20 @@ fun AdvancedSettingsScreen(
                     modifier = Modifier.width(240.dp)
                 )
             }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                Text(stringResource(R.string.first_day_of_week), modifier = Modifier.weight(1f))
+                DropdownPicker(
+                    label = "",
+                    selected = firstDayOfWeek,
+                    options = listOf(
+                        com.trougnouf.cfait.core.MobileFirstDayOfWeek.MONDAY to stringResource(R.string.monday),
+                        com.trougnouf.cfait.core.MobileFirstDayOfWeek.SUNDAY to stringResource(R.string.sunday)
+                    ),
+                    onSelect = { firstDayOfWeek = it; saveToDisk() },
+                    modifier = Modifier.width(240.dp)
+                )
+            }
+
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                 Text(stringResource(R.string.sorting_preset_label), modifier = Modifier.weight(1f))
                 DropdownPicker(

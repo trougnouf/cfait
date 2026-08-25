@@ -104,6 +104,7 @@ fun SettingsScreen(
 
     // State maintained purely for saving without overwriting backend values
     var deleteEventsOnCompletion by remember { mutableStateOf(false) }
+    var firstDayOfWeek by remember { mutableStateOf(com.trougnouf.cfait.core.MobileFirstDayOfWeek.MONDAY) }
 
     var themeExpanded by remember { mutableStateOf(false) }
     // Use localized labels for theme options so they appear translated on Android.
@@ -229,6 +230,7 @@ fun SettingsScreen(
         showJournalTab = cfg.showJournalTab
         showTaskGoalsInSidebar = cfg.showTaskGoalsInSidebar
         sortCollectionsBySize = cfg.sortCollectionsBySize
+        firstDayOfWeek = cfg.firstDayOfWeek
 
         if (isInitialLoad) {
             initialCreateEventsState = cfg.createEventsForTasks
@@ -302,7 +304,8 @@ fun SettingsScreen(
             showGoalsTab = finalShowGoalsTab,
             showJournalTab = finalShowJournalTab,
             showTaskGoalsInSidebar = showTaskGoalsInSidebar,
-            sortCollectionsBySize = sortCollectionsBySize
+            sortCollectionsBySize = sortCollectionsBySize,
+            firstDayOfWeek = firstDayOfWeek
         )
         api.saveConfig(newCfg)
     }

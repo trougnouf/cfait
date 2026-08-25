@@ -124,8 +124,12 @@ fun HomeScreen(
     tabAutoHide: Boolean = true,
     listStates: SnapshotStateMap<String, LazyListState>,
     goals: Map<String, com.trougnouf.cfait.core.MobileGoal>,
+    showCalendarsTab: Boolean,
+    showTagsTab: Boolean,
+    showLocationsTab: Boolean,
     showGoalsTab: Boolean,
     showJournalTab: Boolean,
+    firstDayOfWeek: com.trougnouf.cfait.core.MobileFirstDayOfWeek,
     defaultDurationGoalMins: Int,
     sessionsCountAsCompletions: Boolean,
     onGlobalRefresh: () -> Unit,
@@ -156,6 +160,13 @@ fun HomeScreen(
     var localHasUnsynced by remember { mutableStateOf(hasUnsynced) }
     var isPullRefreshing by remember { mutableStateOf(false) }
     val goalIcon = rememberSaveable { NfIcons.GOAL_ICONS.random() }
+    
+    var showCalendarsTab by remember { mutableStateOf(showCalendarsTab) }
+    var showTagsTab by remember { mutableStateOf(showTagsTab) }
+    var showLocationsTab by remember { mutableStateOf(showLocationsTab) }
+    var showGoalsTab by remember { mutableStateOf(showGoalsTab) }
+    var showJournalTab by remember { mutableStateOf(showJournalTab) }
+    var firstDayOfWeek by remember { mutableStateOf(firstDayOfWeek) }
 
     val enabledCals = remember(calendars) {
         val filtered = calendars.filter { !it.isDisabled }
@@ -1215,30 +1226,30 @@ fun HomeScreen(
         drawerContent = {
             ModalDrawerSheet {
                 Column(modifier = Modifier.fillMaxHeight().width(300.dp)) {
-                    PrimaryTabRow(selectedTabIndex = sidebarTab) {
-                        Tab(
-                            selected = sidebarTab == 0,
-                            onClick = { sidebarTab = 0 },
-                            icon = { NfIcon(NfIcons.CALENDARS_VIEW) })
-                        Tab(
-                            selected = sidebarTab == 1,
-                            onClick = { sidebarTab = 1 },
-                            icon = { NfIcon(NfIcons.TAGS_VIEW) })
-                        Tab(
-                            selected = sidebarTab == 2,
-                            onClick = { sidebarTab = 2 },
-                            icon = { NfIcon(locationTabIcon) })
-                        if (showGoalsTab) {
+                    val availableTabs = mutableListOf<Int>()
+                    if (showCalendarsTab) availableTabs.add(0)
+                    if (showTagsTab) availableTabs.add(1)
+                    if (showLocationsTab) availableTabs.add(2)
+                    if (showGoalsTab) availableTabs.add(3)
+                    if (showJournalTab) availableTabs.add(4)
+
+                    val currentTabIndex = availableTabs.indexOf(sidebarTab).coerceAtLeast(0)
+
+                    PrimaryTabRow(selectedTabIndex = currentTabIndex) {
+                        availableTabs.forEach { tabId ->
+                            val icon = when (tabId) {
+                                0 -> NfIcons.CALENDARS_VIEW
+                                1 -> NfIcons.TAGS_VIEW
+                                2 -> locationTabIcon
+                                3 -> goalIcon
+                                4 -> NfIcons.JOURNAL
+                                else -> NfIcons.CALENDARS_VIEW
+                            }
                             Tab(
-                                selected = sidebarTab == 3,
-                                onClick = { sidebarTab = 3 },
-                                icon = { NfIcon(goalIcon) })
-                        }
-                        if (showJournalTab) {
-                            Tab(
-                                selected = sidebarTab == 4,
-                                onClick = { sidebarTab = 4 },
-                                icon = { NfIcon(NfIcons.JOURNAL) })
+                                selected = sidebarTab == tabId,
+                                onClick = { sidebarTab = tabId },
+                                icon = { NfIcon(icon) }
+                            )
                         }
                     }
 
@@ -1606,34 +1617,154 @@ fun HomeScreen(
                         } else if (sidebarTab == 4 && viewData != null) {
                             item {
                                 val ctxData = viewData.journalContext
+                                val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                                val parsedDate = try { sdf.parse(ctxData.date) ?: java.util.Date() } catch (e: Exception) { java.util.Date() }
+                                val cal = java.util.Calendar.getInstance()
+                                cal.time = parsedDate
+
+                                val currentYear = cal.get(java.util.Calendar.YEAR)
+                                val currentMonth = cal.get(java.util.Calendar.MONTH)
+                                val currentDay = cal.get(java.util.Calendar.DAY_OF_MONTH)
+
+                                cal.set(java.util.Calendar.DAY_OF_MONTH, 1)
+                                val firstDayOfWeekInt = cal.get(java.util.Calendar.DAY_OF_WEEK) // 1=Sun, 2=Mon
+
+                                val isMondayFirst = firstDayOfWeek == com.trougnouf.cfait.core.MobileFirstDayOfWeek.MONDAY
+                                val startOffset = if (isMondayFirst) {
+                                    (firstDayOfWeekInt + 5) % 7
+                                } else {
+                                    firstDayOfWeekInt - 1
+                                }
+
+                                val daysInMonth = cal.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
+
+                                val todayCal = java.util.Calendar.getInstance()
+                                val isCurrentMonthYear = todayCal.get(java.util.Calendar.YEAR) == currentYear && todayCal.get(java.util.Calendar.MONTH) == currentMonth
+                                val todayDay = if (isCurrentMonthYear) todayCal.get(java.util.Calendar.DAY_OF_MONTH) else -1
+
+                                val monthFmt = java.text.SimpleDateFormat("MMMM yyyy", java.util.Locale.getDefault())
+                                val monthStr = monthFmt.format(parsedDate)
+
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(8.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    IconButton(onClick = {
-                                        scope.launch {
-                                            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
-                                            val cal = java.util.Calendar.getInstance()
-                                            cal.time = sdf.parse(ctxData.date)!!
-                                            cal.add(java.util.Calendar.DAY_OF_YEAR, -1)
-                                            api.setJournalDate(sdf.format(cal.time))
-                                            updateTaskList()
-                                        }
+                                    IconButton(onClick = { 
+                                        val c = java.util.Calendar.getInstance()
+                                        c.time = parsedDate
+                                        c.add(java.util.Calendar.MONTH, -1)
+                                        scope.launch { api.setJournalDate(sdf.format(c.time)); updateTaskList() } 
                                     }) { NfIcon(NfIcons.ARROW_LEFT) }
-
-                                    Text(ctxData.date, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-
-                                    IconButton(onClick = {
-                                        scope.launch {
-                                            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
-                                            val cal = java.util.Calendar.getInstance()
-                                            cal.time = sdf.parse(ctxData.date)!!
-                                            cal.add(java.util.Calendar.DAY_OF_YEAR, 1)
-                                            api.setJournalDate(sdf.format(cal.time))
-                                            updateTaskList()
-                                        }
+                                    
+                                    Text(monthStr, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                    
+                                    IconButton(onClick = { 
+                                        val c = java.util.Calendar.getInstance()
+                                        c.time = parsedDate
+                                        c.add(java.util.Calendar.MONTH, 1)
+                                        scope.launch { api.setJournalDate(sdf.format(c.time)); updateTaskList() } 
                                     }) { NfIcon(NfIcons.ARROW_RIGHT) }
+                                }
+
+                                val weekDays = if (isMondayFirst) listOf("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su") else listOf("Su", "Mo", "Tu", "We", "Th", "Fr", "Sa")
+                                Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                                    weekDays.forEach {
+                                        Text(it, fontSize = 12.sp, color = Color.Gray, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+                                    }
+                                }
+                                Spacer(Modifier.height(4.dp))
+
+                                val totalCells = startOffset + daysInMonth
+                                val numRows = (totalCells + 6) / 7
+
+                                Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+                                    for (r in 0 until numRows) {
+                                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                                            for (c in 0 until 7) {
+                                                val cellIdx = r * 7 + c
+                                                if (cellIdx < startOffset || cellIdx >= totalCells) {
+                                                    Spacer(Modifier.weight(1f))
+                                                } else {
+                                                    val day = cellIdx - startOffset + 1
+                                                    val isSelected = day == currentDay
+                                                    val isToday = day == todayDay
+                                                    val hasEntry = ctxData.journalDaysInMonth.contains(day.toUInt())
+
+                                                    val bgColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
+                                                    val contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary 
+                                                                       else if (hasEntry) Color(0xFF4CAF50) 
+                                                                       else if (isToday) MaterialTheme.colorScheme.primary 
+                                                                       else MaterialTheme.colorScheme.onSurface
+
+                                                    val fontWeight = if (isSelected || isToday || hasEntry) FontWeight.Bold else FontWeight.Normal
+
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .weight(1f)
+                                                            .aspectRatio(1f)
+                                                            .padding(2.dp)
+                                                            .clip(CircleShape)
+                                                            .background(bgColor)
+                                                            .clickable {
+                                                                val clickedCal = java.util.Calendar.getInstance()
+                                                                clickedCal.time = parsedDate
+                                                                clickedCal.set(java.util.Calendar.DAY_OF_MONTH, day)
+                                                                scope.launch { api.setJournalDate(sdf.format(clickedCal.time)); updateTaskList() }
+                                                            },
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Text(day.toString(), color = contentColor, fontWeight = fontWeight, fontSize = 14.sp)
+                                                        if (isToday && !isSelected) {
+                                                            Box(Modifier.fillMaxSize().border(1.dp, MaterialTheme.colorScheme.primary, CircleShape))
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Button(
+                                        onClick = {
+                                            scope.launch {
+                                                val c = java.util.Calendar.getInstance()
+                                                c.time = parsedDate
+                                                c.add(java.util.Calendar.DAY_OF_MONTH, -1)
+                                                api.setJournalDate(sdf.format(c.time))
+                                                updateTaskList()
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.onSurface),
+                                        contentPadding = PaddingValues(0.dp)
+                                    ) { Text("< ${stringResource(R.string.journal_yesterday)}", fontSize = 12.sp) }
+
+                                    Button(
+                                        onClick = {
+                                            scope.launch { api.setJournalDate(sdf.format(java.util.Date())); updateTaskList() }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                    ) { Text(stringResource(R.string.journal_today), fontSize = 12.sp) }
+
+                                    Button(
+                                        onClick = {
+                                            scope.launch {
+                                                val c = java.util.Calendar.getInstance()
+                                                c.time = parsedDate
+                                                c.add(java.util.Calendar.DAY_OF_MONTH, 1)
+                                                api.setJournalDate(sdf.format(c.time))
+                                                updateTaskList()
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.onSurface),
+                                        contentPadding = PaddingValues(0.dp)
+                                    ) { Text("${stringResource(R.string.journal_tomorrow)} >", fontSize = 12.sp) }
                                 }
 
                                 Button(
