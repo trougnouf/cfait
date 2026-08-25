@@ -867,6 +867,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_config(): Int
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_get_daily_note_uid(): Int
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_firing_alarms(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_help_data(): Int
@@ -1173,6 +1175,13 @@ internal object UniffiLib {
 
     external fun uniffi_cfait_fn_method_cfaitmobile_get_config(
         `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_get_daily_note_uid(
+        `ptr`: Long,
+        `dateStr`: RustBuffer.ByValue,
+        `calendarHref`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
@@ -1831,6 +1840,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_config() != 16761) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_daily_note_uid() != 18938) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_firing_alarms() != 15758) {
@@ -2653,6 +2665,11 @@ public interface CfaitMobileInterface {
     fun `getCalendars`(): List<MobileCalendar>
 
     fun `getConfig`(): MobileConfig
+
+    fun `getDailyNoteUid`(
+        `dateStr`: kotlin.String,
+        `calendarHref`: kotlin.String,
+    ): kotlin.String?
 
     fun `getFiringAlarms`(): List<MobileAlarmInfo>
 
@@ -3547,6 +3564,23 @@ open class CfaitMobile :
                 uniffiRustCall { _status ->
                     UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_config(
                         it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    override fun `getDailyNoteUid`(
+        `dateStr`: kotlin.String,
+        `calendarHref`: kotlin.String,
+    ): kotlin.String? =
+        FfiConverterOptionalString.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_daily_note_uid(
+                        it,
+                        FfiConverterString.lower(`dateStr`),
+                        FfiConverterString.lower(`calendarHref`),
                         _status,
                     )
                 }

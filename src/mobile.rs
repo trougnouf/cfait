@@ -850,13 +850,25 @@ impl CfaitMobile {
         Ok(())
     }
 
+    pub fn get_daily_note_uid(&self, date_str: String, calendar_href: String) -> Option<String> {
+        let date = chrono::NaiveDate::parse_from_str(&date_str, "%Y-%m-%d").ok()?;
+        let store = self.controller.store.blocking_lock();
+        store
+            .get_journal_entry(&calendar_href, date)
+            .map(|t| t.uid.clone())
+    }
+
     pub fn get_task_tree_markdown(&self, uid: String) -> String {
         let store = self.controller.store.blocking_lock();
         let mut cals = crate::cache::Cache::load_calendars(self.ctx.as_ref()).unwrap_or_default();
         if let Ok(locals) = crate::storage::LocalCalendarRegistry::load(self.ctx.as_ref()) {
             cals.extend(locals);
         }
-        crate::model::extractor::serialize_task_tree(&store, &uid, &cals, false)
+        let is_journal = store
+            .get_task_ref(&uid)
+            .map(|t| t.is_journal)
+            .unwrap_or(false);
+        crate::model::extractor::serialize_task_tree(&store, &uid, &cals, is_journal)
     }
 
     pub fn export_locations_gpx(&self, uid: String) -> Result<String, MobileError> {

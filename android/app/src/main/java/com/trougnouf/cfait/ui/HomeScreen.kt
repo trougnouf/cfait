@@ -157,6 +157,9 @@ fun HomeScreen(
 
     // --- State Declarations ---
     var sidebarTab by rememberSaveable { mutableIntStateOf(0) }
+    var journalDateStr by rememberSaveable { mutableStateOf(java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())) }
+    var journalWikiUid by rememberSaveable { mutableStateOf<String?>(null) }
+    var journalWikiTitle by rememberSaveable { mutableStateOf("") }
     var isManualSyncing by remember { mutableStateOf(false) }
     var activeOpCount by remember { mutableIntStateOf(0) }
     var lastSyncFailed by remember { mutableStateOf(false) }
@@ -1672,7 +1675,10 @@ fun HomeScreen(
                                         val c = java.util.Calendar.getInstance()
                                         c.time = parsedDate
                                         c.add(java.util.Calendar.MONTH, -1)
-                                        scope.launch { api.setJournalDate(sdf.format(c.time)); updateTaskList() } 
+                                        val newDate = sdf.format(c.time)
+                                        journalDateStr = newDate
+                                        journalWikiUid = null
+                                        scope.launch { api.setJournalDate(newDate); updateTaskList() } 
                                     }) { NfIcon(NfIcons.ARROW_LEFT) }
                                     
                                     Text(monthStr, fontWeight = FontWeight.Bold, fontSize = 16.sp)
@@ -1681,7 +1687,10 @@ fun HomeScreen(
                                         val c = java.util.Calendar.getInstance()
                                         c.time = parsedDate
                                         c.add(java.util.Calendar.MONTH, 1)
-                                        scope.launch { api.setJournalDate(sdf.format(c.time)); updateTaskList() } 
+                                        val newDate = sdf.format(c.time)
+                                        journalDateStr = newDate
+                                        journalWikiUid = null
+                                        scope.launch { api.setJournalDate(newDate); updateTaskList() } 
                                     }) { NfIcon(NfIcons.ARROW_RIGHT) }
                                 }
 
@@ -1728,7 +1737,10 @@ fun HomeScreen(
                                                                 val clickedCal = java.util.Calendar.getInstance()
                                                                 clickedCal.time = parsedDate
                                                                 clickedCal.set(java.util.Calendar.DAY_OF_MONTH, day)
-                                                                scope.launch { api.setJournalDate(sdf.format(clickedCal.time)); updateTaskList() }
+                                                                val newDate = sdf.format(clickedCal.time)
+                                                                journalDateStr = newDate
+                                                                journalWikiUid = null
+                                                                scope.launch { api.setJournalDate(newDate); updateTaskList() }
                                                             },
                                                         contentAlignment = Alignment.Center
                                                     ) {
@@ -1754,7 +1766,10 @@ fun HomeScreen(
                                                 val c = java.util.Calendar.getInstance()
                                                 c.time = parsedDate
                                                 c.add(java.util.Calendar.DAY_OF_MONTH, -1)
-                                                api.setJournalDate(sdf.format(c.time))
+                                                val newDate = sdf.format(c.time)
+                                                journalDateStr = newDate
+                                                journalWikiUid = null
+                                                api.setJournalDate(newDate)
                                                 updateTaskList()
                                             }
                                         },
@@ -1764,7 +1779,10 @@ fun HomeScreen(
 
                                     Button(
                                         onClick = {
-                                            scope.launch { api.setJournalDate(sdf.format(java.util.Date())); updateTaskList() }
+                                            val newDate = sdf.format(java.util.Date())
+                                            journalDateStr = newDate
+                                            journalWikiUid = null
+                                            scope.launch { api.setJournalDate(newDate); updateTaskList() }
                                         },
                                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer),
                                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
@@ -1776,81 +1794,16 @@ fun HomeScreen(
                                                 val c = java.util.Calendar.getInstance()
                                                 c.time = parsedDate
                                                 c.add(java.util.Calendar.DAY_OF_MONTH, 1)
-                                                api.setJournalDate(sdf.format(c.time))
+                                                val newDate = sdf.format(c.time)
+                                                journalDateStr = newDate
+                                                journalWikiUid = null
+                                                api.setJournalDate(newDate)
                                                 updateTaskList()
                                             }
                                         },
                                         colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.onSurface),
                                         contentPadding = PaddingValues(0.dp)
                                     ) { Text("${stringResource(R.string.journal_tomorrow)} >", fontSize = 12.sp) }
-                                }
-
-                                Button(
-                                    onClick = {
-                                        scope.launch {
-                                            val activeHref = tabs.getOrNull(pagerState.currentPage)?.isWriteTarget ?: defaultCalHref ?: "local://default"
-                                            val uid = api.getOrCreateDailyNote(ctxData.date, activeHref)
-                                            onTaskClick(uid)
-                                            scope.launch { drawerState.close() }
-                                        }
-                                    },
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
-                                ) {
-                                    Text(stringResource(R.string.journal_notes))
-                                }
-
-                                if (ctxData.totalTrackedMins > 0u || ctxData.dueTasks.isNotEmpty() || ctxData.startedTasks.isNotEmpty() || ctxData.ongoingTasks.isNotEmpty() || ctxData.completedTasks.isNotEmpty()) {
-                                    Text(stringResource(R.string.journal_activity), fontWeight = FontWeight.Bold, modifier = Modifier.padding(8.dp))
-                                    Column(Modifier.padding(horizontal = 8.dp)) {
-                                        if (ctxData.totalTrackedMins > 0u) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                NfIcon(NfIcons.TIMER_SETTINGS, 12.sp, Color(0xFF4CAF50))
-                                                Spacer(Modifier.width(4.dp))
-                                                Text(stringResource(R.string.journal_time_tracked) + ": " + formatDurationHuman(ctxData.totalTrackedMins.toLong()), fontSize = 13.sp, color = Color(0xFF4CAF50))
-                                            }
-                                        }
-
-                                        val renderList = @Composable { titleRes: Int, icon: String, iconColor: Color, items: List<com.trougnouf.cfait.core.MobileRelatedTask> ->
-                                            if (items.isNotEmpty()) {
-                                                Column(Modifier.padding(top = 4.dp)) {
-                                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                                        NfIcon(icon, 10.sp, iconColor)
-                                                        Spacer(Modifier.width(4.dp))
-                                                        Text(stringResource(titleRes) + ":", fontSize = 12.sp, color = Color.Gray)
-                                                    }
-                                                    val text = androidx.compose.ui.text.buildAnnotatedString {
-                                                        items.forEachIndexed { index, task ->
-                                                            pushStringAnnotation("UID", task.uid)
-                                                            withStyle(androidx.compose.ui.text.SpanStyle(color = Color(0xFF2196F3))) {
-                                                                append(task.summary)
-                                                            }
-                                                            pop()
-                                                            if (index < items.size - 1) {
-                                                                withStyle(androidx.compose.ui.text.SpanStyle(color = Color.Gray)) {
-                                                                    append(", ")
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                    androidx.compose.foundation.text.ClickableText(
-                                                        text = text,
-                                                        style = androidx.compose.ui.text.TextStyle(fontSize = 13.sp),
-                                                        onClick = { offset ->
-                                                            text.getStringAnnotations("UID", offset, offset).firstOrNull()?.let {
-                                                                onTaskClick(it.item)
-                                                            }
-                                                        }
-                                                    )
-                                                }
-                                            }
-                                        }
-
-                                        renderList(R.string.journal_worked_on_today, NfIcons.PLAY, Color(0xFF4CAF50), ctxData.startedTasks + ctxData.ongoingTasks)
-                                        renderList(R.string.journal_completed_today, NfIcons.CHECK, Color(0xFF4CAF50), ctxData.completedTasks)
-                                        renderList(R.string.journal_due_today, NfIcons.CALENDAR, Color(0xFFFFA000), ctxData.dueTasks)
-                                    }
-                                } else {
-                                    Text(stringResource(R.string.journal_no_activity), fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(8.dp))
                                 }
 
                                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
@@ -1864,7 +1817,8 @@ fun HomeScreen(
                                         scope.launch {
                                             val activeHref = tabs.getOrNull(pagerState.currentPage)?.isWriteTarget ?: defaultCalHref ?: "local://default"
                                             val uid = api.createWikiPage("", activeHref)
-                                            onTaskClick(uid)
+                                            journalWikiUid = uid
+                                            journalWikiTitle = ""
                                             scope.launch { drawerState.close() }
                                         }
                                     }) {
@@ -1879,8 +1833,9 @@ fun HomeScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable {
+                                            journalWikiUid = page.uid
+                                            journalWikiTitle = page.title
                                             scope.launch { drawerState.close() }
-                                            onTaskClick(page.uid)
                                         }
                                         .padding(start = 8.dp + indent, end = 8.dp, top = 12.dp, bottom = 12.dp),
                                     verticalAlignment = Alignment.CenterVertically
@@ -2528,16 +2483,47 @@ fun HomeScreen(
                             onRefresh = { handlePullRefresh() },
                             modifier = Modifier.weight(1f),
                         ) {
-                            HorizontalPager(
-                                state = pagerState,
-                                modifier = Modifier.fillMaxSize(),
-                                key = { page -> tabs.getOrNull(page)?.id ?: "ALL_TASKS_$page" }
-                            ) { page ->
-                                val currentTab = tabs.getOrNull(page)
-                                val pageKey = currentTab?.id ?: "ALL_TASKS"
-                                val pageListState = listStates.getOrPut(pageKey) { LazyListState() }
+                            if (sidebarTab == 4) {
+                                HorizontalPager(
+                                    state = pagerState,
+                                    modifier = Modifier.fillMaxSize(),
+                                    key = { page -> "JOURNAL_${tabs.getOrNull(page)?.id ?: "ALL_TASKS_$page"}" }
+                                ) { page ->
+                                    val currentTab = tabs.getOrNull(page)
+                                    val href = currentTab?.isWriteTarget ?: defaultCalHref ?: "local://default"
+                                    JournalMainView(
+                                        api = api,
+                                        href = href,
+                                        viewData = viewData,
+                                        journalDateStr = journalDateStr,
+                                        journalWikiUid = journalWikiUid,
+                                        journalWikiTitle = journalWikiTitle,
+                                        onDateChange = { d ->
+                                            journalDateStr = d
+                                            journalWikiUid = null
+                                            scope.launch {
+                                                api.setJournalDate(d)
+                                                updateTaskList()
+                                            }
+                                        },
+                                        onTaskClick = onTaskClick,
+                                        onDataChanged = {
+                                            updateTaskList()
+                                            com.trougnouf.cfait.ui.triggerBackgroundSync(context, api)
+                                        }
+                                    )
+                                }
+                            } else {
+                                HorizontalPager(
+                                    state = pagerState,
+                                    modifier = Modifier.fillMaxSize(),
+                                    key = { page -> tabs.getOrNull(page)?.id ?: "ALL_TASKS_$page" }
+                                ) { page ->
+                                    val currentTab = tabs.getOrNull(page)
+                                    val pageKey = currentTab?.id ?: "ALL_TASKS"
+                                    val pageListState = listStates.getOrPut(pageKey) { LazyListState() }
 
-                                // Instantaneous list resolution via highly-optimized cache merging
+                                    // Instantaneous list resolution via highly-optimized cache merging
                                 val pageTasks = remember(tasks, taskCache, currentTab) {
                                     if (currentTab == null) return@remember emptyList()
 
@@ -2617,6 +2603,7 @@ fun HomeScreen(
                             }
                         }
                     }
+                }
 
                     if (showScrollToTop) {
                         FloatingActionButton(
