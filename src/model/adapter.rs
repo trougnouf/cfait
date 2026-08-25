@@ -4,8 +4,8 @@ File: cfait/src/model/adapter.rs
 
 This file implements ICS <-> Task mapping for Cfait.
 It primarily contains:
- - to_ics: convert Task -> VTODO ICS
- - from_ics: parse VTODO ICS -> Task
+ - to_ics: convert Task -> VTODO/VJOURNAL ICS
+ - from_ics: parse VTODO/VJOURNAL ICS -> Task
  - to_event_ics: produce companion VEVENT ICS for calendar integration
 */
 
@@ -91,19 +91,33 @@ impl IcsAdapter {
             buffer.push_str("PRODID:-//Cfait//Cfait//EN\r\n");
             buffer.push_str("BEGIN:VJOURNAL\r\n");
 
+            let mut append_folded = |prop: &str| {
+                let mut byte_count = 0;
+                for c in prop.chars() {
+                    let len = c.len_utf8();
+                    if byte_count + len > 75 && byte_count > 0 {
+                        buffer.push_str("\r\n ");
+                        byte_count = 1;
+                    }
+                    buffer.push(c);
+                    byte_count += len;
+                }
+                buffer.push_str("\r\n");
+            };
+
             let escaped_uid = task
                 .uid
                 .replace('\\', "\\\\")
                 .replace(',', "\\,")
                 .replace(';', "\\;");
-            buffer.push_str(&format!("UID:{}\r\n", escaped_uid));
+            append_folded(&format!("UID:{}", escaped_uid));
 
             let escaped_summary = task
                 .summary
                 .replace('\\', "\\\\")
                 .replace(',', "\\,")
                 .replace(';', "\\;");
-            buffer.push_str(&format!("SUMMARY:{}\r\n", escaped_summary));
+            append_folded(&format!("SUMMARY:{}", escaped_summary));
 
             let escaped_desc = task
                 .description
@@ -111,18 +125,15 @@ impl IcsAdapter {
                 .replace(',', "\\,")
                 .replace(';', "\\;")
                 .replace('\n', "\\n");
-            buffer.push_str(&format!("DESCRIPTION:{}\r\n", escaped_desc));
+            append_folded(&format!("DESCRIPTION:{}", escaped_desc));
 
-            buffer.push_str(&format!("SEQUENCE:{}\r\n", task.sequence));
-            buffer.push_str(&format!(
-                "DTSTAMP:{}\r\n",
-                Utc::now().format("%Y%m%dT%H%M%SZ")
-            ));
+            append_folded(&format!("SEQUENCE:{}", task.sequence));
+            append_folded(&format!("DTSTAMP:{}", Utc::now().format("%Y%m%dT%H%M%SZ")));
 
             if let Some(DateType::AllDay(d)) = &task.dtstart {
-                buffer.push_str(&format!("DTSTART;VALUE=DATE:{}\r\n", d.format("%Y%m%d")));
+                append_folded(&format!("DTSTART;VALUE=DATE:{}", d.format("%Y%m%d")));
             } else if let Some(DateType::Specific(dt)) = &task.dtstart {
-                buffer.push_str(&format!("DTSTART:{}\r\n", dt.format("%Y%m%dT%H%M%SZ")));
+                append_folded(&format!("DTSTART:{}", dt.format("%Y%m%dT%H%M%SZ")));
             }
 
             if !task.categories.is_empty() {
@@ -135,36 +146,36 @@ impl IcsAdapter {
                             .replace(';', "\\;")
                     })
                     .collect();
-                buffer.push_str(&format!("CATEGORIES:{}\r\n", escaped_cats.join(",")));
+                append_folded(&format!("CATEGORIES:{}", escaped_cats.join(",")));
             }
 
             if let Some(p_uid) = &task.parent_uid {
-                buffer.push_str(&format!("RELATED-TO;RELTYPE=PARENT:{}\r\n", p_uid));
+                append_folded(&format!("RELATED-TO;RELTYPE=PARENT:{}", p_uid));
             }
             for dep in &task.dependencies {
-                buffer.push_str(&format!("RELATED-TO;RELTYPE=DEPENDS-ON:{}\r\n", dep));
+                append_folded(&format!("RELATED-TO;RELTYPE=DEPENDS-ON:{}", dep));
             }
             for rel in &task.related_to {
-                buffer.push_str(&format!("RELATED-TO;RELTYPE=SIBLING:{}\r\n", rel));
+                append_folded(&format!("RELATED-TO;RELTYPE=SIBLING:{}", rel));
             }
             if !task.locations.is_empty() {
-                buffer.push_str(&format!("LOCATION:{}\r\n", task.locations.join(" | ")));
+                append_folded(&format!("LOCATION:{}", task.locations.join(" | ")));
             }
             if let Some(u) = &task.url {
-                buffer.push_str(&format!("URL:{}\r\n", u));
+                append_folded(&format!("URL:{}", u));
             }
             if let Some(g) = &task.geo {
-                buffer.push_str(&format!("GEO:{}\r\n", g.replace(',', ";")));
+                append_folded(&format!("GEO:{}", g.replace(',', ";")));
             }
 
             if task.collapsed {
-                buffer.push_str("X-CFAIT-COLLAPSED:TRUE\r\n");
+                append_folded("X-CFAIT-COLLAPSED:TRUE");
             }
             if task.pinned {
-                buffer.push_str("X-CFAIT-PINNED:TRUE\r\n");
+                append_folded("X-CFAIT-PINNED:TRUE");
             }
             if task.is_note {
-                buffer.push_str("X-CFAIT-KIND:NOTE\r\n");
+                append_folded("X-CFAIT-KIND:NOTE");
             }
 
             buffer.push_str("END:VJOURNAL\r\n");

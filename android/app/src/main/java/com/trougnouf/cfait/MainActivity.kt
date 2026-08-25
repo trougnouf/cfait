@@ -188,11 +188,8 @@ fun CfaitNavHost(
     var defaultDurationGoalMins by remember { mutableIntStateOf(60) }
     var sessionsCountAsCompletions by remember { mutableStateOf(false) }
     var showGoalsTab by remember { mutableStateOf(true) }
-    var tasks by remember { mutableStateOf<List<MobileTask>>(emptyList()) }
-    var tags by remember { mutableStateOf<List<MobileTag>>(emptyList()) }
-    var locations by remember { mutableStateOf<List<MobileLocation>>(emptyList()) }
-    var viewGoals by remember { mutableStateOf<List<com.trougnouf.cfait.core.MobileGoalProgress>>(emptyList()) }
-    var focusedTaskUid by remember { mutableStateOf<String?>(null) }
+    var showJournalTab by remember { mutableStateOf(true) }
+    var viewData by remember { mutableStateOf<com.trougnouf.cfait.core.MobileViewData?>(null) }
     var aliases by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
     var defaultCalHref by remember { mutableStateOf<String?>(null) }
     var hasUnsynced by remember { mutableStateOf(false) }
@@ -305,6 +302,7 @@ fun CfaitNavHost(
                 defaultDurationGoalMins = config.defaultDurationGoalMins.toInt()
                 sessionsCountAsCompletions = config.sessionsCountAsCompletions
                 showGoalsTab = config.showGoalsTab
+                showJournalTab = config.showJournalTab
 
                 hasUnsynced = api.hasUnsyncedChanges()
                 showQuickFilter = config.showQuickFilter
@@ -508,20 +506,13 @@ fun CfaitNavHost(
             HomeScreen(
                 api = api,
                 calendars = calendars,
-                tasks = tasks,
-                tags = tags,
-                locations = locations,
+                viewData = viewData,
                 aliases = aliases,
-                onUpdateViewData = { newTasks, newTags, newLocs, newAliases, newGoals, newFocusedUid ->
-                    tasks = newTasks
-                    tags = newTags
-                    locations = newLocs
+                onUpdateViewData = { newViewData, newAliases ->
+                    viewData = newViewData
                     aliases = newAliases
-                    viewGoals = newGoals
-                    focusedTaskUid = newFocusedUid
                 },
                 defaultCalHref = defaultCalHref,
-                focusedTaskUid = focusedTaskUid,
                 defaultPriority = defaultPriority, // Pass it here
                 isLoading = isLoading,
                 hasUnsynced = hasUnsynced,
@@ -534,8 +525,8 @@ fun CfaitNavHost(
                 tabAutoHide = tabAutoHide, // <-- ADD THIS LINE
                 listStates = listStates,
                 goals = goals,
-                viewGoals = viewGoals,
                 showGoalsTab = showGoalsTab,
+                showJournalTab = showJournalTab,
                 defaultDurationGoalMins = defaultDurationGoalMins,
                 sessionsCountAsCompletions = sessionsCountAsCompletions,
                 onGlobalRefresh = { fastStart() },

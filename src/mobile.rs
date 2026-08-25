@@ -379,12 +379,31 @@ pub struct MobileLocation {
 }
 
 #[derive(uniffi::Record)]
+pub struct MobileDayContext {
+    pub date: String,
+    pub total_tracked_mins: u32,
+    pub due_tasks: Vec<MobileRelatedTask>,
+    pub started_tasks: Vec<MobileRelatedTask>,
+    pub ongoing_tasks: Vec<MobileRelatedTask>,
+    pub completed_tasks: Vec<MobileRelatedTask>,
+}
+
+#[derive(uniffi::Record)]
+pub struct MobileJournalPage {
+    pub uid: String,
+    pub title: String,
+    pub depth: u32,
+}
+
+#[derive(uniffi::Record)]
 pub struct MobileViewData {
     pub tasks: Vec<MobileTask>,
     pub tags: Vec<MobileTag>,
     pub locations: Vec<MobileLocation>,
     pub goals: Vec<MobileGoalProgress>,
     pub focused_task_uid: Option<String>,
+    pub journal_context: MobileDayContext,
+    pub journal_pages: Vec<MobileJournalPage>,
 }
 
 #[derive(uniffi::Record)]
@@ -1028,7 +1047,7 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
         visible_categories: t.visible_categories.clone(),
         visible_locations: t.visible_locations.clone(),
         is_search_context: t.is_search_context,
-        is_note: t.is_note,
+        is_note: t.is_note || t.is_journal,
     }
 }
 
@@ -2283,6 +2302,7 @@ impl CfaitMobile {
         let search_collapsed_set: HashSet<String> =
             session.search_collapsed_tasks.iter().cloned().collect();
         let focused_task_uid = session.focused_task_uid.clone();
+        let selected_journal_date_session = session.selected_journal_date.clone();
         drop(session);
 
         // Then acquire store lock
@@ -2472,12 +2492,114 @@ impl CfaitMobile {
             evaluated_goals.extend(task_goals);
         }
 
+        let selected_journal_date = if selected_journal_date_session.is_empty() {
+            chrono::Local::now().date_naive()
+        } else {
+            chrono::NaiveDate::parse_from_str(&selected_journal_date_session, "%Y-%m-%d")
+                .unwrap_or_else(|_| chrono::Local::now().date_naive())
+        };
+
+        let visible_cals_set: std::collections::HashSet<String> = store
+            .calendars
+            .keys()
+            .filter(|href| !hidden.contains(*href))
+            .cloned()
+            .collect();
+
+        let day_ctx = store.get_day_context(selected_journal_date, &visible_cals_set);
+
+        let map_related = |tasks: Vec<crate::model::Task>| -> Vec<MobileRelatedTask> {
+            tasks
+                .into_iter()
+                .map(|t| MobileRelatedTask {
+                    uid: t.uid,
+                    summary: t.summary,
+                })
+                .collect()
+        };
+
+        let journal_context = MobileDayContext {
+            date: selected_journal_date.format("%Y-%m-%d").to_string(),
+            total_tracked_mins: day_ctx.total_tracked_mins,
+            due_tasks: map_related(day_ctx.due_tasks),
+            started_tasks: map_related(day_ctx.started_tasks),
+            ongoing_tasks: map_related(day_ctx.ongoing_tasks),
+            completed_tasks: map_related(day_ctx.completed_tasks),
+        };
+
+        let mut pages: Vec<&crate::model::Task> = Vec::new();
+        for (href, map) in store.calendars.iter() {
+            if hidden.contains(href)
+                || href == crate::storage::LOCAL_TRASH_HREF
+                || href == "local://recovery"
+            {
+                continue;
+            }
+            for t in map.values() {
+                if t.is_journal
+                    && chrono::NaiveDate::parse_from_str(&t.summary, "%Y-%m-%d").is_err()
+                {
+                    pages.push(t);
+                }
+            }
+        }
+        pages.sort_by(|a, b| a.summary.cmp(&b.summary));
+
+        let page_uids: std::collections::HashSet<String> =
+            pages.iter().map(|p| p.uid.clone()).collect();
+
+        let mut children_map: std::collections::HashMap<String, Vec<&crate::model::Task>> =
+            std::collections::HashMap::new();
+        let mut roots: Vec<&crate::model::Task> = Vec::new();
+
+        for p in &pages {
+            if let Some(parent) = &p.parent_uid
+                && page_uids.contains(parent)
+            {
+                children_map.entry(parent.clone()).or_default().push(p);
+                continue;
+            }
+            roots.push(p);
+        }
+
+        let mut flat_pages = Vec::new();
+
+        // Helper function to recursively flatten journal pages
+        fn flatten_pages<'a>(
+            node: &'a crate::model::Task,
+            children_map: &'a std::collections::HashMap<String, Vec<&'a crate::model::Task>>,
+            depth: u32,
+            out: &mut Vec<MobileJournalPage>,
+        ) {
+            let title = if node.summary.is_empty() {
+                rust_i18n::t!("untitled_page", default = "Untitled page").to_string()
+            } else {
+                node.summary.clone()
+            };
+            out.push(MobileJournalPage {
+                uid: node.uid.clone(),
+                title,
+                depth,
+            });
+            if let Some(children) = children_map.get(&node.uid) {
+                for child in children {
+                    flatten_pages(child, children_map, depth + 1, out);
+                }
+            }
+        }
+
+        for root in &roots {
+            flatten_pages(root, &children_map, 0, &mut flat_pages);
+        }
+
         MobileViewData {
             tasks,
             tags,
             locations,
             goals: evaluated_goals,
             focused_task_uid,
+            journal_context,
+            journal_pages: flat_pages,
         }
     }
 
@@ -2534,6 +2656,67 @@ impl CfaitMobile {
         });
 
         Ok(desc)
+    }
+
+    pub async fn set_journal_date(&self, date: String) -> Result<(), MobileError> {
+        self.dispatch(crate::model::AppIntent::SelectJournalDate { date })
+            .await?;
+        Ok(())
+    }
+
+    pub async fn get_or_create_daily_note(
+        &self,
+        date_str: String,
+        calendar_href: String,
+    ) -> Result<String, MobileError> {
+        let nd = chrono::NaiveDate::parse_from_str(&date_str, "%Y-%m-%d")
+            .map_err(|e| MobileError::from(e.to_string()))?;
+        let store = self.controller.store.lock().await;
+        if let Some(entry) = store.get_journal_entry(&calendar_href, nd) {
+            return Ok(entry.uid.clone());
+        }
+        drop(store);
+
+        let config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
+        let mut new_note = crate::model::Task::new("", &config.tag_aliases, None);
+        new_note.is_journal = true;
+        new_note.calendar_href = calendar_href;
+        new_note.dtstart = Some(crate::model::DateType::AllDay(nd));
+        new_note.summary = date_str;
+        let uid = new_note.uid.clone();
+
+        self.controller
+            .persist_changes(vec![crate::journal::Action::Create(new_note.clone())])
+            .await
+            .map_err(MobileError::from)?;
+        self.controller.store.lock().await.add_task(new_note);
+
+        Ok(uid)
+    }
+
+    pub async fn create_wiki_page(
+        &self,
+        title: String,
+        calendar_href: String,
+    ) -> Result<String, MobileError> {
+        let config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
+        let mut new_page = crate::model::Task::new("", &config.tag_aliases, None);
+        new_page.is_journal = true;
+        new_page.calendar_href = calendar_href;
+        new_page.summary = if title.is_empty() {
+            rust_i18n::t!("untitled_page", default = "Untitled page").to_string()
+        } else {
+            title
+        };
+        let uid = new_page.uid.clone();
+
+        self.controller
+            .persist_changes(vec![crate::journal::Action::Create(new_page.clone())])
+            .await
+            .map_err(MobileError::from)?;
+        self.controller.store.lock().await.add_task(new_page);
+
+        Ok(uid)
     }
 
     pub async fn get_random_task_uid(

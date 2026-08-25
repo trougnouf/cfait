@@ -829,6 +829,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_create_remote_calendar(): Int
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_create_wiki_page(): Int
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_delete_all_calendar_events(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_delete_local_calendar(): Int
@@ -874,6 +876,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_next_global_alarm_time(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_ongoing_tasks(): Int
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_get_or_create_daily_note(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_random_task_uid(): Int
 
@@ -936,6 +940,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_cfait_checksum_method_cfaitmobile_set_calendar_visibility(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_set_default_calendar(): Int
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_set_journal_date(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_set_locale(): Int
 
@@ -1079,6 +1085,12 @@ internal object UniffiLib {
         `color`: RustBuffer.ByValue,
     ): Long
 
+    external fun uniffi_cfait_fn_method_cfaitmobile_create_wiki_page(
+        `ptr`: Long,
+        `title`: RustBuffer.ByValue,
+        `calendarHref`: RustBuffer.ByValue,
+    ): Long
+
     external fun uniffi_cfait_fn_method_cfaitmobile_delete_all_calendar_events(`ptr`: Long): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_delete_local_calendar(
@@ -1185,6 +1197,12 @@ internal object UniffiLib {
         `ptr`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_get_or_create_daily_note(
+        `ptr`: Long,
+        `dateStr`: RustBuffer.ByValue,
+        `calendarHref`: RustBuffer.ByValue,
+    ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_get_random_task_uid(
         `ptr`: Long,
@@ -1369,6 +1387,11 @@ internal object UniffiLib {
         `href`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_set_journal_date(
+        `ptr`: Long,
+        `date`: RustBuffer.ByValue,
+    ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_set_locale(
         `ptr`: Long,
@@ -1753,6 +1776,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_create_remote_calendar() != 52273) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_create_wiki_page() != 8350) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_delete_all_calendar_events() != 30790) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1820,6 +1846,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_ongoing_tasks() != 42174) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_or_create_daily_note() != 34732) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_random_task_uid() != 59673) {
@@ -1913,6 +1942,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_set_default_calendar() != 26251) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_set_journal_date() != 18455) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_set_locale() != 3255) {
@@ -2571,6 +2603,11 @@ public interface CfaitMobileInterface {
         `color`: kotlin.String?,
     ): kotlin.String
 
+    suspend fun `createWikiPage`(
+        `title`: kotlin.String,
+        `calendarHref`: kotlin.String,
+    ): kotlin.String
+
     suspend fun `deleteAllCalendarEvents`(): kotlin.UInt
 
     suspend fun `deleteLocalCalendar`(`href`: kotlin.String)
@@ -2626,6 +2663,11 @@ public interface CfaitMobileInterface {
     suspend fun `getNextGlobalAlarmTime`(): kotlin.Long?
 
     fun `getOngoingTasks`(): List<MobileTask>
+
+    suspend fun `getOrCreateDailyNote`(
+        `dateStr`: kotlin.String,
+        `calendarHref`: kotlin.String,
+    ): kotlin.String
 
     suspend fun `getRandomTaskUid`(
         `filterTags`: List<kotlin.String>,
@@ -2729,6 +2771,8 @@ public interface CfaitMobileInterface {
     )
 
     fun `setDefaultCalendar`(`href`: kotlin.String)
+
+    suspend fun `setJournalDate`(`date`: kotlin.String)
 
     fun `setLocale`(`locale`: kotlin.String)
 
@@ -3178,6 +3222,29 @@ open class CfaitMobile :
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `createWikiPage`(
+        `title`: kotlin.String,
+        `calendarHref`: kotlin.String,
+    ): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_create_wiki_page(
+                    uniffiHandle,
+                    FfiConverterString.lower(`title`),
+                    FfiConverterString.lower(`calendarHref`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
+
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `deleteAllCalendarEvents`(): kotlin.UInt =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
@@ -3549,6 +3616,29 @@ open class CfaitMobile :
                     )
                 }
             },
+        )
+
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `getOrCreateDailyNote`(
+        `dateStr`: kotlin.String,
+        `calendarHref`: kotlin.String,
+    ): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_or_create_daily_note(
+                    uniffiHandle,
+                    FfiConverterString.lower(`dateStr`),
+                    FfiConverterString.lower(`calendarHref`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            MobileException.ErrorHandler,
         )
 
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
@@ -4052,6 +4142,25 @@ open class CfaitMobile :
                 )
             }
         }
+
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `setJournalDate`(`date`: kotlin.String) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_set_journal_date(
+                    uniffiHandle,
+                    FfiConverterString.lower(`date`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
 
     override fun `setLocale`(`locale`: kotlin.String) =
         callWithHandle {
@@ -4808,6 +4917,54 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
     }
 }
 
+data class MobileDayContext(
+    var `date`: kotlin.String,
+    var `totalTrackedMins`: kotlin.UInt,
+    var `dueTasks`: List<MobileRelatedTask>,
+    var `startedTasks`: List<MobileRelatedTask>,
+    var `ongoingTasks`: List<MobileRelatedTask>,
+    var `completedTasks`: List<MobileRelatedTask>,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMobileDayContext : FfiConverterRustBuffer<MobileDayContext> {
+    override fun read(buf: ByteBuffer): MobileDayContext =
+        MobileDayContext(
+            FfiConverterString.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterSequenceTypeMobileRelatedTask.read(buf),
+            FfiConverterSequenceTypeMobileRelatedTask.read(buf),
+            FfiConverterSequenceTypeMobileRelatedTask.read(buf),
+            FfiConverterSequenceTypeMobileRelatedTask.read(buf),
+        )
+
+    override fun allocationSize(value: MobileDayContext) =
+        (
+            FfiConverterString.allocationSize(value.`date`) +
+                FfiConverterUInt.allocationSize(value.`totalTrackedMins`) +
+                FfiConverterSequenceTypeMobileRelatedTask.allocationSize(value.`dueTasks`) +
+                FfiConverterSequenceTypeMobileRelatedTask.allocationSize(value.`startedTasks`) +
+                FfiConverterSequenceTypeMobileRelatedTask.allocationSize(value.`ongoingTasks`) +
+                FfiConverterSequenceTypeMobileRelatedTask.allocationSize(value.`completedTasks`)
+        )
+
+    override fun write(
+        value: MobileDayContext,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`date`, buf)
+        FfiConverterUInt.write(value.`totalTrackedMins`, buf)
+        FfiConverterSequenceTypeMobileRelatedTask.write(value.`dueTasks`, buf)
+        FfiConverterSequenceTypeMobileRelatedTask.write(value.`startedTasks`, buf)
+        FfiConverterSequenceTypeMobileRelatedTask.write(value.`ongoingTasks`, buf)
+        FfiConverterSequenceTypeMobileRelatedTask.write(value.`completedTasks`, buf)
+    }
+}
+
 data class MobileFilterOptions(
     var `filterTags`: List<kotlin.String>,
     var `filterLocations`: List<kotlin.String>,
@@ -5077,6 +5234,42 @@ public object FfiConverterTypeMobileInterval : FfiConverterRustBuffer<MobileInte
     ) {
         FfiConverterUInt.write(value.`amount`, buf)
         FfiConverterTypeMobileIntervalUnit.write(value.`unit`, buf)
+    }
+}
+
+data class MobileJournalPage(
+    var `uid`: kotlin.String,
+    var `title`: kotlin.String,
+    var `depth`: kotlin.UInt,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMobileJournalPage : FfiConverterRustBuffer<MobileJournalPage> {
+    override fun read(buf: ByteBuffer): MobileJournalPage =
+        MobileJournalPage(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+
+    override fun allocationSize(value: MobileJournalPage) =
+        (
+            FfiConverterString.allocationSize(value.`uid`) +
+                FfiConverterString.allocationSize(value.`title`) +
+                FfiConverterUInt.allocationSize(value.`depth`)
+        )
+
+    override fun write(
+        value: MobileJournalPage,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`uid`, buf)
+        FfiConverterString.write(value.`title`, buf)
+        FfiConverterUInt.write(value.`depth`, buf)
     }
 }
 
@@ -5626,6 +5819,8 @@ data class MobileViewData(
     var `locations`: List<MobileLocation>,
     var `goals`: List<MobileGoalProgress>,
     var `focusedTaskUid`: kotlin.String?,
+    var `journalContext`: MobileDayContext,
+    var `journalPages`: List<MobileJournalPage>,
 ) {
     companion object
 }
@@ -5641,6 +5836,8 @@ public object FfiConverterTypeMobileViewData : FfiConverterRustBuffer<MobileView
             FfiConverterSequenceTypeMobileLocation.read(buf),
             FfiConverterSequenceTypeMobileGoalProgress.read(buf),
             FfiConverterOptionalString.read(buf),
+            FfiConverterTypeMobileDayContext.read(buf),
+            FfiConverterSequenceTypeMobileJournalPage.read(buf),
         )
 
     override fun allocationSize(value: MobileViewData) =
@@ -5649,7 +5846,9 @@ public object FfiConverterTypeMobileViewData : FfiConverterRustBuffer<MobileView
                 FfiConverterSequenceTypeMobileTag.allocationSize(value.`tags`) +
                 FfiConverterSequenceTypeMobileLocation.allocationSize(value.`locations`) +
                 FfiConverterSequenceTypeMobileGoalProgress.allocationSize(value.`goals`) +
-                FfiConverterOptionalString.allocationSize(value.`focusedTaskUid`)
+                FfiConverterOptionalString.allocationSize(value.`focusedTaskUid`) +
+                FfiConverterTypeMobileDayContext.allocationSize(value.`journalContext`) +
+                FfiConverterSequenceTypeMobileJournalPage.allocationSize(value.`journalPages`)
         )
 
     override fun write(
@@ -5661,6 +5860,8 @@ public object FfiConverterTypeMobileViewData : FfiConverterRustBuffer<MobileView
         FfiConverterSequenceTypeMobileLocation.write(value.`locations`, buf)
         FfiConverterSequenceTypeMobileGoalProgress.write(value.`goals`, buf)
         FfiConverterOptionalString.write(value.`focusedTaskUid`, buf)
+        FfiConverterTypeMobileDayContext.write(value.`journalContext`, buf)
+        FfiConverterSequenceTypeMobileJournalPage.write(value.`journalPages`, buf)
     }
 }
 
@@ -7366,6 +7567,34 @@ public object FfiConverterSequenceTypeMobileHelpSection : FfiConverterRustBuffer
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeMobileHelpSection.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeMobileJournalPage : FfiConverterRustBuffer<List<MobileJournalPage>> {
+    override fun read(buf: ByteBuffer): List<MobileJournalPage> {
+        val len = buf.getInt()
+        return List<MobileJournalPage>(len) {
+            FfiConverterTypeMobileJournalPage.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<MobileJournalPage>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeMobileJournalPage.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<MobileJournalPage>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeMobileJournalPage.write(it, buf)
         }
     }
 }

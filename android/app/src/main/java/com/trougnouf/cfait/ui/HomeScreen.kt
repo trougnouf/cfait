@@ -64,6 +64,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.trougnouf.cfait.R
@@ -107,13 +108,10 @@ fun parseIcon(s: String): String {
 fun HomeScreen(
     api: CfaitMobile,
     calendars: List<MobileCalendar>,
-    tasks: List<MobileTask>,
-    tags: List<MobileTag>,
-    locations: List<MobileLocation>,
+    viewData: com.trougnouf.cfait.core.MobileViewData?,
     aliases: Map<String, List<String>>,
-    onUpdateViewData: (List<MobileTask>, List<MobileTag>, List<MobileLocation>, Map<String, List<String>>, List<com.trougnouf.cfait.core.MobileGoalProgress>, String?) -> Unit,
+    onUpdateViewData: (com.trougnouf.cfait.core.MobileViewData, Map<String, List<String>>) -> Unit,
     defaultCalHref: String?,
-    focusedTaskUid: String?,
     defaultPriority: Int,
     isLoading: Boolean,
     hasUnsynced: Boolean,
@@ -126,8 +124,8 @@ fun HomeScreen(
     tabAutoHide: Boolean = true,
     listStates: SnapshotStateMap<String, LazyListState>,
     goals: Map<String, com.trougnouf.cfait.core.MobileGoal>,
-    viewGoals: List<com.trougnouf.cfait.core.MobileGoalProgress>,
     showGoalsTab: Boolean,
+    showJournalTab: Boolean,
     defaultDurationGoalMins: Int,
     sessionsCountAsCompletions: Boolean,
     onGlobalRefresh: () -> Unit,
@@ -137,6 +135,11 @@ fun HomeScreen(
     onMigrateLocal: (String, String) -> Unit,
     onAutoScrollComplete: () -> Unit = {},
 ) {
+    val tasks = viewData?.tasks ?: emptyList()
+    val tags = viewData?.tags ?: emptyList()
+    val locations = viewData?.locations ?: emptyList()
+    val viewGoals = viewData?.goals ?: emptyList()
+    val focusedTaskUid = viewData?.focusedTaskUid
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -376,8 +379,8 @@ fun HomeScreen(
                     expandedTags = expandedTags.toList(),
                     expandedLocations = expandedLocations.toList()
                 )
-                val viewData = api.getViewTasks(options)
-                onUpdateViewData(viewData.tasks, viewData.tags, viewData.locations, api.getConfig().tagAliases, viewData.goals, viewData.focusedTaskUid)
+                val newViewData = api.getViewTasks(options)
+                onUpdateViewData(newViewData, api.getConfig().tagAliases)
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
             }
@@ -591,8 +594,8 @@ fun HomeScreen(
                             expandedTags = expandedTags.toList(),
                             expandedLocations = expandedLocations.toList()
                         )
-                        val viewData = api.getViewTasks(options)
-                        onUpdateViewData(viewData.tasks, viewData.tags, viewData.locations, api.getConfig().tagAliases, viewData.goals, viewData.focusedTaskUid)
+                        val newViewData = api.getViewTasks(options)
+                        onUpdateViewData(newViewData, api.getConfig().tagAliases)
                     } catch (e: Exception) {
                         if (e !is CancellationException) {
                             // Ignored
@@ -1231,6 +1234,12 @@ fun HomeScreen(
                                 onClick = { sidebarTab = 3 },
                                 icon = { NfIcon(goalIcon) })
                         }
+                        if (showJournalTab) {
+                            Tab(
+                                selected = sidebarTab == 4,
+                                onClick = { sidebarTab = 4 },
+                                icon = { NfIcon(NfIcons.JOURNAL) })
+                        }
                     }
 
                     if (sidebarTab == 1) {
@@ -1592,6 +1601,144 @@ fun HomeScreen(
                                         }
                                     }
                                     HorizontalDivider()
+                                }
+                            }
+                        } else if (sidebarTab == 4 && viewData != null) {
+                            item {
+                                val ctxData = viewData.journalContext
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    IconButton(onClick = {
+                                        scope.launch {
+                                            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                                            val cal = java.util.Calendar.getInstance()
+                                            cal.time = sdf.parse(ctxData.date)!!
+                                            cal.add(java.util.Calendar.DAY_OF_YEAR, -1)
+                                            api.setJournalDate(sdf.format(cal.time))
+                                            updateTaskList()
+                                        }
+                                    }) { NfIcon(NfIcons.ARROW_LEFT) }
+
+                                    Text(ctxData.date, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+
+                                    IconButton(onClick = {
+                                        scope.launch {
+                                            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                                            val cal = java.util.Calendar.getInstance()
+                                            cal.time = sdf.parse(ctxData.date)!!
+                                            cal.add(java.util.Calendar.DAY_OF_YEAR, 1)
+                                            api.setJournalDate(sdf.format(cal.time))
+                                            updateTaskList()
+                                        }
+                                    }) { NfIcon(NfIcons.ARROW_RIGHT) }
+                                }
+
+                                Button(
+                                    onClick = {
+                                        scope.launch {
+                                            val activeHref = tabs.getOrNull(pagerState.currentPage)?.isWriteTarget ?: defaultCalHref ?: "local://default"
+                                            val uid = api.getOrCreateDailyNote(ctxData.date, activeHref)
+                                            onTaskClick(uid)
+                                            scope.launch { drawerState.close() }
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+                                ) {
+                                    Text(stringResource(R.string.journal_notes))
+                                }
+
+                                if (ctxData.totalTrackedMins > 0u || ctxData.dueTasks.isNotEmpty() || ctxData.startedTasks.isNotEmpty() || ctxData.ongoingTasks.isNotEmpty() || ctxData.completedTasks.isNotEmpty()) {
+                                    Text(stringResource(R.string.journal_activity), fontWeight = FontWeight.Bold, modifier = Modifier.padding(8.dp))
+                                    Column(Modifier.padding(horizontal = 8.dp)) {
+                                        if (ctxData.totalTrackedMins > 0u) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                NfIcon(NfIcons.TIMER_SETTINGS, 12.sp, Color(0xFF4CAF50))
+                                                Spacer(Modifier.width(4.dp))
+                                                Text(stringResource(R.string.journal_time_tracked) + ": " + formatDurationHuman(ctxData.totalTrackedMins.toLong()), fontSize = 13.sp, color = Color(0xFF4CAF50))
+                                            }
+                                        }
+
+                                        val renderList = @Composable { titleRes: Int, icon: String, iconColor: Color, items: List<com.trougnouf.cfait.core.MobileRelatedTask> ->
+                                            if (items.isNotEmpty()) {
+                                                Column(Modifier.padding(top = 4.dp)) {
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        NfIcon(icon, 10.sp, iconColor)
+                                                        Spacer(Modifier.width(4.dp))
+                                                        Text(stringResource(titleRes) + ":", fontSize = 12.sp, color = Color.Gray)
+                                                    }
+                                                    val text = androidx.compose.ui.text.buildAnnotatedString {
+                                                        items.forEachIndexed { index, task ->
+                                                            pushStringAnnotation("UID", task.uid)
+                                                            withStyle(androidx.compose.ui.text.SpanStyle(color = Color(0xFF2196F3))) {
+                                                                append(task.summary)
+                                                            }
+                                                            pop()
+                                                            if (index < items.size - 1) {
+                                                                withStyle(androidx.compose.ui.text.SpanStyle(color = Color.Gray)) {
+                                                                    append(", ")
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    androidx.compose.foundation.text.ClickableText(
+                                                        text = text,
+                                                        style = androidx.compose.ui.text.TextStyle(fontSize = 13.sp),
+                                                        onClick = { offset ->
+                                                            text.getStringAnnotations("UID", offset, offset).firstOrNull()?.let {
+                                                                onTaskClick(it.item)
+                                                            }
+                                                        }
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        renderList(R.string.journal_worked_on_today, NfIcons.PLAY, Color(0xFF4CAF50), ctxData.startedTasks + ctxData.ongoingTasks)
+                                        renderList(R.string.journal_completed_today, NfIcons.CHECK, Color(0xFF4CAF50), ctxData.completedTasks)
+                                        renderList(R.string.journal_due_today, NfIcons.CALENDAR, Color(0xFFFFA000), ctxData.dueTasks)
+                                    }
+                                } else {
+                                    Text(stringResource(R.string.journal_no_activity), fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(8.dp))
+                                }
+
+                                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth().padding(8.dp)
+                                ) {
+                                    Text(stringResource(R.string.wiki_index), fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                                    IconButton(onClick = {
+                                        scope.launch {
+                                            val activeHref = tabs.getOrNull(pagerState.currentPage)?.isWriteTarget ?: defaultCalHref ?: "local://default"
+                                            val uid = api.createWikiPage("", activeHref)
+                                            onTaskClick(uid)
+                                            scope.launch { drawerState.close() }
+                                        }
+                                    }) {
+                                        NfIcon(NfIcons.NEW_FILE)
+                                    }
+                                }
+                            }
+
+                            items(viewData.journalPages) { page ->
+                                val indent = (page.depth.toInt() * 12).dp
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            scope.launch { drawerState.close() }
+                                            onTaskClick(page.uid)
+                                        }
+                                        .padding(start = 8.dp + indent, end = 8.dp, top = 12.dp, bottom = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    NfIcon(NfIcons.JOURNAL, 14.sp, Color.Gray)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(page.title, fontSize = 14.sp)
                                 }
                             }
                         }
