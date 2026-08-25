@@ -1523,9 +1523,41 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                                     "      ".to_string()
                                 };
 
+                                let trimmed = desc_line.trim_start();
+                                let mut is_header = false;
+                                let display_line =
+                                    if let Some(stripped) = trimmed.strip_prefix("# ") {
+                                        is_header = true;
+                                        stripped.trim_start()
+                                    } else if let Some(stripped) = trimmed.strip_prefix("## ") {
+                                        is_header = true;
+                                        stripped.trim_start()
+                                    } else if let Some(stripped) = trimmed.strip_prefix("### ") {
+                                        is_header = true;
+                                        stripped.trim_start()
+                                    } else {
+                                        desc_line
+                                    };
+
+                                let base_style = if is_header {
+                                    Style::default()
+                                        .fg(if is_dark_theme {
+                                            Color::LightBlue
+                                        } else {
+                                            Color::Blue
+                                        })
+                                        .add_modifier(Modifier::BOLD)
+                                } else if trimmed.starts_with("> ") {
+                                    Style::default()
+                                        .fg(Color::DarkGray)
+                                        .add_modifier(Modifier::ITALIC)
+                                } else {
+                                    Style::default().fg(Color::DarkGray)
+                                };
+
                                 let desc_spans = crate::tui::view::parse_inline_elements(
-                                    desc_line,
-                                    Style::default().fg(Color::DarkGray),
+                                    display_line,
+                                    base_style,
                                     true,
                                 );
                                 let mut line_spans = vec![Span::raw(indent)];

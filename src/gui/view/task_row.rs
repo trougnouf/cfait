@@ -1456,26 +1456,155 @@ pub fn view_task_row<'a>(
 
             if has_content_to_show && is_expanded {
                 if !task.description.is_empty() {
-                    let mut desc_col = column![].spacing(8);
-                    for paragraph in task.description.split("\n\n") {
-                        if paragraph.trim().is_empty() {
+                    let mut desc_col = column![].spacing(4);
+                    let mut current_paragraph = String::new();
+
+                    for line in task.description.lines() {
+                        let trimmed = line.trim_start();
+                        if trimmed.is_empty() {
+                            if !current_paragraph.is_empty() {
+                                let spans = parse_inline_markdown(
+                                    &current_paragraph,
+                                    if is_dark_theme {
+                                        Color::from_rgb(0.7, 0.7, 0.7)
+                                    } else {
+                                        Color::from_rgb(0.3, 0.3, 0.3)
+                                    },
+                                    false,
+                                );
+                                desc_col = desc_col.push(rich_text(spans).size(14).on_link_click(
+                                    |target: String| {
+                                        if target.contains("://") || target.starts_with("mailto:") {
+                                            Message::OpenUrl(target)
+                                        } else {
+                                            Message::OpenWikiLink(target)
+                                        }
+                                    },
+                                ));
+                                current_paragraph.clear();
+                            }
+                            desc_col = desc_col.push(Space::new().height(Length::Fixed(4.0)));
                             continue;
                         }
-                        desc_col = desc_col.push(
-                            rich_text(parse_inline_markdown(
-                                paragraph,
-                                Color::from_rgb(0.7, 0.7, 0.7),
-                                false,
-                            ))
-                            .size(14)
-                            .on_link_click(|target: String| {
+
+                        let is_header = trimmed.starts_with("# ")
+                            || trimmed.starts_with("## ")
+                            || trimmed.starts_with("### ");
+                        let is_quote = trimmed.starts_with("> ");
+                        let is_list = trimmed.starts_with("- ") || trimmed.starts_with("* ");
+
+                        if is_header || is_quote || is_list {
+                            if !current_paragraph.is_empty() {
+                                let spans = parse_inline_markdown(
+                                    &current_paragraph,
+                                    if is_dark_theme {
+                                        Color::from_rgb(0.7, 0.7, 0.7)
+                                    } else {
+                                        Color::from_rgb(0.3, 0.3, 0.3)
+                                    },
+                                    false,
+                                );
+                                desc_col = desc_col.push(rich_text(spans).size(14).on_link_click(
+                                    |target: String| {
+                                        if target.contains("://") || target.starts_with("mailto:") {
+                                            Message::OpenUrl(target)
+                                        } else {
+                                            Message::OpenWikiLink(target)
+                                        }
+                                    },
+                                ));
+                                current_paragraph.clear();
+                            }
+
+                            let mut base_color = if is_dark_theme {
+                                Color::from_rgb(0.7, 0.7, 0.7)
+                            } else {
+                                Color::from_rgb(0.3, 0.3, 0.3)
+                            };
+                            let mut size = 14;
+
+                            let display_line = if is_header {
+                                base_color = if is_dark_theme {
+                                    Color::from_rgb(0.3, 0.7, 1.0)
+                                } else {
+                                    Color::from_rgb(0.1, 0.4, 0.8)
+                                };
+                                if let Some(stripped) = trimmed.strip_prefix("# ") {
+                                    size = 18;
+                                    stripped.trim_start()
+                                } else if let Some(stripped) = trimmed.strip_prefix("## ") {
+                                    size = 16;
+                                    stripped.trim_start()
+                                } else if let Some(stripped) = trimmed.strip_prefix("### ") {
+                                    size = 15;
+                                    stripped.trim_start()
+                                } else {
+                                    trimmed
+                                }
+                            } else if is_quote {
+                                base_color = if is_dark_theme {
+                                    Color::from_rgb(0.5, 0.5, 0.5)
+                                } else {
+                                    Color::from_rgb(0.4, 0.4, 0.4)
+                                };
+                                trimmed
+                            } else {
+                                line
+                            };
+
+                            let mut spans = parse_inline_markdown(display_line, base_color, false);
+
+                            if is_header {
+                                for s in &mut spans {
+                                    s.font = Some(iced::Font {
+                                        weight: iced::font::Weight::Bold,
+                                        ..Default::default()
+                                    });
+                                }
+                            } else if is_quote {
+                                for s in &mut spans {
+                                    s.font = Some(iced::Font {
+                                        style: iced::font::Style::Italic,
+                                        ..Default::default()
+                                    });
+                                }
+                            }
+
+                            desc_col = desc_col.push(rich_text(spans).size(size).on_link_click(
+                                |target: String| {
+                                    if target.contains("://") || target.starts_with("mailto:") {
+                                        Message::OpenUrl(target)
+                                    } else {
+                                        Message::OpenWikiLink(target)
+                                    }
+                                },
+                            ));
+                        } else {
+                            if !current_paragraph.is_empty() {
+                                current_paragraph.push('\n');
+                            }
+                            current_paragraph.push_str(line);
+                        }
+                    }
+                    if !current_paragraph.is_empty() {
+                        let spans = parse_inline_markdown(
+                            &current_paragraph,
+                            if is_dark_theme {
+                                Color::from_rgb(0.7, 0.7, 0.7)
+                            } else {
+                                Color::from_rgb(0.3, 0.3, 0.3)
+                            },
+                            false,
+                        );
+                        desc_col = desc_col.push(rich_text(spans).size(14).on_link_click(
+                            |target: String| {
                                 if target.contains("://") || target.starts_with("mailto:") {
                                     Message::OpenUrl(target)
                                 } else {
                                     Message::OpenWikiLink(target)
                                 }
-                            }),
-                        );
+                            },
+                        ));
                     }
                     details_col = details_col.push(desc_col);
                 }
@@ -2024,29 +2153,71 @@ pub fn view_task_row<'a>(
             } else {
                 let mut base_col = column![task_button];
                 if app.show_inline_descriptions && !task.description.is_empty() && !is_expanded {
-                    let mut desc_lines = Vec::new();
+                    let mut desc_col = column![].spacing(2);
                     let mut line_count = 0;
                     for line in task.description.lines() {
                         if line.trim().is_empty() {
                             continue;
                         }
-                        desc_lines.push(line.to_string());
-                        line_count += 1;
-                        if line_count >= 3 {
-                            break;
+
+                        let trimmed = line.trim_start();
+                        let mut is_header = false;
+                        let display_line = if let Some(stripped) = trimmed.strip_prefix("# ") {
+                            is_header = true;
+                            stripped.trim_start()
+                        } else if let Some(stripped) = trimmed.strip_prefix("## ") {
+                            is_header = true;
+                            stripped.trim_start()
+                        } else if let Some(stripped) = trimmed.strip_prefix("### ") {
+                            is_header = true;
+                            stripped.trim_start()
+                        } else {
+                            line
+                        };
+
+                        let is_quote = trimmed.starts_with("> ");
+
+                        let base_color = if is_header {
+                            if is_dark_theme {
+                                Color::from_rgb(0.3, 0.6, 0.9)
+                            } else {
+                                Color::from_rgb(0.2, 0.5, 0.8)
+                            }
+                        } else if is_quote {
+                            if is_dark_theme {
+                                Color::from_rgb(0.5, 0.5, 0.5)
+                            } else {
+                                Color::from_rgb(0.4, 0.4, 0.4)
+                            }
+                        } else {
+                            if is_dark_theme {
+                                Color::from_rgb(0.6, 0.6, 0.6)
+                            } else {
+                                Color::from_rgb(0.4, 0.4, 0.4)
+                            }
+                        };
+
+                        let mut spans = parse_inline_markdown(display_line, base_color, false);
+
+                        if is_header {
+                            for s in &mut spans {
+                                s.font = Some(iced::Font {
+                                    weight: iced::font::Weight::Bold,
+                                    ..Default::default()
+                                });
+                            }
+                        } else if is_quote {
+                            for s in &mut spans {
+                                s.font = Some(iced::Font {
+                                    style: iced::font::Style::Italic,
+                                    ..Default::default()
+                                });
+                            }
                         }
-                    }
-                    if !desc_lines.is_empty() {
-                        let inline_txt = desc_lines.join("\n");
+
                         let inline_desc = row![
                             Space::new().width(Length::Fixed(indent_size as f32 + 34.0)),
-                            rich_text(parse_inline_markdown(
-                                &inline_txt,
-                                Color::from_rgb(0.6, 0.6, 0.6),
-                                false,
-                            ))
-                            .size(14)
-                            .on_link_click(|target: String| {
+                            rich_text(spans).size(14).on_link_click(|target: String| {
                                 if target.contains("://") || target.starts_with("mailto:") {
                                     Message::OpenUrl(target)
                                 } else {
@@ -2054,7 +2225,15 @@ pub fn view_task_row<'a>(
                                 }
                             })
                         ];
-                        base_col = base_col.push(inline_desc).spacing(2);
+
+                        desc_col = desc_col.push(inline_desc);
+                        line_count += 1;
+                        if line_count >= 3 {
+                            break;
+                        }
+                    }
+                    if line_count > 0 {
+                        base_col = base_col.push(desc_col).spacing(2);
                     }
                 }
                 base_col
