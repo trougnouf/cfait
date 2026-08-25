@@ -2249,7 +2249,8 @@ fun HomeScreen(
                         if (tabPosition == "bottom") {
                             tabsContent()
                         }
-                        if (creatingChildTask != null) {
+                        if (sidebarTab != 4) {
+                            if (creatingChildTask != null) {
                             Surface(
                                 color = MaterialTheme.colorScheme.tertiaryContainer,
                                 modifier = Modifier.fillMaxWidth()
@@ -2401,6 +2402,7 @@ fun HomeScreen(
                                     }
                                 }
                             }
+                        }
                         }
                     }
                 }

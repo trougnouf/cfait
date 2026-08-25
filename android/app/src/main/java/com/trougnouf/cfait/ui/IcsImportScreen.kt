@@ -273,7 +273,6 @@ fun JournalMainView(
             } else {
                 api.getDailyNoteUid(journalDateStr, href)
             }
-            uid = targetUid
 
             val content = if (targetUid != null) {
                 api.getTaskTreeMarkdown(targetUid)
@@ -282,6 +281,7 @@ fun JournalMainView(
             }
             val tfv = androidx.compose.ui.text.input.TextFieldValue(content)
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                uid = targetUid
                 text = tfv
                 initialText = content
                 undoStack = listOf(tfv)
@@ -302,9 +302,9 @@ fun JournalMainView(
                         api.getOrCreateDailyNote(journalDateStr, href)
                     }
                 }
-                uid = targetUid
                 api.syncTaskTreeFromMarkdown(targetUid, text.text)
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    uid = targetUid
                     initialText = text.text
                     onDataChanged()
                 }
@@ -322,7 +322,7 @@ fun JournalMainView(
         saveContent()
     }
 
-    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().imePadding()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
