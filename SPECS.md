@@ -29,7 +29,7 @@ Cfait is an offline-first task manager that seamlessly synchronizes with CalDAV 
 
 ### 1.2. The Task & Journal Entity (`VTODO` & `VJOURNAL` Mapping)
 Tasks map strictly to iCalendar `VTODO` components, while daily notes map to `VJOURNAL` components (RFC 5545). Non-standard metadata is stored via `X-CFAIT-` properties.
-*   **VJOURNAL Support:** Each journal entry is a date-anchored note (`DTSTART;VALUE=DATE`). Stored in the active collection. VJOURNAL components (daily notes and wiki pages) are omitted from the main task lists unless they contain child tasks (acting as structural parents), are explicitly tagged with `is:note` or `is:pinned` to force visibility, or are returned as part of an active search query (e.g., using `is:page` or `is:journal`).
+*   **VJOURNAL Support:** Each journal entry is a date-anchored note (`DTSTART;VALUE=DATE`). Stored in the active collection. VJOURNAL components (daily notes and wiki pages) are omitted from the main task lists unless they contain child tasks (acting as structural parents), are children of another task, are explicitly tagged with `is:note` or `is:pinned` to force visibility, or are returned as part of an active search query (e.g., using `is:page` or `is:journal`).
 *   **Status:** `NeedsAction` (Pending), `InProcess` (Timer running), `Completed`, `Cancelled`.
 *   **Manual Block:** Stored via `X-CFAIT-BLOCKED` (boolean) to explicitly mark a task as blocked without dependencies.
 *   **Dates (`DateType`):** Start (`DTSTART`) and Due (`DUE`). Supported variants:

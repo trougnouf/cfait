@@ -2851,6 +2851,7 @@ impl TaskStore {
 
                     if t.is_journal
                         && !self.children_index.contains_key(&t.uid)
+                        && t.parent_uid.is_none()
                         && !is_system_cal
                         && !t.is_note
                         && !t.pinned
@@ -2883,7 +2884,7 @@ impl TaskStore {
                         // Journals with is_note or pinned are always visible even without children.
                         if (t.is_note || t.is_journal)
                             && !self.children_index.contains_key(&t.uid)
-                            && !(t.is_journal && (t.is_note || t.pinned))
+                            && !(t.is_journal && (t.is_note || t.pinned || t.parent_uid.is_some()))
                         {
                             return false;
                         }
