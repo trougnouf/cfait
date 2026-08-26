@@ -532,11 +532,13 @@ fun JournalMainView(
                 }
             }
 
+            val sortedCals = activeCals.sortedByDescending { calHasEntry[it.href] == true }
+
             androidx.compose.foundation.lazy.LazyRow(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(activeCals) { cal ->
+                items(sortedCals, key = { it.href }) { cal ->
                     val isSelected = cal.href == href
                     val hasEntry = calHasEntry[cal.href] == true
                     val marker = if (hasEntry) " 📝" else ""
