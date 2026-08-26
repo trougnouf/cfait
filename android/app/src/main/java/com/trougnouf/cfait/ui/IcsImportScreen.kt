@@ -663,7 +663,11 @@ fun JournalMainView(
                         }
                     }
 
-                    item { renderList(R.string.journal_worked_on_today, NfIcons.PLAY, Color(0xFF4CAF50), ctxData.startedTasks + ctxData.ongoingTasks) }
+                    item { renderList(R.string.journal_started_today, NfIcons.PLAY, Color(0xFF4CAF50), ctxData.startedTasks) }
+                    
+                    val workedOn = (ctxData.ongoingTasks + ctxData.sessionTasks).distinctBy { it.uid }
+                    item { renderList(R.string.journal_worked_on_today, NfIcons.TIMER_SETTINGS, Color(0xFF4CAF50), workedOn) }
+                    
                     item { renderList(R.string.journal_completed_today, NfIcons.CHECK, Color(0xFF4CAF50), ctxData.completedTasks) }
                     item { renderList(R.string.journal_due_today, NfIcons.CALENDAR, Color(0xFFFFA000), ctxData.dueTasks) }
                 }

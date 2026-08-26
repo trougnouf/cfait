@@ -4961,6 +4961,7 @@ data class MobileDayContext(
     var `dueTasks`: List<MobileRelatedTask>,
     var `startedTasks`: List<MobileRelatedTask>,
     var `ongoingTasks`: List<MobileRelatedTask>,
+    var `sessionTasks`: List<MobileRelatedTask>,
     var `completedTasks`: List<MobileRelatedTask>,
     var `journalDaysInMonth`: List<kotlin.UInt>,
 ) {
@@ -4979,6 +4980,7 @@ public object FfiConverterTypeMobileDayContext : FfiConverterRustBuffer<MobileDa
             FfiConverterSequenceTypeMobileRelatedTask.read(buf),
             FfiConverterSequenceTypeMobileRelatedTask.read(buf),
             FfiConverterSequenceTypeMobileRelatedTask.read(buf),
+            FfiConverterSequenceTypeMobileRelatedTask.read(buf),
             FfiConverterSequenceUInt.read(buf),
         )
 
@@ -4989,6 +4991,7 @@ public object FfiConverterTypeMobileDayContext : FfiConverterRustBuffer<MobileDa
                 FfiConverterSequenceTypeMobileRelatedTask.allocationSize(value.`dueTasks`) +
                 FfiConverterSequenceTypeMobileRelatedTask.allocationSize(value.`startedTasks`) +
                 FfiConverterSequenceTypeMobileRelatedTask.allocationSize(value.`ongoingTasks`) +
+                FfiConverterSequenceTypeMobileRelatedTask.allocationSize(value.`sessionTasks`) +
                 FfiConverterSequenceTypeMobileRelatedTask.allocationSize(value.`completedTasks`) +
                 FfiConverterSequenceUInt.allocationSize(value.`journalDaysInMonth`)
         )
@@ -5002,6 +5005,7 @@ public object FfiConverterTypeMobileDayContext : FfiConverterRustBuffer<MobileDa
         FfiConverterSequenceTypeMobileRelatedTask.write(value.`dueTasks`, buf)
         FfiConverterSequenceTypeMobileRelatedTask.write(value.`startedTasks`, buf)
         FfiConverterSequenceTypeMobileRelatedTask.write(value.`ongoingTasks`, buf)
+        FfiConverterSequenceTypeMobileRelatedTask.write(value.`sessionTasks`, buf)
         FfiConverterSequenceTypeMobileRelatedTask.write(value.`completedTasks`, buf)
         FfiConverterSequenceUInt.write(value.`journalDaysInMonth`, buf)
     }
