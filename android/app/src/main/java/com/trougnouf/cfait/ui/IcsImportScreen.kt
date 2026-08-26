@@ -16,7 +16,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -274,6 +277,9 @@ fun JournalMainView(
     val scope = rememberCoroutineScope()
     val isDark = isSystemInDarkTheme()
     val context = LocalContext.current
+    val isImeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    var isMaximized by remember { mutableStateOf(false) }
+    val hideExtras = isMaximized || isImeVisible
     
     val enabledCalendarCount = remember(calendars) {
         calendars.count { !it.isDisabled && it.href != "local://trash" && it.href != "local://recovery" }
@@ -475,6 +481,14 @@ fun JournalMainView(
                 }
             }
 
+            IconButton(onClick = { isMaximized = !isMaximized }) {
+                NfIcon(
+                    NfIcons.FOCUS_FIELD,
+                    20.sp,
+                    if (isMaximized) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
             if (isSaving || isLoading) {
                 CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
             } else if (text.text != initialText || titleInput != initialTitle) {
@@ -488,7 +502,7 @@ fun JournalMainView(
             }
         }
 
-        if (journalWikiUid == null) {
+        if (journalWikiUid == null && !hideExtras) {
             val activeCals = calendars.filter { it.isVisible && !it.isDisabled }
             var calHasEntry by remember { mutableStateOf(mapOf<String, Boolean>()) }
 
@@ -596,7 +610,7 @@ fun JournalMainView(
             CursorContextBanner(api, text) { text = it }
         }
 
-        if (journalWikiUid == null && viewData != null) {
+        if (journalWikiUid == null && viewData != null && !hideExtras) {
             val ctxData = viewData.journalContext
             if (ctxData.totalTrackedMins > 0u || ctxData.dueTasks.isNotEmpty() || ctxData.startedTasks.isNotEmpty() || ctxData.ongoingTasks.isNotEmpty() || ctxData.completedTasks.isNotEmpty()) {
                 HorizontalDivider()

@@ -55,6 +55,8 @@ import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
@@ -154,6 +156,7 @@ fun HomeScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val isDark = isSystemInDarkTheme()
     val hapticFeedback = LocalHapticFeedback.current
+    val isImeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
 
     // --- State Declarations ---
     var sidebarTab by rememberSaveable { mutableIntStateOf(0) }
@@ -245,7 +248,7 @@ fun HomeScreen(
         }
     }
 
-    val showTabs = enabledCals.size > 1 && (!tabAutoHide || isTabsTemporarilyVisible)
+    val showTabs = enabledCals.size > 1 && (!tabAutoHide || isTabsTemporarilyVisible) && !isImeVisible
 
     // Local cache for instant swiping: Accumulate over time
     var taskCache by remember { mutableStateOf<Map<String, List<StableTaskSummary>>>(emptyMap()) }
