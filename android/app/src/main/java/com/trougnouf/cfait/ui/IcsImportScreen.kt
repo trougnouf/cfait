@@ -413,12 +413,6 @@ fun JournalMainView(
                     textStyle = androidx.compose.ui.text.TextStyle(fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 )
                 
-                if (enabledCalendarCount > 1) {
-                    IconButton(onClick = { showMoveDialog = true }) {
-                        NfIcon(NfIcons.MOVE, 20.sp)
-                    }
-                }
-                
                 IconButton(onClick = {
                     scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                         try {
@@ -431,6 +425,12 @@ fun JournalMainView(
                     }
                 }) {
                     NfIcon(NfIcons.DELETE, 20.sp, MaterialTheme.colorScheme.error)
+                }
+                
+                if (enabledCalendarCount > 1) {
+                    IconButton(onClick = { showMoveDialog = true }) {
+                        NfIcon(NfIcons.MOVE, 20.sp)
+                    }
                 }
             } else {
                 IconButton(onClick = {
@@ -452,11 +452,6 @@ fun JournalMainView(
                 }) { NfIcon(NfIcons.ARROW_RIGHT) }
 
                 if (uid != null) {
-                    if (enabledCalendarCount > 1) {
-                        IconButton(onClick = { showMoveDialog = true }) {
-                            NfIcon(NfIcons.MOVE, 20.sp)
-                        }
-                    }
                     IconButton(onClick = {
                         scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                             try {
@@ -471,6 +466,11 @@ fun JournalMainView(
                         }
                     }) {
                         NfIcon(NfIcons.DELETE, 20.sp, MaterialTheme.colorScheme.error)
+                    }
+                    if (enabledCalendarCount > 1) {
+                        IconButton(onClick = { showMoveDialog = true }) {
+                            NfIcon(NfIcons.MOVE, 20.sp)
+                        }
                     }
                 }
             }
