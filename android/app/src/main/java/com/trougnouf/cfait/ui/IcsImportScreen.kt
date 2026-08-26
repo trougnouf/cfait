@@ -447,7 +447,15 @@ fun JournalMainView(
                     onDateChange(sdf.format(c.time))
                 }) { NfIcon(NfIcons.ARROW_LEFT) }
 
-                Text(journalDateStr, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+                Text(
+                    journalDateStr, 
+                    fontWeight = FontWeight.Bold, 
+                    fontSize = 18.sp, 
+                    modifier = Modifier.weight(1f), 
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    softWrap = false
+                )
 
                 IconButton(onClick = {
                     val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
@@ -503,7 +511,11 @@ fun JournalMainView(
         }
 
         if (journalWikiUid == null && !hideExtras) {
-            val activeCals = calendars.filter { it.isVisible && !it.isDisabled }
+            val activeCals = calendars.filter { cal ->
+                cal.isVisible && !cal.isDisabled &&
+                cal.href != "local://trash" &&
+                cal.href != "local://recovery"
+            }
             var calHasEntry by remember { mutableStateOf(mapOf<String, Boolean>()) }
 
             LaunchedEffect(journalDateStr, activeCals) {

@@ -713,18 +713,20 @@ impl IcsAdapter {
         }
 
         if let Some(journal_raw) = master_journal_raw {
-            let uid = extract_prop(&journal_raw, "UID").unwrap_or_default();
-            let summary = extract_prop(&journal_raw, "SUMMARY")
+            let unfolded = icalendar::parser::unfold(&journal_raw);
+
+            let uid = extract_prop(&unfolded, "UID").unwrap_or_default();
+            let summary = extract_prop(&unfolded, "SUMMARY")
                 .map(|s| unescape_ics(&s))
                 .unwrap_or_default();
-            let description = extract_prop(&journal_raw, "DESCRIPTION")
+            let description = extract_prop(&unfolded, "DESCRIPTION")
                 .map(|s| unescape_ics(&s))
                 .unwrap_or_default();
-            let sequence = extract_prop(&journal_raw, "SEQUENCE")
+            let sequence = extract_prop(&unfolded, "SEQUENCE")
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(0);
 
-            let dtstart = if let Some(dtstart_str) = extract_prop(&journal_raw, "DTSTART") {
+            let dtstart = if let Some(dtstart_str) = extract_prop(&unfolded, "DTSTART") {
                 let clean_value = dtstart_str
                     .split_once(':')
                     .map(|x| x.1)
@@ -745,7 +747,7 @@ impl IcsAdapter {
                 None
             };
 
-            let categories = if let Some(cats_str) = extract_prop(&journal_raw, "CATEGORIES") {
+            let categories = if let Some(cats_str) = extract_prop(&unfolded, "CATEGORIES") {
                 split_ics_list(&cats_str)
             } else {
                 Vec::new()
@@ -755,7 +757,6 @@ impl IcsAdapter {
             let mut dependencies = Vec::new();
             let mut related_to = Vec::new();
 
-            let unfolded = icalendar::parser::unfold(&journal_raw);
             for line in unfolded.lines() {
                 let line_upper = line.to_uppercase();
                 if line_upper.starts_with("RELATED-TO")
@@ -795,7 +796,7 @@ impl IcsAdapter {
                 }
             }
 
-            let locations = extract_prop(&journal_raw, "LOCATION")
+            let locations = extract_prop(&unfolded, "LOCATION")
                 .map(|s| {
                     unescape_ics(&s)
                         .split('|')
@@ -805,7 +806,7 @@ impl IcsAdapter {
                 })
                 .unwrap_or_default();
 
-            let url = extract_prop(&journal_raw, "URL").map(|s| {
+            let url = extract_prop(&unfolded, "URL").map(|s| {
                 let unescaped = unescape_ics(&s);
                 if !unescaped.is_empty()
                     && !unescaped.contains("://")
@@ -817,15 +818,15 @@ impl IcsAdapter {
                 }
             });
 
-            let geo = extract_prop(&journal_raw, "GEO").map(|s| s.replace(';', ","));
+            let geo = extract_prop(&unfolded, "GEO").map(|s| s.replace(';', ","));
 
-            let collapsed = extract_prop(&journal_raw, "X-CFAIT-COLLAPSED")
+            let collapsed = extract_prop(&unfolded, "X-CFAIT-COLLAPSED")
                 .map(|v| v.trim().to_uppercase() == "TRUE")
                 .unwrap_or(false);
-            let pinned = extract_prop(&journal_raw, "X-CFAIT-PINNED")
+            let pinned = extract_prop(&unfolded, "X-CFAIT-PINNED")
                 .map(|v| v.trim().to_uppercase() == "TRUE")
                 .unwrap_or(false);
-            let is_note = extract_prop(&journal_raw, "X-CFAIT-KIND")
+            let is_note = extract_prop(&unfolded, "X-CFAIT-KIND")
                 .map(|v| v.trim().to_uppercase() == "NOTE")
                 .unwrap_or(false);
 

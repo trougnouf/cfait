@@ -165,6 +165,7 @@ fun HomeScreen(
     var journalWikiTitle by rememberSaveable { mutableStateOf("") }
     var isManualSyncing by remember { mutableStateOf(false) }
     var activeOpCount by remember { mutableIntStateOf(0) }
+    var journalSelectedHref by rememberSaveable { mutableStateOf<String?>(null) }
     var lastSyncFailed by remember { mutableStateOf(false) }
     var localHasUnsynced by remember { mutableStateOf(hasUnsynced) }
     var isPullRefreshing by remember { mutableStateOf(false) }
@@ -2489,45 +2490,38 @@ fun HomeScreen(
                             modifier = Modifier.weight(1f),
                         ) {
                             if (sidebarTab == 4) {
-                                HorizontalPager(
-                                    state = pagerState,
-                                    modifier = Modifier.fillMaxSize(),
-                                    key = { page -> "JOURNAL_${tabs.getOrNull(page)?.id ?: "ALL_TASKS_$page"}" }
-                                ) { page ->
-                                    val currentTab = tabs.getOrNull(page)
-                                    val href = currentTab?.isWriteTarget ?: defaultCalHref ?: "local://default"
-                                    JournalMainView(
-                                        api = api,
-                                        href = href,
-                                        calendars = calendars,
-                                        onCollectionSelect = { selectedHref ->
-                                            val idx = tabs.indexOfFirst { it.id == selectedHref }
-                                            if (idx >= 0) {
-                                                scope.launch { pagerState.animateScrollToPage(idx) }
-                                            }
-                                        },
-                                        viewData = viewData,
-                                        journalDateStr = journalDateStr,
-                                        journalWikiUid = journalWikiUid,
-                                        journalWikiTitle = journalWikiTitle,
-                                        onDateChange = { d ->
-                                            journalDateStr = d
-                                            journalWikiUid = null
-                                            scope.launch {
-                                                api.setJournalDate(d)
-                                                updateTaskList()
-                                            }
-                                        },
-                                        onCloseWikiPage = {
-                                            journalWikiUid = null
-                                        },
-                                        onTaskClick = onTaskClick,
-                                        onDataChanged = {
+                                val currentTab = tabs.getOrNull(pagerState.currentPage)
+                                val fallbackHref = currentTab?.isWriteTarget ?: defaultCalHref ?: "local://default"
+                                val activeHref = journalSelectedHref ?: fallbackHref
+                                
+                                JournalMainView(
+                                    api = api,
+                                    href = activeHref,
+                                    calendars = calendars,
+                                    onCollectionSelect = { selectedHref ->
+                                        journalSelectedHref = selectedHref
+                                    },
+                                    viewData = viewData,
+                                    journalDateStr = journalDateStr,
+                                    journalWikiUid = journalWikiUid,
+                                    journalWikiTitle = journalWikiTitle,
+                                    onDateChange = { d ->
+                                        journalDateStr = d
+                                        journalWikiUid = null
+                                        scope.launch {
+                                            api.setJournalDate(d)
                                             updateTaskList()
-                                            com.trougnouf.cfait.ui.triggerBackgroundSync(context, api)
                                         }
-                                    )
-                                }
+                                    },
+                                    onCloseWikiPage = {
+                                        journalWikiUid = null
+                                    },
+                                    onTaskClick = onTaskClick,
+                                    onDataChanged = {
+                                        updateTaskList()
+                                        com.trougnouf.cfait.ui.triggerBackgroundSync(context, api)
+                                    }
+                                )
                             } else {
                                 HorizontalPager(
                                     state = pagerState,
