@@ -2694,9 +2694,7 @@ impl CfaitMobile {
                 continue;
             }
             for t in map.values() {
-                if t.is_journal
-                    && chrono::NaiveDate::parse_from_str(&t.summary, "%Y-%m-%d").is_err()
-                {
+                if t.is_journal && t.dtstart.is_none() {
                     pages.push(t);
                 }
             }

@@ -519,11 +519,8 @@ impl AppState {
                 continue;
             }
             for t in map.values() {
-                if t.is_journal {
-                    // A Daily Note is strictly named YYYY-MM-DD. Anything else is a Wiki Page.
-                    if chrono::NaiveDate::parse_from_str(&t.summary, "%Y-%m-%d").is_err() {
-                        pages.push(t);
-                    }
+                if t.is_journal && t.dtstart.is_none() {
+                    pages.push(t);
                 }
             }
         }
