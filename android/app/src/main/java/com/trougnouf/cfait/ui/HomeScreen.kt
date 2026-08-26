@@ -2496,6 +2496,13 @@ fun HomeScreen(
                                     JournalMainView(
                                         api = api,
                                         href = href,
+                                        calendars = calendars,
+                                        onCollectionSelect = { selectedHref ->
+                                            val idx = tabs.indexOfFirst { it.id == selectedHref }
+                                            if (idx >= 0) {
+                                                scope.launch { pagerState.animateScrollToPage(idx) }
+                                            }
+                                        },
                                         viewData = viewData,
                                         journalDateStr = journalDateStr,
                                         journalWikiUid = journalWikiUid,
@@ -2507,6 +2514,9 @@ fun HomeScreen(
                                                 api.setJournalDate(d)
                                                 updateTaskList()
                                             }
+                                        },
+                                        onCloseWikiPage = {
+                                            journalWikiUid = null
                                         },
                                         onTaskClick = onTaskClick,
                                         onDataChanged = {
