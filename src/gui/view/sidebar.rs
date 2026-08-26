@@ -1242,12 +1242,16 @@ pub fn view_sidebar_journal(app: &GuiApp) -> Element<'_, Message> {
     .spacing(4);
 
     let mut pages = Vec::new();
-    for map in app.store.calendars.values() {
+    for (href, map) in app.store.calendars.iter() {
+        if app.hidden_calendars.contains(href)
+            || app.disabled_calendars.contains(href)
+            || href == crate::storage::LOCAL_TRASH_HREF
+            || href == "local://recovery"
+        {
+            continue;
+        }
         for t in map.values() {
-            if t.is_journal
-                && t.calendar_href != crate::storage::LOCAL_TRASH_HREF
-                && t.calendar_href != "local://recovery"
-            {
+            if t.is_journal {
                 // A Daily Note is strictly named YYYY-MM-DD. Anything else is a Wiki Page.
                 if chrono::NaiveDate::parse_from_str(&t.summary, "%Y-%m-%d").is_err() {
                     pages.push(t);
