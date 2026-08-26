@@ -21,6 +21,7 @@ Cfait is an offline-first task manager that seamlessly synchronizes with CalDAV 
     *   *Android:* Handled via `WorkManager`. `PeriodicSyncWorker` runs based on `auto_refresh_interval_mins` (min 15 mins). Foreground manual syncs trigger immediate updates.
 *   **Settings Sync:** User configuration (e.g., `default_calendar`, `disabled_calendars`, sorting presets, goals) and aliases sync across devices via a hidden `VTODO` task with UID `cfait-global-settings-v1` (status `CANCELLED`, category `cfait-internal`). 
     * *Exclusions:* Purely local view state (`hidden_calendars`, window dimensions, UI scale, expanded tree paths) intentionally do not sync so that each device retains its own independent viewing context.
+    * *System Tags:* The `cfait-internal` category must be explicitly excluded from user-facing tag lists and autocomplete suggestions.
 *   **Write Target (Active Collection):** When a new task is created, it is assigned to the UI's currently "active" collection. In the TUI/GUI, this is the collection currently selected/highlighted in the sidebar (regardless of how many other collections are visible in the main view). On Android, this is the collection tab currently being viewed. Upon app startup, this active collection is initialized to the globally synced `default_calendar`.
 *   **Conflict & Error Handling:** 
     *   `412 Precondition Failed` (ETag mismatch): Performs a local 3-way merge. If unmergeable, a "Conflict Copy" is generated.
@@ -123,7 +124,7 @@ Cfait natively supports rendering basic inline Markdown across task summaries, d
 The search bar supports a boolean recursive-descent parser.
 *   **Logic:** Implicit `AND` (space), `OR` (`|`), `NOT` (`-`), and Grouping `()`.
 *   **Primitives:**
-    *   *State:* `is:done`, `is:active`, `is:started` / `is:ongoing`, `is:blocked`, `is:note`, `is:page`.
+    *   *State:* `is:done`, `is:active`, `is:started` / `is:ongoing`, `is:blocked`, `is:note`, `is:page`, `is:canceled` / `is:cancelled`.
     *   *Actionable:* `is:ready` (Excludes completed tasks, explicitly/implicitly blocked tasks, tasks starting in the future, and Notes whose children are all unready. `InProcess` bypasses this).
     *   *Comparison:* `~<30m` (duration < 30m), `!<4` (priority < 4).
     *   *Dates:* `@<today` (Overdue), `^>1w` (Starts in > 1 week).

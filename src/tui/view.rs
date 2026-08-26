@@ -988,11 +988,6 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
             let mut worked_on_uids = std::collections::HashSet::new();
             let mut worked_on_tasks = Vec::new();
-            for t in &day_ctx.started_tasks {
-                if worked_on_uids.insert(t.uid.clone()) {
-                    worked_on_tasks.push(t.clone());
-                }
-            }
             for t in &day_ctx.ongoing_tasks {
                 if worked_on_uids.insert(t.uid.clone()) {
                     worked_on_tasks.push(t.clone());
@@ -1004,9 +999,21 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 }
             }
 
+            if !day_ctx.started_tasks.is_empty() {
+                activity_lines
+                    .push_str(&format!("- ▶ {}: ", rust_i18n::t!("journal_started_today")));
+                let links: Vec<String> = day_ctx
+                    .started_tasks
+                    .iter()
+                    .map(|t| t.summary.clone())
+                    .collect();
+                activity_lines.push_str(&links.join(", "));
+                activity_lines.push('\n');
+            }
+
             if !worked_on_tasks.is_empty() {
                 activity_lines.push_str(&format!(
-                    "- ▶ {}: ",
+                    "- ⏱ {}: ",
                     rust_i18n::t!("journal_worked_on_today")
                 ));
                 let links: Vec<String> =

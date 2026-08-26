@@ -498,6 +498,12 @@ impl Task {
         if part_lower == "is:permanent" || lex.search_is_permanent.contains(&part_lower) {
             return self.permanent;
         }
+        if part_lower == "is:canceled"
+            || part_lower == "is:cancelled"
+            || lex.search_is_canceled.contains(&part_lower)
+        {
+            return self.status == TaskStatus::Cancelled;
+        }
         if lex.exact.get(&part_lower) == Some(&crate::model::parser::ExactToken::IsPinned) {
             return self.pinned;
         }

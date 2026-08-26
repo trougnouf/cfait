@@ -421,6 +421,7 @@ pub struct MobileDayContext {
     pub due_tasks: Vec<MobileRelatedTask>,
     pub started_tasks: Vec<MobileRelatedTask>,
     pub ongoing_tasks: Vec<MobileRelatedTask>,
+    pub session_tasks: Vec<MobileRelatedTask>,
     pub completed_tasks: Vec<MobileRelatedTask>,
     pub journal_days_in_month: Vec<u32>,
 }
@@ -2681,6 +2682,7 @@ impl CfaitMobile {
             due_tasks: map_related(day_ctx.due_tasks),
             started_tasks: map_related(day_ctx.started_tasks),
             ongoing_tasks: map_related(day_ctx.ongoing_tasks),
+            session_tasks: map_related(day_ctx.session_tasks.into_iter().map(|(t, _)| t).collect()),
             completed_tasks: map_related(day_ctx.completed_tasks),
             journal_days_in_month: journal_days_vec,
         };
@@ -3300,22 +3302,57 @@ impl CfaitMobile {
     ) -> Result<(), MobileError> {
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let def_time = NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
-        self.apply_store_mutation(&uid, |store, id| {
-            let mut temp_task = match store.get_task_ref(id) {
-                Some(t) => t.clone(),
-                None => return None,
-            };
-            temp_task.apply_smart_input(&smart_input, &config.tag_aliases, def_time);
-            let _warnings = store.resolve_dependencies(&mut temp_task);
-            if let Some((task, _)) = store.get_task_mut(id) {
-                *task = temp_task;
-                task.sequence += 1;
-                Some(task.clone())
-            } else {
-                None
-            }
-        })
-        .await
+
+        let calendars = self.get_calendars();
+        let calendars_model: Vec<crate::model::CalendarListEntry> = calendars
+            .into_iter()
+            .map(|c| crate::model::item::CalendarListEntry {
+                name: c.name,
+                href: c.href,
+                color: c.color,
+                supports_vjournal: None,
+            })
+            .collect();
+
+        let mut store = self.controller.store.lock().await;
+        let mut temp_task = match store.get_task_ref(&uid) {
+            Some(t) => t.clone(),
+            None => return Err(MobileError::from("Task not found".to_string())),
+        };
+        let original_task = temp_task.clone();
+        let old_href = temp_task.calendar_href.clone();
+
+        temp_task.apply_smart_input(&smart_input, &config.tag_aliases, def_time);
+
+        if let Some(target) = temp_task.target_collection.take() {
+            temp_task.calendar_href =
+                crate::model::resolve_collection(&target, &calendars_model, &old_href);
+        }
+        let new_href = temp_task.calendar_href.clone();
+
+        let _warnings = store.resolve_dependencies(&mut temp_task);
+        temp_task.sequence += 1;
+        let final_task = temp_task.clone();
+
+        store.update_or_add_task(temp_task);
+        drop(store);
+
+        let mut actions = Vec::new();
+        if old_href != new_href {
+            actions.push(crate::journal::Action::Move(
+                original_task,
+                new_href.clone(),
+            ));
+        }
+        actions.push(crate::journal::Action::Update(final_task));
+
+        self.controller
+            .persist_changes(actions)
+            .await
+            .map_err(MobileError::from)?;
+        self.rebuild_alarm_index().await;
+
+        Ok(())
     }
 
     pub async fn update_task_description(

@@ -2843,6 +2843,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
                         .width(Length::Fill),
                     move_btn,
                     delete_btn,
+                    Space::new().width(15),
                     window_controls
                 ]
                 .align_y(iced::Alignment::Center)
@@ -2855,6 +2856,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
                     Space::new().width(Length::Fill),
                     move_btn,
                     delete_btn,
+                    Space::new().width(15),
                     window_controls
                 ]
                 .align_y(iced::Alignment::Center)
@@ -2906,6 +2908,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
                         .width(Length::Fill),
                     move_btn,
                     delete_btn,
+                    Space::new().width(15),
                     window_controls
                 ]
                 .align_y(iced::Alignment::Center)
@@ -2918,6 +2921,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
                     Space::new().width(Length::Fill),
                     move_btn,
                     delete_btn,
+                    Space::new().width(15),
                     window_controls
                 ]
                 .align_y(iced::Alignment::Center)
@@ -3054,11 +3058,6 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
 
     let mut worked_on_uids = std::collections::HashSet::new();
     let mut worked_on_tasks = Vec::new();
-    for t in &owned_day_ctx.started_tasks {
-        if worked_on_uids.insert(t.uid.clone()) {
-            worked_on_tasks.push(t.clone());
-        }
-    }
     for t in &owned_day_ctx.ongoing_tasks {
         if worked_on_uids.insert(t.uid.clone()) {
             worked_on_tasks.push(t.clone());
@@ -3068,6 +3067,39 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
         if worked_on_uids.insert(t.uid.clone()) {
             worked_on_tasks.push(t.clone());
         }
+    }
+
+    if !owned_day_ctx.started_tasks.is_empty() {
+        has_any_activity = true;
+        let mut spans = Vec::new();
+        for (i, t) in owned_day_ctx.started_tasks.iter().enumerate() {
+            if i > 0 {
+                spans.push(span(", ").color(Color::from_rgb(0.6, 0.6, 0.6)));
+            }
+            spans.push(
+                span(t.summary.clone())
+                    .color(Color::from_rgb(0.2, 0.7, 1.0))
+                    .link(t.uid.clone()),
+            );
+        }
+        let rt = rich_text(spans).size(13).on_link_click(Message::JumpToTask);
+
+        activity_col = activity_col.push(
+            column![
+                row![
+                    icon::icon(icon::PLAY_FA)
+                        .size(10)
+                        .color(Color::from_rgb(0.4, 0.8, 0.4)),
+                    text(rust_i18n::t!("journal_started_today"))
+                        .size(12)
+                        .color(Color::from_rgb(0.6, 0.6, 0.6))
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+                rt
+            ]
+            .spacing(2),
+        );
     }
 
     if !worked_on_tasks.is_empty() {
@@ -3088,7 +3120,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
         activity_col = activity_col.push(
             column![
                 row![
-                    icon::icon(icon::PLAY_FA)
+                    icon::icon(icon::TIMER_SETTINGS)
                         .size(10)
                         .color(Color::from_rgb(0.4, 0.8, 0.4)),
                     text(rust_i18n::t!("journal_worked_on_today"))

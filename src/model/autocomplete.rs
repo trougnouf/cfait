@@ -94,6 +94,9 @@ pub fn suggest(
             for map in store.calendars.values() {
                 for t in map.values() {
                     for c in &t.categories {
+                        if c == "cfait-internal" {
+                            continue;
+                        }
                         let c_lower = c.to_lowercase();
                         if c_lower.starts_with(query) {
                             *tag_counts.entry(c.clone()).or_insert(0) += 1;

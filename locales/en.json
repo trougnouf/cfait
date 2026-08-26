@@ -793,6 +793,7 @@
     "parser_is_page": "is:page,is:journal",
     "parser_is_pinned": "is:pinned",
     "parser_is_permanent": "is:permanent",
+    "search_is_canceled": "is:canceled,is:cancelled",
     "parser_dep": "dep:,depends:",
     "parser_rel": "rel:,related:",
     "parser_every": "every",
