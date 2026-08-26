@@ -37,6 +37,8 @@ import com.trougnouf.cfait.ui.formatDurationHuman
 import com.trougnouf.cfait.ui.MarkdownTransformation
 import com.trougnouf.cfait.ui.NfIcon
 import com.trougnouf.cfait.ui.NfIcons
+import com.trougnouf.cfait.ui.triggerBackgroundSync
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -267,9 +269,15 @@ fun JournalMainView(
 
     var undoStack by remember { mutableStateOf(listOf<androidx.compose.ui.text.input.TextFieldValue>()) }
     var redoStack by remember { mutableStateOf(listOf<androidx.compose.ui.text.input.TextFieldValue>()) }
+    var showMoveDialog by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
     val isDark = isSystemInDarkTheme()
+    val context = LocalContext.current
+    
+    val enabledCalendarCount = remember(calendars) {
+        calendars.count { !it.isDisabled && it.href != "local://trash" && it.href != "local://recovery" }
+    }
 
     LaunchedEffect(href, journalDateStr, journalWikiUid) {
         isLoading = true
@@ -340,6 +348,49 @@ fun JournalMainView(
         saveContent()
     }
 
+    if (showMoveDialog) {
+        val targetUid = uid ?: journalWikiUid
+        if (targetUid != null) {
+            val targetCals = remember(calendars) {
+                calendars.filter { !it.isDisabled && it.href != "local://trash" && it.href != "local://recovery" }
+            }
+            AlertDialog(
+                onDismissRequest = { showMoveDialog = false },
+                title = { Text(stringResource(R.string.move_task_title)) },
+                text = {
+                    Column {
+                        LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                            items(targetCals) { cal ->
+                                TextButton(onClick = {
+                                    scope.launch {
+                                        try {
+                                            api.dispatch(com.trougnouf.cfait.core.AppIntent.MoveTaskTree(targetUid, cal.href))
+                                            showMoveDialog = false
+                                            onDataChanged()
+                                            triggerBackgroundSync(context, api)
+                                        } catch (e: Exception) {
+                                            if (e is CancellationException) throw e
+                                            android.widget.Toast.makeText(
+                                                context,
+                                                "Error: ${e.message}",
+                                                android.widget.Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    }
+                                }, modifier = Modifier.fillMaxWidth()) { Text(cal.name) }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showMoveDialog = false
+                    }) { Text(stringResource(R.string.cancel)) }
+                },
+            )
+        }
+    }
+
     Column(Modifier.fillMaxSize().imePadding()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(8.dp),
@@ -361,6 +412,12 @@ fun JournalMainView(
                     ),
                     textStyle = androidx.compose.ui.text.TextStyle(fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 )
+                
+                if (enabledCalendarCount > 1) {
+                    IconButton(onClick = { showMoveDialog = true }) {
+                        NfIcon(NfIcons.MOVE, 20.sp)
+                    }
+                }
                 
                 IconButton(onClick = {
                     scope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -395,6 +452,11 @@ fun JournalMainView(
                 }) { NfIcon(NfIcons.ARROW_RIGHT) }
 
                 if (uid != null) {
+                    if (enabledCalendarCount > 1) {
+                        IconButton(onClick = { showMoveDialog = true }) {
+                            NfIcon(NfIcons.MOVE, 20.sp)
+                        }
+                    }
                     IconButton(onClick = {
                         scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                             try {
