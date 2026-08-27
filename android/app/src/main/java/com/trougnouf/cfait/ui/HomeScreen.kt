@@ -1819,11 +1819,11 @@ fun HomeScreen(
                                     Text(stringResource(R.string.wiki_index), fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                                     IconButton(onClick = {
                                         scope.launch {
-                                            val activeHref = tabs.getOrNull(pagerState.currentPage)?.isWriteTarget ?: defaultCalHref ?: "local://default"
-                                            val uid = api.createWikiPage("", activeHref)
+                                            val fallbackHref = tabs.getOrNull(pagerState.currentPage)?.isWriteTarget ?: defaultCalHref ?: "local://default"
+                                            val href = journalSelectedHref ?: fallbackHref
+                                            val uid = api.createWikiPage("", href)
                                             journalWikiUid = uid
                                             journalWikiTitle = ""
-                                            scope.launch { drawerState.close() }
                                         }
                                     }) {
                                         NfIcon(NfIcons.NEW_FILE)
@@ -1839,7 +1839,6 @@ fun HomeScreen(
                                         .clickable {
                                             journalWikiUid = page.uid
                                             journalWikiTitle = page.title
-                                            scope.launch { drawerState.close() }
                                         }
                                         .padding(start = 8.dp + indent, end = 8.dp, top = 12.dp, bottom = 12.dp),
                                     verticalAlignment = Alignment.CenterVertically
@@ -1971,12 +1970,19 @@ fun HomeScreen(
                 val isAll = currentTab?.id == "ALL"
 
                 val writeCalHref = currentTab?.isWriteTarget ?: localDefaultCalHref
-                val writeCal = calendars.find { it.href == writeCalHref } ?: calendars.firstOrNull()
+                val activeCalHref = if (sidebarTab == 4) {
+                    journalSelectedHref ?: writeCalHref ?: "local://default"
+                } else {
+                    writeCalHref
+                }
+                
+                val displayCal = calendars.find { it.href == activeCalHref } ?: calendars.firstOrNull()
 
-                val headerName = writeCal?.name ?: stringResource(R.string.local_label)
-                val headerColor = writeCal?.color?.let { parseHexColor(it) } ?: MaterialTheme.colorScheme.onSurface
+                val headerName = displayCal?.name ?: stringResource(R.string.local_label)
+                val headerColor = displayCal?.color?.let { parseHexColor(it) } ?: MaterialTheme.colorScheme.onSurface
 
                 val displayName = when {
+                    sidebarTab == 4 -> headerName
                     isAll -> "$headerName etc."
                     isCustom -> headerName // Dots appended below
                     else -> currentTab?.name ?: headerName
@@ -2025,7 +2031,7 @@ fun HomeScreen(
                         modifier = Modifier.clickable {
                             scope.launch {
                                 val currentTabId = tabs.getOrNull(pagerState.currentPage)?.id
-                                val targetWriteHref = writeCal?.href ?: localDefaultCalHref
+                                val targetWriteHref = displayCal?.href ?: localDefaultCalHref
                                 val writeCalIdx = tabs.indexOfFirst { it.id == targetWriteHref }
 
                                 if (currentTabId == targetWriteHref) {
@@ -2053,9 +2059,9 @@ fun HomeScreen(
                         Text(text = displayName, maxLines = 1, overflow = TextOverflow.Ellipsis, color = headerColor)
 
                         // Render the colored +++ for Custom tab
-                        if (isCustom && currentTab != null) {
+                        if (isCustom && currentTab != null && sidebarTab != 4) {
                             val otherVisible =
-                                calendars.filter { it.href in currentTab.hrefs && it.href != writeCal?.href }
+                                calendars.filter { it.href in currentTab.hrefs && it.href != writeCalHref }
                             if (otherVisible.isNotEmpty()) {
                                 if (otherVisible.size <= maxVisiblePlus) {
                                     otherVisible.forEach { cal ->

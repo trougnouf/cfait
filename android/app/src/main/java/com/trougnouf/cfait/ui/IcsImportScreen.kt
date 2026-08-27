@@ -447,14 +447,20 @@ fun JournalMainView(
                     onDateChange(sdf.format(c.time))
                 }) { NfIcon(NfIcons.ARROW_LEFT) }
 
+                var dateTextSize by remember(journalDateStr) { mutableStateOf(18.sp) }
                 Text(
                     journalDateStr, 
                     fontWeight = FontWeight.Bold, 
-                    fontSize = 18.sp, 
+                    fontSize = dateTextSize, 
                     modifier = Modifier.weight(1f), 
                     textAlign = TextAlign.Center,
                     maxLines = 1,
-                    softWrap = false
+                    softWrap = false,
+                    onTextLayout = { textLayoutResult ->
+                        if (textLayoutResult.didOverflowWidth) {
+                            dateTextSize *= 0.95f
+                        }
+                    }
                 )
 
                 IconButton(onClick = {

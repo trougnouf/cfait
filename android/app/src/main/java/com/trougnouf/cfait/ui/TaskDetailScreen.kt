@@ -246,7 +246,18 @@ fun TaskDetailScreen(
             TopAppBar(
                 title = { 
                     if (task != null && task!!.isJournal && task!!.summary.matches(Regex("""^\\d{4}-\\d{2}-\\d{2}$"""))) {
-                        Text(task!!.summary)
+                        var dateTextSize by remember(task!!.summary) { mutableStateOf(22.sp) }
+                        Text(
+                            text = task!!.summary,
+                            fontSize = dateTextSize,
+                            maxLines = 1,
+                            softWrap = false,
+                            onTextLayout = { textLayoutResult ->
+                                if (textLayoutResult.didOverflowWidth) {
+                                    dateTextSize *= 0.95f
+                                }
+                            }
+                        )
                     } else {
                         Text(stringResource(R.string.edit_task_title))
                     }
@@ -387,11 +398,19 @@ fun TaskDetailScreen(
                     modifier = Modifier.padding(start = 4.dp, bottom = 16.dp),
                 )
             } else {
+                var dateTextSize by remember(task!!.summary) { mutableStateOf(28.sp) }
                 Text(
                     text = task!!.summary,
-                    style = MaterialTheme.typography.headlineMedium,
+                    fontSize = dateTextSize,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 16.dp)
+                    modifier = Modifier.padding(bottom = 16.dp),
+                    maxLines = 1,
+                    softWrap = false,
+                    onTextLayout = { textLayoutResult ->
+                        if (textLayoutResult.didOverflowWidth) {
+                            dateTextSize *= 0.95f
+                        }
+                    }
                 )
             }
 
