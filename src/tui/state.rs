@@ -125,6 +125,7 @@ pub struct AppState {
     // Cached sidebar values (derived from the last filter result)
     pub cached_categories: Vec<crate::store::AggregateItem>,
     pub cached_locations: Vec<crate::store::AggregateItem>,
+    pub cached_journal_pages: Vec<crate::store::JournalPageItem>,
 
     pub urgent_days: u32,
     pub urgent_prio: u8,
@@ -188,7 +189,6 @@ pub struct AppState {
     pub journal_date: chrono::NaiveDate,
     pub first_day_of_week: crate::config::FirstDayOfWeek,
     pub journal_editing_uid: Option<String>,
-    pub cached_journal_pages: Vec<(String, String, usize)>,
     pub goals: HashMap<String, crate::config::Goal>,
     pub cached_goals_progress: HashMap<String, (u32, Vec<f32>)>,
     pub cached_task_goals: Vec<(String, String, crate::config::Goal, u32, Vec<f32>)>,
@@ -271,6 +271,7 @@ impl AppState {
             // Initialize sidebar caches as empty; they will be populated by refresh_filtered_view()
             cached_categories: Vec::new(),
             cached_locations: Vec::new(),
+            cached_journal_pages: Vec::new(),
             urgent_days: 1,
             urgent_prio: 1,
             default_priority: 5,
@@ -326,7 +327,6 @@ impl AppState {
             journal_date: chrono::Local::now().date_naive(),
             first_day_of_week: config.first_day_of_week,
             journal_editing_uid: None,
-            cached_journal_pages: Vec::new(),
             goals: config.goals,
             cached_goals_progress: HashMap::new(),
             cached_task_goals: Vec::new(),
@@ -451,6 +451,7 @@ impl AppState {
         self.tasks = filter_res.items;
         self.cached_categories = filter_res.categories;
         self.cached_locations = filter_res.locations;
+        self.cached_journal_pages = filter_res.journal_pages;
 
         let len = self.tasks.len();
         if len == 0 {
@@ -509,63 +510,6 @@ impl AppState {
         }
         task_goals.sort_by(|a, b| a.1.cmp(&b.1));
         self.cached_task_goals = task_goals;
-
-        let mut pages = Vec::new();
-        for (href, map) in self.store.calendars.iter() {
-            if effective_hidden.contains(href)
-                || href == crate::storage::LOCAL_TRASH_HREF
-                || href == "local://recovery"
-            {
-                continue;
-            }
-            for t in map.values() {
-                if t.is_journal && t.dtstart.is_none() {
-                    pages.push(t);
-                }
-            }
-        }
-        pages.sort_by(|a, b| a.summary.cmp(&b.summary));
-
-        let mut children_map: std::collections::HashMap<String, Vec<&crate::model::Task>> =
-            std::collections::HashMap::new();
-        let mut roots = Vec::new();
-        let page_uids: std::collections::HashSet<String> =
-            pages.iter().map(|p| p.uid.clone()).collect();
-
-        for p in &pages {
-            if let Some(parent) = &p.parent_uid
-                && page_uids.contains(parent)
-            {
-                children_map.entry(parent.clone()).or_default().push(p);
-                continue;
-            }
-            roots.push(p);
-        }
-
-        let mut flat_pages = Vec::new();
-        fn flatten_pages(
-            node: &crate::model::Task,
-            children_map: &std::collections::HashMap<String, Vec<&crate::model::Task>>,
-            depth: usize,
-            out: &mut Vec<(String, String, usize)>,
-        ) {
-            let title = if node.summary.is_empty() {
-                rust_i18n::t!("untitled_page", default = "Untitled page").to_string()
-            } else {
-                node.summary.clone()
-            };
-            out.push((node.uid.clone(), title, depth));
-            if let Some(children) = children_map.get(&node.uid) {
-                for child in children {
-                    flatten_pages(child, children_map, depth + 1, out);
-                }
-            }
-        }
-
-        for root in roots {
-            flatten_pages(root, &children_map, 0, &mut flat_pages);
-        }
-        self.cached_journal_pages = flat_pages;
     }
 
     pub fn get_selected_task(&self) -> Option<&Task> {
@@ -751,10 +695,10 @@ impl AppState {
 
                 if self.sidebar_mode == SidebarMode::Journal
                     && let Some(page) = self.cached_journal_pages.get(i)
+                    && page.is_task
                 {
-                    let uid = page.0.clone();
-                    self.journal_editing_uid = Some(uid.clone());
-                    if let Some(task) = self.store.get_task_ref(&uid) {
+                    self.journal_editing_uid = Some(page.key.clone());
+                    if let Some(task) = self.store.get_task_ref(&page.key) {
                         self.active_cal_href = Some(task.calendar_href.clone());
                     }
                 }
@@ -803,10 +747,10 @@ impl AppState {
 
                 if self.sidebar_mode == SidebarMode::Journal
                     && let Some(page) = self.cached_journal_pages.get(i)
+                    && page.is_task
                 {
-                    let uid = page.0.clone();
-                    self.journal_editing_uid = Some(uid.clone());
-                    if let Some(task) = self.store.get_task_ref(&uid) {
+                    self.journal_editing_uid = Some(page.key.clone());
+                    if let Some(task) = self.store.get_task_ref(&page.key) {
                         self.active_cal_href = Some(task.calendar_href.clone());
                     }
                 }
@@ -832,8 +776,9 @@ impl AppState {
 
                     if self.sidebar_mode == SidebarMode::Journal
                         && let Some(page) = self.cached_journal_pages.get(i)
+                        && page.is_task
                     {
-                        let uid = page.0.clone();
+                        let uid = page.key.clone();
                         self.journal_editing_uid = Some(uid.clone());
                         if let Some(task) = self.store.get_task_ref(&uid) {
                             self.active_cal_href = Some(task.calendar_href.clone());
@@ -861,8 +806,9 @@ impl AppState {
 
                     if self.sidebar_mode == SidebarMode::Journal
                         && let Some(page) = self.cached_journal_pages.get(i)
+                        && page.is_task
                     {
-                        let uid = page.0.clone();
+                        let uid = page.key.clone();
                         self.journal_editing_uid = Some(uid.clone());
                         if let Some(task) = self.store.get_task_ref(&uid) {
                             self.active_cal_href = Some(task.calendar_href.clone());

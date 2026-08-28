@@ -55,6 +55,7 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
     app.tasks = filter_res.items;
     app.cached_categories = filter_res.categories;
     app.cached_locations = filter_res.locations;
+    app.cached_journal_pages = filter_res.journal_pages;
 
     for item in &mut app.tasks {
         if let crate::store::TaskListItem::Task(task) = item {

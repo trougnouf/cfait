@@ -1129,21 +1129,40 @@ pub fn view_sidebar_journal(app: &GuiApp) -> Element<'_, Message> {
         let is_selected = date == sel_date;
         let is_today = date == today;
 
-        let has_journal = app
-            .calendars
-            .iter()
-            .filter(|c| {
-                if c.href.starts_with("local://") {
-                    true
-                } else {
-                    c.supports_vjournal.unwrap_or(false)
-                }
-            })
-            .filter(|c| !app.hidden_calendars.contains(&c.href))
-            .filter(|c| !app.disabled_calendars.contains(&c.href))
-            .filter(|c| c.href != crate::storage::LOCAL_TRASH_HREF)
-            .filter(|c| c.href != "local://recovery")
-            .any(|c| app.store.get_journal_entry(&c.href, date).is_some());
+        let mut journal_cals = Vec::new();
+        for c in &app.calendars {
+            let supports = if c.href.starts_with("local://") {
+                true
+            } else {
+                c.supports_vjournal.unwrap_or(false)
+            };
+
+            if !app.hidden_calendars.contains(&c.href)
+                && !app.disabled_calendars.contains(&c.href)
+                && c.href != crate::storage::LOCAL_TRASH_HREF
+                && c.href != "local://recovery"
+                && supports
+                && app.store.get_journal_entry(&c.href, date).is_some()
+            {
+                journal_cals.push(c);
+            }
+        }
+        let has_journal = !journal_cals.is_empty();
+
+        let day_text_color = if has_journal {
+            if journal_cals.len() == 1 {
+                journal_cals[0]
+                    .color
+                    .as_ref()
+                    .and_then(|h| crate::color_utils::parse_hex_to_floats(h))
+                    .map(|(r, g, b)| Color::from_rgb(r, g, b))
+                    .unwrap_or(Color::from_rgb(0.2, 0.8, 0.2))
+            } else {
+                Color::from_rgb(0.8, 0.2, 0.8) // Magenta
+            }
+        } else {
+            Color::from_rgb(0.5, 0.5, 0.5)
+        };
 
         let day_text = if has_journal && !is_selected && !is_today {
             text(d.to_string()).size(12).font(iced::Font {
@@ -1178,13 +1197,8 @@ pub fn view_sidebar_journal(app: &GuiApp) -> Element<'_, Message> {
                     ..button::Style::default()
                 }
             } else {
-                let text_col = if has_journal {
-                    Color::from_rgb(0.2, 0.8, 0.2)
-                } else {
-                    palette.background.weak.text
-                };
                 button::Style {
-                    text_color: text_col,
+                    text_color: day_text_color,
                     ..button::text(theme, status)
                 }
             }
@@ -1220,12 +1234,6 @@ pub fn view_sidebar_journal(app: &GuiApp) -> Element<'_, Message> {
 
     let mut index_col = column![
         row![
-            text(rust_i18n::t!("wiki_index", default = "Wiki index"))
-                .size(14)
-                .font(iced::Font {
-                    weight: iced::font::Weight::Bold,
-                    ..Default::default()
-                }),
             Space::new().width(Length::Fill),
             tooltip(
                 button(icon::icon(app.create_journal_icon).size(12))
@@ -1241,80 +1249,66 @@ pub fn view_sidebar_journal(app: &GuiApp) -> Element<'_, Message> {
     ]
     .spacing(4);
 
-    let mut pages = Vec::new();
-    for (href, map) in app.store.calendars.iter() {
-        if app.hidden_calendars.contains(href)
-            || app.disabled_calendars.contains(href)
-            || href == crate::storage::LOCAL_TRASH_HREF
-            || href == "local://recovery"
-        {
-            continue;
-        }
-        for t in map.values() {
-            if t.is_journal && t.dtstart.is_none() {
-                pages.push(t);
-            }
-        }
-    }
-    pages.sort_by(|a, b| a.summary.cmp(&b.summary));
+    for page in &app.cached_journal_pages {
+        let display_name = &page.title;
+        let indent = Space::new().width(Length::Fixed(page.depth as f32 * 12.0));
 
-    let mut children_map: std::collections::HashMap<String, Vec<&crate::model::Task>> =
-        std::collections::HashMap::new();
-    let mut roots = Vec::new();
-    let page_uids: std::collections::HashSet<String> =
-        pages.iter().map(|p| p.uid.clone()).collect();
-
-    for p in &pages {
-        if let Some(parent) = &p.parent_uid
-            && page_uids.contains(parent)
-        {
-            children_map.entry(parent.clone()).or_default().push(p);
-            continue;
-        }
-        roots.push(p);
-    }
-
-    fn render_page_tree<'a>(
-        node: &crate::model::Task,
-        children_map: &std::collections::HashMap<String, Vec<&crate::model::Task>>,
-        depth: usize,
-    ) -> Element<'a, Message> {
-        let display_name = if node.summary.is_empty() {
-            rust_i18n::t!("untitled_page", default = "Untitled page").to_string()
+        let icon_char = if page.is_task {
+            icon::JOURNAL
         } else {
-            node.summary.clone()
+            if page.is_expanded {
+                icon::ARROW_EXPAND_DOWN
+            } else {
+                icon::ARROW_EXPAND_UP
+            }
         };
 
-        let indent = Space::new().width(Length::Fixed(depth as f32 * 12.0));
-        let btn = button(
-            row![
-                indent,
-                icon::icon(icon::JOURNAL)
-                    .size(12)
-                    .color(Color::from_rgb(0.5, 0.5, 0.5)),
-                text(display_name).size(13)
-            ]
-            .spacing(6)
-            .align_y(iced::Alignment::Center),
-        )
-        .style(button::text)
-        .padding([4, 4])
-        .width(Length::Fill)
-        .on_press(Message::OpenJournalPage(node.uid.clone()));
-
-        if let Some(children) = children_map.get(&node.uid) {
-            let mut col = column![btn];
-            for child in children {
-                col = col.push(render_page_tree(child, children_map, depth + 1));
-            }
-            col.into()
+        let color = if page.is_task {
+            app.calendars
+                .iter()
+                .find(|c| c.href == page.calendar_href)
+                .and_then(|c| c.color.as_ref())
+                .and_then(|h| crate::color_utils::parse_hex_to_floats(h))
+                .map(|(r, g, b)| Color::from_rgb(r, g, b))
+                .unwrap_or(Color::from_rgb(0.5, 0.5, 0.5))
         } else {
-            btn.into()
-        }
-    }
+            Color::from_rgb(0.7, 0.7, 0.7)
+        };
 
-    for root in roots {
-        index_col = index_col.push(render_page_tree(root, &children_map, 0));
+        let row_content = row![
+            icon::icon(icon_char).size(12).color(color),
+            text(display_name.clone()).size(13)
+        ]
+        .spacing(6)
+        .align_y(iced::Alignment::Center);
+
+        let mut btn = button(row_content)
+            .style(button::text)
+            .padding([4, 4])
+            .width(Length::Fill);
+
+        if page.is_task {
+            btn = btn.on_press(Message::OpenJournalPage(page.key.clone()));
+        } else {
+            btn = btn.on_press(Message::ToggleTagCollapse(page.key.clone()));
+        }
+
+        let mut item_row = row![indent, btn].align_y(iced::Alignment::Center);
+
+        if page.is_task && page.has_children {
+            let expand_icon = if page.is_expanded {
+                icon::ARROW_EXPAND_DOWN
+            } else {
+                icon::ARROW_EXPAND_UP
+            };
+            let expand_btn = button(icon::icon(expand_icon).size(12).color(color))
+                .style(button::text)
+                .padding([4, 4])
+                .on_press(Message::ToggleTreeCollapse(page.key.clone()));
+            item_row = item_row.push(expand_btn);
+        }
+
+        index_col = index_col.push(item_row);
     }
 
     let index_scroll = scrollable(index_col).height(Length::Fill).direction(

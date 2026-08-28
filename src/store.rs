@@ -54,7 +54,7 @@ use crate::config::Config;
 use crate::context::AppContext;
 use crate::journal::Action as JournalAction;
 use crate::model::{AppIntent, DateType, Task, TaskStatus};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Datelike, Utc};
 use fastrand;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -79,7 +79,18 @@ pub struct AggregateItem {
     pub is_expanded: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
+pub struct JournalPageItem {
+    pub key: String,
+    pub title: String,
+    pub depth: usize,
+    pub has_children: bool,
+    pub is_expanded: bool,
+    pub is_task: bool,
+    pub calendar_href: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum DependencyWarning {
     NotFound {
         raw: String,
@@ -130,6 +141,7 @@ pub struct FilterResult {
     pub items: Vec<TaskListItem>,
     pub categories: Vec<AggregateItem>,
     pub locations: Vec<AggregateItem>,
+    pub journal_pages: Vec<JournalPageItem>,
 }
 
 /// Context structure used during hierarchy organization
@@ -3287,6 +3299,258 @@ impl TaskStore {
             results
         };
 
+        // 4.5) Build Journal Pages Tree
+        let mut journal_tasks = Vec::new();
+        for (href, map) in &self.calendars {
+            if options.hidden_calendars.contains(href)
+                || href == crate::storage::LOCAL_TRASH_HREF
+                || href == "local://recovery"
+            {
+                continue;
+            }
+            for t in map.values() {
+                if t.is_journal {
+                    journal_tasks.push(t);
+                }
+            }
+        }
+
+        let mut date_journals = Vec::new();
+        let mut pages = Vec::new();
+        let mut all_journal_uids = HashSet::new();
+
+        for t in journal_tasks {
+            all_journal_uids.insert(t.uid.as_str());
+            if t.dtstart.is_some() {
+                date_journals.push(t);
+            } else {
+                pages.push(t);
+            }
+        }
+
+        let mut journal_children: HashMap<&str, Vec<&Task>> = HashMap::new();
+        let mut root_pages = Vec::new();
+
+        for p in &pages {
+            if let Some(parent) = &p.parent_uid
+                && all_journal_uids.contains(parent.as_str())
+            {
+                journal_children.entry(parent.as_str()).or_default().push(p);
+                continue;
+            }
+            root_pages.push(*p);
+        }
+
+        root_pages.sort_by(|a, b| a.summary.cmp(&b.summary));
+        for list in journal_children.values_mut() {
+            list.sort_by(|a, b| a.summary.cmp(&b.summary));
+        }
+
+        let mut timeline: std::collections::BTreeMap<
+            i32,
+            std::collections::BTreeMap<u32, Vec<&Task>>,
+        > = std::collections::BTreeMap::new();
+        for t in &date_journals {
+            if let Some(dt) = &t.dtstart {
+                let d = dt.to_date_naive();
+                timeline
+                    .entry(d.year())
+                    .or_default()
+                    .entry(d.month())
+                    .or_default()
+                    .push(*t);
+            }
+        }
+        for months in timeline.values_mut() {
+            for tasks in months.values_mut() {
+                tasks.sort_by(|a, b| {
+                    let da = a.dtstart.as_ref().unwrap().to_date_naive();
+                    let db = b.dtstart.as_ref().unwrap().to_date_naive();
+                    da.cmp(&db)
+                });
+            }
+        }
+
+        let mut journal_pages_out = Vec::new();
+
+        fn flatten_journal<'a>(
+            node: &'a Task,
+            children_map: &HashMap<&'a str, Vec<&'a Task>>,
+            depth: usize,
+            out: &mut Vec<JournalPageItem>,
+            force_expanded: bool,
+        ) {
+            let title = if node.summary.is_empty() {
+                rust_i18n::t!("untitled_page", default = "Untitled page").to_string()
+            } else {
+                node.summary.clone()
+            };
+
+            let has_children = children_map.contains_key(node.uid.as_str());
+            let is_expanded = if force_expanded {
+                true
+            } else {
+                !node.collapsed
+            };
+
+            out.push(JournalPageItem {
+                key: node.uid.clone(),
+                title,
+                depth,
+                has_children,
+                is_expanded,
+                is_task: true,
+                calendar_href: node.calendar_href.clone(),
+            });
+
+            if is_expanded && let Some(children) = children_map.get(node.uid.as_str()) {
+                for child in children {
+                    flatten_journal(child, children_map, depth + 1, out, force_expanded);
+                }
+            }
+        }
+
+        if !timeline.is_empty() {
+            let timeline_key = "j:timeline";
+            let timeline_expanded = options.expanded_tags.contains(timeline_key);
+            journal_pages_out.push(JournalPageItem {
+                key: timeline_key.to_string(),
+                title: rust_i18n::t!("timeline", default = "Timeline").to_string(),
+                depth: 0,
+                has_children: true,
+                is_expanded: timeline_expanded,
+                is_task: false,
+                calendar_href: String::new(),
+            });
+
+            if timeline_expanded {
+                for (year, months) in timeline.iter().rev() {
+                    let year_key = format!("j:y:{}", year);
+                    let year_expanded = options.expanded_tags.contains(&year_key);
+                    journal_pages_out.push(JournalPageItem {
+                        key: year_key.clone(),
+                        title: year.to_string(),
+                        depth: 1,
+                        has_children: true,
+                        is_expanded: year_expanded,
+                        is_task: false,
+                        calendar_href: String::new(),
+                    });
+
+                    if year_expanded {
+                        for (month, tasks) in months.iter().rev() {
+                            let month_name = match month {
+                                1 => rust_i18n::t!("parser_months_jan")
+                                    .split(',')
+                                    .next()
+                                    .unwrap_or("January")
+                                    .to_string(),
+                                2 => rust_i18n::t!("parser_months_feb")
+                                    .split(',')
+                                    .next()
+                                    .unwrap_or("February")
+                                    .to_string(),
+                                3 => rust_i18n::t!("parser_months_mar")
+                                    .split(',')
+                                    .next()
+                                    .unwrap_or("March")
+                                    .to_string(),
+                                4 => rust_i18n::t!("parser_months_apr")
+                                    .split(',')
+                                    .next()
+                                    .unwrap_or("April")
+                                    .to_string(),
+                                5 => rust_i18n::t!("parser_months_may")
+                                    .split(',')
+                                    .next()
+                                    .unwrap_or("May")
+                                    .to_string(),
+                                6 => rust_i18n::t!("parser_months_jun")
+                                    .split(',')
+                                    .next()
+                                    .unwrap_or("June")
+                                    .to_string(),
+                                7 => rust_i18n::t!("parser_months_jul")
+                                    .split(',')
+                                    .next()
+                                    .unwrap_or("July")
+                                    .to_string(),
+                                8 => rust_i18n::t!("parser_months_aug")
+                                    .split(',')
+                                    .next()
+                                    .unwrap_or("August")
+                                    .to_string(),
+                                9 => rust_i18n::t!("parser_months_sep")
+                                    .split(',')
+                                    .next()
+                                    .unwrap_or("September")
+                                    .to_string(),
+                                10 => rust_i18n::t!("parser_months_oct")
+                                    .split(',')
+                                    .next()
+                                    .unwrap_or("October")
+                                    .to_string(),
+                                11 => rust_i18n::t!("parser_months_nov")
+                                    .split(',')
+                                    .next()
+                                    .unwrap_or("November")
+                                    .to_string(),
+                                12 => rust_i18n::t!("parser_months_dec")
+                                    .split(',')
+                                    .next()
+                                    .unwrap_or("December")
+                                    .to_string(),
+                                _ => "Unknown".to_string(),
+                            };
+                            let month_key = format!("j:m:{}:{}", year, month);
+                            let month_expanded = options.expanded_tags.contains(&month_key);
+                            journal_pages_out.push(JournalPageItem {
+                                key: month_key.clone(),
+                                title: month_name.to_string(),
+                                depth: 2,
+                                has_children: true,
+                                is_expanded: month_expanded,
+                                is_task: false,
+                                calendar_href: String::new(),
+                            });
+
+                            if month_expanded {
+                                for t in tasks.iter().rev() {
+                                    flatten_journal(
+                                        t,
+                                        &journal_children,
+                                        3,
+                                        &mut journal_pages_out,
+                                        false,
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if !root_pages.is_empty() {
+            let pages_key = "j:pages";
+            let pages_expanded = options.expanded_tags.contains(pages_key) || true;
+            journal_pages_out.push(JournalPageItem {
+                key: pages_key.to_string(),
+                title: rust_i18n::t!("wiki_index", default = "Wiki index").to_string(),
+                depth: 0,
+                has_children: true,
+                is_expanded: pages_expanded,
+                is_task: false,
+                calendar_href: String::new(),
+            });
+
+            if pages_expanded {
+                for p in &root_pages {
+                    flatten_journal(p, &journal_children, 1, &mut journal_pages_out, true);
+                }
+            }
+        }
+
         // Convert category maps into sorted vectors for UI
         let categories = build_aggregates(
             cat_active_counts,
@@ -3688,6 +3952,7 @@ impl TaskStore {
             items: organized_items,
             categories: final_categories,
             locations,
+            journal_pages: journal_pages_out,
         }
     }
 

@@ -2511,8 +2511,9 @@ pub async fn handle_key_event(
                     && state.active_focus == Focus::Sidebar
                     && let Some(idx) = state.cal_state.selected()
                     && let Some(page) = state.cached_journal_pages.get(idx)
+                    && page.is_task
                 {
-                    let uid = page.0.clone();
+                    let uid = page.key.clone();
                     let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                     let intent = AppIntent::DeleteTaskTree { uid: uid.clone() };
                     let actions = state.apply_task_intent(&intent, &config);
@@ -2634,8 +2635,9 @@ pub async fn handle_key_event(
                     && state.sidebar_mode == SidebarMode::Journal
                     && let Some(idx) = state.cal_state.selected()
                     && let Some(page) = state.cached_journal_pages.get(idx)
+                    && page.is_task
                 {
-                    let uid = page.0.clone();
+                    let uid = page.key.clone();
                     let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                     let intent = AppIntent::DeleteTaskTree { uid: uid.clone() };
                     let actions = state.apply_task_intent(&intent, &config);
@@ -3260,6 +3262,38 @@ pub async fn handle_key_event(
                                 }
                             }
                         }
+                        SidebarMode::Journal => {
+                            if let Some(idx) = state.cal_state.selected()
+                                && let Some(page) = state.cached_journal_pages.get(idx)
+                            {
+                                if page.is_task {
+                                    let config =
+                                        Config::load(state.ctx.as_ref()).unwrap_or_default();
+                                    let intent = AppIntent::ToggleTreeCollapse {
+                                        uid: page.key.clone(),
+                                    };
+                                    let actions = state.apply_task_intent(&intent, &config);
+                                    state.refresh_filtered_view();
+                                    if !actions.is_empty() {
+                                        let tx = action_tx.clone();
+                                        tokio::spawn(async move {
+                                            let _ = tx.send(Action::PersistBatch(actions)).await;
+                                        });
+                                    }
+                                } else {
+                                    let key = page.key.clone();
+                                    if !state.expanded_tags.remove(&key) {
+                                        state.expanded_tags.insert(key);
+                                    }
+                                    state.refresh_filtered_view();
+                                    if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
+                                        cfg.expanded_tags =
+                                            state.expanded_tags.iter().cloned().collect();
+                                        let _ = cfg.save(state.ctx.as_ref());
+                                    }
+                                }
+                            }
+                        }
                         _ => {}
                     }
                 }
@@ -3561,7 +3595,38 @@ pub async fn handle_key_event(
                                 }
                             }
                         }
-                        SidebarMode::Journal => {}
+                        SidebarMode::Journal => {
+                            if let Some(idx) = state.cal_state.selected()
+                                && let Some(page) = state.cached_journal_pages.get(idx)
+                            {
+                                if page.is_task {
+                                    let config =
+                                        Config::load(state.ctx.as_ref()).unwrap_or_default();
+                                    let intent = AppIntent::ToggleTreeCollapse {
+                                        uid: page.key.clone(),
+                                    };
+                                    let actions = state.apply_task_intent(&intent, &config);
+                                    state.refresh_filtered_view();
+                                    if !actions.is_empty() {
+                                        let tx = action_tx.clone();
+                                        tokio::spawn(async move {
+                                            let _ = tx.send(Action::PersistBatch(actions)).await;
+                                        });
+                                    }
+                                } else {
+                                    let key = page.key.clone();
+                                    if !state.expanded_tags.remove(&key) {
+                                        state.expanded_tags.insert(key);
+                                    }
+                                    state.refresh_filtered_view();
+                                    if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
+                                        cfg.expanded_tags =
+                                            state.expanded_tags.iter().cloned().collect();
+                                        let _ = cfg.save(state.ctx.as_ref());
+                                    }
+                                }
+                            }
+                        }
                     }
                 } else if state.mode == InputMode::Editing {
                     state.move_cursor_right();
@@ -3739,10 +3804,24 @@ pub async fn handle_key_event(
                             if let Some(idx) = state.cal_state.selected()
                                 && let Some(page) = state.cached_journal_pages.get(idx)
                             {
-                                state.journal_editing_uid = Some(page.0.clone());
-                                state.active_focus = Focus::Main;
-                                state.details_scroll = 0;
-                                state.refresh_filtered_view();
+                                if page.is_task {
+                                    state.journal_editing_uid = Some(page.key.clone());
+                                    state.active_focus = Focus::Main;
+                                    state.details_scroll = 0;
+                                    state.refresh_filtered_view();
+                                } else {
+                                    // toggle expansion
+                                    let key = page.key.clone();
+                                    if !state.expanded_tags.remove(&key) {
+                                        state.expanded_tags.insert(key);
+                                    }
+                                    state.refresh_filtered_view();
+                                    if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
+                                        cfg.expanded_tags =
+                                            state.expanded_tags.iter().cloned().collect();
+                                        let _ = cfg.save(state.ctx.as_ref());
+                                    }
+                                }
                             }
                         }
                     }
@@ -3827,8 +3906,9 @@ pub async fn handle_key_event(
                 {
                     if let Some(idx) = state.cal_state.selected()
                         && let Some(page) = state.cached_journal_pages.get(idx)
+                        && page.is_task
                     {
-                        let uid = page.0.clone();
+                        let uid = page.key.clone();
                         let desc = crate::model::extractor::serialize_task_tree(
                             &state.store,
                             &uid,

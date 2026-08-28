@@ -431,6 +431,10 @@ pub struct MobileJournalPage {
     pub uid: String,
     pub title: String,
     pub depth: u32,
+    pub has_children: bool,
+    pub is_expanded: bool,
+    pub is_task: bool,
+    pub calendar_href: String,
 }
 
 #[derive(uniffi::Record)]
@@ -2687,68 +2691,19 @@ impl CfaitMobile {
             journal_days_in_month: journal_days_vec,
         };
 
-        let mut pages: Vec<&crate::model::Task> = Vec::new();
-        for (href, map) in store.calendars.iter() {
-            if hidden.contains(href)
-                || href == crate::storage::LOCAL_TRASH_HREF
-                || href == "local://recovery"
-            {
-                continue;
-            }
-            for t in map.values() {
-                if t.is_journal && t.dtstart.is_none() {
-                    pages.push(t);
-                }
-            }
-        }
-        pages.sort_by(|a, b| a.summary.cmp(&b.summary));
-
-        let page_uids: std::collections::HashSet<String> =
-            pages.iter().map(|p| p.uid.clone()).collect();
-
-        let mut children_map: std::collections::HashMap<String, Vec<&crate::model::Task>> =
-            std::collections::HashMap::new();
-        let mut roots: Vec<&crate::model::Task> = Vec::new();
-
-        for p in &pages {
-            if let Some(parent) = &p.parent_uid
-                && page_uids.contains(parent)
-            {
-                children_map.entry(parent.clone()).or_default().push(p);
-                continue;
-            }
-            roots.push(p);
-        }
-
-        let mut flat_pages = Vec::new();
-
-        // Helper function to recursively flatten journal pages
-        fn flatten_pages<'a>(
-            node: &'a crate::model::Task,
-            children_map: &'a std::collections::HashMap<String, Vec<&'a crate::model::Task>>,
-            depth: u32,
-            out: &mut Vec<MobileJournalPage>,
-        ) {
-            let title = if node.summary.is_empty() {
-                rust_i18n::t!("untitled_page", default = "Untitled page").to_string()
-            } else {
-                node.summary.clone()
-            };
-            out.push(MobileJournalPage {
-                uid: node.uid.clone(),
-                title,
-                depth,
-            });
-            if let Some(children) = children_map.get(&node.uid) {
-                for child in children {
-                    flatten_pages(child, children_map, depth + 1, out);
-                }
-            }
-        }
-
-        for root in &roots {
-            flatten_pages(root, &children_map, 0, &mut flat_pages);
-        }
+        let journal_pages: Vec<MobileJournalPage> = filtered
+            .journal_pages
+            .into_iter()
+            .map(|p| MobileJournalPage {
+                uid: p.key,
+                title: p.title,
+                depth: p.depth as u32,
+                has_children: p.has_children,
+                is_expanded: p.is_expanded,
+                is_task: p.is_task,
+                calendar_href: p.calendar_href,
+            })
+            .collect();
 
         MobileViewData {
             tasks,
@@ -2757,7 +2712,7 @@ impl CfaitMobile {
             goals: evaluated_goals,
             focused_task_uid,
             journal_context,
-            journal_pages: flat_pages,
+            journal_pages,
         }
     }
 

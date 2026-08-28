@@ -72,6 +72,7 @@ pub struct GuiApp {
     // Cached Sidebar Data (computed once, not in view())
     pub cached_categories: Vec<crate::store::AggregateItem>,
     pub cached_locations: Vec<crate::store::AggregateItem>,
+    pub cached_journal_pages: Vec<crate::store::JournalPageItem>,
 
     // --- Stable ID Cache ---
     // Maps Task UID -> Iced Widget ID. Ensures the View and Update loops use the exact same ID instance.
@@ -453,6 +454,7 @@ impl Default for GuiApp {
 
             cached_categories: Vec::new(),
             cached_locations: Vec::new(),
+            cached_journal_pages: Vec::new(),
 
             task_ids: HashMap::new(),
 

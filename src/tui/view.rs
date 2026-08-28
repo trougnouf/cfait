@@ -637,14 +637,23 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             calendar_paragraph = Some(Paragraph::new(cal_lines));
 
             for page in &state.cached_journal_pages {
-                let indent = "  ".repeat(page.2);
-                let prefix = if Some(&page.0) == state.journal_editing_uid.as_ref() {
+                let indent = "  ".repeat(page.depth);
+
+                let icon_str = if page.is_task {
+                    "📔"
+                } else {
+                    if page.is_expanded { "▼" } else { "▶" }
+                };
+
+                let prefix = if Some(&page.key) == state.journal_editing_uid.as_ref() {
                     "> "
                 } else {
                     "  "
                 };
-                let span = Span::raw(format!("{}{}📔 {}", prefix, indent, page.1));
-                let style = if Some(&page.0) == state.journal_editing_uid.as_ref() {
+
+                let span = Span::raw(format!("{}{} {} {}", prefix, indent, icon_str, page.title));
+
+                let style = if Some(&page.key) == state.journal_editing_uid.as_ref() {
                     Style::default()
                         .fg(if is_dark_theme {
                             Color::Yellow
@@ -652,8 +661,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                             Color::Rgb(200, 100, 0)
                         })
                         .add_modifier(Modifier::BOLD)
-                } else {
+                } else if page.is_task {
                     Style::default().fg(Color::Cyan)
+                } else {
+                    Style::default().fg(Color::DarkGray)
                 };
                 items.push(ListItem::new(Line::from(span)).style(style));
             }
