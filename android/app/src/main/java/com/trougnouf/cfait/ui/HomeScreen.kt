@@ -1720,11 +1720,15 @@ fun HomeScreen(
                                                     val day = cellIdx - startOffset + 1
                                                     val isSelected = day == currentDay
                                                     val isToday = day == todayDay
-                                                    val hasEntry = ctxData.journalDaysInMonth.contains(day.toUInt())
+                                                    val dayData = ctxData.journalDaysInMonth.find { it.day.toUInt() == day.toUInt() }
+                                                    val hasEntry = dayData != null
 
                                                     val bgColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
                                                     val contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary 
-                                                                       else if (hasEntry) Color(0xFF4CAF50) 
+                                                                       else if (hasEntry) {
+                                                                           if (dayData!!.colors.size == 1) com.trougnouf.cfait.ui.parseHexColor(dayData.colors[0])
+                                                                           else Color(0xFFE91E63)
+                                                                       }
                                                                        else if (isToday) MaterialTheme.colorScheme.primary 
                                                                        else MaterialTheme.colorScheme.onSurface
 
@@ -1833,19 +1837,56 @@ fun HomeScreen(
 
                             items(viewData.journalPages) { page ->
                                 val indent = (page.depth.toInt() * 12).dp
+                                val isTask = page.isTask
+                
+                                val iconChar = if (isTask) {
+                                    NfIcons.JOURNAL
+                                } else {
+                                    if (page.isExpanded) NfIcons.ARROW_EXPAND_DOWN else NfIcons.ARROW_EXPAND_UP
+                                }
+                
+                                val color = if (isTask) {
+                                    calendars.find { it.href == page.calendarHref }?.color?.let { com.trougnouf.cfait.ui.parseHexColor(it) } ?: Color.Gray
+                                } else {
+                                    Color.Gray
+                                }
+                
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable {
-                                            journalWikiUid = page.uid
-                                            journalWikiTitle = page.title
+                                            if (isTask) {
+                                                journalWikiUid = page.uid
+                                                journalWikiTitle = page.title
+                                            } else {
+                                                scope.launch {
+                                                    api.dispatch(com.trougnouf.cfait.core.AppIntent.ToggleTagCollapse(page.uid))
+                                                    onDataChanged()
+                                                }
+                                            }
                                         }
-                                        .padding(start = 8.dp + indent, end = 8.dp, top = 12.dp, bottom = 12.dp),
+                                        .padding(start = 8.dp + indent, end = 8.dp, top = 8.dp, bottom = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    NfIcon(NfIcons.JOURNAL, 14.sp, Color.Gray)
+                                    NfIcon(iconChar, 14.sp, color)
                                     Spacer(Modifier.width(8.dp))
                                     Text(page.title, fontSize = 14.sp)
+                                    
+                                    if (isTask && page.hasChildren) {
+                                        Spacer(Modifier.weight(1f))
+                                        val expandIcon = if (page.isExpanded) NfIcons.ARROW_EXPAND_DOWN else NfIcons.ARROW_EXPAND_UP
+                                        IconButton(
+                                            onClick = {
+                                                scope.launch {
+                                                    api.dispatch(com.trougnouf.cfait.core.AppIntent.ToggleTreeCollapse(page.uid))
+                                                    onDataChanged()
+                                                }
+                                            },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            NfIcon(expandIcon, 14.sp, color)
+                                        }
+                                    }
                                 }
                             }
                         }

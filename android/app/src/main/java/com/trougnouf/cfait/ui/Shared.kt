@@ -418,6 +418,8 @@ object NfIcons {
     val EDIT = get(0xf040)
     val ARROW_UP = get(0xf062)
     val ARROW_DOWN = get(0xf063)
+    val ARROW_EXPAND_DOWN = get(0xf0796)
+    val ARROW_EXPAND_UP = get(0xf0799)
     val HAND_STOP = get(0xf256)
     val FOCUS_FIELD = get(0xf0f4f)
     val LIST_CHECK = get(0xf0ae)

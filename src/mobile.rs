@@ -415,6 +415,12 @@ pub struct MobileLocation {
 }
 
 #[derive(uniffi::Record)]
+pub struct MobileJournalDay {
+    pub day: u32,
+    pub colors: Vec<String>,
+}
+
+#[derive(uniffi::Record)]
 pub struct MobileDayContext {
     pub date: String,
     pub total_tracked_mins: u32,
@@ -423,7 +429,7 @@ pub struct MobileDayContext {
     pub ongoing_tasks: Vec<MobileRelatedTask>,
     pub session_tasks: Vec<MobileRelatedTask>,
     pub completed_tasks: Vec<MobileRelatedTask>,
-    pub journal_days_in_month: Vec<u32>,
+    pub journal_days_in_month: Vec<MobileJournalDay>,
 }
 
 #[derive(uniffi::Record)]
@@ -2648,27 +2654,41 @@ impl CfaitMobile {
         let day_ctx = store.get_day_context(selected_journal_date, &visible_cals_set);
 
         use chrono::Datelike;
-        let mut journal_days_in_month = std::collections::HashSet::new();
+        let mut journal_days_in_month: HashMap<u32, Vec<String>> = HashMap::new();
         let target_month = selected_journal_date.month();
         let target_year = selected_journal_date.year();
+        let all_cals = self.get_calendars();
 
         for (href, map) in store.calendars.iter() {
             if !visible_cals_set.contains(href) {
                 continue;
             }
+            let col_color = all_cals
+                .iter()
+                .find(|c| c.href == *href)
+                .and_then(|c| c.color.clone())
+                .unwrap_or_else(|| "#4CAF50".to_string());
+
             for t in map.values() {
                 if t.is_journal
                     && let Some(dt) = &t.dtstart
                 {
                     let d = dt.to_date_naive();
                     if d.year() == target_year && d.month() == target_month {
-                        journal_days_in_month.insert(d.day());
+                        journal_days_in_month.entry(d.day()).or_default().push(col_color.clone());
                     }
                 }
             }
         }
-        let mut journal_days_vec: Vec<u32> = journal_days_in_month.into_iter().collect();
-        journal_days_vec.sort();
+        let mut journal_days_vec: Vec<MobileJournalDay> = journal_days_in_month
+            .into_iter()
+            .map(|(day, mut colors)| {
+                colors.sort();
+                colors.dedup();
+                MobileJournalDay { day, colors }
+            })
+            .collect();
+        journal_days_vec.sort_by_key(|d| d.day);
 
         let map_related = |tasks: Vec<crate::model::Task>| -> Vec<MobileRelatedTask> {
             tasks

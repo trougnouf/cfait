@@ -4967,7 +4967,7 @@ data class MobileDayContext(
     var `ongoingTasks`: List<MobileRelatedTask>,
     var `sessionTasks`: List<MobileRelatedTask>,
     var `completedTasks`: List<MobileRelatedTask>,
-    var `journalDaysInMonth`: List<kotlin.UInt>,
+    var `journalDaysInMonth`: List<MobileJournalDay>,
 ) {
     companion object
 }
@@ -4985,7 +4985,7 @@ public object FfiConverterTypeMobileDayContext : FfiConverterRustBuffer<MobileDa
             FfiConverterSequenceTypeMobileRelatedTask.read(buf),
             FfiConverterSequenceTypeMobileRelatedTask.read(buf),
             FfiConverterSequenceTypeMobileRelatedTask.read(buf),
-            FfiConverterSequenceUInt.read(buf),
+            FfiConverterSequenceTypeMobileJournalDay.read(buf),
         )
 
     override fun allocationSize(value: MobileDayContext) =
@@ -4997,7 +4997,7 @@ public object FfiConverterTypeMobileDayContext : FfiConverterRustBuffer<MobileDa
                 FfiConverterSequenceTypeMobileRelatedTask.allocationSize(value.`ongoingTasks`) +
                 FfiConverterSequenceTypeMobileRelatedTask.allocationSize(value.`sessionTasks`) +
                 FfiConverterSequenceTypeMobileRelatedTask.allocationSize(value.`completedTasks`) +
-                FfiConverterSequenceUInt.allocationSize(value.`journalDaysInMonth`)
+                FfiConverterSequenceTypeMobileJournalDay.allocationSize(value.`journalDaysInMonth`)
         )
 
     override fun write(
@@ -5011,7 +5011,7 @@ public object FfiConverterTypeMobileDayContext : FfiConverterRustBuffer<MobileDa
         FfiConverterSequenceTypeMobileRelatedTask.write(value.`ongoingTasks`, buf)
         FfiConverterSequenceTypeMobileRelatedTask.write(value.`sessionTasks`, buf)
         FfiConverterSequenceTypeMobileRelatedTask.write(value.`completedTasks`, buf)
-        FfiConverterSequenceUInt.write(value.`journalDaysInMonth`, buf)
+        FfiConverterSequenceTypeMobileJournalDay.write(value.`journalDaysInMonth`, buf)
     }
 }
 
@@ -5295,10 +5295,46 @@ public object FfiConverterTypeMobileInterval : FfiConverterRustBuffer<MobileInte
     }
 }
 
+data class MobileJournalDay(
+    var `day`: kotlin.UInt,
+    var `colors`: List<kotlin.String>,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMobileJournalDay : FfiConverterRustBuffer<MobileJournalDay> {
+    override fun read(buf: ByteBuffer): MobileJournalDay =
+        MobileJournalDay(
+            FfiConverterUInt.read(buf),
+            FfiConverterSequenceString.read(buf),
+        )
+
+    override fun allocationSize(value: MobileJournalDay) =
+        (
+            FfiConverterUInt.allocationSize(value.`day`) +
+                FfiConverterSequenceString.allocationSize(value.`colors`)
+        )
+
+    override fun write(
+        value: MobileJournalDay,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterUInt.write(value.`day`, buf)
+        FfiConverterSequenceString.write(value.`colors`, buf)
+    }
+}
+
 data class MobileJournalPage(
     var `uid`: kotlin.String,
     var `title`: kotlin.String,
     var `depth`: kotlin.UInt,
+    var `hasChildren`: kotlin.Boolean,
+    var `isExpanded`: kotlin.Boolean,
+    var `isTask`: kotlin.Boolean,
+    var `calendarHref`: kotlin.String,
 ) {
     companion object
 }
@@ -5312,13 +5348,21 @@ public object FfiConverterTypeMobileJournalPage : FfiConverterRustBuffer<MobileJ
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterUInt.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterString.read(buf),
         )
 
     override fun allocationSize(value: MobileJournalPage) =
         (
             FfiConverterString.allocationSize(value.`uid`) +
                 FfiConverterString.allocationSize(value.`title`) +
-                FfiConverterUInt.allocationSize(value.`depth`)
+                FfiConverterUInt.allocationSize(value.`depth`) +
+                FfiConverterBoolean.allocationSize(value.`hasChildren`) +
+                FfiConverterBoolean.allocationSize(value.`isExpanded`) +
+                FfiConverterBoolean.allocationSize(value.`isTask`) +
+                FfiConverterString.allocationSize(value.`calendarHref`)
         )
 
     override fun write(
@@ -5328,6 +5372,10 @@ public object FfiConverterTypeMobileJournalPage : FfiConverterRustBuffer<MobileJ
         FfiConverterString.write(value.`uid`, buf)
         FfiConverterString.write(value.`title`, buf)
         FfiConverterUInt.write(value.`depth`, buf)
+        FfiConverterBoolean.write(value.`hasChildren`, buf)
+        FfiConverterBoolean.write(value.`isExpanded`, buf)
+        FfiConverterBoolean.write(value.`isTask`, buf)
+        FfiConverterString.write(value.`calendarHref`, buf)
     }
 }
 
@@ -7629,34 +7677,6 @@ public object FfiConverterOptionalTypeMobileTask : FfiConverterRustBuffer<Mobile
 /**
  * @suppress
  */
-public object FfiConverterSequenceUInt : FfiConverterRustBuffer<List<kotlin.UInt>> {
-    override fun read(buf: ByteBuffer): List<kotlin.UInt> {
-        val len = buf.getInt()
-        return List<kotlin.UInt>(len) {
-            FfiConverterUInt.read(buf)
-        }
-    }
-
-    override fun allocationSize(value: List<kotlin.UInt>): ULong {
-        val sizeForLength = 4UL
-        val sizeForItems = value.map { FfiConverterUInt.allocationSize(it) }.sum()
-        return sizeForLength + sizeForItems
-    }
-
-    override fun write(
-        value: List<kotlin.UInt>,
-        buf: ByteBuffer,
-    ) {
-        buf.putInt(value.size)
-        value.iterator().forEach {
-            FfiConverterUInt.write(it, buf)
-        }
-    }
-}
-
-/**
- * @suppress
- */
 public object FfiConverterSequenceFloat : FfiConverterRustBuffer<List<kotlin.Float>> {
     override fun read(buf: ByteBuffer): List<kotlin.Float> {
         val len = buf.getInt()
@@ -7874,6 +7894,34 @@ public object FfiConverterSequenceTypeMobileHelpSection : FfiConverterRustBuffer
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeMobileHelpSection.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeMobileJournalDay : FfiConverterRustBuffer<List<MobileJournalDay>> {
+    override fun read(buf: ByteBuffer): List<MobileJournalDay> {
+        val len = buf.getInt()
+        return List<MobileJournalDay>(len) {
+            FfiConverterTypeMobileJournalDay.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<MobileJournalDay>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeMobileJournalDay.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<MobileJournalDay>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeMobileJournalDay.write(it, buf)
         }
     }
 }

@@ -3410,6 +3410,26 @@ impl TaskStore {
             }
         }
 
+        if !root_pages.is_empty() {
+            let pages_key = "j:pages";
+            let pages_expanded = options.expanded_tags.contains(pages_key);
+            journal_pages_out.push(JournalPageItem {
+                key: pages_key.to_string(),
+                title: rust_i18n::t!("wiki_index", default = "Wiki index").to_string(),
+                depth: 0,
+                has_children: true,
+                is_expanded: pages_expanded,
+                is_task: false,
+                calendar_href: String::new(),
+            });
+
+            if pages_expanded {
+                for p in &root_pages {
+                    flatten_journal(p, &journal_children, 1, &mut journal_pages_out, true);
+                }
+            }
+        }
+
         if !timeline.is_empty() {
             let timeline_key = "j:timeline";
             let timeline_expanded = options.expanded_tags.contains(timeline_key);
@@ -3527,26 +3547,6 @@ impl TaskStore {
                             }
                         }
                     }
-                }
-            }
-        }
-
-        if !root_pages.is_empty() {
-            let pages_key = "j:pages";
-            let pages_expanded = options.expanded_tags.contains(pages_key);
-            journal_pages_out.push(JournalPageItem {
-                key: pages_key.to_string(),
-                title: rust_i18n::t!("wiki_index", default = "Wiki index").to_string(),
-                depth: 0,
-                has_children: true,
-                is_expanded: pages_expanded,
-                is_task: false,
-                calendar_href: String::new(),
-            });
-
-            if pages_expanded {
-                for p in &root_pages {
-                    flatten_journal(p, &journal_children, 1, &mut journal_pages_out, true);
                 }
             }
         }
