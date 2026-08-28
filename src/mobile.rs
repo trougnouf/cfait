@@ -2448,6 +2448,8 @@ impl CfaitMobile {
         let selected_journal_date_session = session.selected_journal_date.clone();
         drop(session);
 
+        let all_cals = self.get_calendars();
+
         // Then acquire store lock
         let store = self.controller.store.lock().await;
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
@@ -2657,7 +2659,6 @@ impl CfaitMobile {
         let mut journal_days_in_month: HashMap<u32, Vec<String>> = HashMap::new();
         let target_month = selected_journal_date.month();
         let target_year = selected_journal_date.year();
-        let all_cals = self.get_calendars();
 
         for (href, map) in store.calendars.iter() {
             if !visible_cals_set.contains(href) {

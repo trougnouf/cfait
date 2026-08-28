@@ -1164,6 +1164,14 @@ impl Config {
             config.config_version = 1;
         }
 
+        if config.config_version == 1 {
+            // New default for expanded_tags was added in v2
+            if config.expanded_tags.is_empty() {
+                config.expanded_tags = vec!["j:pages".to_string()];
+            }
+            config.config_version = 2;
+        }
+
         Ok(config)
     }
 
