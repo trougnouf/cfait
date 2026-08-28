@@ -978,20 +978,22 @@ impl TaskStore {
             let uid = if dep.len() == 36 && uuid::Uuid::parse_str(dep).is_ok() {
                 dep.clone()
             } else {
-                let candidates = self.get_dependency_candidates(dep);
-                if candidates.len() == 1 {
-                    candidates[0].0.clone()
-                } else if candidates.len() > 1 {
-                    warnings.push(DependencyWarning::Ambiguous {
-                        raw: dep.clone(),
-                        source_task_uid: task.uid.clone(),
-                        relation_type: "dep".to_string(),
-                        candidates,
-                    });
-                    dep.clone()
-                } else {
-                    warnings.push(DependencyWarning::NotFound { raw: dep.clone() });
-                    dep.clone()
+                match self.resolve_dependency_ref(dep) {
+                    Ok(resolved_uid) => resolved_uid,
+                    Err(_) => {
+                        let candidates = self.get_dependency_candidates(dep);
+                        if candidates.len() > 1 {
+                            warnings.push(DependencyWarning::Ambiguous {
+                                raw: dep.clone(),
+                                source_task_uid: task.uid.clone(),
+                                relation_type: "dep".to_string(),
+                                candidates,
+                            });
+                        } else {
+                            warnings.push(DependencyWarning::NotFound { raw: dep.clone() });
+                        }
+                        dep.clone()
+                    }
                 }
             };
 
@@ -1014,20 +1016,22 @@ impl TaskStore {
             let uid = if rel.len() == 36 && uuid::Uuid::parse_str(rel).is_ok() {
                 rel.clone()
             } else {
-                let candidates = self.get_dependency_candidates(rel);
-                if candidates.len() == 1 {
-                    candidates[0].0.clone()
-                } else if candidates.len() > 1 {
-                    warnings.push(DependencyWarning::Ambiguous {
-                        raw: rel.clone(),
-                        source_task_uid: task.uid.clone(),
-                        relation_type: "rel".to_string(),
-                        candidates,
-                    });
-                    rel.clone()
-                } else {
-                    warnings.push(DependencyWarning::NotFound { raw: rel.clone() });
-                    rel.clone()
+                match self.resolve_dependency_ref(rel) {
+                    Ok(resolved_uid) => resolved_uid,
+                    Err(_) => {
+                        let candidates = self.get_dependency_candidates(rel);
+                        if candidates.len() > 1 {
+                            warnings.push(DependencyWarning::Ambiguous {
+                                raw: rel.clone(),
+                                source_task_uid: task.uid.clone(),
+                                relation_type: "rel".to_string(),
+                                candidates,
+                            });
+                        } else {
+                            warnings.push(DependencyWarning::NotFound { raw: rel.clone() });
+                        }
+                        rel.clone()
+                    }
                 }
             };
 
