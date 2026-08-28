@@ -288,6 +288,7 @@ pub enum Message {
 
     OpenJournalPage(String),
     CreateJournalPage,
+    CreateJournalSubPage(String),
     JournalTitleInputChanged(String),
 
     // --- Context Menu ---

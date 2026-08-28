@@ -2830,6 +2830,16 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
             )
             .style(crate::gui::view::tooltip_style);
 
+            let create_subpage_btn = tooltip(
+                iced::widget::button(icon::icon(icon::CREATE_CHILD).size(14))
+                    .style(iced::widget::button::secondary)
+                    .padding(8)
+                    .on_press(Message::CreateJournalSubPage(uid.clone())),
+                text(rust_i18n::t!("create_subtask")).size(12),
+                tooltip::Position::Bottom,
+            )
+            .style(crate::gui::view::tooltip_style);
+
             if app.journal_editing_uid.is_some() {
                 row![
                     iced::widget::text_input("Page title...", &app.journal_title_input)
@@ -2841,6 +2851,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
                         })
                         .padding(5)
                         .width(Length::Fill),
+                    create_subpage_btn,
                     move_btn,
                     delete_btn,
                     Space::new().width(15),
@@ -2854,6 +2865,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
                         ..Default::default()
                     }),
                     Space::new().width(Length::Fill),
+                    create_subpage_btn,
                     move_btn,
                     delete_btn,
                     Space::new().width(15),
@@ -2895,6 +2907,16 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
             )
             .style(crate::gui::view::tooltip_style);
 
+            let create_subpage_btn = tooltip(
+                iced::widget::button(icon::icon(icon::CREATE_CHILD).size(14))
+                    .style(iced::widget::button::secondary)
+                    .padding(8)
+                    .on_press(Message::CreateJournalSubPage(uid.clone())),
+                text(rust_i18n::t!("create_subtask")).size(12),
+                tooltip::Position::Bottom,
+            )
+            .style(crate::gui::view::tooltip_style);
+
             if app.journal_editing_uid.is_some() {
                 row![
                     iced::widget::text_input("Page title...", &app.journal_title_input)
@@ -2906,6 +2928,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
                         })
                         .padding(5)
                         .width(Length::Fill),
+                    create_subpage_btn,
                     move_btn,
                     delete_btn,
                     Space::new().width(15),
@@ -2919,6 +2942,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
                         ..Default::default()
                     }),
                     Space::new().width(Length::Fill),
+                    create_subpage_btn,
                     move_btn,
                     delete_btn,
                     Space::new().width(15),

@@ -218,6 +218,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 }
                 Err(_) => {
                     // Not found. Proceed with standard wiki behavior: create it.
+                    if app.sidebar_mode == SidebarMode::Journal {
+                        flush_journal_save(app);
+                    }
+
                     let config = crate::config::Config::load(app.ctx.as_ref()).unwrap_or_default();
                     let def_time =
                         chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M")
@@ -256,7 +260,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
                     let uid = new_task.uid.clone();
                     app.store.add_task(new_task.clone());
-                    crate::gui::update::common::refresh_filtered_tasks(app);
 
                     if let Some(tx) = &app.bg_tx {
                         let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(vec![
@@ -264,7 +267,21 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         ]));
                     }
 
-                    handle(app, Message::JumpToTask(uid))
+                    if app.sidebar_mode == SidebarMode::Journal {
+                        app.active_cal_href = Some(target_href);
+                        app.sidebar_mode = SidebarMode::Journal;
+                        app.journal_editing_uid = Some(uid);
+                        app.journal_title_input = title.clone();
+                        app.journal_editor_content =
+                            iced::widget::text_editor::Content::with_text("");
+                        app.editor_maximized = true;
+
+                        refresh_filtered_tasks(app);
+                        Task::none()
+                    } else {
+                        refresh_filtered_tasks(app);
+                        handle(app, Message::JumpToTask(uid))
+                    }
                 }
             }
         }
@@ -1076,8 +1093,44 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
 
             app.active_cal_href = Some(target_href);
+            app.journal_editing_uid = Some(uid);
+            app.journal_editor_content = iced::widget::text_editor::Content::with_text("");
+            app.editor_maximized = true;
+
             refresh_filtered_tasks(app);
-            handle(app, Message::OpenJournalPage(uid))
+            Task::none()
+        }
+        Message::CreateJournalSubPage(parent_uid) => {
+            flush_journal_save(app);
+            let target_href = app
+                .journal_editing_href
+                .clone()
+                .or(app.active_cal_href.clone())
+                .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
+
+            let mut new_page = crate::model::Task::new("", &app.tag_aliases, None);
+            new_page.summary =
+                rust_i18n::t!("untitled_page", default = "Untitled page").to_string();
+            app.journal_title_input = new_page.summary.clone();
+            new_page.is_journal = true;
+            new_page.calendar_href = target_href.clone();
+            new_page.parent_uid = Some(parent_uid);
+            let uid = new_page.uid.clone();
+
+            app.store.add_task(new_page.clone());
+            if let Some(tx) = &app.bg_tx {
+                let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(vec![
+                    crate::journal::Action::Create(new_page),
+                ]));
+            }
+
+            app.active_cal_href = Some(target_href);
+            app.journal_editing_uid = Some(uid);
+            app.journal_editor_content = iced::widget::text_editor::Content::with_text("");
+            app.editor_maximized = true;
+
+            refresh_filtered_tasks(app);
+            Task::none()
         }
         Message::JournalDateInputChanged(s) => {
             app.journal_date_input = s;

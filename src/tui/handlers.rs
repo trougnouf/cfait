@@ -2681,33 +2681,59 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Char('C') => {
-                if state.active_focus == Focus::Main
-                    && let Some(task) = state.get_selected_task()
-                {
-                    // Fix: Define these inside the block to resolve scope errors
-                    let uid = task.uid.clone();
-                    let summary = task.summary.clone();
+                if state.active_focus == Focus::Main {
+                    if state.sidebar_mode == SidebarMode::Journal {
+                        let uid_opt = state.journal_editing_uid.clone().or_else(|| {
+                            let target_href = state
+                                .active_cal_href
+                                .clone()
+                                .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
+                            state
+                                .store
+                                .get_journal_entry(&target_href, state.journal_date)
+                                .map(|t| t.uid.clone())
+                        });
 
-                    let mut initial_input = String::new();
-                    for cat in &task.categories {
-                        // Parity: Use quote_value to handle spaces correctly
-                        initial_input
-                            .push_str(&format!("#{} ", crate::model::parser::quote_value(cat)));
+                        if let Some(uid) = uid_opt {
+                            let summary = state.store.get_summary(&uid).unwrap_or_default();
+                            state.input_buffer = "is:page ".to_string();
+                            state.cursor_position = state.input_buffer.chars().count();
+
+                            state.mode = InputMode::Creating;
+                            state.creating_with_desc = false;
+                            state.new_task_title.clear();
+                            state.creating_child_of = Some(uid);
+                            state.message =
+                                rust_i18n::t!("new_child_of", name = summary).to_string();
+                        }
+                    } else if let Some(task) = state.get_selected_task() {
+                        // Fix: Define these inside the block to resolve scope errors
+                        let uid = task.uid.clone();
+                        let summary = task.summary.clone();
+
+                        let mut initial_input = String::new();
+                        for cat in &task.categories {
+                            // Parity: Use quote_value to handle spaces correctly
+                            initial_input
+                                .push_str(&format!("#{} ", crate::model::parser::quote_value(cat)));
+                        }
+                        // Parity: Add Location inheritance
+                        for loc in &task.locations {
+                            initial_input.push_str(&format!(
+                                "@@{} ",
+                                crate::model::parser::quote_value(loc)
+                            ));
+                        }
+
+                        state.input_buffer = initial_input;
+                        state.cursor_position = state.input_buffer.chars().count();
+
+                        state.mode = InputMode::Creating;
+                        state.creating_with_desc = false;
+                        state.new_task_title.clear();
+                        state.creating_child_of = Some(uid);
+                        state.message = rust_i18n::t!("new_child_of", name = summary).to_string();
                     }
-                    // Parity: Add Location inheritance
-                    for loc in &task.locations {
-                        initial_input
-                            .push_str(&format!("@@{} ", crate::model::parser::quote_value(loc)));
-                    }
-
-                    state.input_buffer = initial_input;
-                    state.cursor_position = state.input_buffer.chars().count();
-
-                    state.mode = InputMode::Creating;
-                    state.creating_with_desc = false;
-                    state.new_task_title.clear();
-                    state.creating_child_of = Some(uid);
-                    state.message = rust_i18n::t!("new_child_of", name = summary).to_string();
                 }
             }
             KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
