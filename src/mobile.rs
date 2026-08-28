@@ -2675,7 +2675,10 @@ impl CfaitMobile {
                 {
                     let d = dt.to_date_naive();
                     if d.year() == target_year && d.month() == target_month {
-                        journal_days_in_month.entry(d.day()).or_default().push(col_color.clone());
+                        journal_days_in_month
+                            .entry(d.day())
+                            .or_default()
+                            .push(col_color.clone());
                     }
                 }
             }
