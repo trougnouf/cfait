@@ -2988,34 +2988,41 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Char('l') => {
-                let data = if let Some(yanked) = &state.yanked_uid {
-                    state
-                        .get_selected_task()
-                        .map(|current| (current.uid.clone(), yanked.clone()))
+                if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
+                    state.journal_date += chrono::Duration::days(1);
+                    state.journal_editing_uid = None;
+                    state.refresh_filtered_view();
                 } else {
-                    None
-                };
-
-                if let Some((curr_uid, yanked_uid)) = data {
-                    if curr_uid == yanked_uid {
-                        state.message = rust_i18n::t!("error_cannot_relate_to_self").to_string();
+                    let data = if let Some(yanked) = &state.yanked_uid {
+                        state
+                            .get_selected_task()
+                            .map(|current| (current.uid.clone(), yanked.clone()))
                     } else {
-                        let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
-                        let intent = AppIntent::AddRelatedTo {
-                            uid: curr_uid.clone(),
-                            related_uid: yanked_uid.clone(),
-                        };
+                        None
+                    };
 
-                        let actions = state.apply_task_intent(&intent, &config);
-                        if !state.yank_lock_active {
-                            state.yanked_uid = None;
-                        }
-                        state.refresh_filtered_view();
-                        if !actions.is_empty() {
-                            let tx = action_tx.clone();
-                            tokio::spawn(async move {
-                                let _ = tx.send(Action::PersistBatch(actions)).await;
-                            });
+                    if let Some((curr_uid, yanked_uid)) = data {
+                        if curr_uid == yanked_uid {
+                            state.message =
+                                rust_i18n::t!("error_cannot_relate_to_self").to_string();
+                        } else {
+                            let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
+                            let intent = AppIntent::AddRelatedTo {
+                                uid: curr_uid.clone(),
+                                related_uid: yanked_uid.clone(),
+                            };
+
+                            let actions = state.apply_task_intent(&intent, &config);
+                            if !state.yank_lock_active {
+                                state.yanked_uid = None;
+                            }
+                            state.refresh_filtered_view();
+                            if !actions.is_empty() {
+                                let tx = action_tx.clone();
+                                tokio::spawn(async move {
+                                    let _ = tx.send(Action::PersistBatch(actions)).await;
+                                });
+                            }
                         }
                     }
                 }
@@ -3469,7 +3476,7 @@ pub async fn handle_key_event(
                     }
                 }
             }
-            KeyCode::Left => {
+            KeyCode::Left | KeyCode::Char('h') => {
                 if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
                     state.journal_date -= chrono::Duration::days(1);
                     state.journal_editing_uid = None;
