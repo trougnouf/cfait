@@ -3017,61 +3017,62 @@ impl TaskStore {
                 || (!ignore_categories && !options.selected_categories.is_empty())
                 || (!ignore_locations && !options.selected_locations.is_empty());
 
-            if !needs_expansion {
-                let uids = base_refs.iter().map(|t| t.uid.clone()).collect();
-                return (base_refs, uids);
-            }
-
-            let mut children_map = HashMap::new();
-            let mut parent_map = HashMap::new();
-
-            for t in &scoped_refs {
-                if let Some(p) = &t.parent_uid {
-                    children_map
-                        .entry(p.clone())
-                        .or_insert_with(Vec::new)
-                        .push(t.uid.clone());
-                    parent_map.insert(t.uid.clone(), p.clone());
-                }
-            }
-
-            let mut direct_matches_initial = HashSet::new();
-
-            for t in &scoped_refs {
-                if is_match(t) {
-                    direct_matches_initial.insert(t.uid.clone());
-                }
-            }
-
+            let mut valid_direct_matches = HashSet::new();
             let mut expanded = HashSet::new();
-            let mut expand_queue: Vec<String> = direct_matches_initial.iter().cloned().collect();
-            let mut idx = 0;
-            while idx < expand_queue.len() {
-                let curr = expand_queue[idx].clone();
-                idx += 1;
 
-                if !expanded.insert(curr.clone()) {
-                    continue;
-                }
-
-                if let Some(children) = children_map.get(&curr) {
-                    for child in children {
-                        expand_queue.push(child.clone());
+            if needs_expansion {
+                let mut children_map = HashMap::new();
+                for t in &scoped_refs {
+                    if let Some(p) = &t.parent_uid {
+                        children_map
+                            .entry(p.clone())
+                            .or_insert_with(Vec::new)
+                            .push(t.uid.clone());
                     }
                 }
-            }
 
-            let mut valid_direct_matches = HashSet::new();
-            for t in &base_refs {
-                if expanded.contains(&t.uid) {
+                let mut direct_matches_initial = HashSet::new();
+                for t in &scoped_refs {
+                    if is_match(t) {
+                        direct_matches_initial.insert(t.uid.clone());
+                    }
+                }
+
+                let mut expand_queue: Vec<String> =
+                    direct_matches_initial.iter().cloned().collect();
+                let mut idx = 0;
+                while idx < expand_queue.len() {
+                    let curr = expand_queue[idx].clone();
+                    idx += 1;
+
+                    if !expanded.insert(curr.clone()) {
+                        continue;
+                    }
+
+                    if let Some(children) = children_map.get(&curr) {
+                        for child in children {
+                            expand_queue.push(child.clone());
+                        }
+                    }
+                }
+
+                for t in &base_refs {
+                    if expanded.contains(&t.uid) {
+                        valid_direct_matches.insert(t.uid.clone());
+                    }
+                }
+            } else {
+                for t in &base_refs {
                     valid_direct_matches.insert(t.uid.clone());
+                    expanded.insert(t.uid.clone());
                 }
             }
 
+            // Global ancestry resolution
             let mut context_matches = HashSet::new();
             for uid in &valid_direct_matches {
                 let mut curr = uid.clone();
-                while let Some(p) = parent_map.get(&curr) {
+                while let Some(p) = self.get_task_ref(&curr).and_then(|t| t.parent_uid.clone()) {
                     if !context_matches.insert(p.clone()) {
                         break;
                     }
@@ -3079,13 +3080,23 @@ impl TaskStore {
                 }
             }
 
-            let filtered_refs: Vec<&Task> = scoped_refs
+            let mut filtered_refs: Vec<&Task> = scoped_refs
                 .iter()
                 .copied()
                 .filter(|t| {
                     valid_direct_matches.contains(&t.uid) || context_matches.contains(&t.uid)
                 })
                 .collect();
+
+            // Inject parents from outside scoped_refs
+            let scoped_uids: HashSet<&str> = scoped_refs.iter().map(|t| t.uid.as_str()).collect();
+            for ctx_uid in &context_matches {
+                if !scoped_uids.contains(ctx_uid.as_str())
+                    && let Some(t) = self.get_task_ref(ctx_uid)
+                {
+                    filtered_refs.push(t);
+                }
+            }
 
             (filtered_refs, expanded)
         };
@@ -3313,15 +3324,11 @@ impl TaskStore {
         // duplicate aggregates removed (handled above)
 
         // 5) Clone final results into owned Task structs and compute transient fields.
-        let has_filter = !options.search_term.is_empty()
-            || !options.selected_categories.is_empty()
-            || !options.selected_locations.is_empty();
-
         let mut final_tasks_processed: Vec<Task> = final_refs
             .into_iter()
             .map(|t_ref| {
                 let mut t = t_ref.clone();
-                t.is_search_context = has_filter && !direct_matches.contains(&t.uid);
+                t.is_search_context = !direct_matches.contains(&t.uid);
                 t.transient_is_paused = t.is_paused();
                 t.transient_recent_ts = t
                     .last_modified_date()
@@ -3330,8 +3337,11 @@ impl TaskStore {
                     .unwrap_or(0);
                 // Compute blocked flags: explicit vs implicit
                 t.is_blocked = check_is_blocked_explicit(&t, &completed_uids);
-                t.is_implicitly_blocked =
-                    !t.is_blocked && *eff_blocked_map.get(&t.uid).unwrap_or(&false);
+                t.is_implicitly_blocked = !t.is_blocked
+                    && eff_blocked_map
+                        .get(&t.uid)
+                        .copied()
+                        .unwrap_or_else(|| check_is_effectively_blocked(&t, &completed_uids));
                 // Penalize blocked tasks by lowering their effective priority so they sort after non-blocked
                 // tasks within the same rank. Numeric priority: lower is better, so increase the numeric
                 // value for blocked tasks (worse priority). Clamp to 9.
@@ -3443,8 +3453,11 @@ impl TaskStore {
                 .as_ref()
                 .map(|start| start.to_start_comparison_time() > now)
                 .unwrap_or(false);
-            t.is_implicitly_future =
-                !t.is_future_start && *eff_future_map.get(&t.uid).unwrap_or(&false);
+            t.is_implicitly_future = !t.is_future_start
+                && eff_future_map
+                    .get(&t.uid)
+                    .copied()
+                    .unwrap_or_else(|| check_is_effectively_future(t));
             t.is_overdue = t
                 .effective_due
                 .as_ref()
