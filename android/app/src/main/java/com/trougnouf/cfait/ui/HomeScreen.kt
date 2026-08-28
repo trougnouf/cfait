@@ -1821,7 +1821,7 @@ fun HomeScreen(
                                         scope.launch {
                                             val fallbackHref = tabs.getOrNull(pagerState.currentPage)?.isWriteTarget ?: defaultCalHref ?: "local://default"
                                             val href = journalSelectedHref ?: fallbackHref
-                                            val uid = api.createWikiPage("", href)
+                                            val uid = api.createWikiPage("", href, null)
                                             journalWikiUid = uid
                                             journalWikiTitle = ""
                                         }
@@ -2518,6 +2518,10 @@ fun HomeScreen(
                                             api.setJournalDate(d)
                                             updateTaskList()
                                         }
+                                    },
+                                    onOpenWikiPage = { newUid, newTitle ->
+                                        journalWikiUid = newUid
+                                        journalWikiTitle = newTitle
                                     },
                                     onCloseWikiPage = {
                                         journalWikiUid = null

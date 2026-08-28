@@ -2856,11 +2856,13 @@ impl CfaitMobile {
         &self,
         title: String,
         calendar_href: String,
+        parent_uid: Option<String>,
     ) -> Result<String, MobileError> {
         let config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
         let mut new_page = crate::model::Task::new("", &config.tag_aliases, None);
         new_page.is_journal = true;
         new_page.calendar_href = calendar_href;
+        new_page.parent_uid = parent_uid;
         new_page.summary = if title.is_empty() {
             rust_i18n::t!("untitled_page", default = "Untitled page").to_string()
         } else {

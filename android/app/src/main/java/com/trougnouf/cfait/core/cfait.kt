@@ -1091,6 +1091,7 @@ internal object UniffiLib {
         `ptr`: Long,
         `title`: RustBuffer.ByValue,
         `calendarHref`: RustBuffer.ByValue,
+        `parentUid`: RustBuffer.ByValue,
     ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_delete_all_calendar_events(`ptr`: Long): Long
@@ -1785,7 +1786,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_create_remote_calendar() != 52273) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_create_wiki_page() != 8350) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_create_wiki_page() != 37800) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_delete_all_calendar_events() != 30790) {
@@ -2618,6 +2619,7 @@ public interface CfaitMobileInterface {
     suspend fun `createWikiPage`(
         `title`: kotlin.String,
         `calendarHref`: kotlin.String,
+        `parentUid`: kotlin.String?,
     ): kotlin.String
 
     suspend fun `deleteAllCalendarEvents`(): kotlin.UInt
@@ -3242,6 +3244,7 @@ open class CfaitMobile :
     override suspend fun `createWikiPage`(
         `title`: kotlin.String,
         `calendarHref`: kotlin.String,
+        `parentUid`: kotlin.String?,
     ): kotlin.String =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
@@ -3249,6 +3252,7 @@ open class CfaitMobile :
                     uniffiHandle,
                     FfiConverterString.lower(`title`),
                     FfiConverterString.lower(`calendarHref`),
+                    FfiConverterOptionalString.lower(`parentUid`),
                 )
             },
             { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },

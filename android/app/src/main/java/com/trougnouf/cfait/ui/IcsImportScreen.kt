@@ -258,6 +258,7 @@ fun JournalMainView(
     journalWikiUid: String?,
     journalWikiTitle: String,
     onDateChange: (String) -> Unit,
+    onOpenWikiPage: (String, String) -> Unit,
     onCloseWikiPage: () -> Unit,
     onTaskClick: (String) -> Unit,
     onDataChanged: () -> Unit
@@ -313,13 +314,14 @@ fun JournalMainView(
         }
     }
 
-    val saveContent = {
-        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            isSaving = true
-            try {
+    suspend fun flushSave() {
+        if (text.text == initialText && titleInput == initialTitle) return
+        isSaving = true
+        try {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 val targetUid = if (uid != null) uid!! else {
                     if (journalWikiUid != null) {
-                        api.createWikiPage(titleInput, href)
+                        api.createWikiPage(titleInput, href, null)
                     } else {
                         api.getOrCreateDailyNote(journalDateStr, href)
                     }
@@ -339,12 +341,16 @@ fun JournalMainView(
                     initialTitle = titleInput
                     onDataChanged()
                 }
-            } catch (e: Exception) {
-                // Ignore
-            } finally {
-                isSaving = false
             }
+        } catch (e: Exception) {
+            // Ignore
+        } finally {
+            isSaving = false
         }
+    }
+
+    val saveContent = {
+        scope.launch { flushSave() }
     }
 
     LaunchedEffect(text.text, titleInput) {
@@ -433,6 +439,18 @@ fun JournalMainView(
                     NfIcon(NfIcons.DELETE, 20.sp, MaterialTheme.colorScheme.error)
                 }
                 
+                IconButton(onClick = {
+                    scope.launch {
+                        flushSave()
+                        val newUid = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            api.createWikiPage("", href, journalWikiUid)
+                        }
+                        onOpenWikiPage(newUid, "")
+                    }
+                }) {
+                    NfIcon(NfIcons.CHILD, 20.sp)
+                }
+
                 if (enabledCalendarCount > 1) {
                     IconButton(onClick = { showMoveDialog = true }) {
                         NfIcon(NfIcons.MOVE, 20.sp)
@@ -470,6 +488,21 @@ fun JournalMainView(
                     c.add(java.util.Calendar.DAY_OF_MONTH, 1)
                     onDateChange(sdf.format(c.time))
                 }) { NfIcon(NfIcons.ARROW_RIGHT) }
+
+                IconButton(onClick = {
+                    scope.launch {
+                        flushSave()
+                        val parentUid = uid ?: kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            api.getOrCreateDailyNote(journalDateStr, href)
+                        }
+                        val newUid = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            api.createWikiPage("", href, parentUid)
+                        }
+                        onOpenWikiPage(newUid, "")
+                    }
+                }) {
+                    NfIcon(NfIcons.CHILD, 20.sp)
+                }
 
                 if (uid != null) {
                     IconButton(onClick = {
