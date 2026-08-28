@@ -76,7 +76,16 @@ fn compute_task_lines(input: &str, is_journal: bool) -> Vec<bool> {
         let mut after_marker = rest;
         let mut is_header = false;
 
-        if !is_journal && rest.starts_with("### ") {
+        if !is_journal && rest.starts_with("###### ") {
+            is_header = true;
+            after_marker = &rest[7..];
+        } else if !is_journal && rest.starts_with("##### ") {
+            is_header = true;
+            after_marker = &rest[6..];
+        } else if !is_journal && rest.starts_with("#### ") {
+            is_header = true;
+            after_marker = &rest[5..];
+        } else if !is_journal && rest.starts_with("### ") {
             is_header = true;
             after_marker = &rest[4..];
         } else if !is_journal && rest.starts_with("## ") {
@@ -279,7 +288,19 @@ pub fn extract_markdown_tasks(input: &str, is_journal: bool) -> (String, Vec<Ext
             let mut header_depth = 0;
 
             if !is_journal {
-                if let Some(stripped) = rest.strip_prefix("### ") {
+                if let Some(stripped) = rest.strip_prefix("###### ") {
+                    is_header = true;
+                    header_depth = 6;
+                    raw_text = stripped;
+                } else if let Some(stripped) = rest.strip_prefix("##### ") {
+                    is_header = true;
+                    header_depth = 5;
+                    raw_text = stripped;
+                } else if let Some(stripped) = rest.strip_prefix("#### ") {
+                    is_header = true;
+                    header_depth = 4;
+                    raw_text = stripped;
+                } else if let Some(stripped) = rest.strip_prefix("### ") {
                     is_header = true;
                     header_depth = 3;
                     raw_text = stripped;

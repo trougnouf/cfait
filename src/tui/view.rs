@@ -226,7 +226,13 @@ fn highlight_markdown_raw(input: &str, is_dark_theme: bool) -> Text<'static> {
         let trimmed = line.trim_start();
         let mut spans = Vec::new();
 
-        if trimmed.starts_with('#') {
+        if trimmed.starts_with("# ")
+            || trimmed.starts_with("## ")
+            || trimmed.starts_with("### ")
+            || trimmed.starts_with("#### ")
+            || trimmed.starts_with("##### ")
+            || trimmed.starts_with("###### ")
+        {
             spans.extend(crate::tui::view::parse_inline_elements(
                 line,
                 Style::default()

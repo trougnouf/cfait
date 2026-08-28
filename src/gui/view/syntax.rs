@@ -331,7 +331,12 @@ impl Highlighter for MarkdownHighlighter {
         let checkbox_color = Some(Color::from_rgb(0.4, 0.8, 0.4)); // Greenish
 
         let trimmed = line.trim_start();
-        let is_header = trimmed.starts_with('#');
+        let is_header = trimmed.starts_with("# ")
+            || trimmed.starts_with("## ")
+            || trimmed.starts_with("### ")
+            || trimmed.starts_with("#### ")
+            || trimmed.starts_with("##### ")
+            || trimmed.starts_with("###### ");
         let _is_list =
             trimmed.starts_with("- [") || trimmed.starts_with("* [") || trimmed.starts_with("+ [");
         let is_table = trimmed.starts_with('|') && trimmed[1..].contains('|');
@@ -371,6 +376,12 @@ impl Highlighter for MarkdownHighlighter {
                 after_marker = indent + 3;
             } else if trimmed.starts_with("### ") {
                 after_marker = indent + 4;
+            } else if trimmed.starts_with("#### ") {
+                after_marker = indent + 5;
+            } else if trimmed.starts_with("##### ") {
+                after_marker = indent + 6;
+            } else if trimmed.starts_with("###### ") {
+                after_marker = indent + 7;
             }
         } else {
             if trimmed.starts_with("- ") || trimmed.starts_with("* ") || trimmed.starts_with("+ ") {

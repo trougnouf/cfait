@@ -1458,9 +1458,53 @@ pub fn view_task_row<'a>(
                 if !task.description.is_empty() {
                     let mut desc_col = column![].spacing(4);
                     let mut current_paragraph = String::new();
+                    let mut in_code_block = false;
 
                     for line in task.description.lines() {
                         let trimmed = line.trim_start();
+
+                        if trimmed.starts_with("```") {
+                            if !current_paragraph.is_empty() {
+                                let spans = parse_inline_markdown(
+                                    &current_paragraph,
+                                    if is_dark_theme {
+                                        Color::from_rgb(0.7, 0.7, 0.7)
+                                    } else {
+                                        Color::from_rgb(0.3, 0.3, 0.3)
+                                    },
+                                    false,
+                                );
+                                desc_col = desc_col.push(rich_text(spans).size(14).on_link_click(
+                                    |target: String| {
+                                        if target.contains("://") || target.starts_with("mailto:") {
+                                            Message::OpenUrl(target)
+                                        } else {
+                                            Message::OpenWikiLink(target)
+                                        }
+                                    },
+                                ));
+                                current_paragraph.clear();
+                            }
+                            in_code_block = !in_code_block;
+                            let spans: Vec<iced::widget::text::Span<'_, String>> = vec![
+                                span(line.to_string())
+                                    .color(Color::from_rgb(0.8, 0.6, 0.4))
+                                    .font(iced::Font::MONOSPACE),
+                            ];
+                            desc_col = desc_col.push(rich_text(spans).size(14));
+                            continue;
+                        }
+
+                        if in_code_block {
+                            let spans: Vec<iced::widget::text::Span<'_, String>> = vec![
+                                span(line.to_string())
+                                    .color(Color::from_rgb(0.8, 0.6, 0.4))
+                                    .font(iced::Font::MONOSPACE),
+                            ];
+                            desc_col = desc_col.push(rich_text(spans).size(14));
+                            continue;
+                        }
+
                         if trimmed.is_empty() {
                             if !current_paragraph.is_empty() {
                                 let spans = parse_inline_markdown(
@@ -1489,7 +1533,10 @@ pub fn view_task_row<'a>(
 
                         let is_header = trimmed.starts_with("# ")
                             || trimmed.starts_with("## ")
-                            || trimmed.starts_with("### ");
+                            || trimmed.starts_with("### ")
+                            || trimmed.starts_with("#### ")
+                            || trimmed.starts_with("##### ")
+                            || trimmed.starts_with("###### ");
                         let is_quote = trimmed.starts_with("> ");
                         let is_list = trimmed.starts_with("- ") || trimmed.starts_with("* ");
 
@@ -1523,7 +1570,7 @@ pub fn view_task_row<'a>(
                             };
                             let mut size = 14;
 
-                            let display_line = if is_header {
+                            let display_line: String = if is_header {
                                 base_color = if is_dark_theme {
                                     Color::from_rgb(0.3, 0.7, 1.0)
                                 } else {
@@ -1531,15 +1578,24 @@ pub fn view_task_row<'a>(
                                 };
                                 if let Some(stripped) = trimmed.strip_prefix("# ") {
                                     size = 18;
-                                    stripped.trim_start()
+                                    stripped.trim_start().to_string()
                                 } else if let Some(stripped) = trimmed.strip_prefix("## ") {
                                     size = 16;
-                                    stripped.trim_start()
+                                    stripped.trim_start().to_string()
                                 } else if let Some(stripped) = trimmed.strip_prefix("### ") {
                                     size = 15;
-                                    stripped.trim_start()
+                                    stripped.trim_start().to_string()
+                                } else if let Some(stripped) = trimmed.strip_prefix("#### ") {
+                                    size = 14;
+                                    stripped.trim_start().to_string()
+                                } else if let Some(stripped) = trimmed.strip_prefix("##### ") {
+                                    size = 14;
+                                    stripped.trim_start().to_string()
+                                } else if let Some(stripped) = trimmed.strip_prefix("###### ") {
+                                    size = 14;
+                                    stripped.trim_start().to_string()
                                 } else {
-                                    trimmed
+                                    trimmed.to_string()
                                 }
                             } else if is_quote {
                                 base_color = if is_dark_theme {
@@ -1547,12 +1603,16 @@ pub fn view_task_row<'a>(
                                 } else {
                                     Color::from_rgb(0.4, 0.4, 0.4)
                                 };
-                                trimmed
+                                trimmed.to_string()
                             } else {
-                                line
+                                let mut s = line.to_string();
+                                if is_list && let Some(idx) = s.find("- ").or(s.find("* ")) {
+                                    s.replace_range(idx..idx + 2, "• ");
+                                }
+                                s
                             };
 
-                            let mut spans = parse_inline_markdown(display_line, base_color, false);
+                            let mut spans = parse_inline_markdown(&display_line, base_color, false);
 
                             if is_header {
                                 for s in &mut spans {
@@ -2155,26 +2215,79 @@ pub fn view_task_row<'a>(
                 if app.show_inline_descriptions && !task.description.is_empty() && !is_expanded {
                     let mut desc_col = column![].spacing(2);
                     let mut line_count = 0;
+                    let mut in_code_block = false;
                     for line in task.description.lines() {
                         if line.trim().is_empty() {
                             continue;
                         }
 
                         let trimmed = line.trim_start();
+
+                        if trimmed.starts_with("```") {
+                            in_code_block = !in_code_block;
+                            let spans: Vec<iced::widget::text::Span<'_, String>> = vec![
+                                span(line.to_string())
+                                    .color(Color::from_rgb(0.8, 0.6, 0.4))
+                                    .font(iced::Font::MONOSPACE),
+                            ];
+                            let inline_desc = row![
+                                Space::new().width(Length::Fixed(indent_size as f32 + 34.0)),
+                                rich_text(spans).size(14)
+                            ];
+                            desc_col = desc_col.push(inline_desc);
+                            line_count += 1;
+                            if line_count >= 3 {
+                                break;
+                            }
+                            continue;
+                        }
+
+                        if in_code_block {
+                            let spans: Vec<iced::widget::text::Span<'_, String>> = vec![
+                                span(line.to_string())
+                                    .color(Color::from_rgb(0.8, 0.6, 0.4))
+                                    .font(iced::Font::MONOSPACE),
+                            ];
+                            let inline_desc = row![
+                                Space::new().width(Length::Fixed(indent_size as f32 + 34.0)),
+                                rich_text(spans).size(14)
+                            ];
+                            desc_col = desc_col.push(inline_desc);
+                            line_count += 1;
+                            if line_count >= 3 {
+                                break;
+                            }
+                            continue;
+                        }
+
                         let mut is_header = false;
-                        let display_line = if let Some(stripped) = trimmed.strip_prefix("# ") {
+                        let mut display_line = if let Some(stripped) = trimmed.strip_prefix("# ") {
                             is_header = true;
-                            stripped.trim_start()
+                            stripped.trim_start().to_string()
                         } else if let Some(stripped) = trimmed.strip_prefix("## ") {
                             is_header = true;
-                            stripped.trim_start()
+                            stripped.trim_start().to_string()
                         } else if let Some(stripped) = trimmed.strip_prefix("### ") {
                             is_header = true;
-                            stripped.trim_start()
+                            stripped.trim_start().to_string()
+                        } else if let Some(stripped) = trimmed.strip_prefix("#### ") {
+                            is_header = true;
+                            stripped.trim_start().to_string()
+                        } else if let Some(stripped) = trimmed.strip_prefix("##### ") {
+                            is_header = true;
+                            stripped.trim_start().to_string()
+                        } else if let Some(stripped) = trimmed.strip_prefix("###### ") {
+                            is_header = true;
+                            stripped.trim_start().to_string()
                         } else {
-                            line
+                            line.to_string()
                         };
 
+                        if display_line.starts_with("- ") || display_line.starts_with("* ") {
+                            display_line.replace_range(0..2, "• ");
+                        }
+
+                        let display_line_str = display_line.as_str();
                         let is_quote = trimmed.starts_with("> ");
 
                         let base_color = if is_header {
@@ -2197,7 +2310,7 @@ pub fn view_task_row<'a>(
                             }
                         };
 
-                        let mut spans = parse_inline_markdown(display_line, base_color, false);
+                        let mut spans = parse_inline_markdown(display_line_str, base_color, false);
 
                         if is_header {
                             for s in &mut spans {
