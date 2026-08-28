@@ -590,7 +590,9 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     chrono::NaiveDate::from_ymd_opt(date.year(), date.month(), d).unwrap();
                 let is_selected = current_date == date;
                 let is_today = current_date == today;
-                let has_journal = state.calendars.iter().any(|c| {
+
+                let mut journal_cals = Vec::new();
+                for c in &state.calendars {
                     let supports = if c.href.starts_with("local://") {
                         true
                     } else {
@@ -602,13 +604,17 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         || c.href == "local://recovery"
                         || !supports
                     {
-                        return false;
+                        continue;
                     }
-                    state
+                    if state
                         .store
                         .get_journal_entry(&c.href, current_date)
                         .is_some()
-                });
+                    {
+                        journal_cals.push(c);
+                    }
+                }
+                let has_journal = !journal_cals.is_empty();
                 let day_str = format!("{:2} ", d);
 
                 let mut style = Style::default();
@@ -620,7 +626,18 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 } else if is_today {
                     style = style.fg(Color::Blue).add_modifier(Modifier::BOLD);
                 } else if has_journal {
-                    style = style.fg(Color::Green).add_modifier(Modifier::BOLD);
+                    let color = if journal_cals.len() == 1 {
+                        if let Some(hex) = &journal_cals[0].color
+                            && let Some((r, g, b)) = color_utils::parse_hex_to_u8(hex)
+                        {
+                            Color::Rgb(r, g, b)
+                        } else {
+                            Color::Green
+                        }
+                    } else {
+                        Color::Magenta
+                    };
+                    style = style.fg(color).add_modifier(Modifier::BOLD);
                 } else {
                     style = style.fg(Color::Gray);
                 }
@@ -653,6 +670,19 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
                 let span = Span::raw(format!("{}{} {} {}", prefix, indent, icon_str, page.title));
 
+                let color = if page.is_task {
+                    state
+                        .calendars
+                        .iter()
+                        .find(|c| c.href == page.calendar_href)
+                        .and_then(|c| c.color.as_ref())
+                        .and_then(|hex| color_utils::parse_hex_to_u8(hex))
+                        .map(|(r, g, b)| Color::Rgb(r, g, b))
+                        .unwrap_or(Color::Cyan)
+                } else {
+                    Color::DarkGray
+                };
+
                 let style = if Some(&page.key) == state.journal_editing_uid.as_ref() {
                     Style::default()
                         .fg(if is_dark_theme {
@@ -661,10 +691,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                             Color::Rgb(200, 100, 0)
                         })
                         .add_modifier(Modifier::BOLD)
-                } else if page.is_task {
-                    Style::default().fg(Color::Cyan)
                 } else {
-                    Style::default().fg(Color::DarkGray)
+                    Style::default().fg(color)
                 };
                 items.push(ListItem::new(Line::from(span)).style(style));
             }
