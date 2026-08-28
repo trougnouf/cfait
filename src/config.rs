@@ -333,7 +333,7 @@ fn default_cutoff() -> Option<u32> {
 }
 
 // Configuration version constant for migration handling
-const CURRENT_CONFIG_VERSION: u32 = 1;
+const CURRENT_CONFIG_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TaskAction {
@@ -1011,7 +1011,7 @@ impl Default for Config {
             first_day_of_week: FirstDayOfWeek::default(),
             description_editor: String::new(),
             log_level: default_log_level(),
-            expanded_tags: Vec::new(),
+            expanded_tags: vec!["j:pages".to_string()],
             expanded_locations: Vec::new(),
             sync_settings: true,
             settings_updated_at: 0,

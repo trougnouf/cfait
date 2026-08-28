@@ -3533,7 +3533,7 @@ impl TaskStore {
 
         if !root_pages.is_empty() {
             let pages_key = "j:pages";
-            let pages_expanded = options.expanded_tags.contains(pages_key) || true;
+            let pages_expanded = options.expanded_tags.contains(pages_key);
             journal_pages_out.push(JournalPageItem {
                 key: pages_key.to_string(),
                 title: rust_i18n::t!("wiki_index", default = "Wiki index").to_string(),
