@@ -3575,7 +3575,7 @@ impl TaskStore {
                 }
 
                 if let Some(bc) = best_child_opt {
-                    if t.is_note {
+                    if t.is_note || t.is_search_context {
                         best.sort_rank = bc.sort_rank;
                         best.effective_priority = bc.effective_priority;
                         best.effective_due = bc.effective_due.clone();
