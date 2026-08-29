@@ -3,11 +3,13 @@
 package com.trougnouf.cfait.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -405,12 +407,13 @@ fun JournalMainView(
 
     Column(Modifier.fillMaxSize().imePadding()) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (journalWikiUid != null) {
-                NfIcon(NfIcons.JOURNAL, 20.sp, MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.width(8.dp))
+                Box(modifier = Modifier.padding(horizontal = 8.dp)) {
+                    NfIcon(NfIcons.JOURNAL, 20.sp, MaterialTheme.colorScheme.primary)
+                }
                 OutlinedTextField(
                     value = titleInput,
                     onValueChange = { titleInput = it },
@@ -424,38 +427,6 @@ fun JournalMainView(
                     ),
                     textStyle = androidx.compose.ui.text.TextStyle(fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 )
-                
-                IconButton(onClick = {
-                    scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                        try {
-                            api.dispatch(com.trougnouf.cfait.core.AppIntent.DeleteTaskTree(journalWikiUid))
-                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                onDataChanged()
-                                onCloseWikiPage()
-                            }
-                        } catch (e: Exception) {}
-                    }
-                }) {
-                    NfIcon(NfIcons.DELETE, 20.sp, MaterialTheme.colorScheme.error)
-                }
-                
-                IconButton(onClick = {
-                    scope.launch {
-                        flushSave()
-                        val newUid = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                            api.createWikiPage("", href, journalWikiUid)
-                        }
-                        onOpenWikiPage(newUid, "")
-                    }
-                }) {
-                    NfIcon(NfIcons.CHILD, 20.sp)
-                }
-
-                if (enabledCalendarCount > 1) {
-                    IconButton(onClick = { showMoveDialog = true }) {
-                        NfIcon(NfIcons.MOVE, 20.sp)
-                    }
-                }
             } else {
                 IconButton(onClick = {
                     val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
@@ -463,22 +434,13 @@ fun JournalMainView(
                     c.time = sdf.parse(journalDateStr) ?: java.util.Date()
                     c.add(java.util.Calendar.DAY_OF_MONTH, -1)
                     onDateChange(sdf.format(c.time))
-                }) { NfIcon(NfIcons.ARROW_LEFT) }
+                }, modifier = Modifier.size(40.dp)) { NfIcon(NfIcons.ARROW_LEFT, 20.sp) }
 
-                var dateTextSize by remember(journalDateStr) { mutableStateOf(18.sp) }
                 Text(
                     journalDateStr, 
                     fontWeight = FontWeight.Bold, 
-                    fontSize = dateTextSize, 
-                    modifier = Modifier.weight(1f), 
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    softWrap = false,
-                    onTextLayout = { textLayoutResult ->
-                        if (textLayoutResult.didOverflowWidth) {
-                            dateTextSize *= 0.95f
-                        }
-                    }
+                    fontSize = 18.sp, 
+                    modifier = Modifier.padding(horizontal = 4.dp)
                 )
 
                 IconButton(onClick = {
@@ -487,64 +449,108 @@ fun JournalMainView(
                     c.time = sdf.parse(journalDateStr) ?: java.util.Date()
                     c.add(java.util.Calendar.DAY_OF_MONTH, 1)
                     onDateChange(sdf.format(c.time))
-                }) { NfIcon(NfIcons.ARROW_RIGHT) }
+                }, modifier = Modifier.size(40.dp)) { NfIcon(NfIcons.ARROW_RIGHT, 20.sp) }
+            }
 
-                IconButton(onClick = {
-                    scope.launch {
-                        flushSave()
-                        val parentUid = uid ?: kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                            api.getOrCreateDailyNote(journalDateStr, href)
+            Box(
+                modifier = Modifier.weight(1f, fill = false),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (journalWikiUid != null) {
+                        IconButton(onClick = {
+                            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                try {
+                                    api.dispatch(com.trougnouf.cfait.core.AppIntent.DeleteTaskTree(journalWikiUid))
+                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                        onDataChanged()
+                                        onCloseWikiPage()
+                                    }
+                                } catch (e: Exception) {}
+                            }
+                        }, modifier = Modifier.size(40.dp)) {
+                            NfIcon(NfIcons.DELETE, 20.sp, MaterialTheme.colorScheme.error)
                         }
-                        val newUid = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                            api.createWikiPage("", href, parentUid)
-                        }
-                        onOpenWikiPage(newUid, "")
-                    }
-                }) {
-                    NfIcon(NfIcons.CHILD, 20.sp)
-                }
-
-                if (uid != null) {
-                    IconButton(onClick = {
-                        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                            try {
-                                api.dispatch(com.trougnouf.cfait.core.AppIntent.DeleteTaskTree(uid!!))
-                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                    onDataChanged()
-                                    text = androidx.compose.ui.text.input.TextFieldValue("")
-                                    initialText = ""
-                                    uid = null
+                        IconButton(onClick = {
+                            scope.launch {
+                                flushSave()
+                                val newUid = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    api.createWikiPage("", href, journalWikiUid)
                                 }
-                            } catch (e: Exception) {}
+                                onOpenWikiPage(newUid, "")
+                            }
+                        }, modifier = Modifier.size(40.dp)) {
+                            NfIcon(NfIcons.CHILD, 20.sp)
                         }
-                    }) {
-                        NfIcon(NfIcons.DELETE, 20.sp, MaterialTheme.colorScheme.error)
-                    }
-                    if (enabledCalendarCount > 1) {
-                        IconButton(onClick = { showMoveDialog = true }) {
-                            NfIcon(NfIcons.MOVE, 20.sp)
+                        if (enabledCalendarCount > 1) {
+                            IconButton(onClick = { showMoveDialog = true }, modifier = Modifier.size(40.dp)) {
+                                NfIcon(NfIcons.MOVE, 20.sp)
+                            }
+                        }
+                    } else {
+                        IconButton(onClick = {
+                            scope.launch {
+                                flushSave()
+                                val parentUid = uid ?: kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    api.getOrCreateDailyNote(journalDateStr, href)
+                                }
+                                val newUid = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    api.createWikiPage("", href, parentUid)
+                                }
+                                onOpenWikiPage(newUid, "")
+                            }
+                        }, modifier = Modifier.size(40.dp)) {
+                            NfIcon(NfIcons.CHILD, 20.sp)
+                        }
+
+                        if (uid != null) {
+                            IconButton(onClick = {
+                                scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                    try {
+                                        api.dispatch(com.trougnouf.cfait.core.AppIntent.DeleteTaskTree(uid!!))
+                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                            onDataChanged()
+                                            text = androidx.compose.ui.text.input.TextFieldValue("")
+                                            initialText = ""
+                                            uid = null
+                                        }
+                                    } catch (e: Exception) {}
+                                }
+                            }, modifier = Modifier.size(40.dp)) {
+                                NfIcon(NfIcons.DELETE, 20.sp, MaterialTheme.colorScheme.error)
+                            }
+                            if (enabledCalendarCount > 1) {
+                                IconButton(onClick = { showMoveDialog = true }, modifier = Modifier.size(40.dp)) {
+                                    NfIcon(NfIcons.MOVE, 20.sp)
+                                }
+                            }
                         }
                     }
-                }
-            }
 
-            IconButton(onClick = { isMaximized = !isMaximized }) {
-                NfIcon(
-                    NfIcons.FOCUS_FIELD,
-                    20.sp,
-                    if (isMaximized) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+                    IconButton(onClick = { isMaximized = !isMaximized }, modifier = Modifier.size(40.dp)) {
+                        NfIcon(
+                            NfIcons.FOCUS_FIELD,
+                            20.sp,
+                            if (isMaximized) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
 
-            if (isSaving || isLoading) {
-                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-            } else if (text.text != initialText || titleInput != initialTitle) {
-                IconButton(onClick = { saveContent() }) {
-                    NfIcon(NfIcons.SAVE_AS, 20.sp, MaterialTheme.colorScheme.primary)
-                }
-            } else {
-                IconButton(onClick = {  }) {
-                    NfIcon(NfIcons.CHECK, 20.sp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                    if (isSaving || isLoading) {
+                        Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                        }
+                    } else if (text.text != initialText || titleInput != initialTitle) {
+                        IconButton(onClick = { saveContent() }, modifier = Modifier.size(40.dp)) {
+                            NfIcon(NfIcons.SAVE_AS, 20.sp, MaterialTheme.colorScheme.primary)
+                        }
+                    } else {
+                        IconButton(onClick = {  }, modifier = Modifier.size(40.dp)) {
+                            NfIcon(NfIcons.CHECK, 20.sp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                        }
+                    }
                 }
             }
         }

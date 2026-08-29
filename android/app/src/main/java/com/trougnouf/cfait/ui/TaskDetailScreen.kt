@@ -11,6 +11,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -246,112 +247,102 @@ fun TaskDetailScreen(
             TopAppBar(
                 title = { 
                     if (task != null && task!!.isJournal && task!!.summary.matches(Regex("""^\\d{4}-\\d{2}-\\d{2}$"""))) {
-                        var dateTextSize by remember(task!!.summary) { mutableStateOf(22.sp) }
                         Text(
                             text = task!!.summary,
-                            fontSize = dateTextSize,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
                             maxLines = 1,
-                            softWrap = false,
-                            onTextLayout = { textLayoutResult ->
-                                if (textLayoutResult.didOverflowWidth) {
-                                    dateTextSize *= 0.95f
-                                }
-                            }
+                            overflow = TextOverflow.Ellipsis
                         )
                     } else {
-                        Text(stringResource(R.string.edit_task_title))
+                        Text(stringResource(R.string.edit_task_title), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 },
                 navigationIcon = { IconButton(onClick = onBack) { NfIcon(NfIcons.BACK, 20.sp) } },
                 actions = {
-                    if (task!!.geo != null) {
-                        IconButton(onClick = { uriHandler.openUri("geo:${task!!.geo}") }) {
-                            NfIcon(NfIcons.MAP_LOCATION_DOT, 20.sp)
-                        }
-                    }
-                    if (task!!.url != null) {
-                        IconButton(onClick = { uriHandler.openUri(task!!.url!!) }) {
-                            NfIcon(NfIcons.WEB_CHECK, 20.sp)
-                        }
-                    }
-
-                    val canUndoDesc = descUndoStack.size > 1
-                    val canUndoSmart = smartUndoStack.size > 1
-                    val canUndo = (lastEdited == "smart" && canUndoSmart) || (lastEdited == "desc" && canUndoDesc) || canUndoSmart || canUndoDesc
-
-                    if (canUndo) {
-                        IconButton(onClick = {
-                            if (lastEdited == "smart" && canUndoSmart) {
-                                val current = smartUndoStack.last()
-                                smartRedoStack = (smartRedoStack + current).takeLast(50)
-                                smartUndoStack = smartUndoStack.dropLast(1)
-                                smartInput = smartUndoStack.last()
-                            } else if (canUndoDesc) {
-                                val current = descUndoStack.last()
-                                descRedoStack = (descRedoStack + current).takeLast(50)
-                                descUndoStack = descUndoStack.dropLast(1)
-                                description = descUndoStack.last()
-                            } else if (canUndoSmart) {
-                                val current = smartUndoStack.last()
-                                smartRedoStack = (smartRedoStack + current).takeLast(50)
-                                smartUndoStack = smartUndoStack.dropLast(1)
-                                smartInput = smartUndoStack.last()
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (task!!.geo != null) {
+                            IconButton(onClick = { uriHandler.openUri("geo:${task!!.geo}") }) {
+                                NfIcon(NfIcons.MAP_LOCATION_DOT, 20.sp)
                             }
-                        }) { NfIcon(NfIcons.UNDO, 20.sp) }
-                    }
-                    
-                    val canRedoDesc = descRedoStack.isNotEmpty()
-                    val canRedoSmart = smartRedoStack.isNotEmpty()
-                    val canRedo = (lastEdited == "smart" && canRedoSmart) || (lastEdited == "desc" && canRedoDesc) || canRedoSmart || canRedoDesc
-
-                    if (canRedo) {
-                        IconButton(onClick = {
-                            if (lastEdited == "smart" && canRedoSmart) {
-                                val next = smartRedoStack.last()
-                                smartRedoStack = smartRedoStack.dropLast(1)
-                                smartUndoStack = (smartUndoStack + next).takeLast(50)
-                                smartInput = next
-                            } else if (canRedoDesc) {
-                                val next = descRedoStack.last()
-                                descRedoStack = descRedoStack.dropLast(1)
-                                descUndoStack = (descUndoStack + next).takeLast(50)
-                                description = next
-                            } else if (canRedoSmart) {
-                                val next = smartRedoStack.last()
-                                smartRedoStack = smartRedoStack.dropLast(1)
-                                smartUndoStack = (smartUndoStack + next).takeLast(50)
-                                smartInput = next
-                            }
-                        }) { NfIcon(NfIcons.REDO, 20.sp) }
-                    }
-
-                    IconButton(onClick = { onEditTree(task!!.uid) }) {
-                        NfIcon(NfIcons.EDIT_TREE, 20.sp)
-                    }
-                    if (enabledCalendarCount > 1) {
-                        TextButton(onClick = {
-                            showMoveDialog = true
-                        }) { 
-                            Text(
-                                stringResource(R.string.menu_move),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            ) 
                         }
-                    }
-                    TextButton(
-                        onClick = {
-                            // Optimistic Save:
-                            // We delegate the actual async work to the parent (MainActivity)
-                            // so we can leave this screen immediately without killing the save process.
-                            handleSaveWithGeo(smartInput.text, description.text)
-                        },
-                    ) { 
-                        Text(
-                            stringResource(R.string.save),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        ) 
+                        if (task!!.url != null) {
+                            IconButton(onClick = { uriHandler.openUri(task!!.url!!) }) {
+                                NfIcon(NfIcons.WEB_CHECK, 20.sp)
+                            }
+                        }
+
+                        val canUndoDesc = descUndoStack.size > 1
+                        val canUndoSmart = smartUndoStack.size > 1
+                        val canUndo = (lastEdited == "smart" && canUndoSmart) || (lastEdited == "desc" && canUndoDesc) || canUndoSmart || canUndoDesc
+
+                        if (canUndo) {
+                            IconButton(onClick = {
+                                if (lastEdited == "smart" && canUndoSmart) {
+                                    val current = smartUndoStack.last()
+                                    smartRedoStack = (smartRedoStack + current).takeLast(50)
+                                    smartUndoStack = smartUndoStack.dropLast(1)
+                                    smartInput = smartUndoStack.last()
+                                } else if (canUndoDesc) {
+                                    val current = descUndoStack.last()
+                                    descRedoStack = (descRedoStack + current).takeLast(50)
+                                    descUndoStack = descUndoStack.dropLast(1)
+                                    description = descUndoStack.last()
+                                } else if (canUndoSmart) {
+                                    val current = smartUndoStack.last()
+                                    smartRedoStack = (smartRedoStack + current).takeLast(50)
+                                    smartUndoStack = smartUndoStack.dropLast(1)
+                                    smartInput = smartUndoStack.last()
+                                }
+                            }) { NfIcon(NfIcons.UNDO, 20.sp) }
+                        }
+                        
+                        val canRedoDesc = descRedoStack.isNotEmpty()
+                        val canRedoSmart = smartRedoStack.isNotEmpty()
+                        val canRedo = (lastEdited == "smart" && canRedoSmart) || (lastEdited == "desc" && canRedoDesc) || canRedoSmart || canRedoDesc
+
+                        if (canRedo) {
+                            IconButton(onClick = {
+                                if (lastEdited == "smart" && canRedoSmart) {
+                                    val next = smartRedoStack.last()
+                                    smartRedoStack = smartRedoStack.dropLast(1)
+                                    smartUndoStack = (smartUndoStack + next).takeLast(50)
+                                    smartInput = next
+                                } else if (canRedoDesc) {
+                                    val next = descRedoStack.last()
+                                    descRedoStack = descRedoStack.dropLast(1)
+                                    descUndoStack = (descUndoStack + next).takeLast(50)
+                                    description = next
+                                } else if (canRedoSmart) {
+                                    val next = smartRedoStack.last()
+                                    smartRedoStack = smartRedoStack.dropLast(1)
+                                    smartUndoStack = (smartUndoStack + next).takeLast(50)
+                                    smartInput = next
+                                }
+                            }) { NfIcon(NfIcons.REDO, 20.sp) }
+                        }
+
+                        IconButton(onClick = { onEditTree(task!!.uid) }) {
+                            NfIcon(NfIcons.EDIT_TREE, 20.sp)
+                        }
+                        if (enabledCalendarCount > 1) {
+                            IconButton(onClick = { showMoveDialog = true }) {
+                                NfIcon(NfIcons.MOVE, 20.sp)
+                            }
+                        }
+                        IconButton(
+                            onClick = {
+                                // Optimistic Save:
+                                // We delegate the actual async work to the parent (MainActivity)
+                                // so we can leave this screen immediately without killing the save process.
+                                handleSaveWithGeo(smartInput.text, description.text)
+                            },
+                        ) { 
+                            NfIcon(NfIcons.SAVE_AS, 20.sp, MaterialTheme.colorScheme.primary)
+                        }
                     }
                 },
             )
@@ -398,19 +389,13 @@ fun TaskDetailScreen(
                     modifier = Modifier.padding(start = 4.dp, bottom = 16.dp),
                 )
             } else {
-                var dateTextSize by remember(task!!.summary) { mutableStateOf(28.sp) }
                 Text(
                     text = task!!.summary,
-                    fontSize = dateTextSize,
+                    fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 16.dp),
                     maxLines = 1,
-                    softWrap = false,
-                    onTextLayout = { textLayoutResult ->
-                        if (textLayoutResult.didOverflowWidth) {
-                            dateTextSize *= 0.95f
-                        }
-                    }
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
