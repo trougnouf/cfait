@@ -2809,7 +2809,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
     });
 
     let header_drag_area: Element<_> = if app.force_ssd {
-        let header_top = if let Some(uid) = current_day_uid.clone() {
+        let header_row = if let Some(uid) = current_day_uid.clone() {
             let delete_btn = tooltip(
                 iced::widget::button(icon::icon(icon::TRASH).size(14))
                     .style(iced::widget::button::danger)
@@ -2850,7 +2850,8 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
                             ..Default::default()
                         })
                         .padding(5)
-                        .width(Length::Fill),
+                        .width(Length::FillPortion(2)),
+                    Space::new().width(Length::FillPortion(1)),
                     create_subpage_btn,
                     move_btn,
                     delete_btn,
@@ -2884,9 +2885,16 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
             ]
             .align_y(iced::Alignment::Center)
         };
-        header_top.into()
+        container(header_row)
+            .padding(iced::Padding {
+                top: 10.0,
+                bottom: 5.0,
+                left: 10.0,
+                right: 10.0,
+            })
+            .into()
     } else {
-        let header_top = if let Some(uid) = current_day_uid.clone() {
+        let header_row = if let Some(uid) = current_day_uid.clone() {
             let delete_btn = tooltip(
                 iced::widget::button(icon::icon(icon::TRASH).size(14))
                     .style(iced::widget::button::danger)
@@ -2927,7 +2935,8 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
                             ..Default::default()
                         })
                         .padding(5)
-                        .width(Length::Fill),
+                        .width(Length::FillPortion(2)),
+                    Space::new().width(Length::FillPortion(1)),
                     create_subpage_btn,
                     move_btn,
                     delete_btn,
@@ -2961,7 +2970,13 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
             ]
             .align_y(iced::Alignment::Center)
         };
-        MouseArea::new(header_top)
+        let header_container = container(header_row).padding(iced::Padding {
+            top: 10.0,
+            bottom: 5.0,
+            left: 10.0,
+            right: 10.0,
+        });
+        MouseArea::new(header_container)
             .on_press(Message::WindowDragged)
             .into()
     };

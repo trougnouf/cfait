@@ -1275,12 +1275,22 @@ pub fn view_sidebar_journal(app: &GuiApp) -> Element<'_, Message> {
             Color::from_rgb(0.7, 0.7, 0.7)
         };
 
-        let row_content = row![
-            icon::icon(icon_char).size(12).color(color),
+        let is_active = Some(&page.key) == app.journal_editing_uid.as_ref();
+        let display_text = if is_active {
+            text(display_name.clone())
+                .size(13)
+                .font(iced::Font {
+                    weight: iced::font::Weight::Bold,
+                    ..Default::default()
+                })
+                .color(app.theme().extended_palette().primary.base.color)
+        } else {
             text(display_name.clone()).size(13)
-        ]
-        .spacing(6)
-        .align_y(iced::Alignment::Center);
+        };
+
+        let row_content = row![icon::icon(icon_char).size(12).color(color), display_text]
+            .spacing(6)
+            .align_y(iced::Alignment::Center);
 
         let mut btn = button(row_content)
             .style(button::text)
