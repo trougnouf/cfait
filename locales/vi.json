@@ -598,12 +598,11 @@
     "show": "Hiện",
     "show_all": "Hiện tất cả",
     "show_all_collections": "Hiện tất cả bộ sưu tầm",
-    "show_details": "Hiện chi tiết",
     "show_calendars_tab": "Hiện phần lịch ở thanh bên",
+    "show_details": "Hiện chi tiết",
     "show_goals_tab": "Hiện phần mục tiêu ở thanh bên",
-    "show_tags_tab": "Hiện phần thẻ ở thanh bên",
-    "show_locations_tab": "Hiện phần vị trí ở thanh bên",
     "show_less": "Ẩn bớt",
+    "show_locations_tab": "Hiện phần vị trí ở thanh bên",
     "show_older_sessions": {
         "one": "Hiện 1 phiên làm việc trước…",
         "other": "Hiện %{count} phiên làm việc trước…"
@@ -611,6 +610,7 @@
     "show_ongoing_notifications_explain": "Hiện một thông báo với đồng hồ đếm giờ khi việc làm đang được thực hiện.",
     "show_ongoing_notifications_label": "Hiện thông báo về việc làm đang thực hiện",
     "show_priority_numbers": "Hiện giá trị của ưu tiên (!X)",
+    "show_tags_tab": "Hiện phần thẻ ở thanh bên",
     "show_task_goals_in_sidebar": "Hiện mục tiêu liên quan đến việc làm ở thanh bên",
     "snooze": "Tạm ẩn…",
     "snooze_custom_title": "Tuỳ chỉnh",
