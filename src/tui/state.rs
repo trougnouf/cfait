@@ -924,6 +924,21 @@ impl AppState {
         };
         self.export_selection_state.select(Some(i));
     }
+
+    /// Sets journal_editing_uid to the journal entry UID for the current journal_date,
+    /// if such an entry exists. This should be called after changing journal_date
+    /// to ensure the current page is properly highlighted in the sidebar.
+    pub fn update_journal_editing_uid(&mut self) {
+        let href = self.active_cal_href.clone().unwrap_or_else(|| {
+            self.calendars
+                .first()
+                .map(|c| c.href.clone())
+                .unwrap_or_default()
+        });
+        if let Some(entry) = self.store.get_journal_entry(&href, self.journal_date) {
+            self.journal_editing_uid = Some(entry.uid.clone());
+        }
+    }
 }
 
 #[cfg(test)]

@@ -1681,7 +1681,8 @@ fun HomeScreen(
                                         c.add(java.util.Calendar.MONTH, -1)
                                         val newDate = sdf.format(c.time)
                                         journalDateStr = newDate
-                                        journalWikiUid = null
+                                        // Try to find the journal page for this date
+                                        journalWikiUid = viewData?.journalPages?.firstOrNull { it.title == newDate }?.uid
                                         scope.launch { api.setJournalDate(newDate); updateTaskList() } 
                                     }) { NfIcon(NfIcons.ARROW_LEFT) }
                                     
@@ -1693,7 +1694,8 @@ fun HomeScreen(
                                         c.add(java.util.Calendar.MONTH, 1)
                                         val newDate = sdf.format(c.time)
                                         journalDateStr = newDate
-                                        journalWikiUid = null
+                                        // Try to find the journal page for this date
+                                        journalWikiUid = viewData?.journalPages?.firstOrNull { it.title == newDate }?.uid
                                         scope.launch { api.setJournalDate(newDate); updateTaskList() } 
                                     }) { NfIcon(NfIcons.ARROW_RIGHT) }
                                 }
@@ -1747,7 +1749,8 @@ fun HomeScreen(
                                                                 clickedCal.set(java.util.Calendar.DAY_OF_MONTH, day)
                                                                 val newDate = sdf.format(clickedCal.time)
                                                                 journalDateStr = newDate
-                                                                journalWikiUid = null
+                                                                // Try to find the journal page for this date
+                                                                journalWikiUid = viewData?.journalPages?.firstOrNull { it.title == newDate }?.uid
                                                                 scope.launch { api.setJournalDate(newDate); updateTaskList() }
                                                             },
                                                         contentAlignment = Alignment.Center
@@ -1776,7 +1779,8 @@ fun HomeScreen(
                                                 c.add(java.util.Calendar.DAY_OF_MONTH, -1)
                                                 val newDate = sdf.format(c.time)
                                                 journalDateStr = newDate
-                                                journalWikiUid = null
+                                                // Try to find the journal page for this date
+                                                journalWikiUid = viewData?.journalPages?.firstOrNull { it.title == newDate }?.uid
                                                 api.setJournalDate(newDate)
                                                 updateTaskList()
                                             }
@@ -1789,7 +1793,8 @@ fun HomeScreen(
                                         onClick = {
                                             val newDate = sdf.format(java.util.Date())
                                             journalDateStr = newDate
-                                            journalWikiUid = null
+                                            // Try to find the journal page for this date
+                                            journalWikiUid = viewData?.journalPages?.firstOrNull { it.title == newDate }?.uid
                                             scope.launch { api.setJournalDate(newDate); updateTaskList() }
                                         },
                                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer),
@@ -1804,7 +1809,8 @@ fun HomeScreen(
                                                 c.add(java.util.Calendar.DAY_OF_MONTH, 1)
                                                 val newDate = sdf.format(c.time)
                                                 journalDateStr = newDate
-                                                journalWikiUid = null
+                                                // Try to find the journal page for this date
+                                                journalWikiUid = viewData?.journalPages?.firstOrNull { it.title == newDate }?.uid
                                                 api.setJournalDate(newDate)
                                                 updateTaskList()
                                             }
@@ -1870,7 +1876,7 @@ fun HomeScreen(
                                 ) {
                                     NfIcon(iconChar, 14.sp, color)
                                     Spacer(Modifier.width(8.dp))
-                                    Text(page.title, fontSize = 14.sp)
+                                    Text(page.title, fontSize = 14.sp, fontWeight = if (page.uid == journalWikiUid) FontWeight.Bold else FontWeight.Normal)
                                     
                                     if (isTask && page.hasChildren) {
                                         Spacer(Modifier.weight(1f))
@@ -2554,7 +2560,8 @@ fun HomeScreen(
                                     journalWikiTitle = journalWikiTitle,
                                     onDateChange = { d ->
                                         journalDateStr = d
-                                        journalWikiUid = null
+                                        // Try to find the journal page for this date
+                                        journalWikiUid = viewData?.journalPages?.firstOrNull { it.title == d }?.uid
                                         scope.launch {
                                             api.setJournalDate(d)
                                             updateTaskList()

@@ -1059,6 +1059,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         true,
                     );
                     app.journal_editor_content = iced::widget::text_editor::Content::with_text(&md);
+                    app.journal_editing_uid = Some(entry.uid.clone());
                 } else {
                     app.journal_editor_content = iced::widget::text_editor::Content::new();
                 }
@@ -1085,6 +1086,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     true,
                 );
                 app.journal_editor_content = iced::widget::text_editor::Content::with_text(&md);
+                app.journal_editing_uid = Some(entry.uid.clone());
             } else {
                 app.journal_editor_content = iced::widget::text_editor::Content::new();
             }
@@ -1104,6 +1106,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     true,
                 );
                 app.journal_editor_content = iced::widget::text_editor::Content::with_text(&md);
+                app.journal_editing_uid = Some(entry.uid.clone());
             } else {
                 app.journal_editor_content = iced::widget::text_editor::Content::new();
             }
@@ -1230,6 +1233,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         true,
                     );
                     app.journal_editor_content = iced::widget::text_editor::Content::with_text(&md);
+                    app.journal_editing_uid = Some(entry.uid.clone());
                 } else {
                     app.journal_editor_content = iced::widget::text_editor::Content::new();
                 }

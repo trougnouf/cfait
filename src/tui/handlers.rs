@@ -2135,6 +2135,7 @@ pub async fn handle_key_event(
                 if let Ok(d) = chrono::NaiveDate::parse_from_str(input, "%Y-%m-%d") {
                     state.journal_date = d;
                     state.journal_editing_uid = None;
+                    state.update_journal_editing_uid();
                     state.mode = InputMode::Normal;
                     state.input_buffer.clear();
                     state.message = String::new();
@@ -2336,6 +2337,7 @@ pub async fn handle_key_event(
                 if state.sidebar_mode == SidebarMode::Journal {
                     state.journal_date = chrono::Local::now().date_naive();
                     state.journal_editing_uid = None;
+                    state.update_journal_editing_uid();
                     state.refresh_filtered_view();
                 } else if let Some(summary) = state.get_selected_task().map(|t| t.summary.clone()) {
                     state.mode = InputMode::AddingSession;
@@ -3480,6 +3482,7 @@ pub async fn handle_key_event(
                 if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
                     state.journal_date -= chrono::Duration::days(1);
                     state.journal_editing_uid = None;
+                    state.update_journal_editing_uid();
                     state.refresh_filtered_view();
                 } else {
                     state.move_cursor_left()
@@ -3489,6 +3492,7 @@ pub async fn handle_key_event(
                 if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
                     state.journal_date += chrono::Duration::days(1);
                     state.journal_editing_uid = None;
+                    state.update_journal_editing_uid();
                     state.refresh_filtered_view();
                 } else if state.active_focus == Focus::Sidebar {
                     match state.sidebar_mode {

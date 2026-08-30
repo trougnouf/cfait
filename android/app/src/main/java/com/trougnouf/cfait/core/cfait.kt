@@ -6123,6 +6123,8 @@ data class MobileViewData(
     var `focusedTaskUid`: kotlin.String?,
     var `journalContext`: MobileDayContext,
     var `journalPages`: List<MobileJournalPage>,
+    var `selectedJournalDate`: kotlin.String,
+    var `selectedJournalUid`: kotlin.String?,
 ) {
     companion object
 }
@@ -6140,6 +6142,8 @@ public object FfiConverterTypeMobileViewData : FfiConverterRustBuffer<MobileView
             FfiConverterOptionalString.read(buf),
             FfiConverterTypeMobileDayContext.read(buf),
             FfiConverterSequenceTypeMobileJournalPage.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
         )
 
     override fun allocationSize(value: MobileViewData) =
@@ -6150,7 +6154,9 @@ public object FfiConverterTypeMobileViewData : FfiConverterRustBuffer<MobileView
                 FfiConverterSequenceTypeMobileGoalProgress.allocationSize(value.`goals`) +
                 FfiConverterOptionalString.allocationSize(value.`focusedTaskUid`) +
                 FfiConverterTypeMobileDayContext.allocationSize(value.`journalContext`) +
-                FfiConverterSequenceTypeMobileJournalPage.allocationSize(value.`journalPages`)
+                FfiConverterSequenceTypeMobileJournalPage.allocationSize(value.`journalPages`) +
+                FfiConverterString.allocationSize(value.`selectedJournalDate`) +
+                FfiConverterOptionalString.allocationSize(value.`selectedJournalUid`)
         )
 
     override fun write(
@@ -6164,6 +6170,8 @@ public object FfiConverterTypeMobileViewData : FfiConverterRustBuffer<MobileView
         FfiConverterOptionalString.write(value.`focusedTaskUid`, buf)
         FfiConverterTypeMobileDayContext.write(value.`journalContext`, buf)
         FfiConverterSequenceTypeMobileJournalPage.write(value.`journalPages`, buf)
+        FfiConverterString.write(value.`selectedJournalDate`, buf)
+        FfiConverterOptionalString.write(value.`selectedJournalUid`, buf)
     }
 }
 

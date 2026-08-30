@@ -452,6 +452,8 @@ pub struct MobileViewData {
     pub focused_task_uid: Option<String>,
     pub journal_context: MobileDayContext,
     pub journal_pages: Vec<MobileJournalPage>,
+    pub selected_journal_date: String,
+    pub selected_journal_uid: Option<String>,
 }
 
 #[derive(uniffi::Record)]
@@ -2718,6 +2720,7 @@ impl CfaitMobile {
 
         let journal_pages: Vec<MobileJournalPage> = filtered
             .journal_pages
+            .clone()
             .into_iter()
             .map(|p| MobileJournalPage {
                 uid: p.key,
@@ -2730,6 +2733,22 @@ impl CfaitMobile {
             })
             .collect();
 
+        // Find the selected journal UID for the current date
+        // by looking for a journal entry with a matching dtstart date
+        let selected_journal_uid: Option<String> =
+            filtered.journal_pages.into_iter().find_map(|p| {
+                // Try to get the actual task from the store
+                if let Some(task) = store.get_task_ref(&p.key)
+                    && let Some(dt) = &task.dtstart
+                {
+                    let date = dt.to_date_naive();
+                    if date == selected_journal_date {
+                        return Some(p.key);
+                    }
+                }
+                None
+            });
+
         MobileViewData {
             tasks,
             tags,
@@ -2738,6 +2757,8 @@ impl CfaitMobile {
             focused_task_uid,
             journal_context,
             journal_pages,
+            selected_journal_date: selected_journal_date.format("%Y-%m-%d").to_string(),
+            selected_journal_uid,
         }
     }
 
