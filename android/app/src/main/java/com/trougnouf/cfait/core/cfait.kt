@@ -1246,6 +1246,7 @@ internal object UniffiLib {
         `ptr`: Long,
         `rawWord`: RustBuffer.ByValue,
         `kind`: RustBuffer.ByValue,
+        `contextUid`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
@@ -1879,7 +1880,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_tasks_related_to() != 37777) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_token_context() != 57765) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_token_context() != 4023) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_version_info() != 23909) {
@@ -2705,6 +2706,7 @@ public interface CfaitMobileInterface {
     fun `getTokenContext`(
         `rawWord`: kotlin.String,
         `kind`: MobileSyntaxType,
+        `contextUid`: kotlin.String?,
     ): MobileResolvedDependency?
 
     fun `getVersionInfo`(): MobileVersionInfo
@@ -3767,6 +3769,7 @@ open class CfaitMobile :
     override fun `getTokenContext`(
         `rawWord`: kotlin.String,
         `kind`: MobileSyntaxType,
+        `contextUid`: kotlin.String?,
     ): MobileResolvedDependency? =
         FfiConverterOptionalTypeMobileResolvedDependency.lift(
             callWithHandle {
@@ -3775,6 +3778,7 @@ open class CfaitMobile :
                         it,
                         FfiConverterString.lower(`rawWord`),
                         FfiConverterTypeMobileSyntaxType.lower(`kind`),
+                        FfiConverterOptionalString.lower(`contextUid`),
                         _status,
                     )
                 }

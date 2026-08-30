@@ -67,7 +67,8 @@ Evaluated instantly during text input. Supported across all clients.
 | `~` or `est:` | Estimated duration (supports ranges). | `~30m`, `~1h-2h` |
 | `#` | Tag/Category (Supports brace expansion). | `#work`, `#project{sub1,sub2}` |
 | `@@` or `loc:`| Location (Supports multiple via `|`). | `@@office`, `@@aldi|auchan` |
-| `url:` / `[[ ]]`| Attach URL or Wiki-link. (Any `scheme://` or `mailto:` is supported. Bare URLs default to `https://`). | `url:perdu.com`, `[[obsidian://open]]`, `[[Master plan|Alias]]` |
+| `url:` | Attach a URL. (Any `scheme://` or `mailto:` is supported. Bare URLs default to `https://`). | `url:perdu.com`, `url:https://example.com` |
+| `[[ ]]` | Wiki-link to jump to or create a task/page. Use `:` for absolute paths and `+` for relative sub-items. | `[[Master plan]]`, `[[+Child]]`, `[[Project:Phase 1]]` |
 | `dep:` or `depends:`| Set dependency (blocks the task). Supports short UIDs or fuzzy matching by summary. | `dep:"Install foundation"`, `dep:abc1234` |
 | `rel:` or `related:`| Set related task (sibling). Supports short UIDs or fuzzy matching by summary. | `rel:"Master plan"`, `rel:abc1234` |
 | `geo:` | Geo-coordinates. | `geo:50.1,4.2`, `geo:here` (Mobile: Fetches GPS) |
@@ -107,7 +108,9 @@ Users can also use the "Edit Tree" action (or `Ctrl+E`) to edit an entire existi
     *   `[x]`, `[X]`, or `[*]` maps to `Completed`.
     *   `[-]` or `[~]` maps to `Cancelled`.
 *   **The Structural Parent Rule:** If you indent an actionable task (`- [ ] subtask`) underneath a plain bullet point (`- Folder`), Cfait recognizes the plain bullet as a structural block and extracts it as an `is:note` component. This preserves the proper parent/child hierarchy.
-*   **Wiki Sub-pages:** To create an explicit sub-page (a `VJOURNAL` component), append `is:page` to the line, or use wiki-links (`[[Project:Phase 1]]`) to dynamically navigate to and create new pages.
+*   **Context-Aware Wiki Links:** Creating a missing link inherits the component type of where it was clicked (creating an actionable `VTODO` from a task, or a `VJOURNAL` from a page). Standard links (`[[My Page]]`) always search globally and default to root-level creation.
+    *   *Override Context:* Use `- [ ] [[My Task]]` to explicitly force an actionable task, or `[[My Page is:page]]` to explicitly force a journal page.
+    *   *Hierarchy Paths:* Use `[[Project:Phase 1]]` to define an absolute path (dynamically generating missing ancestors). Use `[[+Subpage]]` to explicitly search for or create a child within the current context.
 *   **Sequential Dependencies:** Numbered lists (`1. [ ]`, `2. [ ]`) create `DEPENDS-ON` blocking relationships. If multiple tasks share the same number at the same indentation level (e.g., two `3. [ ]` tasks), they are extracted as parallel steps that both depend on the previous step (`2. [ ]`). Items do not need to be written in sequential order; out-of-order lists are resolved systematically.
 *   **Round-Trip UIDs:** Serialized task trees append an inline HTML comment containing a unique identifier (e.g., `<!-- uid:abc-123 -->`) to the end of each task line. Formatting and text without UID comments are parsed into the `DESCRIPTION`.
 

@@ -852,11 +852,11 @@ pub fn view_task_row<'a>(
             let summary_text: Element<'a, Message> = rich_text(summary_spans)
                 .size(font_size)
                 .width(Length::Fill)
-                .on_link_click(|target: String| {
+                .on_link_click(move |target: String| {
                     if target.contains("://") || target.starts_with("mailto:") {
                         Message::OpenUrl(target)
                     } else {
-                        Message::OpenWikiLink(target)
+                        Message::OpenWikiLink(target, Some(task.uid.clone()))
                     }
                 })
                 .into();
@@ -1475,11 +1475,11 @@ pub fn view_task_row<'a>(
                                     false,
                                 );
                                 desc_col = desc_col.push(rich_text(spans).size(14).on_link_click(
-                                    |target: String| {
+                                    move |target: String| {
                                         if target.contains("://") || target.starts_with("mailto:") {
                                             Message::OpenUrl(target)
                                         } else {
-                                            Message::OpenWikiLink(target)
+                                            Message::OpenWikiLink(target, Some(task.uid.clone()))
                                         }
                                     },
                                 ));
@@ -1517,11 +1517,11 @@ pub fn view_task_row<'a>(
                                     false,
                                 );
                                 desc_col = desc_col.push(rich_text(spans).size(14).on_link_click(
-                                    |target: String| {
+                                    move |target: String| {
                                         if target.contains("://") || target.starts_with("mailto:") {
                                             Message::OpenUrl(target)
                                         } else {
-                                            Message::OpenWikiLink(target)
+                                            Message::OpenWikiLink(target, Some(task.uid.clone()))
                                         }
                                     },
                                 ));
@@ -1552,11 +1552,11 @@ pub fn view_task_row<'a>(
                                     false,
                                 );
                                 desc_col = desc_col.push(rich_text(spans).size(14).on_link_click(
-                                    |target: String| {
+                                    move |target: String| {
                                         if target.contains("://") || target.starts_with("mailto:") {
                                             Message::OpenUrl(target)
                                         } else {
-                                            Message::OpenWikiLink(target)
+                                            Message::OpenWikiLink(target, Some(task.uid.clone()))
                                         }
                                     },
                                 ));
@@ -1631,11 +1631,11 @@ pub fn view_task_row<'a>(
                             }
 
                             desc_col = desc_col.push(rich_text(spans).size(size).on_link_click(
-                                |target: String| {
+                                move |target: String| {
                                     if target.contains("://") || target.starts_with("mailto:") {
                                         Message::OpenUrl(target)
                                     } else {
-                                        Message::OpenWikiLink(target)
+                                        Message::OpenWikiLink(target, Some(task.uid.clone()))
                                     }
                                 },
                             ));
@@ -1657,11 +1657,11 @@ pub fn view_task_row<'a>(
                             false,
                         );
                         desc_col = desc_col.push(rich_text(spans).size(14).on_link_click(
-                            |target: String| {
+                            move |target: String| {
                                 if target.contains("://") || target.starts_with("mailto:") {
                                     Message::OpenUrl(target)
                                 } else {
-                                    Message::OpenWikiLink(target)
+                                    Message::OpenWikiLink(target, Some(task.uid.clone()))
                                 }
                             },
                         ));
@@ -2330,13 +2330,15 @@ pub fn view_task_row<'a>(
 
                         let inline_desc = row![
                             Space::new().width(Length::Fixed(indent_size as f32 + 34.0)),
-                            rich_text(spans).size(14).on_link_click(|target: String| {
-                                if target.contains("://") || target.starts_with("mailto:") {
-                                    Message::OpenUrl(target)
-                                } else {
-                                    Message::OpenWikiLink(target)
-                                }
-                            })
+                            rich_text(spans)
+                                .size(14)
+                                .on_link_click(move |target: String| {
+                                    if target.contains("://") || target.starts_with("mailto:") {
+                                        Message::OpenUrl(target)
+                                    } else {
+                                        Message::OpenWikiLink(target, Some(task.uid.clone()))
+                                    }
+                                })
                         ];
 
                         desc_col = desc_col.push(inline_desc);

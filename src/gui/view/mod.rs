@@ -3462,6 +3462,13 @@ pub fn build_context_banner<'a>(
             };
 
             if !clean_uid.is_empty() {
+                let context_uid = app
+                    .editing_tree_uid
+                    .as_ref()
+                    .or(app.editing_uid.as_ref())
+                    .or(app.journal_editing_uid.as_ref())
+                    .map(|s| s.as_str());
+
                 let is_url = clean_uid.contains("://") || clean_uid.starts_with("mailto:");
 
                 let (icon_char, color, text_str, msg) = if is_url {
@@ -3472,7 +3479,7 @@ pub fn build_context_banner<'a>(
                         Some(Message::OpenUrl(clean_uid.clone())),
                     )
                 } else {
-                    match app.store.resolve_dependency_ref(&clean_uid) {
+                    match app.store.resolve_dependency_ref(&clean_uid, context_uid) {
                         Ok(resolved_uid) => {
                             if let Some(summary) = app.store.get_summary(&resolved_uid) {
                                 let icon = if kind == SyntaxType::Dependency {

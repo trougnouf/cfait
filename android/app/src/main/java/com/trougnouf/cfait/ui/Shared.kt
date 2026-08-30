@@ -1015,7 +1015,7 @@ class SmartSyntaxTransformation(
 }
 
 @Composable
-fun CursorContextBanner(api: CfaitMobile, textFieldValue: TextFieldValue, onTextChange: (TextFieldValue) -> Unit) {
+fun CursorContextBanner(api: CfaitMobile, textFieldValue: TextFieldValue, contextUid: String? = null, onTextChange: (TextFieldValue) -> Unit) {
     val cursor = textFieldValue.selection.start
     val text = textFieldValue.text
 
@@ -1107,7 +1107,7 @@ fun CursorContextBanner(api: CfaitMobile, textFieldValue: TextFieldValue, onText
                         activeToken = token
                         rawWord = word
                         resolvedDep = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                            api.getTokenContext(word, token.kind)
+                            api.getTokenContext(word, token.kind, contextUid)
                         }
                     }
                 } else {

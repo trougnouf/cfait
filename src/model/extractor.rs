@@ -123,7 +123,14 @@ fn compute_task_lines(input: &str, is_journal: bool) -> Vec<bool> {
                 let has_is_note = after_marker.contains("is:note")
                     || after_marker.contains("is:page")
                     || after_marker.contains("is:journal");
-                if has_checkbox || has_uid || has_is_note || (!is_journal && !has_checkbox) {
+                let has_wiki_link = after_marker.trim().starts_with("[[");
+
+                if has_checkbox
+                    || has_uid
+                    || has_is_note
+                    || has_wiki_link
+                    || (!is_journal && !has_checkbox)
+                {
                     is_task_line[i] = true;
                 }
             }
@@ -663,7 +670,7 @@ pub fn serialize_task_tree(
         prefix: &str,
         parent_href: &str,
     ) {
-        let status_str = if task.is_note {
+        let status_str = if task.is_note || task.is_journal {
             String::new()
         } else {
             format!(

@@ -253,9 +253,14 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                     example: format!("{p_rel}\"{}\"", rust_i18n::t!("example_meeting")),
                 },
                 HelpItem {
-                    keys: format!("{} {} [[ ]]", p_url, rust_i18n::t!("or")),
-                    desc: rust_i18n::t!("help_metadata_attach_link").to_string(),
-                    example: format!("{p_url}https://perdu.com or [[https://perdu.com]]"),
+                    keys: p_url.to_string(),
+                    desc: rust_i18n::t!("help_metadata_attach_url").to_string(),
+                    example: format!("{p_url}https://perdu.com, {p_url}example.com"),
+                },
+                HelpItem {
+                    keys: "[[ ]]".to_string(),
+                    desc: rust_i18n::t!("help_metadata_wiki_link").to_string(),
+                    example: rust_i18n::t!("example_wiki_links").to_string(),
                 },
                 HelpItem {
                     keys: "geo:".to_string(),

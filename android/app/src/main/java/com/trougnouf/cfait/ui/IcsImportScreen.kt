@@ -666,7 +666,7 @@ fun JournalMainView(
                     unfocusedIndicatorColor = Color.Transparent
                 )
             )
-            CursorContextBanner(api, text) { text = it }
+            CursorContextBanner(api, text, uid) { text = it }
         }
 
         if (journalWikiUid == null && viewData != null && !hideExtras) {

@@ -879,68 +879,147 @@ impl TaskStore {
         self.add_task_to_indices(&task);
     }
 
-    pub fn resolve_dependency_ref(&self, reference: &str) -> Result<String, String> {
+    fn is_descendant_of(&self, descendant_uid: &str, ancestor_uid: &str) -> bool {
+        let mut curr = descendant_uid.to_string();
+        let mut visited = HashSet::new();
+        while let Some(p_uid) = self.get_task_ref(&curr).and_then(|t| t.parent_uid.clone()) {
+            if p_uid == ancestor_uid {
+                return true;
+            }
+            if !visited.insert(p_uid.clone()) {
+                break;
+            }
+            curr = p_uid;
+        }
+        false
+    }
+
+    fn task_matches_path(
+        &self,
+        task: &Task,
+        path_segments: &[String],
+        is_relative: bool,
+        context_uid: Option<&str>,
+    ) -> bool {
+        let target_summary =
+            crate::model::parser::strip_quotes(path_segments.last().unwrap()).to_lowercase();
+        let task_summary = task.summary.to_lowercase();
+
+        if !task_summary.contains(&target_summary) {
+            return false;
+        }
+
+        if is_relative {
+            if let Some(ctx_uid) = context_uid {
+                if !self.is_descendant_of(&task.uid, ctx_uid) {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+
+        if path_segments.len() <= 1 {
+            return true;
+        }
+
+        let mut current_task = task;
+        let mut segment_idx = path_segments.len().saturating_sub(2);
+
+        while segment_idx < path_segments.len() {
+            if let Some(p_uid) = &current_task.parent_uid {
+                if let Some(p_task) = self.get_task_ref(p_uid) {
+                    let expected_summary =
+                        crate::model::parser::strip_quotes(&path_segments[segment_idx])
+                            .to_lowercase();
+                    if p_task.summary.to_lowercase().contains(&expected_summary) {
+                        if segment_idx == 0 {
+                            break;
+                        }
+                        segment_idx -= 1;
+                    }
+                    current_task = p_task;
+                } else {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    pub fn resolve_dependency_ref(
+        &self,
+        reference: &str,
+        context_uid: Option<&str>,
+    ) -> Result<String, String> {
         let clean_ref = reference
             .trim_start_matches("[[")
             .trim_end_matches("]]")
             .trim();
 
-        // FAST PATH: Exact UID match (O(1))
-        if self.index.contains_key(clean_ref) {
-            return Ok(clean_ref.to_string());
+        let is_relative = clean_ref.starts_with('+');
+        let path_str = if is_relative {
+            clean_ref[1..].trim()
+        } else {
+            clean_ref
+        };
+
+        let path_segments = crate::model::parser::split_path_respecting_quotes(path_str);
+        if path_segments.is_empty() {
+            return Err("Empty reference".to_string());
         }
 
-        let lower_ref = clean_ref.to_lowercase();
+        if path_segments.len() == 1 {
+            let single_ref = crate::model::parser::strip_quotes(&path_segments[0]);
+            if self.index.contains_key(&single_ref) {
+                return Ok(single_ref);
+            }
+        }
 
-        let mut exact_uid_match = None;
-        let mut exact_uid_count = 0;
-
-        let mut exact_sum_match = None;
-        let mut exact_sum_count = 0;
-
-        let mut partial_matches = Vec::new();
+        let mut matches = Vec::new();
 
         for (href, map) in &self.calendars {
             let is_system = href == crate::storage::LOCAL_TRASH_HREF || href == "local://recovery";
 
             for (uid, task) in map {
-                // UID prefix matches ALWAYS search all calendars (including trash/recovery)
-                // so we can resolve legacy dangling references and clean them up
-                if uid.starts_with(clean_ref) {
-                    exact_uid_match = Some(uid.clone());
-                    exact_uid_count += 1;
-                }
-
-                if !is_system {
-                    if task.summary.to_lowercase() == lower_ref {
-                        exact_sum_match = Some(uid.clone());
-                        exact_sum_count += 1;
-                    }
-                    if task.summary.to_lowercase().contains(&lower_ref) {
-                        partial_matches.push((uid.clone(), task.summary.clone()));
-                    }
+                if (path_segments.len() == 1
+                    && uid.starts_with(&crate::model::parser::strip_quotes(&path_segments[0])))
+                    || (!is_system
+                        && self.task_matches_path(task, &path_segments, is_relative, context_uid))
+                {
+                    matches.push(task.clone());
                 }
             }
         }
 
-        if exact_uid_count == 1 {
-            return Ok(exact_uid_match.unwrap());
-        }
-        if exact_sum_count == 1 {
-            return Ok(exact_sum_match.unwrap());
-        }
-        if partial_matches.len() == 1 {
-            return Ok(partial_matches[0].0.clone());
+        matches.sort_by_key(|t| t.uid.clone());
+        matches.dedup_by(|a, b| a.uid == b.uid);
+
+        if matches.len() == 1 {
+            return Ok(matches[0].uid.clone());
         }
 
-        if partial_matches.len() > 1 {
-            let summaries: Vec<String> = partial_matches
+        if matches.len() > 1 {
+            let target_summary =
+                crate::model::parser::strip_quotes(path_segments.last().unwrap()).to_lowercase();
+            let exact_matches: Vec<_> = matches
+                .iter()
+                .filter(|t| t.summary.to_lowercase() == target_summary)
+                .collect();
+            if exact_matches.len() == 1 {
+                return Ok(exact_matches[0].uid.clone());
+            }
+
+            let summaries: Vec<String> = matches
                 .into_iter()
                 .take(3)
-                .map(|(_, s)| format!("'{}'", s))
+                .map(|t| format!("'{}'", t.summary))
                 .collect();
             let mut matches_str = summaries.join(", ");
-            if exact_uid_count + exact_sum_count > 3 {
+            if summaries.len() == 3 {
                 matches_str.push_str(", ...");
             }
             return Err(rust_i18n::t!(
@@ -954,28 +1033,48 @@ impl TaskStore {
         Err(rust_i18n::t!("error_task_not_found_for_dep", reference = clean_ref).to_string())
     }
 
-    pub fn get_dependency_candidates(&self, reference: &str) -> Vec<(String, String)> {
+    pub fn get_dependency_candidates(
+        &self,
+        reference: &str,
+        context_uid: Option<&str>,
+    ) -> Vec<(String, String)> {
         let clean_ref = reference
             .trim_start_matches("[[")
             .trim_end_matches("]]")
             .trim();
-        let lower_ref = clean_ref.to_lowercase();
+
+        let is_relative = clean_ref.starts_with('+');
+        let path_str = if is_relative {
+            clean_ref[1..].trim()
+        } else {
+            clean_ref
+        };
+
+        let path_segments = crate::model::parser::split_path_respecting_quotes(path_str);
+        if path_segments.is_empty() {
+            return Vec::new();
+        }
+
         let mut matches = Vec::new();
 
         for (href, map) in &self.calendars {
             let is_system = href == crate::storage::LOCAL_TRASH_HREF || href == "local://recovery";
             for (uid, task) in map {
-                if uid.starts_with(clean_ref)
-                    || (!is_system && task.summary.to_lowercase().contains(&lower_ref))
+                if (path_segments.len() == 1
+                    && uid.starts_with(&crate::model::parser::strip_quotes(&path_segments[0])))
+                    || (!is_system
+                        && self.task_matches_path(task, &path_segments, is_relative, context_uid))
                 {
                     matches.push((uid.clone(), task.summary.clone()));
                 }
             }
         }
 
+        let target_summary =
+            crate::model::parser::strip_quotes(path_segments.last().unwrap()).to_lowercase();
         matches.sort_by(|a, b| {
-            let a_starts = a.1.to_lowercase().starts_with(&lower_ref);
-            let b_starts = b.1.to_lowercase().starts_with(&lower_ref);
+            let a_starts = a.1.to_lowercase().starts_with(&target_summary);
+            let b_starts = b.1.to_lowercase().starts_with(&target_summary);
             b_starts.cmp(&a_starts).then_with(|| a.1.cmp(&b.1))
         });
         matches.dedup_by(|a, b| a.0 == b.0);
@@ -990,10 +1089,10 @@ impl TaskStore {
             let uid = if dep.len() == 36 && uuid::Uuid::parse_str(dep).is_ok() {
                 dep.clone()
             } else {
-                match self.resolve_dependency_ref(dep) {
+                match self.resolve_dependency_ref(dep, Some(&task.uid)) {
                     Ok(resolved_uid) => resolved_uid,
                     Err(_) => {
-                        let candidates = self.get_dependency_candidates(dep);
+                        let candidates = self.get_dependency_candidates(dep, Some(&task.uid));
                         if candidates.len() > 1 {
                             warnings.push(DependencyWarning::Ambiguous {
                                 raw: dep.clone(),
@@ -1028,10 +1127,10 @@ impl TaskStore {
             let uid = if rel.len() == 36 && uuid::Uuid::parse_str(rel).is_ok() {
                 rel.clone()
             } else {
-                match self.resolve_dependency_ref(rel) {
+                match self.resolve_dependency_ref(rel, Some(&task.uid)) {
                     Ok(resolved_uid) => resolved_uid,
                     Err(_) => {
-                        let candidates = self.get_dependency_candidates(rel);
+                        let candidates = self.get_dependency_candidates(rel, Some(&task.uid));
                         if candidates.len() > 1 {
                             warnings.push(DependencyWarning::Ambiguous {
                                 raw: rel.clone(),

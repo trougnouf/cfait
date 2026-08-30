@@ -722,6 +722,7 @@ impl CfaitMobile {
         &self,
         raw_word: String,
         kind: MobileSyntaxType,
+        context_uid: Option<String>,
     ) -> Option<MobileResolvedDependency> {
         let clean_uid = if matches!(kind, MobileSyntaxType::WikiLink) {
             crate::model::parser::strip_quotes(
@@ -742,7 +743,7 @@ impl CfaitMobile {
         }
 
         let store = self.controller.store.blocking_lock();
-        match store.resolve_dependency_ref(&clean_uid) {
+        match store.resolve_dependency_ref(&clean_uid, context_uid.as_deref()) {
             Ok(uid) => {
                 let summary = store
                     .get_summary(&uid)

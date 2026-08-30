@@ -2390,7 +2390,7 @@ fun HomeScreen(
                                             textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp),
                                             visualTransformation = remember(isDark) { MarkdownTransformation(isDark, api) },
                                         )
-                                        CursorContextBanner(api, newDescriptionText) { newDescriptionText = it }
+                                        CursorContextBanner(api, newDescriptionText, creatingChildUid) { newDescriptionText = it }
                                         Spacer(Modifier.height(8.dp))
                                     }
                                 }
@@ -2414,7 +2414,7 @@ fun HomeScreen(
                                                 )
                                             }),
                                         )
-                                        CursorContextBanner(api, newTaskText) { newTaskText = it }
+                                        CursorContextBanner(api, newTaskText, creatingChildUid) { newTaskText = it }
                                     }
 
                                     AnimatedVisibility(visible = isCreateExpanded) {

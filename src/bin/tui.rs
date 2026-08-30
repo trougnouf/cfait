@@ -113,7 +113,7 @@ async fn resolve_collection_href(ctx: &Arc<dyn AppContext>, target: &str) -> Str
 
 // Helper to resolve short partial UIDs, summaries, or wiki-links back to a full UID
 fn resolve_uid(store: &TaskStore, partial: &str) -> Option<String> {
-    match store.resolve_dependency_ref(partial) {
+    match store.resolve_dependency_ref(partial, None) {
         Ok(uid) => Some(uid),
         Err(msg) => {
             eprintln!("{}", msg);
@@ -249,6 +249,9 @@ async fn apply_markdown_update(
             sub.calendar_href = task.calendar_href.clone();
             sub.percent_complete = ext.percent_complete;
             sub.is_note = ext.is_note;
+            if is_journal && ext.is_note {
+                sub.is_journal = true;
+            }
             store.add_task(sub.clone());
             actions.push(cfait::journal::Action::Create(sub));
         }

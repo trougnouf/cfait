@@ -1797,6 +1797,9 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                     sub.percent_complete = Some(pc);
                 }
                 sub.is_note = ext.is_note;
+                if is_journal && ext.is_note {
+                    sub.is_journal = true;
+                }
 
                 app.store.add_task(sub.clone());
                 actions.push(crate::journal::Action::Create(sub));
@@ -1846,16 +1849,22 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
             }
         }
 
-        if let Some(parent) = &app.creating_child_of {
-            new_task.parent_uid = Some(parent.clone());
+        let parent = if let Some(parent_uid) = &app.creating_child_of {
+            app.store.get_task_ref(parent_uid).cloned()
+        } else {
+            None
+        };
+        if let Some(parent_ref) = &parent {
+            new_task.parent_uid = Some(parent_ref.uid.clone());
             if !app.child_lock_active {
                 app.creating_child_of = None;
             }
         }
 
-        let target_href = app
-            .active_cal_href
-            .clone()
+        let target_href = parent
+            .as_ref()
+            .map(|p| p.calendar_href.clone())
+            .or_else(|| app.active_cal_href.clone())
             .or_else(|| {
                 app.calendars
                     .iter()
@@ -1882,6 +1891,7 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
             let inherited_href = new_task.calendar_href.clone();
 
             let parent_uid = new_task.uid.clone();
+            let parent_is_journal = new_task.is_journal;
 
             let mut resolved_props = std::collections::HashMap::new();
             resolved_props.insert(
@@ -1965,6 +1975,9 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                     sub.percent_complete = Some(pc);
                 }
                 sub.is_note = ext.is_note;
+                if parent_is_journal && ext.is_note {
+                    sub.is_journal = true;
+                }
 
                 tasks_to_create.push(sub);
             }

@@ -282,7 +282,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ArrowLeft
         | Message::SidebarInteractSpace
         | Message::SidebarInteractEnter
-        | Message::OpenWikiLink(_)
+        | Message::OpenWikiLink(_, _)
         | Message::OpenJournalPage(_)
         | Message::CreateJournalPage
         | Message::CreateJournalSubPage(_) => view::handle(app, message),

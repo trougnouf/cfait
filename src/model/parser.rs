@@ -1417,6 +1417,35 @@ pub fn quote_value(s: &str) -> String {
     }
 }
 
+pub fn split_path_respecting_quotes(path: &str) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut current = String::new();
+    let mut in_quote = false;
+    let mut escaped = false;
+
+    for c in path.chars() {
+        if escaped {
+            current.push(c);
+            escaped = false;
+        } else if c == '\\' {
+            escaped = true;
+            current.push(c);
+        } else if c == '"' {
+            in_quote = !in_quote;
+            current.push(c);
+        } else if c == ':' && !in_quote {
+            parts.push(current.trim().to_string());
+            current.clear();
+        } else {
+            current.push(c);
+        }
+    }
+    if !current.trim().is_empty() {
+        parts.push(current.trim().to_string());
+    }
+    parts
+}
+
 pub fn split_input_respecting_quotes(input: &str) -> Vec<(usize, usize, String)> {
     let mut parts = Vec::new();
     let mut current = String::new();
@@ -3108,6 +3137,7 @@ pub fn apply_smart_input(
             explicit_note_flag = Some(true);
         } else if exact == Some(&ExactToken::IsPage) {
             task.is_journal = true;
+            explicit_note_flag = Some(true);
         } else if exact == Some(&ExactToken::IsBlocked) {
             task.manual_block = true;
         } else if exact == Some(&ExactToken::IsPermanent) {
@@ -3523,7 +3553,26 @@ pub fn apply_smart_input(
 
     task.summary = summary_words.join(" ");
     let mut implicit_note = false;
-    if task.summary.starts_with("- ") || task.summary.starts_with("* ") {
+
+    let s = task.summary.trim();
+    if s.starts_with("[[") && s.ends_with("]]") && s[2..s.len() - 2].find("[[").is_none() {
+        let mut inner = s[2..s.len() - 2].trim();
+        if let Some((target, _)) = inner.split_once('|') {
+            inner = target.trim();
+        }
+        if inner.starts_with('+') {
+            inner = inner[1..].trim();
+        }
+
+        let path_segments = split_path_respecting_quotes(inner);
+        if let Some(last) = path_segments.last() {
+            task.summary = strip_quotes(last).to_string();
+        } else {
+            task.summary = inner.to_string();
+        }
+
+        // We do NOT force is_journal here anymore. Context decides.
+    } else if task.summary.starts_with("- ") || task.summary.starts_with("* ") {
         implicit_note = true;
         task.summary = task.summary[2..].trim_start().to_string();
     } else if task.summary == "-" || task.summary == "*" {

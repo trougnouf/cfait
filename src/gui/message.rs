@@ -139,7 +139,7 @@ pub enum Message {
     ToggleEditorMaximize,
 
     // --- View & Filter ---
-    OpenWikiLink(String),
+    OpenWikiLink(String, Option<String>),
     SetShowInlineDescriptions(bool),
     ToggleChildLock,
     ToggleYankLock,

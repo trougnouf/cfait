@@ -207,10 +207,25 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
-        Message::OpenWikiLink(title) => {
+        Message::OpenWikiLink(title, context_uid) => {
             let clean_title = title.trim_start_matches("[[").trim_end_matches("]]").trim();
 
-            match app.store.resolve_dependency_ref(clean_title) {
+            let is_relative = clean_title.starts_with('+');
+            let path_str = if is_relative {
+                clean_title[1..].trim()
+            } else {
+                clean_title
+            };
+
+            let path_segments = crate::model::parser::split_path_respecting_quotes(path_str);
+            if path_segments.is_empty() {
+                return Task::none();
+            }
+
+            match app
+                .store
+                .resolve_dependency_ref(clean_title, context_uid.as_deref())
+            {
                 Ok(uid) => handle(app, Message::JumpToTask(uid)),
                 Err(msg) if msg.starts_with("Ambiguous") => {
                     app.error_msg = Some(msg);
@@ -226,52 +241,94 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     let def_time =
                         chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M")
                             .ok();
-                    let mut new_task = crate::model::Task::new(&title, &app.tag_aliases, def_time);
 
-                    new_task.is_journal = true;
-                    new_task.is_note = true;
+                    let context_is_journal = if let Some(uid) = &context_uid {
+                        app.store
+                            .get_task_ref(uid)
+                            .map(|t| t.is_journal)
+                            .unwrap_or(false)
+                    } else {
+                        app.sidebar_mode == SidebarMode::Journal
+                    };
 
-                    if app.sidebar_mode == SidebarMode::Journal
-                        && let Some(parent) = &app.journal_editing_uid
-                    {
-                        new_task.parent_uid = Some(parent.clone());
-                    }
+                    let mut current_parent_uid = if is_relative {
+                        context_uid.clone()
+                    } else {
+                        None
+                    };
 
-                    let warnings = app.store.resolve_dependencies(&mut new_task);
-                    if !warnings.is_empty() {
-                        for w in warnings {
-                            log::warn!("Dependency resolution: {}", w);
+                    let mut final_uid = String::new();
+                    let mut actions = Vec::new();
+
+                    for (i, segment) in path_segments.iter().enumerate() {
+                        let seg_clean = crate::model::parser::strip_quotes(segment);
+
+                        let mut found_uid = None;
+                        for (href, map) in &app.store.calendars {
+                            if href == crate::storage::LOCAL_TRASH_HREF
+                                || href == "local://recovery"
+                            {
+                                continue;
+                            }
+                            for (uid, t) in map {
+                                if t.parent_uid == current_parent_uid
+                                    && t.summary.eq_ignore_ascii_case(&seg_clean)
+                                {
+                                    found_uid = Some(uid.clone());
+                                    break;
+                                }
+                            }
+                            if found_uid.is_some() {
+                                break;
+                            }
+                        }
+
+                        if let Some(uid) = found_uid {
+                            current_parent_uid = Some(uid.clone());
+                            if i == path_segments.len() - 1 {
+                                final_uid = uid;
+                            }
+                        } else {
+                            let mut new_task =
+                                crate::model::Task::new(&seg_clean, &app.tag_aliases, def_time);
+
+                            if context_is_journal {
+                                new_task.is_journal = true;
+                                new_task.is_note = true;
+                            }
+
+                            new_task.parent_uid = current_parent_uid.clone();
+
+                            let target_href = if let Some(p_uid) = &current_parent_uid {
+                                app.store
+                                    .get_task_ref(p_uid)
+                                    .map(|t| t.calendar_href.clone())
+                            } else {
+                                None
+                            }
+                            .or_else(|| app.active_cal_href.clone())
+                            .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
+                            new_task.calendar_href = target_href.clone();
+
+                            let uid = new_task.uid.clone();
+                            app.store.add_task(new_task.clone());
+                            actions.push(crate::journal::Action::Create(new_task));
+
+                            current_parent_uid = Some(uid.clone());
+                            if i == path_segments.len() - 1 {
+                                final_uid = uid;
+                            }
                         }
                     }
 
-                    let target_href = app
-                        .active_cal_href
-                        .clone()
-                        .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
-                    new_task.calendar_href = target_href.clone();
-
-                    if let Some(target) = new_task.target_collection.take() {
-                        new_task.calendar_href = crate::model::resolve_collection(
-                            &target,
-                            &app.calendars,
-                            &new_task.calendar_href,
-                        );
-                    }
-
-                    let uid = new_task.uid.clone();
-                    app.store.add_task(new_task.clone());
-
                     if let Some(tx) = &app.bg_tx {
-                        let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(vec![
-                            crate::journal::Action::Create(new_task),
-                        ]));
+                        let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(actions));
                     }
 
                     if app.sidebar_mode == SidebarMode::Journal {
-                        app.active_cal_href = Some(target_href);
-                        app.sidebar_mode = SidebarMode::Journal;
-                        app.journal_editing_uid = Some(uid);
-                        app.journal_title_input = title.clone();
+                        app.journal_editing_uid = Some(final_uid);
+                        app.journal_title_input =
+                            crate::model::parser::strip_quotes(path_segments.last().unwrap());
                         app.journal_editor_content =
                             iced::widget::text_editor::Content::with_text("");
                         app.editor_maximized = true;
@@ -280,7 +337,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         Task::none()
                     } else {
                         refresh_filtered_tasks(app);
-                        handle(app, Message::JumpToTask(uid))
+                        handle(app, Message::JumpToTask(final_uid))
                     }
                 }
             }
