@@ -342,7 +342,6 @@
     "help_md_title": "Description & Sous-tâches",
     "help_metadata_absolute_reminder": "Rappel absolu (heure fixe)",
     "help_metadata_append_description": "Ajouter une description (utiliser \"\" ou {})",
-    "help_metadata_attach_link": "Joindre un lien (ou utiliser [[url]])",
     "help_metadata_coordinates": "Coordonnées (par ex. : lat,long ou lat, long. Android : geo:here)",
     "help_metadata_dependency": "Dépendre d'une autre tâche (bloque cette tâche)",
     "help_metadata_force_calendar": "Forcer la création d'un événement",

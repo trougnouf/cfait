@@ -241,7 +241,6 @@
     "help_keyboard_zoom_ui": "Приблизить / отдалить / сбросить (GUI)",
     "help_metadata_absolute_reminder": "Напоминание с абсолютным временем",
     "help_metadata_append_description": "Добавить описание к тексту",
-    "help_metadata_attach_link": "Указать ссылку",
     "help_metadata_coordinates": "Координаты (Широта, Долгота)",
     "help_metadata_force_calendar": "Принудительное создание событий календаря",
     "help_metadata_jump_related": "Перейти к меню связанных задач",
