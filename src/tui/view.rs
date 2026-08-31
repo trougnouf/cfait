@@ -489,7 +489,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     let indent = "  ".repeat(item.depth as usize);
                     let tree_icon_span = if item.has_children && !item.is_expanded {
                         Span::styled(
-                            "[+]",
+                            "[+z]",
                             Style::default().fg(if is_dark_theme {
                                 Color::Yellow
                             } else {
@@ -563,7 +563,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     let indent = "  ".repeat(item.depth as usize);
                     let tree_icon_span = if item.has_children && !item.is_expanded {
                         Span::styled(
-                            "[+]",
+                            "[+z]",
                             Style::default().fg(if is_dark_theme {
                                 Color::Yellow
                             } else {
@@ -713,12 +713,20 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
                 let icon_str = if page.is_task {
                     if page.has_children {
-                        if page.is_expanded { "▼" } else { "▶" }
+                        if page.is_expanded {
+                            "▼ (z)"
+                        } else {
+                            "▶ (z)"
+                        }
                     } else {
                         "📔"
                     }
                 } else {
-                    if page.is_expanded { "▼" } else { "▶" }
+                    if page.is_expanded {
+                        "▼ (z)"
+                    } else {
+                        "▶ (z)"
+                    }
                 };
 
                 let prefix = if Some(&page.key) == state.journal_editing_uid.as_ref() {
@@ -990,9 +998,16 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             let entry = state
                 .store
                 .get_journal_entry(&target_href, state.journal_date);
-            let desc = entry.map(|e| e.description.clone()).unwrap_or_else(|| {
+            let desc = if let Some(e) = entry {
+                crate::model::extractor::serialize_task_tree(
+                    &state.store,
+                    &e.uid,
+                    &state.calendars,
+                    true,
+                )
+            } else {
                 rust_i18n::t!("journal_no_notes", name = target_name).to_string()
-            });
+            };
             (
                 format!(
                     " {} {} ({}) ",
@@ -1396,7 +1411,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
                         let tree_indicator = if t.has_visible_subtasks && t.collapsed {
                             Span::styled(
-                                "[+]",
+                                "[+z]",
                                 Style::default().fg(if is_dark_theme {
                                     Color::Yellow
                                 } else {

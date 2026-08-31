@@ -1070,6 +1070,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::SelectJournalDate(date) => {
             flush_journal_save(app);
             app.journal_editing_uid = None;
+            app.journal_title_input.clear();
             app.journal_date = date;
             app.journal_date_input = date.format("%Y-%m-%d").to_string();
             let href = app
@@ -1086,7 +1087,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     true,
                 );
                 app.journal_editor_content = iced::widget::text_editor::Content::with_text(&md);
-                app.journal_editing_uid = Some(entry.uid.clone());
             } else {
                 app.journal_editor_content = iced::widget::text_editor::Content::new();
             }
@@ -1097,6 +1097,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.journal_editing_href = Some(href.clone());
             app.active_cal_href = Some(href.clone());
             app.journal_editing_uid = None;
+            app.journal_title_input.clear();
             let date = app.journal_date;
             if let Some(entry) = app.store.get_journal_entry(&href, date) {
                 let md = crate::model::extractor::serialize_task_tree(
@@ -1106,7 +1107,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     true,
                 );
                 app.journal_editor_content = iced::widget::text_editor::Content::with_text(&md);
-                app.journal_editing_uid = Some(entry.uid.clone());
             } else {
                 app.journal_editor_content = iced::widget::text_editor::Content::new();
             }

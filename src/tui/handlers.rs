@@ -3027,7 +3027,6 @@ pub async fn handle_key_event(
                 if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
                     state.journal_date += chrono::Duration::days(1);
                     state.journal_editing_uid = None;
-                    state.update_journal_editing_uid();
                     state.refresh_filtered_view();
                 } else {
                     let data = if let Some(yanked) = &state.yanked_uid {
@@ -3187,7 +3186,6 @@ pub async fn handle_key_event(
                 if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
                     state.journal_date += chrono::Duration::days(7);
                     state.journal_editing_uid = None;
-                    state.update_journal_editing_uid();
                     state.refresh_filtered_view();
                 } else {
                     state.next();
@@ -3197,7 +3195,6 @@ pub async fn handle_key_event(
                 if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
                     state.journal_date -= chrono::Duration::days(7);
                     state.journal_editing_uid = None;
-                    state.update_journal_editing_uid();
                     state.refresh_filtered_view();
                 } else {
                     state.previous();
@@ -3445,6 +3442,55 @@ pub async fn handle_key_event(
                         ));
                     }
 
+                    // Extract Wiki Links and URLs
+                    let mut text = task.summary.clone();
+                    text.push(' ');
+                    text.push_str(&task.description);
+
+                    let mut seen = std::collections::HashSet::new();
+                    let mut start = 0;
+                    while let Some(idx) = text[start..].find("[[") {
+                        let abs_start = start + idx;
+                        if let Some(end_idx) = text[abs_start..].find("]]") {
+                            let link = &text[abs_start + 2..abs_start + end_idx];
+                            if seen.insert(link.to_string()) {
+                                items.push((
+                                    format!("[[{link}]]"),
+                                    format!("🔗 [Link] {}", link),
+                                    "wiki_link".to_string(),
+                                ));
+                            }
+                            start = abs_start + end_idx + 2;
+                        } else {
+                            break;
+                        }
+                    }
+
+                    let mut start = 0;
+                    while let Some(idx) = text[start..].find("http") {
+                        let abs_start = start + idx;
+                        let mut end_idx = abs_start;
+                        for c in text[abs_start..].chars() {
+                            if c.is_whitespace() || c == ']' || c == ')' {
+                                break;
+                            }
+                            end_idx += c.len_utf8();
+                        }
+                        if end_idx > abs_start {
+                            let link = &text[abs_start..end_idx];
+                            if seen.insert(link.to_string()) {
+                                items.push((
+                                    link.to_string(),
+                                    format!("🌐 [URL] {}", link),
+                                    "url".to_string(),
+                                ));
+                            }
+                            start = end_idx;
+                        } else {
+                            break;
+                        }
+                    }
+
                     if !items.is_empty() {
                         state.relationship_items = items;
                         state.relationship_selection_state.select(Some(0));
@@ -3519,7 +3565,6 @@ pub async fn handle_key_event(
                 if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
                     state.journal_date -= chrono::Duration::days(1);
                     state.journal_editing_uid = None;
-                    state.update_journal_editing_uid();
                     state.refresh_filtered_view();
                 } else {
                     state.move_cursor_left()
@@ -3529,7 +3574,6 @@ pub async fn handle_key_event(
                 if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
                     state.journal_date += chrono::Duration::days(1);
                     state.journal_editing_uid = None;
-                    state.update_journal_editing_uid();
                     state.refresh_filtered_view();
                 } else if state.active_focus == Focus::Sidebar {
                     match state.sidebar_mode {
@@ -4563,13 +4607,45 @@ pub async fn handle_key_event(
             }
             KeyCode::Enter => {
                 if let Some(idx) = state.relationship_selection_state.selected()
-                    && let Some((target_uid, _, _)) = state.relationship_items.get(idx)
+                    && let Some((target_uid, _, rel_type)) = state.relationship_items.get(idx)
                 {
-                    // Jump to the target task
                     let target_uid = target_uid.clone();
+                    let rel_type = rel_type.clone();
+                    if rel_type == "url" {
+                        #[cfg(not(target_os = "android"))]
+                        {
+                            let target_url = target_uid.clone();
+                            std::thread::spawn(move || {
+                                #[cfg(target_os = "linux")]
+                                let _ = std::process::Command::new("xdg-open")
+                                    .arg(target_url)
+                                    .spawn();
+                                #[cfg(target_os = "windows")]
+                                let _ = std::process::Command::new("explorer")
+                                    .arg(target_url)
+                                    .spawn();
+                                #[cfg(target_os = "macos")]
+                                let _ = std::process::Command::new("open").arg(target_url).spawn();
+                            });
+                        }
+                        state.mode = InputMode::Normal;
+                        state.message = rust_i18n::t!("open_url").to_string();
+                        return None;
+                    }
+
+                    let curr_uid = state.get_selected_task().map(|t| t.uid.clone());
+                    let actual_target = if rel_type == "wiki_link" {
+                        state
+                            .store
+                            .resolve_dependency_ref(&target_uid, curr_uid.as_deref())
+                            .unwrap_or_else(|_| target_uid.clone())
+                    } else {
+                        target_uid.clone()
+                    };
 
                     // Find which calendar this task belongs to
-                    if let Some(href) = state.store.index.get(&target_uid).cloned() {
+                    if let Some(href) = state.store.index.get(&actual_target).cloned() {
+                        let target_uid = actual_target;
                         // Clear filters that might hide the task
                         state.active_search_query.clear();
                         state.selected_categories.clear();
@@ -4643,8 +4719,9 @@ pub async fn handle_key_event(
                         state.message = rust_i18n::t!("jumped_to_task").to_string();
                     } else {
                         // FALLBACK: Treat degraded/unresolved references as a search query!
-                        state.input_buffer = target_uid.clone();
-                        state.active_search_query = target_uid.clone();
+                        let target_uid_clone = target_uid.clone();
+                        state.input_buffer = target_uid_clone.clone();
+                        state.active_search_query = target_uid_clone;
                         state.search_collapsed_tasks.clear();
                         state.selected_categories.clear();
                         state.selected_locations.clear();
@@ -4652,7 +4729,7 @@ pub async fn handle_key_event(
                         state.refresh_filtered_view();
 
                         state.mode = InputMode::Normal;
-                        state.message = format!("Searching: '{}'", target_uid);
+                        state.message = format!("Searching: '{}'", target_uid.clone());
                     }
                 }
             }

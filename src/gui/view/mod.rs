@@ -806,8 +806,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
 
     // --- MOVE TASK MODAL OVERLAY ---
     if let Some(uid) = &app.moving_task_uid
-        && let Some(idx) = app.find_task_index_by_uid(uid)
-        && let Some(task) = app.get_task_at_index(idx)
+        && let Some(task) = app.store.get_task_ref(uid).cloned()
     {
         let targets = app.get_move_targets(&task.calendar_href, app.moving_task_is_tree);
 
