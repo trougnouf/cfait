@@ -1015,7 +1015,13 @@ class SmartSyntaxTransformation(
 }
 
 @Composable
-fun CursorContextBanner(api: CfaitMobile, textFieldValue: TextFieldValue, contextUid: String? = null, onTextChange: (TextFieldValue) -> Unit) {
+fun CursorContextBanner(
+    api: CfaitMobile,
+    textFieldValue: TextFieldValue,
+    contextUid: String? = null,
+    onNavigate: ((String) -> Unit)? = null,
+    onTextChange: (TextFieldValue) -> Unit
+) {
     val cursor = textFieldValue.selection.start
     val text = textFieldValue.text
 
@@ -1135,6 +1141,7 @@ fun CursorContextBanner(api: CfaitMobile, textFieldValue: TextFieldValue, contex
                         .fillMaxWidth()
                         .background(color.copy(alpha = 0.1f), RoundedCornerShape(6.dp))
                         .border(1.dp, color.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                        .then(if (onNavigate != null && resolvedDep!!.isFound) Modifier.clickable { onNavigate(resolvedDep!!.uid) } else Modifier)
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {

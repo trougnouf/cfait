@@ -410,6 +410,14 @@ fun HomeScreen(
         }
     }
 
+    val onToggleCollapse: (String) -> Unit = { tag ->
+        expandedTags = if (expandedTags.contains(tag)) expandedTags - tag else expandedTags + tag
+        scope.launch {
+            api.dispatch(com.trougnouf.cfait.core.AppIntent.ToggleTagCollapse(tag))
+            updateTaskList()
+        }
+    }
+
     fun checkSyncStatus() {
         scope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
@@ -1865,10 +1873,7 @@ fun HomeScreen(
                                                 journalWikiUid = page.uid
                                                 journalWikiTitle = page.title
                                             } else {
-                                                scope.launch {
-                                                    api.dispatch(com.trougnouf.cfait.core.AppIntent.ToggleTagCollapse(page.uid))
-                                                    onDataChanged()
-                                                }
+                                                onToggleCollapse(page.uid)
                                             }
                                         }
                                         .padding(start = 8.dp + indent, end = 8.dp, top = 8.dp, bottom = 8.dp),
@@ -2396,7 +2401,7 @@ fun HomeScreen(
                                             textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp),
                                             visualTransformation = remember(isDark) { MarkdownTransformation(isDark, api) },
                                         )
-                                        CursorContextBanner(api, newDescriptionText, creatingChildUid) { newDescriptionText = it }
+                                        CursorContextBanner(api, newDescriptionText, creatingChildUid, onNavigate = onTaskClick) { newDescriptionText = it }
                                         Spacer(Modifier.height(8.dp))
                                     }
                                 }
@@ -2420,7 +2425,7 @@ fun HomeScreen(
                                                 )
                                             }),
                                         )
-                                        CursorContextBanner(api, newTaskText, creatingChildUid) { newTaskText = it }
+                                        CursorContextBanner(api, newTaskText, creatingChildUid, onNavigate = onTaskClick) { newTaskText = it }
                                     }
 
                                     AnimatedVisibility(visible = isCreateExpanded) {
@@ -2578,7 +2583,8 @@ fun HomeScreen(
                                     onDataChanged = {
                                         updateTaskList()
                                         com.trougnouf.cfait.ui.triggerBackgroundSync(context, api)
-                                    }
+                                    },
+                                    onToggleCollapse = onToggleCollapse
                                 )
                             } else {
                                 HorizontalPager(

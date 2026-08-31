@@ -263,7 +263,8 @@ fun JournalMainView(
     onOpenWikiPage: (String, String) -> Unit,
     onCloseWikiPage: () -> Unit,
     onTaskClick: (String) -> Unit,
-    onDataChanged: () -> Unit
+    onDataChanged: () -> Unit,
+    onToggleCollapse: ((String) -> Unit)? = null
 ) {
     var text by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
     var initialText by remember { mutableStateOf("") }
@@ -666,7 +667,7 @@ fun JournalMainView(
                     unfocusedIndicatorColor = Color.Transparent
                 )
             )
-            CursorContextBanner(api, text, uid) { text = it }
+            CursorContextBanner(api, text, uid, onNavigate = onTaskClick) { text = it }
         }
 
         if (journalWikiUid == null && viewData != null && !hideExtras) {

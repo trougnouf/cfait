@@ -185,7 +185,7 @@ fun TreeEditorScreen(
                         imeAction = ImeAction.None
                     )
                 )
-                com.trougnouf.cfait.ui.CursorContextBanner(api, markdownText, uid) { markdownText = it }
+                com.trougnouf.cfait.ui.CursorContextBanner(api, markdownText, uid, onNavigate = null) { markdownText = it }
             }
         }
     }
