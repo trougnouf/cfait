@@ -2174,14 +2174,36 @@ pub async fn handle_key_event(
             KeyCode::Char('e') | KeyCode::Char('E')
                 if key.modifiers.contains(KeyModifiers::CONTROL) =>
             {
-                if let Some(t) = state.get_selected_task() {
-                    let uid = t.uid.clone();
-                    let is_journal = t.is_journal;
+                let mut target_uid = None;
+                if state.active_focus == Focus::Sidebar && state.sidebar_mode == SidebarMode::Journal {
+                    if let Some(idx) = state.cal_state.selected()
+                        && let Some(page) = state.cached_journal_pages.get(idx)
+                        && page.is_task
+                    {
+                        target_uid = Some(page.key.clone());
+                    }
+                } else if state.sidebar_mode == SidebarMode::Journal {
+                    target_uid = state.journal_editing_uid.clone().or_else(|| {
+                        let target_href = state
+                            .active_cal_href
+                            .clone()
+                            .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
+                        state
+                            .store
+                            .get_journal_entry(&target_href, state.journal_date)
+                            .map(|t| t.uid.clone())
+                    });
+                } else if let Some(t) = state.get_selected_task() {
+                    target_uid = Some(t.uid.clone());
+                }
+
+                if let Some(uid) = target_uid {
+                    let is_journal = state.store.get_task_ref(&uid).map(|t| t.is_journal).unwrap_or(false);
                     let desc = crate::model::extractor::serialize_task_tree(
                         &state.store,
                         &uid,
                         &state.calendars,
-                        false,
+                        is_journal,
                     );
                     match run_external_editor(&desc, state.ctx.as_ref()) {
                         Ok(Some(new_desc)) => {
@@ -2999,6 +3021,7 @@ pub async fn handle_key_event(
                 if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
                     state.journal_date += chrono::Duration::days(1);
                     state.journal_editing_uid = None;
+                    state.update_journal_editing_uid();
                     state.refresh_filtered_view();
                 } else {
                     let data = if let Some(yanked) = &state.yanked_uid {
@@ -3158,6 +3181,7 @@ pub async fn handle_key_event(
                 if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
                     state.journal_date += chrono::Duration::days(7);
                     state.journal_editing_uid = None;
+                    state.update_journal_editing_uid();
                     state.refresh_filtered_view();
                 } else {
                     state.next();
@@ -3167,6 +3191,7 @@ pub async fn handle_key_event(
                 if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
                     state.journal_date -= chrono::Duration::days(7);
                     state.journal_editing_uid = None;
+                    state.update_journal_editing_uid();
                     state.refresh_filtered_view();
                 } else {
                     state.previous();
@@ -4047,22 +4072,78 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Char('E') => {
-                if state.sidebar_mode == SidebarMode::Journal && state.journal_editing_uid.is_some()
-                {
-                    let uid = state.journal_editing_uid.clone().unwrap();
-                    let t = state.store.get_task_ref(&uid).unwrap();
-                    state.input_buffer = t.summary.clone();
-                    if state.input_buffer.starts_with("- ") {
-                        state.input_buffer = state.input_buffer[2..].to_string();
+                let mut target_uid = None;
+                if state.active_focus == Focus::Sidebar && state.sidebar_mode == SidebarMode::Journal {
+                    if let Some(idx) = state.cal_state.selected()
+                        && let Some(page) = state.cached_journal_pages.get(idx)
+                        && page.is_task
+                    {
+                        target_uid = Some(page.key.clone());
                     }
-                    state.input_buffer = format!("is:page {}", state.input_buffer);
-                    state.cursor_position = state.input_buffer.chars().count();
-                    state.editing_uid = Some(uid);
-                    state.mode = InputMode::Editing;
-                    return None;
-                } else if state.sidebar_mode == SidebarMode::Journal
-                    && state.active_focus == Focus::Main
-                {
+                } else if state.sidebar_mode == SidebarMode::Journal {
+                    target_uid = state.journal_editing_uid.clone().or_else(|| {
+                        let target_href = state
+                            .active_cal_href
+                            .clone()
+                            .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
+                        state
+                            .store
+                            .get_journal_entry(&target_href, state.journal_date)
+                            .map(|t| t.uid.clone())
+                    });
+                } else if let Some(t) = state.get_selected_task() {
+                    target_uid = Some(t.uid.clone());
+                }
+
+                if let Some(uid) = target_uid {
+                    if state.sidebar_mode == SidebarMode::Journal {
+                        if let Some(t) = state.store.get_task_ref(&uid) {
+                            state.input_buffer = t.summary.clone();
+                            if state.input_buffer.starts_with("- ") {
+                                state.input_buffer = state.input_buffer[2..].to_string();
+                            }
+                            state.input_buffer = format!("is:page {}", state.input_buffer);
+                            state.cursor_position = state.input_buffer.chars().count();
+                            state.editing_uid = Some(uid.clone());
+                            state.mode = InputMode::Editing;
+                            return None;
+                        }
+                    }
+
+                    if let Some(t) = state.store.get_task_ref(&uid) {
+                        let desc = t.description.clone();
+                        match run_external_editor(&desc, state.ctx.as_ref()) {
+                            Ok(Some(new_desc)) => {
+                                if new_desc != desc {
+                                    state.input_buffer = new_desc;
+                                    state.editing_uid = Some(uid);
+                                    state.mode = InputMode::EditingDescription;
+                                    save_description(state, action_tx);
+                                }
+                                state.needs_redraw = true;
+                                return None;
+                            }
+                            Ok(None) => {
+                                state.input_buffer = desc.clone();
+                                state.cursor_position = state.input_buffer.chars().count();
+                                state.edit_scroll_offset = 0;
+                                state.edit_scroll_x = 0;
+                                state.editing_uid = Some(uid.clone());
+                                state.mode = InputMode::EditingDescription;
+                            }
+                            Err(e) => {
+                                state.message = e;
+                                state.input_buffer = desc.clone();
+                                state.cursor_position = state.input_buffer.chars().count();
+                                state.edit_scroll_offset = 0;
+                                state.edit_scroll_x = 0;
+                                state.editing_uid = Some(uid.clone());
+                                state.mode = InputMode::EditingDescription;
+                                state.needs_redraw = true;
+                            }
+                        }
+                    }
+                } else if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
                     let target_href = state
                         .active_cal_href
                         .clone()
@@ -4075,26 +4156,13 @@ pub async fn handle_key_event(
                         })
                         .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
 
-                    let (desc, is_daily) = if let Some(uid) = &state.journal_editing_uid {
-                        let t = state.store.get_task_ref(uid).unwrap();
-                        (t.description.clone(), false)
-                    } else {
-                        let entry = state
-                            .store
-                            .get_journal_entry(&target_href, state.journal_date);
-                        (
-                            entry.map(|e| e.description.clone()).unwrap_or_default(),
-                            true,
-                        )
-                    };
-
+                    let entry = state.store.get_journal_entry(&target_href, state.journal_date);
+                    let desc = entry.map(|e| e.description.clone()).unwrap_or_default();
+                    
                     match run_external_editor(&desc, state.ctx.as_ref()) {
                         Ok(Some(new_desc)) => {
                             if new_desc != desc {
                                 state.input_buffer = new_desc;
-                                if !is_daily {
-                                    state.editing_uid = state.journal_editing_uid.clone();
-                                }
                                 state.mode = InputMode::EditingDescription;
                                 save_description(state, action_tx);
                             }
@@ -4104,9 +4172,6 @@ pub async fn handle_key_event(
                         Ok(None) => {
                             state.input_buffer = desc;
                             state.cursor_position = state.input_buffer.chars().count();
-                            if !is_daily {
-                                state.editing_uid = state.journal_editing_uid.clone();
-                            }
                             state.mode = InputMode::EditingDescription;
                             return None;
                         }
@@ -4114,47 +4179,9 @@ pub async fn handle_key_event(
                             state.message = e;
                             state.input_buffer = desc;
                             state.cursor_position = state.input_buffer.chars().count();
-                            if !is_daily {
-                                state.editing_uid = state.journal_editing_uid.clone();
-                            }
                             state.mode = InputMode::EditingDescription;
                             state.needs_redraw = true;
                             return None;
-                        }
-                    }
-                } else if let Some(t) = state.get_selected_task() {
-                    let desc = t.description.clone();
-                    let uid = t.uid.clone();
-                    match run_external_editor(&desc, state.ctx.as_ref()) {
-                        Ok(Some(new_desc)) => {
-                            if new_desc != desc {
-                                state.input_buffer = new_desc;
-                                state.editing_uid = Some(uid);
-                                state.mode = InputMode::EditingDescription;
-                                save_description(state, action_tx);
-                            }
-                            state.needs_redraw = true;
-                            return None;
-                        }
-                        Ok(None) => {
-                            // Fallback to built-in editor
-                            state.input_buffer = desc.clone();
-                            state.cursor_position = state.input_buffer.chars().count();
-                            state.edit_scroll_offset = 0;
-                            state.edit_scroll_x = 0;
-                            state.editing_uid = Some(uid.clone());
-                            state.mode = InputMode::EditingDescription;
-                        }
-                        Err(e) => {
-                            state.message = e;
-                            // Fallback to built-in editor
-                            state.input_buffer = desc.clone();
-                            state.cursor_position = state.input_buffer.chars().count();
-                            state.edit_scroll_offset = 0;
-                            state.edit_scroll_x = 0;
-                            state.editing_uid = Some(uid.clone());
-                            state.mode = InputMode::EditingDescription;
-                            state.needs_redraw = true;
                         }
                     }
                 }

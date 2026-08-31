@@ -3553,7 +3553,28 @@ impl TaskStore {
 
                     if year_expanded {
                         for (month, tasks) in months.iter().rev() {
-                            let month_name = format!("{:02}", month);
+                            let raw_month = match month {
+                                1 => rust_i18n::t!("parser_months_jan"),
+                                2 => rust_i18n::t!("parser_months_feb"),
+                                3 => rust_i18n::t!("parser_months_mar"),
+                                4 => rust_i18n::t!("parser_months_apr"),
+                                5 => rust_i18n::t!("parser_months_may"),
+                                6 => rust_i18n::t!("parser_months_jun"),
+                                7 => rust_i18n::t!("parser_months_jul"),
+                                8 => rust_i18n::t!("parser_months_aug"),
+                                9 => rust_i18n::t!("parser_months_sep"),
+                                10 => rust_i18n::t!("parser_months_oct"),
+                                11 => rust_i18n::t!("parser_months_nov"),
+                                12 => rust_i18n::t!("parser_months_dec"),
+                                _ => std::borrow::Cow::Borrowed(""),
+                            };
+                            let raw_month_str = raw_month.split(',').next().unwrap_or("").trim();
+                            let mut chars = raw_month_str.chars();
+                            let month_name = match chars.next() {
+                                None => format!("{:02}", month),
+                                Some(f) => f.to_uppercase().collect::<String>() + chars.as_str(),
+                            };
+
                             let month_key = format!("j:m:{}:{}", year, month);
                             let month_expanded = options.expanded_tags.contains(&month_key);
                             journal_pages_out.push(JournalPageItem {
