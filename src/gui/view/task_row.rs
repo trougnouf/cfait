@@ -23,14 +23,53 @@ pub fn parse_inline_markdown(
     text_str: &str,
     base_color: Color,
     is_strikethrough: bool,
+    highlight_regex: &Option<std::rc::Rc<regex::Regex>>,
+    highlight_color: Color,
 ) -> Vec<iced::widget::text::Span<'static, String>> {
+    fn push_highlighted_spans(
+        spans: &mut Vec<iced::widget::text::Span<'static, String>>,
+        text: &str,
+        mut template: iced::widget::text::Span<'static, String>,
+        highlight_regex: &Option<std::rc::Rc<regex::Regex>>,
+        highlight_color: Color,
+    ) {
+        if let Some(re) = highlight_regex.as_ref() {
+            let mut last_match = 0;
+            for mat in re.find_iter(text) {
+                if mat.start() > last_match {
+                    let mut s = template.clone();
+                    s.text = text[last_match..mat.start()].to_string().into();
+                    spans.push(s);
+                }
+                let mut s = template.clone();
+                s.text = text[mat.start()..mat.end()].to_string().into();
+                s.color = Some(highlight_color);
+                s.font = Some(iced::Font {
+                    weight: iced::font::Weight::Bold,
+                    ..template.font.unwrap_or_default()
+                });
+                spans.push(s);
+                last_match = mat.end();
+            }
+            if last_match < text.len() {
+                template.text = text[last_match..].to_string().into();
+                spans.push(template);
+            }
+        } else {
+            template.text = text.to_string().into();
+            spans.push(template);
+        }
+    }
+
     // FAST PATH: Skip expensive parsing if no markdown trigger characters are present.
     if !text_str.contains(['[', '*', '_', '~', '`']) && !text_str.contains("http") {
-        let mut sp = span(text_str.to_string()).color(base_color);
+        let mut sp = span(String::new()).color(base_color);
         if is_strikethrough {
             sp = sp.strikethrough(true);
         }
-        return vec![sp];
+        let mut spans = Vec::new();
+        push_highlighted_spans(&mut spans, text_str, sp, highlight_regex, highlight_color);
+        return spans;
     }
 
     let mut spans = Vec::new();
@@ -147,59 +186,92 @@ pub fn parse_inline_markdown(
 
         if let Some((abs_start, abs_end, start_marker, start_len, end_len)) = best_match {
             if abs_start > current_idx {
-                let text = text_str[current_idx..abs_start].to_string();
-                let mut sp = span(text).color(base_color);
+                let text = &text_str[current_idx..abs_start];
+                let mut sp = span(String::new()).color(base_color);
                 if is_strikethrough {
                     sp = sp.strikethrough(true);
                 }
-                spans.push(sp);
+                push_highlighted_spans(&mut spans, text, sp, highlight_regex, highlight_color);
             }
 
-            let chunk = text_str[abs_start..abs_end].to_string();
-            let inner_chunk = text_str[abs_start + start_len..abs_end - end_len].to_string();
+            let chunk = &text_str[abs_start..abs_end];
+            let inner_chunk = &text_str[abs_start + start_len..abs_end - end_len];
 
-            let mut sp = match start_marker {
+            if start_marker == "<!-- uid:" {
+                current_idx = abs_end;
+                continue;
+            }
+
+            let (display_text, mut sp) = match start_marker {
                 "[]()" => {
                     let mid = chunk.find("](").unwrap();
                     let display = &chunk[1..mid];
                     let url = &chunk[mid + 2..chunk.len() - 1];
-                    span(display.to_string())
-                        .color(Color::from_rgba(0.2, 0.7, 1.0, base_color.a))
-                        .link(url.to_string())
+                    (
+                        display,
+                        span(String::new())
+                            .color(Color::from_rgba(0.2, 0.7, 1.0, base_color.a))
+                            .link(url.to_string()),
+                    )
                 }
-                "http" => span(chunk.clone())
-                    .color(Color::from_rgba(0.2, 0.7, 1.0, base_color.a))
-                    .link(chunk),
+                "http" => (
+                    chunk,
+                    span(String::new())
+                        .color(Color::from_rgba(0.2, 0.7, 1.0, base_color.a))
+                        .link(chunk.to_string()),
+                ),
                 "[[" => {
                     let inner = &text_str[abs_start + start_len..abs_end - end_len];
                     let (target, display) = if let Some((t, d)) = inner.split_once('|') {
-                        (t.to_string(), d.to_string())
+                        (t, d)
                     } else {
-                        (inner.to_string(), inner.to_string())
+                        (inner, inner)
                     };
-                    span(display.to_string())
-                        .color(Color::from_rgba(0.2, 0.7, 1.0, base_color.a))
-                        .link(target)
+                    (
+                        display,
+                        span(String::new())
+                            .color(Color::from_rgba(0.2, 0.7, 1.0, base_color.a))
+                            .link(target.to_string()),
+                    )
                 }
-                "**" | "__" => span(inner_chunk).color(base_color).font(iced::Font {
-                    weight: iced::font::Weight::Bold,
-                    ..Default::default()
-                }),
-                "*" | "_" => span(inner_chunk).color(base_color).font(iced::Font {
-                    style: iced::font::Style::Italic,
-                    ..Default::default()
-                }),
-                "`" => span(inner_chunk)
-                    .color(Color::from_rgba(0.8, 0.6, 0.4, base_color.a))
-                    .font(iced::Font::MONOSPACE),
-                "~~" => span(inner_chunk).color(base_color).strikethrough(true),
-                _ => span(inner_chunk).color(base_color),
+                "**" | "__" => (
+                    inner_chunk,
+                    span(String::new()).color(base_color).font(iced::Font {
+                        weight: iced::font::Weight::Bold,
+                        ..Default::default()
+                    }),
+                ),
+                "*" | "_" => (
+                    inner_chunk,
+                    span(String::new()).color(base_color).font(iced::Font {
+                        style: iced::font::Style::Italic,
+                        ..Default::default()
+                    }),
+                ),
+                "`" => (
+                    inner_chunk,
+                    span(String::new())
+                        .color(Color::from_rgba(0.8, 0.6, 0.4, base_color.a))
+                        .font(iced::Font::MONOSPACE),
+                ),
+                "~~" => (
+                    inner_chunk,
+                    span(String::new()).color(base_color).strikethrough(true),
+                ),
+                _ => (inner_chunk, span(String::new()).color(base_color)),
             };
 
             if is_strikethrough && start_marker != "~~" {
                 sp = sp.strikethrough(true);
             }
-            spans.push(sp);
+
+            push_highlighted_spans(
+                &mut spans,
+                display_text,
+                sp,
+                highlight_regex,
+                highlight_color,
+            );
 
             current_idx = abs_end;
         } else {
@@ -208,21 +280,21 @@ pub fn parse_inline_markdown(
     }
 
     if current_idx < text_str.len() {
-        let text = text_str[current_idx..].to_string();
-        let mut sp = span(text).color(base_color);
+        let text = &text_str[current_idx..];
+        let mut sp = span(String::new()).color(base_color);
         if is_strikethrough {
             sp = sp.strikethrough(true);
         }
-        spans.push(sp);
+        push_highlighted_spans(&mut spans, text, sp, highlight_regex, highlight_color);
     }
 
     if spans.is_empty() {
-        let text = text_str.to_string();
-        let mut sp = span(text).color(base_color);
+        let text = text_str;
+        let mut sp = span(String::new()).color(base_color);
         if is_strikethrough {
             sp = sp.strikethrough(true);
         }
-        spans.push(sp);
+        push_highlighted_spans(&mut spans, text, sp, highlight_regex, highlight_color);
     }
 
     spans
@@ -286,6 +358,8 @@ pub fn view_task_row<'a>(
     index: usize,
     item: &'a crate::store::TaskListItem,
     row_id: iced::widget::Id,
+    highlight_regex: Option<std::rc::Rc<regex::Regex>>,
+    highlight_color: Color,
 ) -> Element<'a, Message> {
     match item {
         crate::store::TaskListItem::ExpandGroup(key, depth) => {
@@ -847,7 +921,13 @@ pub fn view_task_row<'a>(
             let is_strikethrough = (app.strikethrough_completed && task.status.is_done())
                 || task.calendar_href == "local://trash";
 
-            let summary_spans = parse_inline_markdown(&task.summary, title_color, is_strikethrough);
+            let summary_spans = parse_inline_markdown(
+                &task.summary,
+                title_color,
+                is_strikethrough,
+                &highlight_regex,
+                highlight_color,
+            );
 
             let summary_text: Element<'a, Message> = rich_text(summary_spans)
                 .size(font_size)
@@ -1473,6 +1553,8 @@ pub fn view_task_row<'a>(
                                         Color::from_rgb(0.3, 0.3, 0.3)
                                     },
                                     false,
+                                    &highlight_regex,
+                                    highlight_color,
                                 );
                                 desc_col = desc_col.push(rich_text(spans).size(14).on_link_click(
                                     move |target: String| {
@@ -1515,6 +1597,8 @@ pub fn view_task_row<'a>(
                                         Color::from_rgb(0.3, 0.3, 0.3)
                                     },
                                     false,
+                                    &highlight_regex,
+                                    highlight_color,
                                 );
                                 desc_col = desc_col.push(rich_text(spans).size(14).on_link_click(
                                     move |target: String| {
@@ -1550,6 +1634,8 @@ pub fn view_task_row<'a>(
                                         Color::from_rgb(0.3, 0.3, 0.3)
                                     },
                                     false,
+                                    &highlight_regex,
+                                    highlight_color,
                                 );
                                 desc_col = desc_col.push(rich_text(spans).size(14).on_link_click(
                                     move |target: String| {
@@ -1612,7 +1698,13 @@ pub fn view_task_row<'a>(
                                 s
                             };
 
-                            let mut spans = parse_inline_markdown(&display_line, base_color, false);
+                            let mut spans = parse_inline_markdown(
+                                &display_line,
+                                base_color,
+                                false,
+                                &highlight_regex,
+                                highlight_color,
+                            );
 
                             if is_header {
                                 for s in &mut spans {
@@ -1655,6 +1747,8 @@ pub fn view_task_row<'a>(
                                 Color::from_rgb(0.3, 0.3, 0.3)
                             },
                             false,
+                            &highlight_regex,
+                            highlight_color,
                         );
                         desc_col = desc_col.push(rich_text(spans).size(14).on_link_click(
                             move |target: String| {
@@ -2310,7 +2404,13 @@ pub fn view_task_row<'a>(
                             }
                         };
 
-                        let mut spans = parse_inline_markdown(display_line_str, base_color, false);
+                        let mut spans = parse_inline_markdown(
+                            display_line_str,
+                            base_color,
+                            false,
+                            &highlight_regex,
+                            highlight_color,
+                        );
 
                         if is_header {
                             for s in &mut spans {

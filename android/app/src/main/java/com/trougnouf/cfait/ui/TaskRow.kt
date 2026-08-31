@@ -95,7 +95,9 @@ fun TaskRow(
     enabledCalendarCount: Int,
     isHighlighted: Boolean = false,
     isCollapsed: Boolean = false,
-    onToggleCollapse: () -> Unit = {}
+    onToggleCollapse: () -> Unit = {},
+    highlightRegex: Regex? = null,
+    highlightColor: Color = Color.Unspecified
 ) {
     val startPadding = (task.task.depth.toInt() * 12).dp
     var expanded by remember { mutableStateOf(false) }
@@ -138,8 +140,8 @@ fun TaskRow(
                     fontWeight = if (task.task.priority > 0.toUByte()) FontWeight.Medium else FontWeight.Normal,
                     lineHeight = 18.sp
                 )
-                val annotatedSummary = remember(task.task.summary, textColor, isStrikethrough) {
-                    com.trougnouf.cfait.ui.parseInlineMarkdown(task.task.summary, textColor, isStrikethrough)
+                val annotatedSummary = remember(task.task.summary, textColor, isStrikethrough, highlightRegex) {
+                    com.trougnouf.cfait.ui.parseInlineMarkdown(task.task.summary, textColor, isStrikethrough, highlightRegex, highlightColor)
                 }
                 
                 Text(

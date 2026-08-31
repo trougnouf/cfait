@@ -1041,6 +1041,7 @@ dependencies = [
  "os_info",
  "percent-encoding",
  "ratatui",
+ "regex",
  "rfd",
  "roxmltree 0.21.1",
  "rpassword",

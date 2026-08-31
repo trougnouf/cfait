@@ -121,6 +121,20 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
             .collect();
         let _ = tx.try_send(SystemEvent::UpdateTasks(all_tasks));
     }
+
+    // Update search highlight regex
+    let search_text_str = app.search_value.text();
+    app.search_highlight_regex = if !search_text_str.trim().is_empty() {
+        let terms = crate::model::matcher::extract_highlight_terms(&search_text_str);
+        if terms.is_empty() {
+            None
+        } else {
+            let pattern = format!("(?i)({})", terms.join("|"));
+            regex::Regex::new(&pattern).ok().map(std::rc::Rc::new)
+        }
+    } else {
+        None
+    };
 }
 
 /// Persist GUI-level config values back to the central Config object and save to disk.

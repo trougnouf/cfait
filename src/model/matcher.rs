@@ -30,6 +30,52 @@ pub struct Query {
     expr: SearchExpr,
 }
 
+pub fn extract_highlight_terms(query: &str) -> Vec<String> {
+    let tokens = tokenize_query(query);
+    let mut terms = Vec::new();
+    let lex_guard = crate::model::parser::LEXICON.read().unwrap();
+    for t in tokens {
+        if let Token::Text(s) = t {
+            let lower = s.to_lowercase();
+            if lower.starts_with("is:")
+                || lex_guard.search_is_done.contains(&lower)
+                || lex_guard.search_is_active.contains(&lower)
+                || lex_guard.search_is_started.contains(&lower)
+                || lex_guard.search_is_ongoing.contains(&lower)
+                || lex_guard.search_is_ready.contains(&lower)
+                || lex_guard.search_is_blocked.contains(&lower)
+                || lex_guard.search_is_note.contains(&lower)
+                || lex_guard.search_is_page.contains(&lower)
+                || lex_guard.search_is_permanent.contains(&lower)
+                || lex_guard.search_is_canceled.contains(&lower)
+            {
+                continue;
+            }
+
+            let mut clean_term = s.as_str();
+            if let Some((pref, _, _)) = lex_guard.match_prefix(&lower) {
+                clean_term = &s[pref.len()..];
+            } else if let Some(stripped) = s.strip_prefix('#') {
+                clean_term = stripped;
+            } else if let Some(stripped) = s.strip_prefix("@@") {
+                clean_term = stripped;
+            } else if let Some(stripped) = s.strip_prefix('-') {
+                clean_term = stripped;
+            } else if let Some(stripped) = s.strip_prefix('!') {
+                clean_term = stripped;
+            } else if let Some(stripped) = s.strip_prefix('~') {
+                clean_term = stripped;
+            }
+
+            let clean_term = crate::model::parser::strip_quotes(clean_term);
+            if !clean_term.trim().is_empty() {
+                terms.push(regex::escape(clean_term.trim()));
+            }
+        }
+    }
+    terms
+}
+
 impl Query {
     pub fn new(query: &str) -> Self {
         let tokens = tokenize_query(query);

@@ -2046,6 +2046,13 @@ fn view_main_content(app: &GuiApp, show_logo: bool, is_expanded: bool) -> Elemen
     // We use a hasher to create a stable, `Copy`-able u64 key for the keyed_column
     use std::hash::{Hash, Hasher};
 
+    let highlight_color = if app.theme().extended_palette().is_dark {
+        Color::from_rgb(1.0, 0.9, 0.1) // Bright yellow
+    } else {
+        Color::from_rgb(0.8, 0.2, 0.0) // Reddish for light theme
+    };
+    let highlight_regex = app.search_highlight_regex.clone();
+
     let tasks_view =
         iced::widget::keyed_column(app.tasks.iter().enumerate().map(|(real_index, item)| {
             let row_id = match item {
@@ -2080,7 +2087,17 @@ fn view_main_content(app: &GuiApp, show_logo: bool, is_expanded: bool) -> Elemen
             };
             let key = hasher.finish();
 
-            (key, view_task_row(app, real_index, item, row_id))
+            (
+                key,
+                view_task_row(
+                    app,
+                    real_index,
+                    item,
+                    row_id,
+                    highlight_regex.clone(),
+                    highlight_color,
+                ),
+            )
         }))
         .spacing(1);
 

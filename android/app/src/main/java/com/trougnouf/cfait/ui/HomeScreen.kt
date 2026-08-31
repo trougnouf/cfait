@@ -314,6 +314,23 @@ fun HomeScreen(
     var highlightedUid by remember { mutableStateOf(autoScrollUid) }
     var scrollTrigger by remember { mutableLongStateOf(0L) }
 
+    var highlightTerms by remember { mutableStateOf<List<String>>(emptyList()) }
+    LaunchedEffect(searchQuery) {
+        try {
+            highlightTerms = api.extractHighlightTerms(searchQuery)
+        } catch (e: Exception) {
+            highlightTerms = emptyList()
+        }
+    }
+    val highlightRegex = remember(highlightTerms) {
+        if (highlightTerms.isNotEmpty()) {
+            Regex("(?i)(${highlightTerms.joinToString("|")})")
+        } else {
+            null
+        }
+    }
+    val highlightColor = if (isDark) Color(0xFFFFFF00) else Color(0xFFFF5500)
+
     var newTaskText by rememberSaveable(stateSaver = androidx.compose.ui.text.input.TextFieldValue.Saver) { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
     var newDescriptionText by rememberSaveable(stateSaver = androidx.compose.ui.text.input.TextFieldValue.Saver) { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
     var isCreateExpanded by rememberSaveable { mutableStateOf(false) }
@@ -2660,7 +2677,9 @@ fun HomeScreen(
                                                 isCollapsed = stableTask.task.isCollapsed,
                                                 onToggleCollapse = {
                                                     onTaskAction("toggle_collapse", stableTask.task)
-                                                }
+                                                },
+                                                highlightRegex = highlightRegex,
+                                                highlightColor = highlightColor
                                             )
                                         } else {
                                             // Extract payload from uid: "virtual-expand-{payload}" or "virtual-collapse-{payload}"

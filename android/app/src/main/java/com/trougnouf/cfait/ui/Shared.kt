@@ -75,9 +75,48 @@ val NerdFont = FontFamily(Font(R.font.symbols_nerd_font))
 @Immutable
 data class StableTaskSummary(val task: MobileTaskSummary)
 
-fun parseInlineMarkdown(textStr: String, baseColor: androidx.compose.ui.graphics.Color, isStrikethrough: Boolean): androidx.compose.ui.text.AnnotatedString {
+fun appendHighlighted(
+    builder: androidx.compose.ui.text.AnnotatedString.Builder,
+    text: String,
+    highlightRegex: Regex?,
+    highlightColor: androidx.compose.ui.graphics.Color
+) {
+    if (highlightRegex == null) {
+        builder.append(text)
+        return
+    }
+    var lastMatchEnd = 0
+    highlightRegex.findAll(text).forEach { matchResult ->
+        if (matchResult.range.first > lastMatchEnd) {
+            builder.append(text.substring(lastMatchEnd, matchResult.range.first))
+        }
+        builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = highlightColor, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, background = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.2f)))
+        builder.append(matchResult.value)
+        builder.pop()
+        lastMatchEnd = matchResult.range.last + 1
+    }
+    if (lastMatchEnd < text.length) {
+        builder.append(text.substring(lastMatchEnd))
+    }
+}
+
+fun parseInlineMarkdown(
+    textStr: String, 
+    baseColor: androidx.compose.ui.graphics.Color, 
+    isStrikethrough: Boolean,
+    highlightRegex: Regex? = null,
+    highlightColor: androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color.Unspecified
+): androidx.compose.ui.text.AnnotatedString {
     val builder = androidx.compose.ui.text.AnnotatedString.Builder()
     val baseDecoration = if (isStrikethrough) androidx.compose.ui.text.style.TextDecoration.LineThrough else null
+
+    // FAST PATH: Skip expensive parsing if no markdown trigger characters are present.
+    if (!textStr.contains('[') && !textStr.contains('*') && !textStr.contains('_') && !textStr.contains('~') && !textStr.contains('`') && !textStr.contains("http")) {
+        builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = baseColor, textDecoration = baseDecoration))
+        appendHighlighted(builder, textStr, highlightRegex, highlightColor)
+        builder.pop()
+        return builder.toAnnotatedString()
+    }
 
     var currentIdx = 0
     while (currentIdx < textStr.length) {
@@ -210,7 +249,7 @@ fun parseInlineMarkdown(textStr: String, baseColor: androidx.compose.ui.graphics
             if (absStart > currentIdx) {
                 val chunk = textStr.substring(currentIdx, absStart)
                 builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = baseColor, textDecoration = baseDecoration))
-                builder.append(chunk)
+                appendHighlighted(builder, chunk, highlightRegex, highlightColor)
                 builder.pop()
             }
 
@@ -221,41 +260,41 @@ fun parseInlineMarkdown(textStr: String, baseColor: androidx.compose.ui.graphics
                 "<!-- uid:" -> {}
                 "**", "__" -> {
                     builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = baseColor, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, textDecoration = baseDecoration))
-                    builder.append(innerChunk)
+                    appendHighlighted(builder, innerChunk, highlightRegex, highlightColor)
                     builder.pop()
                 }
                 "*", "_" -> {
                     builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = baseColor, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, textDecoration = baseDecoration))
-                    builder.append(innerChunk)
+                    appendHighlighted(builder, innerChunk, highlightRegex, highlightColor)
                     builder.pop()
                 }
                 "~~" -> {
                     builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = baseColor, textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough))
-                    builder.append(innerChunk)
+                    appendHighlighted(builder, innerChunk, highlightRegex, highlightColor)
                     builder.pop()
                 }
                 "`" -> {
                     builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = androidx.compose.ui.graphics.Color(0xFFCC9966), fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, textDecoration = baseDecoration))
-                    builder.append(innerChunk)
+                    appendHighlighted(builder, innerChunk, highlightRegex, highlightColor)
                     builder.pop()
                 }
                 "[]()" -> {
                     val mid = chunk.indexOf("](")
                     val display = chunk.substring(1, mid)
                     builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = androidx.compose.ui.graphics.Color(0xFF33B5E5), textDecoration = baseDecoration))
-                    builder.append(display)
+                    appendHighlighted(builder, display, highlightRegex, highlightColor)
                     builder.pop()
                 }
                 "[[" -> {
                     val split = innerChunk.indexOf('|')
                     val display = if (split != -1) innerChunk.substring(split + 1) else innerChunk
                     builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = androidx.compose.ui.graphics.Color(0xFF33B5E5), textDecoration = baseDecoration))
-                    builder.append(display)
+                    appendHighlighted(builder, display, highlightRegex, highlightColor)
                     builder.pop()
                 }
                 "http" -> {
                     builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = androidx.compose.ui.graphics.Color(0xFF33B5E5), textDecoration = baseDecoration))
-                    builder.append(chunk)
+                    appendHighlighted(builder, chunk, highlightRegex, highlightColor)
                     builder.pop()
                 }
             }
@@ -267,7 +306,7 @@ fun parseInlineMarkdown(textStr: String, baseColor: androidx.compose.ui.graphics
 
     if (currentIdx < textStr.length) {
         builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = baseColor, textDecoration = baseDecoration))
-        builder.append(textStr.substring(currentIdx))
+        appendHighlighted(builder, textStr.substring(currentIdx), highlightRegex, highlightColor)
         builder.pop()
     }
 

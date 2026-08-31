@@ -27,11 +27,50 @@ use ratatui::{
 };
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-fn parse_inline_elements(text: &str, base_style: Style, strip_markers: bool) -> Vec<Span<'static>> {
+fn push_highlighted_spans_tui(
+    spans: &mut Vec<Span<'static>>,
+    text: &str,
+    template_style: Style,
+    highlight_regex: Option<&regex::Regex>,
+) {
+    if let Some(re) = highlight_regex {
+        let mut last_match = 0;
+        for mat in re.find_iter(text) {
+            if mat.start() > last_match {
+                spans.push(Span::styled(
+                    text[last_match..mat.start()].to_string(),
+                    template_style,
+                ));
+            }
+            spans.push(Span::styled(
+                text[mat.start()..mat.end()].to_string(),
+                template_style
+                    .fg(Color::Black)
+                    .bg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ));
+            last_match = mat.end();
+        }
+        if last_match < text.len() {
+            spans.push(Span::styled(text[last_match..].to_string(), template_style));
+        }
+    } else {
+        spans.push(Span::styled(text.to_string(), template_style));
+    }
+}
+
+fn parse_inline_elements(
+    text: &str,
+    base_style: Style,
+    strip_markers: bool,
+    highlight_regex: Option<&regex::Regex>,
+) -> Vec<Span<'static>> {
     // FAST PATH: Skip expensive parsing if no markdown trigger characters are present.
     if !text.contains(['[', '*', '_', '~', '`']) && !text.contains("http") && !text.contains("<!--")
     {
-        return vec![Span::styled(text.to_string(), base_style)];
+        let mut spans = Vec::new();
+        push_highlighted_spans_tui(&mut spans, text, base_style, highlight_regex);
+        return spans;
     }
 
     let mut spans = Vec::new();
@@ -147,10 +186,12 @@ fn parse_inline_elements(text: &str, base_style: Style, strip_markers: bool) -> 
 
         if let Some((abs_start, abs_end, start_marker, start_len, end_len)) = best_match {
             if abs_start > current_idx {
-                spans.push(Span::styled(
-                    text[current_idx..abs_start].to_string(),
+                push_highlighted_spans_tui(
+                    &mut spans,
+                    &text[current_idx..abs_start],
                     base_style,
-                ));
+                    highlight_regex,
+                );
             }
 
             let chunk = &text[abs_start..abs_end];
@@ -162,17 +203,21 @@ fn parse_inline_elements(text: &str, base_style: Style, strip_markers: bool) -> 
                 chunk.to_string()
             };
 
-            let span = match start_marker {
-                "<!-- uid:" => Span::styled(
-                    if strip_markers {
-                        "".to_string()
-                    } else {
-                        chunk.to_string()
-                    },
-                    Style::default()
-                        .fg(Color::DarkGray)
-                        .add_modifier(Modifier::ITALIC),
-                ),
+            if start_marker == "<!-- uid:" {
+                let txt = if strip_markers { "" } else { chunk };
+                if !txt.is_empty() {
+                    spans.push(Span::styled(
+                        txt.to_string(),
+                        Style::default()
+                            .fg(Color::DarkGray)
+                            .add_modifier(Modifier::ITALIC),
+                    ));
+                }
+                current_idx = abs_end;
+                continue;
+            }
+
+            let (txt, style) = match start_marker {
                 "[]()" => {
                     let mid = chunk.find("](").unwrap();
                     let display = &chunk[1..mid];
@@ -181,9 +226,9 @@ fn parse_inline_elements(text: &str, base_style: Style, strip_markers: bool) -> 
                     } else {
                         chunk.to_string()
                     };
-                    Span::styled(txt, Style::default().fg(Color::Cyan))
+                    (txt, Style::default().fg(Color::Cyan))
                 }
-                "http" => Span::styled(chunk.to_string(), Style::default().fg(Color::Cyan)),
+                "http" => (chunk.to_string(), Style::default().fg(Color::Cyan)),
                 "[[" => {
                     let inner_content = &text[abs_start + start_len..abs_end - end_len];
                     let (_, display) = if let Some((t, d)) = inner_content.split_once('|') {
@@ -196,16 +241,16 @@ fn parse_inline_elements(text: &str, base_style: Style, strip_markers: bool) -> 
                     } else {
                         chunk.to_string()
                     };
-                    Span::styled(txt, Style::default().fg(Color::Cyan))
+                    (txt, Style::default().fg(Color::Cyan))
                 }
-                "**" | "__" => Span::styled(display_text, base_style.add_modifier(Modifier::BOLD)),
-                "*" | "_" => Span::styled(display_text, base_style.add_modifier(Modifier::ITALIC)),
-                "`" => Span::styled(display_text, Style::default().fg(Color::Yellow)),
-                "~~" => Span::styled(display_text, base_style.add_modifier(Modifier::CROSSED_OUT)),
-                _ => Span::styled(display_text, base_style),
+                "**" | "__" => (display_text, base_style.add_modifier(Modifier::BOLD)),
+                "*" | "_" => (display_text, base_style.add_modifier(Modifier::ITALIC)),
+                "`" => (display_text, Style::default().fg(Color::Yellow)),
+                "~~" => (display_text, base_style.add_modifier(Modifier::CROSSED_OUT)),
+                _ => (display_text, base_style),
             };
 
-            spans.push(span);
+            push_highlighted_spans_tui(&mut spans, &txt, style, highlight_regex);
             current_idx = abs_end;
         } else {
             break;
@@ -213,7 +258,12 @@ fn parse_inline_elements(text: &str, base_style: Style, strip_markers: bool) -> 
     }
 
     if current_idx < text.len() {
-        spans.push(Span::styled(text[current_idx..].to_string(), base_style));
+        push_highlighted_spans_tui(
+            &mut spans,
+            &text[current_idx..],
+            base_style,
+            highlight_regex,
+        );
     }
     spans
 }
@@ -243,6 +293,7 @@ fn highlight_markdown_raw(input: &str, is_dark_theme: bool) -> Text<'static> {
                     })
                     .add_modifier(Modifier::BOLD),
                 false,
+                None,
             ));
         } else if trimmed.starts_with("- ") || trimmed.starts_with("* ") {
             spans.extend(crate::tui::view::parse_inline_elements(
@@ -253,6 +304,7 @@ fn highlight_markdown_raw(input: &str, is_dark_theme: bool) -> Text<'static> {
                     Color::Rgb(150, 100, 0)
                 }),
                 false,
+                None,
             ));
         } else if trimmed.starts_with("> ") {
             spans.extend(crate::tui::view::parse_inline_elements(
@@ -261,6 +313,7 @@ fn highlight_markdown_raw(input: &str, is_dark_theme: bool) -> Text<'static> {
                     .fg(Color::DarkGray)
                     .add_modifier(Modifier::ITALIC),
                 false,
+                None,
             ));
         } else if trimmed.starts_with("```") {
             spans.extend(crate::tui::view::parse_inline_elements(
@@ -271,12 +324,14 @@ fn highlight_markdown_raw(input: &str, is_dark_theme: bool) -> Text<'static> {
                     Color::Rgb(0, 120, 0)
                 }),
                 false,
+                None,
             ));
         } else {
             spans.extend(crate::tui::view::parse_inline_elements(
                 line,
                 Style::default(),
                 false,
+                None,
             ));
         }
 
@@ -1535,6 +1590,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                             &display_title,
                             base_style,
                             true,
+                            state.search_highlight_regex.as_deref(),
                         );
 
                         let mut spans = vec![
@@ -1611,6 +1667,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                                     display_line,
                                     base_style,
                                     true,
+                                    state.search_highlight_regex.as_deref(),
                                 );
                                 let mut line_spans = vec![Span::raw(indent)];
                                 line_spans.extend(desc_spans);

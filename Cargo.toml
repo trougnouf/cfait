@@ -94,6 +94,7 @@ iced_aw = { version = "0.14", features = ["color_picker"], optional = true }
 rfd = { version = "0.17", optional = true, default-features = false, features = ["xdg-portal"] }
 fastrand = "2.5"
 once_cell = "1.21"
+regex = "1"
 
 
 [build-dependencies]

@@ -855,6 +855,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_export_locations_gpx(): Int
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_extract_highlight_terms(): Int
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_extract_list_prefix(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_all_locations(): Int
@@ -1151,6 +1153,12 @@ internal object UniffiLib {
     external fun uniffi_cfait_fn_method_cfaitmobile_export_locations_gpx(
         `ptr`: Long,
         `uid`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_extract_highlight_terms(
+        `ptr`: Long,
+        `query`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
@@ -1824,6 +1832,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_export_locations_gpx() != 38277) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_extract_highlight_terms() != 53985) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_extract_list_prefix() != 48803) {
@@ -2657,6 +2668,8 @@ public interface CfaitMobileInterface {
 
     fun `exportLocationsGpx`(`uid`: kotlin.String): kotlin.String
 
+    fun `extractHighlightTerms`(`query`: kotlin.String): List<kotlin.String>
+
     fun `extractListPrefix`(`line`: kotlin.String): kotlin.String
 
     suspend fun `getAllLocations`(): List<MobileLocation>
@@ -3487,6 +3500,19 @@ open class CfaitMobile :
                     UniffiLib.uniffi_cfait_fn_method_cfaitmobile_export_locations_gpx(
                         it,
                         FfiConverterString.lower(`uid`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    override fun `extractHighlightTerms`(`query`: kotlin.String): List<kotlin.String> =
+        FfiConverterSequenceString.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_extract_highlight_terms(
+                        it,
+                        FfiConverterString.lower(`query`),
                         _status,
                     )
                 }

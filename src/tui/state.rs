@@ -199,6 +199,7 @@ pub struct AppState {
 
     pub text_undo_stack: Vec<String>,
     pub text_redo_stack: Vec<String>,
+    pub search_highlight_regex: Option<std::rc::Rc<regex::Regex>>,
 }
 
 impl Default for AppState {
@@ -335,6 +336,7 @@ impl AppState {
             redo_stack: Vec::new(),
             text_undo_stack: Vec::new(),
             text_redo_stack: Vec::new(),
+            search_highlight_regex: None,
         }
     }
 
@@ -510,6 +512,18 @@ impl AppState {
         }
         task_goals.sort_by(|a, b| a.1.cmp(&b.1));
         self.cached_task_goals = task_goals;
+
+        self.search_highlight_regex = if !search_term.trim().is_empty() {
+            let terms = crate::model::matcher::extract_highlight_terms(search_term);
+            if terms.is_empty() {
+                None
+            } else {
+                let pattern = format!("(?i)({})", terms.join("|"));
+                regex::Regex::new(&pattern).ok().map(std::rc::Rc::new)
+            }
+        } else {
+            None
+        };
     }
 
     pub fn get_selected_task(&self) -> Option<&Task> {
