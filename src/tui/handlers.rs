@@ -2175,7 +2175,9 @@ pub async fn handle_key_event(
                 if key.modifiers.contains(KeyModifiers::CONTROL) =>
             {
                 let mut target_uid = None;
-                if state.active_focus == Focus::Sidebar && state.sidebar_mode == SidebarMode::Journal {
+                if state.active_focus == Focus::Sidebar
+                    && state.sidebar_mode == SidebarMode::Journal
+                {
                     if let Some(idx) = state.cal_state.selected()
                         && let Some(page) = state.cached_journal_pages.get(idx)
                         && page.is_task
@@ -2198,7 +2200,11 @@ pub async fn handle_key_event(
                 }
 
                 if let Some(uid) = target_uid {
-                    let is_journal = state.store.get_task_ref(&uid).map(|t| t.is_journal).unwrap_or(false);
+                    let is_journal = state
+                        .store
+                        .get_task_ref(&uid)
+                        .map(|t| t.is_journal)
+                        .unwrap_or(false);
                     let desc = crate::model::extractor::serialize_task_tree(
                         &state.store,
                         &uid,
@@ -4073,7 +4079,9 @@ pub async fn handle_key_event(
             }
             KeyCode::Char('E') => {
                 let mut target_uid = None;
-                if state.active_focus == Focus::Sidebar && state.sidebar_mode == SidebarMode::Journal {
+                if state.active_focus == Focus::Sidebar
+                    && state.sidebar_mode == SidebarMode::Journal
+                {
                     if let Some(idx) = state.cal_state.selected()
                         && let Some(page) = state.cached_journal_pages.get(idx)
                         && page.is_task
@@ -4096,18 +4104,18 @@ pub async fn handle_key_event(
                 }
 
                 if let Some(uid) = target_uid {
-                    if state.sidebar_mode == SidebarMode::Journal {
-                        if let Some(t) = state.store.get_task_ref(&uid) {
-                            state.input_buffer = t.summary.clone();
-                            if state.input_buffer.starts_with("- ") {
-                                state.input_buffer = state.input_buffer[2..].to_string();
-                            }
-                            state.input_buffer = format!("is:page {}", state.input_buffer);
-                            state.cursor_position = state.input_buffer.chars().count();
-                            state.editing_uid = Some(uid.clone());
-                            state.mode = InputMode::Editing;
-                            return None;
+                    if state.sidebar_mode == SidebarMode::Journal
+                        && let Some(t) = state.store.get_task_ref(&uid)
+                    {
+                        state.input_buffer = t.summary.clone();
+                        if state.input_buffer.starts_with("- ") {
+                            state.input_buffer = state.input_buffer[2..].to_string();
                         }
+                        state.input_buffer = format!("is:page {}", state.input_buffer);
+                        state.cursor_position = state.input_buffer.chars().count();
+                        state.editing_uid = Some(uid.clone());
+                        state.mode = InputMode::Editing;
+                        return None;
                     }
 
                     if let Some(t) = state.store.get_task_ref(&uid) {
@@ -4143,7 +4151,9 @@ pub async fn handle_key_event(
                             }
                         }
                     }
-                } else if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
+                } else if state.sidebar_mode == SidebarMode::Journal
+                    && state.active_focus == Focus::Main
+                {
                     let target_href = state
                         .active_cal_href
                         .clone()
@@ -4156,9 +4166,11 @@ pub async fn handle_key_event(
                         })
                         .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
 
-                    let entry = state.store.get_journal_entry(&target_href, state.journal_date);
+                    let entry = state
+                        .store
+                        .get_journal_entry(&target_href, state.journal_date);
                     let desc = entry.map(|e| e.description.clone()).unwrap_or_default();
-                    
+
                     match run_external_editor(&desc, state.ctx.as_ref()) {
                         Ok(Some(new_desc)) => {
                             if new_desc != desc {
