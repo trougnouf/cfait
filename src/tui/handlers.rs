@@ -2685,9 +2685,10 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Char('C') => {
+                let mut target_uid = None;
                 if state.active_focus == Focus::Main {
                     if state.sidebar_mode == SidebarMode::Journal {
-                        let uid_opt = state.journal_editing_uid.clone().or_else(|| {
+                        target_uid = state.journal_editing_uid.clone().or_else(|| {
                             let target_href = state
                                 .active_cal_href
                                 .clone()
@@ -2697,31 +2698,36 @@ pub async fn handle_key_event(
                                 .get_journal_entry(&target_href, state.journal_date)
                                 .map(|t| t.uid.clone())
                         });
-
-                        if let Some(uid) = uid_opt {
-                            let summary = state.store.get_summary(&uid).unwrap_or_default();
-                            state.input_buffer = "is:page ".to_string();
-                            state.cursor_position = state.input_buffer.chars().count();
-
-                            state.mode = InputMode::Creating;
-                            state.creating_with_desc = false;
-                            state.new_task_title.clear();
-                            state.creating_child_of = Some(uid);
-                            state.message =
-                                rust_i18n::t!("new_child_of", name = summary).to_string();
-                        }
                     } else if let Some(task) = state.get_selected_task() {
-                        // Fix: Define these inside the block to resolve scope errors
-                        let uid = task.uid.clone();
-                        let summary = task.summary.clone();
+                        target_uid = Some(task.uid.clone());
+                    }
+                } else if state.active_focus == Focus::Sidebar
+                    && state.sidebar_mode == SidebarMode::Journal
+                    && let Some(idx) = state.cal_state.selected()
+                    && let Some(page) = state.cached_journal_pages.get(idx)
+                    && page.is_task
+                {
+                    target_uid = Some(page.key.clone());
+                }
 
+                if let Some(uid) = target_uid {
+                    if state.sidebar_mode == SidebarMode::Journal {
+                        let summary = state.store.get_summary(&uid).unwrap_or_default();
+                        state.input_buffer = "is:page ".to_string();
+                        state.cursor_position = state.input_buffer.chars().count();
+
+                        state.mode = InputMode::Creating;
+                        state.creating_with_desc = false;
+                        state.new_task_title.clear();
+                        state.creating_child_of = Some(uid);
+                        state.message = rust_i18n::t!("new_child_of", name = summary).to_string();
+                    } else if let Some(task) = state.store.get_task_ref(&uid) {
+                        let summary = task.summary.clone();
                         let mut initial_input = String::new();
                         for cat in &task.categories {
-                            // Parity: Use quote_value to handle spaces correctly
                             initial_input
                                 .push_str(&format!("#{} ", crate::model::parser::quote_value(cat)));
                         }
-                        // Parity: Add Location inheritance
                         for loc in &task.locations {
                             initial_input.push_str(&format!(
                                 "@@{} ",
@@ -2735,7 +2741,7 @@ pub async fn handle_key_event(
                         state.mode = InputMode::Creating;
                         state.creating_with_desc = false;
                         state.new_task_title.clear();
-                        state.creating_child_of = Some(uid);
+                        state.creating_child_of = Some(uid.clone());
                         state.message = rust_i18n::t!("new_child_of", name = summary).to_string();
                     }
                 }

@@ -3509,7 +3509,7 @@ impl TaskStore {
             let pages_expanded = options.expanded_tags.contains(pages_key);
             journal_pages_out.push(JournalPageItem {
                 key: pages_key.to_string(),
-                title: rust_i18n::t!("wiki_index", default = "Wiki index").to_string(),
+                title: rust_i18n::t!("pages", default = "Pages").to_string(),
                 depth: 0,
                 has_children: true,
                 is_expanded: pages_expanded,
@@ -3553,69 +3553,7 @@ impl TaskStore {
 
                     if year_expanded {
                         for (month, tasks) in months.iter().rev() {
-                            let month_name = match month {
-                                1 => rust_i18n::t!("parser_months_jan")
-                                    .split(',')
-                                    .next()
-                                    .unwrap_or("January")
-                                    .to_string(),
-                                2 => rust_i18n::t!("parser_months_feb")
-                                    .split(',')
-                                    .next()
-                                    .unwrap_or("February")
-                                    .to_string(),
-                                3 => rust_i18n::t!("parser_months_mar")
-                                    .split(',')
-                                    .next()
-                                    .unwrap_or("March")
-                                    .to_string(),
-                                4 => rust_i18n::t!("parser_months_apr")
-                                    .split(',')
-                                    .next()
-                                    .unwrap_or("April")
-                                    .to_string(),
-                                5 => rust_i18n::t!("parser_months_may")
-                                    .split(',')
-                                    .next()
-                                    .unwrap_or("May")
-                                    .to_string(),
-                                6 => rust_i18n::t!("parser_months_jun")
-                                    .split(',')
-                                    .next()
-                                    .unwrap_or("June")
-                                    .to_string(),
-                                7 => rust_i18n::t!("parser_months_jul")
-                                    .split(',')
-                                    .next()
-                                    .unwrap_or("July")
-                                    .to_string(),
-                                8 => rust_i18n::t!("parser_months_aug")
-                                    .split(',')
-                                    .next()
-                                    .unwrap_or("August")
-                                    .to_string(),
-                                9 => rust_i18n::t!("parser_months_sep")
-                                    .split(',')
-                                    .next()
-                                    .unwrap_or("September")
-                                    .to_string(),
-                                10 => rust_i18n::t!("parser_months_oct")
-                                    .split(',')
-                                    .next()
-                                    .unwrap_or("October")
-                                    .to_string(),
-                                11 => rust_i18n::t!("parser_months_nov")
-                                    .split(',')
-                                    .next()
-                                    .unwrap_or("November")
-                                    .to_string(),
-                                12 => rust_i18n::t!("parser_months_dec")
-                                    .split(',')
-                                    .next()
-                                    .unwrap_or("December")
-                                    .to_string(),
-                                _ => "Unknown".to_string(),
-                            };
+                            let month_name = format!("{:02}", month);
                             let month_key = format!("j:m:{}:{}", year, month);
                             let month_expanded = options.expanded_tags.contains(&month_key);
                             journal_pages_out.push(JournalPageItem {

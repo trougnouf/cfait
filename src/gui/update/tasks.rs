@@ -370,6 +370,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             let mut initial_input = String::new();
             if let Some(parent) = app.store.get_task_ref(&parent_uid) {
+                if parent.is_journal {
+                    initial_input.push_str("is:page ");
+                }
                 for cat in &parent.categories {
                     initial_input
                         .push_str(&format!("#{} ", crate::model::parser::quote_value(cat)));
@@ -687,8 +690,29 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::KeyboardCreateChild => {
-            if let Some(selected_uid) = app.selected_uid.clone() {
-                return handle(app, Message::StartCreateChild(selected_uid));
+            let mut target_uid = None;
+            if app.active_focus == Focus::Sidebar && app.sidebar_mode == SidebarMode::Journal {
+                if let Some(page) = app.cached_journal_pages.get(app.sidebar_selection_idx)
+                    && page.is_task
+                {
+                    target_uid = Some(page.key.clone());
+                }
+            } else if app.sidebar_mode == SidebarMode::Journal {
+                target_uid = app.journal_editing_uid.clone().or_else(|| {
+                    let target_href = app
+                        .active_cal_href
+                        .clone()
+                        .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
+                    app.store
+                        .get_journal_entry(&target_href, app.journal_date)
+                        .map(|t| t.uid.clone())
+                });
+            } else if let Some(selected_uid) = app.selected_uid.clone() {
+                target_uid = Some(selected_uid);
+            }
+
+            if let Some(uid) = target_uid {
+                return handle(app, Message::StartCreateChild(uid));
             }
             Task::none()
         }
