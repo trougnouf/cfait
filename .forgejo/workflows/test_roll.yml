@@ -224,10 +224,7 @@ jobs:
           git push origin "$TAG_NAME" -f
           sleep 5
 
-          # 2. Delete old release if it exists
-          tea release delete --repo "$REPO" --confirm "$TAG_NAME" 2>/dev/null || true
-
-          # 3. Flatten the directory structure
+          # 2. Flatten the directory structure
           # Moves files from subfolders (like dist/rolling-android/cfait.apk) to dist/
           cd dist
           find . -mindepth 2 -type f -exec mv -t . {} +
