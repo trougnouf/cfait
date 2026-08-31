@@ -1353,6 +1353,216 @@ pub async fn handle_key_event(
             handle_text_redo(state);
             return None;
         }
+        if matches!(key.code, KeyCode::Char('o') | KeyCode::Char('O'))
+            && key.modifiers.contains(KeyModifiers::CONTROL)
+        {
+            let target_text = &state.input_buffer;
+            let cursor_pos = state.cursor_position;
+            let line_start = target_text[..cursor_pos]
+                .rfind('\n')
+                .map(|i| i + 1)
+                .unwrap_or(0);
+            let line_end = target_text[cursor_pos..]
+                .find('\n')
+                .map(|i| cursor_pos + i)
+                .unwrap_or(target_text.len());
+            let current_line = &target_text[line_start..line_end];
+            let local_cursor = cursor_pos.saturating_sub(line_start);
+
+            let tokens = crate::model::parser::tokenize_smart_input(current_line, false);
+            let mut active_context = None;
+            for t in tokens {
+                if local_cursor >= t.start && local_cursor <= t.end {
+                    if matches!(
+                        t.kind,
+                        crate::model::parser::SyntaxType::Dependency
+                            | crate::model::parser::SyntaxType::Relation
+                            | crate::model::parser::SyntaxType::WikiLink
+                            | crate::model::parser::SyntaxType::Url
+                    ) {
+                        active_context = Some((t.kind, current_line[t.start..t.end].to_string()));
+                    }
+                    break;
+                }
+            }
+
+            if let Some((kind, raw_word)) = active_context {
+                let clean_uid = if kind == crate::model::parser::SyntaxType::WikiLink {
+                    crate::model::parser::strip_quotes(
+                        raw_word.trim_start_matches("[[").trim_end_matches("]]"),
+                    )
+                } else if kind == crate::model::parser::SyntaxType::Url {
+                    crate::model::parser::strip_quotes(raw_word.trim_start_matches("url:"))
+                } else {
+                    let lex_guard = crate::model::parser::LEXICON.read().unwrap();
+                    let lower = raw_word.to_lowercase();
+                    if let Some((p_str, _, _)) = lex_guard.match_prefix(&lower) {
+                        crate::model::parser::strip_quotes(&raw_word[p_str.len()..])
+                    } else {
+                        crate::model::parser::strip_quotes(&raw_word)
+                    }
+                };
+
+                if !clean_uid.is_empty() {
+                    let context_uid = state
+                        .editing_tree_uid
+                        .as_ref()
+                        .or(state.editing_uid.as_ref())
+                        .or(state.journal_editing_uid.as_ref())
+                        .map(|s| s.as_str());
+                    let is_url = clean_uid.contains("://") || clean_uid.starts_with("mailto:");
+
+                    if is_url {
+                        #[cfg(not(target_os = "android"))]
+                        {
+                            let target_url = clean_uid.clone();
+                            std::thread::spawn(move || {
+                                #[cfg(target_os = "linux")]
+                                let _ = std::process::Command::new("xdg-open")
+                                    .arg(target_url)
+                                    .spawn();
+                                #[cfg(target_os = "windows")]
+                                let _ = std::process::Command::new("explorer")
+                                    .arg(target_url)
+                                    .spawn();
+                                #[cfg(target_os = "macos")]
+                                let _ = std::process::Command::new("open").arg(target_url).spawn();
+                            });
+                        }
+                        state.message = rust_i18n::t!("open_url").to_string();
+                    } else {
+                        let target_uid =
+                            match state.store.resolve_dependency_ref(&clean_uid, context_uid) {
+                                Ok(resolved_uid) => resolved_uid,
+                                Err(_) => {
+                                    if kind == crate::model::parser::SyntaxType::WikiLink {
+                                        let config =
+                                            crate::config::Config::load(state.ctx.as_ref())
+                                                .unwrap_or_default();
+                                        let mut new_task = crate::model::Task::new(
+                                            &clean_uid,
+                                            &state.tag_aliases,
+                                            chrono::NaiveTime::parse_from_str(
+                                                &config.default_reminder_time,
+                                                "%H:%M",
+                                            )
+                                            .ok(),
+                                        );
+                                        let ctx_is_journal = context_uid
+                                            .and_then(|u| state.store.get_task_ref(u))
+                                            .map(|t| t.is_journal)
+                                            .unwrap_or(state.sidebar_mode == SidebarMode::Journal);
+                                        if ctx_is_journal {
+                                            new_task.is_journal = true;
+                                            new_task.is_note = true;
+                                        }
+                                        let target_href = context_uid
+                                            .and_then(|u| state.store.get_task_ref(u))
+                                            .map(|t| t.calendar_href.clone())
+                                            .or_else(|| state.active_cal_href.clone())
+                                            .unwrap_or_else(|| {
+                                                crate::storage::LOCAL_CALENDAR_HREF.to_string()
+                                            });
+                                        new_task.calendar_href = target_href;
+                                        let new_uid = new_task.uid.clone();
+                                        state.store.add_task(new_task.clone());
+
+                                        let tx = action_tx.clone();
+                                        tokio::spawn(async move {
+                                            let _ = tx
+                                                .send(crate::tui::action::Action::PersistBatch(
+                                                    vec![crate::journal::Action::Create(new_task)],
+                                                ))
+                                                .await;
+                                        });
+                                        new_uid
+                                    } else {
+                                        state.message = format!("Searching: '{}'", clean_uid);
+                                        state.input_buffer = clean_uid;
+                                        state.active_search_query = state.input_buffer.clone();
+                                        state.search_collapsed_tasks.clear();
+                                        state.selected_categories.clear();
+                                        state.selected_locations.clear();
+                                        state.refresh_filtered_view();
+                                        state.mode = InputMode::Normal;
+                                        return None;
+                                    }
+                                }
+                            };
+
+                        if let Some(href) = state.store.index.get(&target_uid).cloned() {
+                            state.active_search_query.clear();
+                            state.selected_categories.clear();
+                            state.selected_locations.clear();
+
+                            if state.active_cal_href.as_ref() != Some(&href) {
+                                state.active_cal_href = Some(href.clone());
+                                state.hidden_calendars.remove(&href);
+                            }
+
+                            if let Some(task) = state.store.get_task_ref(&target_uid).cloned() {
+                                if task.status.is_done() && state.hide_completed {
+                                    state.hide_completed = false;
+                                }
+                                if task.status.is_done() {
+                                    let group_key = task.parent_uid.clone().unwrap_or_default();
+                                    state.expanded_done_groups.insert(group_key);
+                                }
+                                let mut curr = task.parent_uid.clone();
+                                let mut to_uncollapse = Vec::new();
+                                while let Some(p_uid) = curr {
+                                    if let Some(p_task) = state.store.get_task_ref(&p_uid) {
+                                        if p_task.collapsed {
+                                            to_uncollapse.push(p_uid.clone());
+                                        }
+                                        curr = p_task.parent_uid.clone();
+                                    } else {
+                                        break;
+                                    }
+                                }
+                                if !to_uncollapse.is_empty() {
+                                    let config = crate::config::Config::load(state.ctx.as_ref())
+                                        .unwrap_or_default();
+                                    let mut actions = Vec::new();
+                                    for p_uid in to_uncollapse {
+                                        let intent = crate::model::AppIntent::SetTreeCollapse {
+                                            uid: p_uid,
+                                            collapsed: false,
+                                        };
+                                        actions.extend(state.apply_task_intent(&intent, &config));
+                                    }
+                                    if !actions.is_empty() {
+                                        let tx = action_tx.clone();
+                                        tokio::spawn(async move {
+                                            let _ = tx
+                                                .send(crate::tui::action::Action::PersistBatch(
+                                                    actions,
+                                                ))
+                                                .await;
+                                        });
+                                    }
+                                }
+
+                                if task.is_journal {
+                                    state.sidebar_mode = SidebarMode::Journal;
+                                    state.journal_editing_uid = Some(target_uid.clone());
+                                }
+                            }
+
+                            state.refresh_filtered_view();
+
+                            if let Some(task_idx) = state.find_task_index_by_uid(&target_uid) {
+                                state.list_state.select(Some(task_idx));
+                            }
+
+                            state.mode = InputMode::Normal;
+                            state.message = rust_i18n::t!("jumped_to_task").to_string();
+                        }
+                    }
+                }
+            }
+            return None;
+        }
     }
 
     match state.mode {
