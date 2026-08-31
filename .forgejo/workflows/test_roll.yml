@@ -229,7 +229,10 @@ jobs:
           cd dist
           find . -mindepth 2 -type f -exec mv -t . {} +
 
-          # 4. Build the asset arguments array
+          # 4. Delete existing release for this tag
+          tea release delete --repo "$REPO" --confirm "$TAG_NAME" || true
+
+          # 5. Build the asset arguments array
           ASSETS=()
           for file in *; do
             if [ -f "$file" ]; then
@@ -238,7 +241,7 @@ jobs:
             fi
           done
 
-          # 5. Re-create the release with ALL assets attached in one command
+          # 6. Re-create the release with ALL assets attached in one command
           tea release create \
             --repo "$REPO" \
             --title "Rolling Development Build" \
