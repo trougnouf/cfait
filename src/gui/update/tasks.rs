@@ -758,7 +758,23 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                             );
                         }
                     }
-                    SidebarMode::Journal => {}
+                    SidebarMode::Journal => {
+                        if let Some(page) = app.cached_journal_pages.get(app.sidebar_selection_idx)
+                            && page.has_children
+                        {
+                            if page.is_task {
+                                return crate::gui::update::tasks::handle(
+                                    app,
+                                    Message::ToggleTreeCollapse(page.key.clone()),
+                                );
+                            } else {
+                                return crate::gui::update::view::handle(
+                                    app,
+                                    Message::ToggleTagCollapse(page.key.clone()),
+                                );
+                            }
+                        }
+                    }
                     SidebarMode::Goals => {}
                 }
                 return Task::none();

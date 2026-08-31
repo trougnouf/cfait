@@ -1871,7 +1871,11 @@ fun HomeScreen(
                                 val isTask = page.isTask
                 
                                 val iconChar = if (isTask) {
-                                    NfIcons.JOURNAL
+                                    if (page.hasChildren) {
+                                        if (page.isExpanded) NfIcons.ARROW_EXPAND_DOWN else NfIcons.ARROW_EXPAND_UP
+                                    } else {
+                                        NfIcons.JOURNAL
+                                    }
                                 } else {
                                     if (page.isExpanded) NfIcons.ARROW_EXPAND_DOWN else NfIcons.ARROW_EXPAND_UP
                                 }
@@ -1896,13 +1900,7 @@ fun HomeScreen(
                                         .padding(start = 8.dp + indent, end = 8.dp, top = 8.dp, bottom = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    NfIcon(iconChar, 14.sp, color)
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(page.title, fontSize = 14.sp, fontWeight = if (page.uid == journalWikiUid) FontWeight.Bold else FontWeight.Normal)
-                                    
                                     if (isTask && page.hasChildren) {
-                                        Spacer(Modifier.weight(1f))
-                                        val expandIcon = if (page.isExpanded) NfIcons.ARROW_EXPAND_DOWN else NfIcons.ARROW_EXPAND_UP
                                         IconButton(
                                             onClick = {
                                                 scope.launch {
@@ -1910,11 +1908,15 @@ fun HomeScreen(
                                                     onDataChanged()
                                                 }
                                             },
-                                            modifier = Modifier.size(24.dp)
+                                            modifier = Modifier.size(24.dp).padding(0.dp)
                                         ) {
-                                            NfIcon(expandIcon, 14.sp, color)
+                                            NfIcon(iconChar, 14.sp, color)
                                         }
+                                    } else {
+                                        NfIcon(iconChar, 14.sp, color)
                                     }
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(page.title, fontSize = 14.sp, fontWeight = if (page.uid == journalWikiUid) FontWeight.Bold else FontWeight.Normal)
                                 }
                             }
                         }

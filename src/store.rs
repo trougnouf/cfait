@@ -3477,7 +3477,6 @@ impl TaskStore {
             children_map: &HashMap<&'a str, Vec<&'a Task>>,
             depth: usize,
             out: &mut Vec<JournalPageItem>,
-            force_expanded: bool,
         ) {
             let title = if node.summary.is_empty() {
                 rust_i18n::t!("untitled_page", default = "Untitled page").to_string()
@@ -3486,11 +3485,7 @@ impl TaskStore {
             };
 
             let has_children = children_map.contains_key(node.uid.as_str());
-            let is_expanded = if force_expanded {
-                true
-            } else {
-                !node.collapsed
-            };
+            let is_expanded = !node.collapsed;
 
             out.push(JournalPageItem {
                 key: node.uid.clone(),
@@ -3504,7 +3499,7 @@ impl TaskStore {
 
             if is_expanded && let Some(children) = children_map.get(node.uid.as_str()) {
                 for child in children {
-                    flatten_journal(child, children_map, depth + 1, out, force_expanded);
+                    flatten_journal(child, children_map, depth + 1, out);
                 }
             }
         }
@@ -3524,7 +3519,7 @@ impl TaskStore {
 
             if pages_expanded {
                 for p in &root_pages {
-                    flatten_journal(p, &journal_children, 1, &mut journal_pages_out, true);
+                    flatten_journal(p, &journal_children, 1, &mut journal_pages_out);
                 }
             }
         }
@@ -3640,7 +3635,6 @@ impl TaskStore {
                                         &journal_children,
                                         3,
                                         &mut journal_pages_out,
-                                        false,
                                     );
                                 }
                             }

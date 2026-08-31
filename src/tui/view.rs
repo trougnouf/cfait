@@ -712,7 +712,11 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 let indent = "  ".repeat(page.depth);
 
                 let icon_str = if page.is_task {
-                    "📔"
+                    if page.has_children {
+                        if page.is_expanded { "▼" } else { "▶" }
+                    } else {
+                        "📔"
+                    }
                 } else {
                     if page.is_expanded { "▼" } else { "▶" }
                 };
