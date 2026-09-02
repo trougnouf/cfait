@@ -4193,6 +4193,13 @@ impl TaskStore {
                 };
 
                 for u in uids_to_complete {
+                    if let Some(t) = self.get_task_ref(&u) {
+                        // Prevent structural notes and journal pages from being completed
+                        if (t.is_note || t.is_journal) && target_status.is_done() {
+                            continue;
+                        }
+                    }
+
                     if let Some((primary, secondary, children)) =
                         self.set_status(&u, target_status, false)
                     {
