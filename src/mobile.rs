@@ -512,6 +512,7 @@ pub struct MobileConfig {
     pub allow_insecure: bool,
     pub hide_completed: bool,
     pub hide_aliases_in_sidebar: bool,
+    pub strikethrough_completed: bool,
     pub tag_aliases: HashMap<String, Vec<String>>,
     pub disabled_calendars: Vec<String>,
     pub sort_cutoff_days: Option<u32>,
@@ -1426,6 +1427,7 @@ impl CfaitMobile {
             allow_insecure: c.allow_insecure_certs,
             hide_completed: c.hide_completed,
             hide_aliases_in_sidebar: c.hide_aliases_in_sidebar,
+            strikethrough_completed: c.strikethrough_completed,
             tag_aliases: c.tag_aliases,
             disabled_calendars: c.disabled_calendars,
             sort_cutoff_days: c.sort_cutoff_days,
@@ -1596,6 +1598,7 @@ impl CfaitMobile {
         c.allow_insecure_certs = config.allow_insecure;
         c.hide_completed = config.hide_completed;
         c.hide_aliases_in_sidebar = config.hide_aliases_in_sidebar;
+        c.strikethrough_completed = config.strikethrough_completed;
         c.tag_aliases = config.tag_aliases;
         c.disabled_calendars = config.disabled_calendars;
         c.sort_cutoff_days = config.sort_cutoff_days;
