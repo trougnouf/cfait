@@ -345,6 +345,7 @@ impl Task {
             return self
                 .locations
                 .iter()
+                .chain(self.transient_desc_locs.iter())
                 .any(|l| l.to_lowercase().contains(loc_query));
         }
 
@@ -504,6 +505,7 @@ impl Task {
             return self
                 .categories
                 .iter()
+                .chain(self.transient_desc_tags.iter())
                 .any(|c| c.to_lowercase().contains(tag_query));
         }
 
@@ -561,10 +563,12 @@ impl Task {
         let cat_match = self
             .categories
             .iter()
+            .chain(self.transient_desc_tags.iter())
             .any(|c| c.to_lowercase().contains(&part_lower));
         let loc_match = self
             .locations
             .iter()
+            .chain(self.transient_desc_locs.iter())
             .any(|l| l.to_lowercase().contains(&part_lower));
 
         summary_match || desc_match || cat_match || loc_match

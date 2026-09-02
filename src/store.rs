@@ -729,10 +729,12 @@ impl TaskStore {
     /// Replace or insert an entire calendar's tasks.
     /// This sets up the internal uid index and rebuilds relation indices for correctness.
     pub fn insert(&mut self, calendar_href: String, tasks: Vec<Task>) {
+        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let mut new_map = HashMap::new();
         let mut uids_to_add = Vec::new();
 
         for mut task in tasks {
+            task.extract_transient_metadata(&config.tag_aliases);
             let uid = task.uid.clone();
 
             // Protect against stale reads wiping out recent local mutations
@@ -863,7 +865,9 @@ impl TaskStore {
     /// in the calendar map and indices are rebuilt to reflect the new relationships.
     /// Add a single task into the store. If it already exists, it will be overwritten
     /// in the calendar map and indices are rebuilt to reflect the new relationships.
-    pub fn add_task(&mut self, task: Task) {
+    pub fn add_task(&mut self, mut task: Task) {
+        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
+        task.extract_transient_metadata(&config.tag_aliases);
         let href = task.calendar_href.clone();
         self.index.insert(task.uid.clone(), href.clone());
 
@@ -1165,7 +1169,9 @@ impl TaskStore {
 
     /// Update an existing task or insert it if missing. This method attempts to handle
     /// moves between calendars by checking the uid index and adjusting maps accordingly.
-    pub fn update_or_add_task(&mut self, task: Task) {
+    pub fn update_or_add_task(&mut self, mut task: Task) {
+        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
+        task.extract_transient_metadata(&config.tag_aliases);
         let href = task.calendar_href.clone();
         let uid = task.uid.clone();
         if let Some(existing_href) = self.index.get(&uid) {
@@ -3051,12 +3057,12 @@ impl TaskStore {
                     if options.match_all_categories {
                         for sel in options.selected_categories {
                             if sel == UNCATEGORIZED_ID {
-                                if !t.categories.is_empty() {
+                                if !t.categories.is_empty() || !t.transient_desc_tags.is_empty() {
                                     return false;
                                 }
                             } else {
                                 let mut has = false;
-                                for c in &t.categories {
+                                for c in t.categories.iter().chain(t.transient_desc_tags.iter()) {
                                     if check_match(c, sel) {
                                         has = true;
                                         break;
@@ -3069,12 +3075,16 @@ impl TaskStore {
                         }
                     } else {
                         let mut hit = false;
-                        if filter_uncategorized && t.categories.is_empty() {
+                        if filter_uncategorized
+                            && t.categories.is_empty()
+                            && t.transient_desc_tags.is_empty()
+                        {
                             hit = true;
                         } else {
                             for sel in options.selected_categories {
                                 if sel != UNCATEGORIZED_ID {
-                                    for c in &t.categories {
+                                    for c in t.categories.iter().chain(t.transient_desc_tags.iter())
+                                    {
                                         if check_match(c, sel) {
                                             hit = true;
                                             break;
@@ -3094,11 +3104,11 @@ impl TaskStore {
 
                 // Location matching
                 if !ignore_locations && !options.selected_locations.is_empty() {
-                    if t.locations.is_empty() {
+                    if t.locations.is_empty() && t.transient_desc_locs.is_empty() {
                         return false;
                     }
                     let mut hit = false;
-                    for loc in &t.locations {
+                    for loc in t.locations.iter().chain(t.transient_desc_locs.iter()) {
                         for sel in options.selected_locations {
                             if loc == sel
                                 || (loc.starts_with(sel) && loc.chars().nth(sel.len()) == Some(':'))
@@ -3241,14 +3251,14 @@ impl TaskStore {
         for t in &tag_refs {
             let is_active = !t.status.is_done();
 
-            if t.categories.is_empty() {
+            if t.categories.is_empty() && t.transient_desc_tags.is_empty() {
                 uncat_any = true;
                 if is_active {
                     uncat_active_count += 1;
                 }
             } else {
                 let mut seen_for_task = HashSet::new();
-                for cat in &t.categories {
+                for cat in t.categories.iter().chain(t.transient_desc_tags.iter()) {
                     let parts: Vec<&str> = cat.split(':').collect();
                     let mut current_hierarchy = String::with_capacity(cat.len());
 
@@ -3280,7 +3290,7 @@ impl TaskStore {
         for t in &loc_refs {
             let is_active = !t.status.is_done();
 
-            for loc in &t.locations {
+            for loc in t.locations.iter().chain(t.transient_desc_locs.iter()) {
                 let parts: Vec<&str> = loc.split(':').collect();
                 let mut current_hierarchy = String::with_capacity(loc.len());
                 for (i, part) in parts.iter().enumerate() {
@@ -4629,6 +4639,8 @@ mod tests {
             is_search_context: false,
             transient_is_paused: false,
             transient_recent_ts: 0,
+            transient_desc_tags: Vec::new(),
+            transient_desc_locs: Vec::new(),
         }
     }
 

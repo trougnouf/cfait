@@ -891,6 +891,8 @@ impl IcsAdapter {
                 is_search_context: false,
                 transient_is_paused: false,
                 transient_recent_ts: 0,
+                transient_desc_tags: Vec::new(),
+                transient_desc_locs: Vec::new(),
             });
         }
 
@@ -1482,6 +1484,8 @@ impl IcsAdapter {
             is_search_context: false,
             transient_is_paused: false,
             transient_recent_ts: 0,
+            transient_desc_tags: Vec::new(),
+            transient_desc_locs: Vec::new(),
         })
     }
 

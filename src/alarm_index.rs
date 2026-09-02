@@ -521,6 +521,8 @@ mod tests {
             is_search_context: false,
             transient_is_paused: false,
             transient_recent_ts: 0,
+            transient_desc_tags: Vec::new(),
+            transient_desc_locs: Vec::new(),
         };
 
         // Simulate dismissing the implicit alarm by adding an explicit acknowledged alarm

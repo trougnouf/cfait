@@ -765,6 +765,75 @@ pub fn extract_inline_goals(input: &str) -> (String, HashMap<String, crate::conf
     (cleaned_words.join(" "), new_goals)
 }
 
+pub fn extract_tags_and_locations(
+    text: &str,
+    aliases: &HashMap<String, Vec<String>>,
+) -> (Vec<String>, Vec<String>) {
+    let tokens = tokenize_smart_input(text, false);
+    let mut tags = Vec::new();
+    let mut locs = Vec::new();
+
+    for t in tokens {
+        let chunk = &text[t.start..t.end];
+        if t.kind == SyntaxType::Tag {
+            let tag = chunk.trim_start_matches('#');
+            let expanded_cats = expand_braces(tag);
+            for cat in expanded_cats {
+                let clean = strip_quotes(&cat);
+                if !clean.is_empty() {
+                    tags.push(clean);
+                }
+            }
+        } else if t.kind == SyntaxType::Location {
+            let clean = if chunk.starts_with("@@") {
+                strip_quotes(chunk.trim_start_matches("@@"))
+            } else if chunk.to_lowercase().starts_with("loc:") {
+                strip_quotes(&chunk[4..])
+            } else {
+                strip_quotes(chunk)
+            };
+            for l in clean.split('|') {
+                let l_trim = l.trim();
+                if !l_trim.is_empty() {
+                    locs.push(l_trim.to_string());
+                }
+            }
+        }
+    }
+
+    let mut visited = HashSet::new();
+    let mut final_tags = tags.clone();
+    let mut final_locs = locs.clone();
+
+    for tag in tags {
+        let expanded = collect_alias_expansions(&format!("#{}", tag), aliases, &mut visited, 0);
+        for e in expanded {
+            if let Some(t) = e.strip_prefix('#') {
+                final_tags.push(strip_quotes(t));
+            } else if let Some(l) = e.strip_prefix("@@") {
+                final_locs.push(strip_quotes(l));
+            }
+        }
+    }
+    for loc in locs {
+        let expanded = collect_alias_expansions(&format!("@@{}", loc), aliases, &mut visited, 0);
+        for e in expanded {
+            if let Some(t) = e.strip_prefix('#') {
+                final_tags.push(strip_quotes(t));
+            } else if let Some(l) = e.strip_prefix("@@") {
+                final_locs.push(strip_quotes(l));
+            }
+        }
+    }
+
+    final_tags.sort();
+    final_tags.dedup();
+    final_locs.sort();
+    final_locs.dedup();
+
+    (final_tags, final_locs)
+}
+
 pub fn resolve_selection_aliases(
     selection: &str,
     is_location: bool,

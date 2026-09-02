@@ -412,6 +412,10 @@ pub struct Task {
     pub transient_is_paused: bool,
     #[serde(skip)]
     pub transient_recent_ts: i64,
+    #[serde(skip)]
+    pub transient_desc_tags: Vec<String>,
+    #[serde(skip)]
+    pub transient_desc_locs: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -739,6 +743,8 @@ impl Task {
             is_search_context: false,
             transient_is_paused: false,
             transient_recent_ts: 0,
+            transient_desc_tags: Vec::new(),
+            transient_desc_locs: Vec::new(),
         };
         task.apply_smart_input(input, aliases, default_reminder_time);
         task
@@ -752,6 +758,18 @@ impl Task {
     ) {
         // Delegate to parser module to keep the model focused on state.
         super::parser::apply_smart_input(self, input, aliases, default_reminder_time);
+    }
+
+    pub fn extract_transient_metadata(&mut self, aliases: &HashMap<String, Vec<String>>) {
+        self.transient_desc_tags.clear();
+        self.transient_desc_locs.clear();
+        if !self.is_journal {
+            return;
+        }
+        let (tags, locs) =
+            crate::model::parser::extract_tags_and_locations(&self.description, aliases);
+        self.transient_desc_tags = tags;
+        self.transient_desc_locs = locs;
     }
 
     /// Calculate a compact base rank used by the multi-stage sort algorithm.
@@ -1219,7 +1237,11 @@ impl Task {
             }
         };
 
-        for cat in &self.categories {
+        for cat in self
+            .categories
+            .iter()
+            .chain(self.transient_desc_tags.iter())
+        {
             if let Some(val) = aliases.get(cat) {
                 process_expansions(val);
             }
@@ -1232,7 +1254,7 @@ impl Task {
             }
         }
 
-        for loc in &self.locations {
+        for loc in self.locations.iter().chain(self.transient_desc_locs.iter()) {
             let key = format!("@@{}", loc);
             if let Some(targets) = aliases.get(&key) {
                 process_expansions(targets);
@@ -1250,20 +1272,26 @@ impl Task {
         }
 
         let mut visible_tags = Vec::new();
-        for cat in &self.categories {
+        for cat in self
+            .categories
+            .iter()
+            .chain(self.transient_desc_tags.iter())
+        {
             if !hidden_tags.contains(cat) {
                 visible_tags.push(cat.clone());
             }
         }
         visible_tags.sort();
+        visible_tags.dedup();
 
         let mut visible_locations = Vec::new();
-        for loc in &self.locations {
+        for loc in self.locations.iter().chain(self.transient_desc_locs.iter()) {
             if !hidden_locations.contains(loc) {
                 visible_locations.push(loc.clone());
             }
         }
         visible_locations.sort();
+        visible_locations.dedup();
 
         (visible_tags, visible_locations)
     }
