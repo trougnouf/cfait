@@ -106,8 +106,8 @@ fun TaskRow(
     val isDark = androidx.compose.foundation.isSystemInDarkTheme()
 
     val textColor = getTaskTextColor(task.task.priority.toInt(), task.task.isDone, isDark)
-    val highlightColor = Color(0xFFffe600).copy(alpha = 0.1f)
-    val containerColor = if (isHighlighted || expanded) highlightColor else MaterialTheme.colorScheme.surface
+    val rowHighlightColor = Color(0xFFffe600).copy(alpha = 0.1f)
+    val containerColor = if (isHighlighted || expanded) rowHighlightColor else MaterialTheme.colorScheme.surface
     val uriHandler = LocalUriHandler.current
 
     Card(

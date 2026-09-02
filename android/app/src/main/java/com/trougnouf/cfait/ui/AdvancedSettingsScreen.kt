@@ -44,6 +44,7 @@ fun AdvancedSettingsScreen(
     var maxDoneSubtasks by remember { mutableStateOf("5") }
     var trashRetention by remember { mutableStateOf("14") }
     var deleteEventsOnCompletion by remember { mutableStateOf(false) }
+    var strikethroughCompleted by remember { mutableStateOf(false) }
     var showOngoingNotifications by remember { mutableStateOf(true) }
     var showQuickFilter by remember { mutableStateOf(true) }
     var quickFilterTerm by remember { mutableStateOf("is:ready") }
@@ -55,7 +56,7 @@ fun AdvancedSettingsScreen(
     var sortStandardByPriority by remember { mutableStateOf(false) }
     var pausedSortBehavior by remember { mutableStateOf("tiebreak") }
     var sortTiebreakRecent by remember { mutableStateOf(false) }
-    var sortPreset by remember { mutableStateOf("UrgentStartedDue") }
+    var sortPreset by remember { mutableStateOf("Urgent > Ongoing > Due Soon") }
     var sortDays by remember { mutableStateOf("30") }
     var urgentDays by remember { mutableStateOf("1") }
     var urgentPrio by remember { mutableStateOf("1") }
@@ -71,6 +72,7 @@ fun AdvancedSettingsScreen(
             maxDoneSubtasks = cfg.maxDoneSubtasks.toString()
             trashRetention = cfg.trashRetention.toString()
             deleteEventsOnCompletion = cfg.deleteEventsOnCompletion
+            strikethroughCompleted = cfg.strikethroughCompleted
             showOngoingNotifications = cfg.showOngoingNotifications
             showQuickFilter = cfg.showQuickFilter
             quickFilterTerm = cfg.quickFilterTerm
@@ -104,6 +106,7 @@ fun AdvancedSettingsScreen(
                 maxDoneSubtasks = maxDoneSubtasks.toUIntOrNull() ?: 5u,
                 trashRetention = trashRetention.toUIntOrNull() ?: 14u,
                 deleteEventsOnCompletion = deleteEventsOnCompletion,
+                strikethroughCompleted = strikethroughCompleted,
                 showOngoingNotifications = showOngoingNotifications,
                 showQuickFilter = showQuickFilter,
                 quickFilterTerm = quickFilterTerm,
@@ -224,6 +227,13 @@ fun AdvancedSettingsScreen(
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(checked = strikethroughCompleted, onCheckedChange = { strikethroughCompleted = it })
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.strikethrough_completed))
+            }
+            Spacer(Modifier.height(16.dp))
+            
             Text(
                 stringResource(R.string.settings_sorting),
                 fontWeight = FontWeight.SemiBold,
@@ -277,9 +287,9 @@ fun AdvancedSettingsScreen(
                     label = "",
                     selected = sortPreset,
                     options = listOf(
-                        "UrgentStartedDue" to "Urgent > Ongoing > Due Soon",
-                        "UrgentDueStarted" to "Urgent > Due Soon > Ongoing",
-                        "StartedUrgentDue" to "Ongoing > Urgent > Due Soon"
+                        "Urgent > Ongoing > Due Soon" to "Urgent > Ongoing > Due Soon",
+                        "Urgent > Due Soon > Ongoing" to "Urgent > Due Soon > Ongoing",
+                        "Ongoing > Urgent > Due Soon" to "Ongoing > Urgent > Due Soon"
                     ),
                     onSelect = { sortPreset = it },
                     modifier = Modifier.width(240.dp)
@@ -304,32 +314,6 @@ fun AdvancedSettingsScreen(
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp,
                 modifier = Modifier.padding(bottom = 16.dp)
-            )
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
-                Text(stringResource(R.string.sorting_preset_label), modifier = Modifier.weight(1f))
-                DropdownPicker(
-                    label = "",
-                    selected = sortPreset,
-                    options = listOf(
-                        "UrgentStartedDue" to "Urgent > Ongoing > Due Soon",
-                        "UrgentDueStarted" to "Urgent > Due Soon > Ongoing",
-                        "StartedUrgentDue" to "Ongoing > Urgent > Due Soon"
-                    ),
-                    onSelect = { sortPreset = it },
-                    modifier = Modifier.width(240.dp)
-                )
-            }
-            Text(
-                stringResource(R.string.settings_sort_preset_explain),
-                fontSize = 12.sp,
-                color = androidx.compose.ui.graphics.Color.Gray,
-                modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
-            )
-
-            Text(
-                stringResource(R.string.settings_urgent_definition),
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 16.sp
             )
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                 Text(stringResource(R.string.due_within_days), modifier = Modifier.weight(1f))
