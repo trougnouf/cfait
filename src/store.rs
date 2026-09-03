@@ -3131,22 +3131,26 @@ impl TaskStore {
                                 let l_b = loc.as_bytes();
                                 let s_b = sel.as_bytes();
                                 if l_b.eq_ignore_ascii_case(s_b) {
-                                    hit = true; break;
+                                    hit = true;
+                                    break;
                                 }
                                 if l_b.len() > s_b.len() && l_b[s_b.len()] == b':' {
                                     if l_b[..s_b.len()].eq_ignore_ascii_case(s_b) {
-                                        hit = true; break;
+                                        hit = true;
+                                        break;
                                     }
                                 }
                             } else {
                                 let loc_lower = loc.to_lowercase();
                                 let sel_lower = sel.to_lowercase();
                                 if loc_lower == sel_lower {
-                                    hit = true; break;
+                                    hit = true;
+                                    break;
                                 }
                                 if let Some(stripped) = loc_lower.strip_prefix(&sel_lower) {
                                     if stripped.starts_with(':') {
-                                        hit = true; break;
+                                        hit = true;
+                                        break;
                                     }
                                 }
                             }
