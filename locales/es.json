@@ -746,6 +746,7 @@
         "other": "%{count} tareas",
         "zero": "Sin tareas"
     },
+    "theme_amoled": "AMOLED (Negro intenso)",
     "theme_auto_detect": "Automático",
     "theme_dark": "Oscuro",
     "theme_dynamic_dark": "Oscuro dinámico",
