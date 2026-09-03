@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 use crate::model::CalendarListEntry;
+use crate::model::matcher::{contains_ignore_case, starts_with_ignore_case};
 use crate::model::parser::{LEXICON, PrefixToken, quote_value, split_input_respecting_quotes};
 use crate::store::TaskStore;
 use std::collections::HashMap;
@@ -85,7 +86,7 @@ pub fn suggest(
 
             for k in aliases.keys() {
                 if let Some(clean) = k.strip_prefix('#')
-                    && clean.to_lowercase().starts_with(query)
+                    && starts_with_ignore_case(clean, query)
                     && clean != "cfait-internal"
                 {
                     tag_counts.insert(clean.to_string(), 0);
@@ -97,8 +98,7 @@ pub fn suggest(
                         if c == "cfait-internal" {
                             continue;
                         }
-                        let c_lower = c.to_lowercase();
-                        if c_lower.starts_with(query) {
+                        if starts_with_ignore_case(c, query) {
                             *tag_counts.entry(c.clone()).or_insert(0) += 1;
                         }
                     }
@@ -139,7 +139,7 @@ pub fn suggest(
 
         for k in aliases.keys() {
             if let Some(clean) = k.strip_prefix("@@")
-                && clean.to_lowercase().starts_with(&query_lower)
+                && starts_with_ignore_case(clean, &query_lower)
             {
                 loc_counts.insert(clean.to_string(), 0);
             }
@@ -147,7 +147,7 @@ pub fn suggest(
         for map in store.calendars.values() {
             for t in map.values() {
                 for l in &t.locations {
-                    if l.to_lowercase().starts_with(&query_lower) {
+                    if starts_with_ignore_case(l, &query_lower) {
                         *loc_counts.entry(l.clone()).or_insert(0) += 1;
                     }
                 }
@@ -182,14 +182,14 @@ pub fn suggest(
             if cal.href == "local://trash" || cal.href == "local://recovery" {
                 continue;
             }
-            if cal.name.to_lowercase().contains(&query_clean) {
+            if contains_ignore_case(&cal.name, &query_clean) {
                 matches.push(cal.clone());
             }
         }
 
         matches.sort_by(|a, b| {
-            let a_starts = a.name.to_lowercase().starts_with(&query_clean);
-            let b_starts = b.name.to_lowercase().starts_with(&query_clean);
+            let a_starts = starts_with_ignore_case(&a.name, &query_clean);
+            let b_starts = starts_with_ignore_case(&b.name, &query_clean);
 
             let count_a = store.calendars.get(&a.href).map_or(0, |m| m.len());
             let count_b = store.calendars.get(&b.href).map_or(0, |m| m.len());
@@ -245,8 +245,8 @@ pub fn suggest(
                     if t.status.is_done() || t.calendar_href == crate::storage::LOCAL_TRASH_HREF {
                         continue;
                     }
-                    if t.summary.to_lowercase().contains(&query_clean)
-                        || t.uid.to_lowercase().starts_with(&query_clean)
+                    if contains_ignore_case(&t.summary, &query_clean)
+                        || starts_with_ignore_case(&t.uid, &query_clean)
                     {
                         matches.push(t.clone());
                     }
@@ -254,8 +254,8 @@ pub fn suggest(
             }
 
             matches.sort_by(|a, b| {
-                let a_starts = a.summary.to_lowercase().starts_with(&query_clean);
-                let b_starts = b.summary.to_lowercase().starts_with(&query_clean);
+                let a_starts = starts_with_ignore_case(&a.summary, &query_clean);
+                let b_starts = starts_with_ignore_case(&b.summary, &query_clean);
                 b_starts
                     .cmp(&a_starts)
                     .then_with(|| a.summary.cmp(&b.summary))

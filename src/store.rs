@@ -3047,6 +3047,19 @@ impl TaskStore {
                     let filter_uncategorized =
                         options.selected_categories.contains(UNCATEGORIZED_ID);
                     let check_match = |task_cat: &str, selected: &str| -> bool {
+                        if task_cat.is_ascii() && selected.is_ascii() {
+                            let tc = task_cat.as_bytes();
+                            let sel = selected.as_bytes();
+                            if tc.eq_ignore_ascii_case(sel) {
+                                return true;
+                            }
+                            if tc.len() > sel.len() && tc[sel.len()] == b':' {
+                                if tc[..sel.len()].eq_ignore_ascii_case(sel) {
+                                    return true;
+                                }
+                            }
+                            return false;
+                        }
                         let tc_lower = task_cat.to_lowercase();
                         let sel_lower = selected.to_lowercase();
                         if tc_lower == sel_lower {
@@ -3114,11 +3127,28 @@ impl TaskStore {
                     let mut hit = false;
                     for loc in t.locations.iter().chain(t.transient_desc_locs.iter()) {
                         for sel in options.selected_locations {
-                            if loc == sel
-                                || (loc.starts_with(sel) && loc.chars().nth(sel.len()) == Some(':'))
-                            {
-                                hit = true;
-                                break;
+                            if loc.is_ascii() && sel.is_ascii() {
+                                let l_b = loc.as_bytes();
+                                let s_b = sel.as_bytes();
+                                if l_b.eq_ignore_ascii_case(s_b) {
+                                    hit = true; break;
+                                }
+                                if l_b.len() > s_b.len() && l_b[s_b.len()] == b':' {
+                                    if l_b[..s_b.len()].eq_ignore_ascii_case(s_b) {
+                                        hit = true; break;
+                                    }
+                                }
+                            } else {
+                                let loc_lower = loc.to_lowercase();
+                                let sel_lower = sel.to_lowercase();
+                                if loc_lower == sel_lower {
+                                    hit = true; break;
+                                }
+                                if let Some(stripped) = loc_lower.strip_prefix(&sel_lower) {
+                                    if stripped.starts_with(':') {
+                                        hit = true; break;
+                                    }
+                                }
                             }
                         }
                         if hit {

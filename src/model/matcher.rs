@@ -311,6 +311,41 @@ impl Parser {
     }
 }
 
+pub fn contains_ignore_case(haystack: &str, needle_lower: &str) -> bool {
+    if needle_lower.is_empty() {
+        return true;
+    }
+    let h = haystack.as_bytes();
+    let n = needle_lower.as_bytes();
+    if haystack.is_ascii() && needle_lower.is_ascii() {
+        if h.len() < n.len() {
+            return false;
+        }
+        for i in 0..=(h.len() - n.len()) {
+            if h[i..i + n.len()].eq_ignore_ascii_case(n) {
+                return true;
+            }
+        }
+        return false;
+    }
+    haystack.to_lowercase().contains(needle_lower)
+}
+
+pub fn starts_with_ignore_case(haystack: &str, prefix_lower: &str) -> bool {
+    if prefix_lower.is_empty() {
+        return true;
+    }
+    let h = haystack.as_bytes();
+    let p = prefix_lower.as_bytes();
+    if haystack.is_ascii() && prefix_lower.is_ascii() {
+        if h.len() < p.len() {
+            return false;
+        }
+        return h[..p.len()].eq_ignore_ascii_case(p);
+    }
+    haystack.to_lowercase().starts_with(prefix_lower)
+}
+
 impl Task {
     /// Checks if the task matches the given search query using boolean logic.
     /// Supports implicit AND, OR (|), NOT (-), and parentheses.
@@ -361,7 +396,7 @@ impl Task {
                 t.locations
                     .iter()
                     .chain(t.transient_desc_locs.iter())
-                    .any(|l| l.to_lowercase().contains(loc_query))
+                    .any(|l| contains_ignore_case(l, loc_query))
             };
 
             if is_match(self) {
@@ -542,7 +577,7 @@ impl Task {
                 t.categories
                     .iter()
                     .chain(t.transient_desc_tags.iter())
-                    .any(|c| c.to_lowercase().contains(tag_query))
+                    .any(|c| contains_ignore_case(c, tag_query))
             };
 
             if is_match(self) {
@@ -616,18 +651,18 @@ impl Task {
         // --- Fallback: Text Search ---
         // Matches summary, description, categories, or location.
         let is_match = |t: &Task| {
-            let summary_match = t.summary.to_lowercase().contains(&part_lower);
-            let desc_match = t.description.to_lowercase().contains(&part_lower);
+            let summary_match = contains_ignore_case(&t.summary, &part_lower);
+            let desc_match = contains_ignore_case(&t.description, &part_lower);
             let cat_match = t
                 .categories
                 .iter()
                 .chain(t.transient_desc_tags.iter())
-                .any(|c| c.to_lowercase().contains(&part_lower));
+                .any(|c| contains_ignore_case(c, &part_lower));
             let loc_match = t
                 .locations
                 .iter()
                 .chain(t.transient_desc_locs.iter())
-                .any(|l| l.to_lowercase().contains(&part_lower));
+                .any(|l| contains_ignore_case(l, &part_lower));
 
             summary_match || desc_match || cat_match || loc_match
         };
