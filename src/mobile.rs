@@ -797,7 +797,11 @@ impl CfaitMobile {
         let mut to_uncollapse = Vec::new();
         if let Some(task) = &task_clone {
             let mut curr = task.parent_uid.clone();
+            let mut visited = std::collections::HashSet::new();
             while let Some(p_uid) = curr {
+                if !visited.insert(p_uid.clone()) {
+                    break;
+                }
                 if let Some(p_task) = store_guard.get_task_ref(&p_uid) {
                     if p_task.collapsed {
                         to_uncollapse.push(p_uid.clone());

@@ -929,9 +929,13 @@ impl TaskStore {
 
         let mut current_task = task;
         let mut segment_idx = path_segments.len().saturating_sub(2);
+        let mut visited = std::collections::HashSet::new();
 
         while segment_idx < path_segments.len() {
             if let Some(p_uid) = &current_task.parent_uid {
+                if !visited.insert(p_uid.clone()) {
+                    return false;
+                }
                 if let Some(p_task) = self.get_task_ref(p_uid) {
                     let expected_summary =
                         crate::model::parser::strip_quotes(&path_segments[segment_idx])

@@ -368,7 +368,11 @@ impl Task {
                 return true;
             }
             let mut curr = self.parent_uid.as_deref();
+            let mut visited = std::collections::HashSet::new();
             while let Some(p_uid) = curr {
+                if !visited.insert(p_uid) {
+                    break;
+                }
                 if let Some(p) = store.get_task_ref(p_uid) {
                     if is_match(p) {
                         return true;
@@ -545,7 +549,11 @@ impl Task {
                 return true;
             }
             let mut curr = self.parent_uid.as_deref();
+            let mut visited = std::collections::HashSet::new();
             while let Some(p_uid) = curr {
+                if !visited.insert(p_uid) {
+                    break;
+                }
                 if let Some(p) = store.get_task_ref(p_uid) {
                     if is_match(p) {
                         return true;
@@ -628,7 +636,11 @@ impl Task {
             return true;
         }
         let mut curr = self.parent_uid.as_deref();
+        let mut visited = std::collections::HashSet::new();
         while let Some(p_uid) = curr {
+            if !visited.insert(p_uid) {
+                break;
+            }
             if let Some(p) = store.get_task_ref(p_uid) {
                 if is_match(p) {
                     return true;
