@@ -1212,20 +1212,20 @@ pub async fn handle_key_event(
                     if let Some((t, _)) = state.store.get_task_mut(&task.uid)
                         && t.handle_dismiss(&alarm_uid)
                     {
-                        let uid = t.uid.clone();
+                        t.sequence += 1;
+                        let cloned = t.clone();
                         // Update UI
                         state.active_alarm = None;
                         state.refresh_filtered_view();
-                        // Push update via centralized logic
-                        let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
-                        let intent = AppIntent::ToggleTask { uid: uid.clone() };
-                        let actions = state.apply_task_intent(&intent, &config);
-                        // Push update to alarm actor
                         update_alarms(state);
 
                         let tx = action_tx.clone();
                         tokio::spawn(async move {
-                            let _ = tx.send(Action::PersistBatch(actions)).await;
+                            let _ = tx
+                                .send(Action::PersistBatch(vec![crate::journal::Action::Update(
+                                    cloned,
+                                )]))
+                                .await;
                         });
                     }
                     return None;
@@ -1235,18 +1235,19 @@ pub async fn handle_key_event(
                     if let Some((t, _)) = state.store.get_task_mut(&task.uid)
                         && t.handle_snooze(&alarm_uid, state.snooze_short_mins)
                     {
-                        let uid = t.uid.clone();
+                        t.sequence += 1;
+                        let cloned = t.clone();
                         state.active_alarm = None;
                         state.refresh_filtered_view();
-                        // Push update via centralized logic
-                        let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
-                        let intent = AppIntent::ToggleTask { uid: uid.clone() };
-                        let actions = state.apply_task_intent(&intent, &config);
                         update_alarms(state);
 
                         let tx = action_tx.clone();
                         tokio::spawn(async move {
-                            let _ = tx.send(Action::PersistBatch(actions)).await;
+                            let _ = tx
+                                .send(Action::PersistBatch(vec![crate::journal::Action::Update(
+                                    cloned,
+                                )]))
+                                .await;
                         });
                     }
                     return None;
@@ -1256,18 +1257,19 @@ pub async fn handle_key_event(
                     if let Some((t, _)) = state.store.get_task_mut(&task.uid)
                         && t.handle_snooze(&alarm_uid, state.snooze_long_mins)
                     {
-                        let uid = t.uid.clone();
+                        t.sequence += 1;
+                        let cloned = t.clone();
                         state.active_alarm = None;
                         state.refresh_filtered_view();
-                        // Push update via centralized logic
-                        let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
-                        let intent = AppIntent::ToggleTask { uid: uid.clone() };
-                        let actions = state.apply_task_intent(&intent, &config);
                         update_alarms(state);
 
                         let tx = action_tx.clone();
                         tokio::spawn(async move {
-                            let _ = tx.send(Action::PersistBatch(actions)).await;
+                            let _ = tx
+                                .send(Action::PersistBatch(vec![crate::journal::Action::Update(
+                                    cloned,
+                                )]))
+                                .await;
                         });
                     }
                     return None;
@@ -2114,20 +2116,21 @@ pub async fn handle_key_event(
                         && let Some((t, _)) = state.store.get_task_mut(&task.uid)
                         && t.snooze_alarm(&alarm_uid, mins)
                     {
-                        let uid = t.uid.clone();
+                        t.sequence += 1;
+                        let cloned = t.clone();
                         state.active_alarm = None;
                         state.mode = InputMode::Normal;
                         state.reset_input();
                         state.refresh_filtered_view();
-                        // Push update via centralized logic
-                        let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
-                        let intent = AppIntent::ToggleTask { uid: uid.clone() };
-                        let actions = state.apply_task_intent(&intent, &config);
                         update_alarms(state);
 
                         let tx = action_tx.clone();
                         tokio::spawn(async move {
-                            let _ = tx.send(Action::PersistBatch(actions)).await;
+                            let _ = tx
+                                .send(Action::PersistBatch(vec![crate::journal::Action::Update(
+                                    cloned,
+                                )]))
+                                .await;
                         });
                     }
                 } else {
