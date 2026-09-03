@@ -337,6 +337,11 @@ impl Highlighter for MarkdownHighlighter {
             Color::from_rgb(0.1, 0.5, 0.9)
         });
         let dim_color = Some(Color::from_rgba(0.5, 0.5, 0.5, 0.6));
+        let marker_dim_color = Some(if is_dark {
+            Color::from_rgba(0.5, 0.5, 0.5, 0.4)
+        } else {
+            Color::from_rgba(0.5, 0.5, 0.5, 0.35)
+        });
         let checkbox_color = Some(Color::from_rgb(0.4, 0.8, 0.4));
         let list_marker_color = Some(if is_dark {
             Color::from_rgb(0.8, 0.6, 0.0)
@@ -511,8 +516,8 @@ impl Highlighter for MarkdownHighlighter {
                 (
                     "<!-- uid:",
                     "-->",
-                    9,
-                    3,
+                    0,
+                    0,
                     highlighter::Format {
                         color: dim_color,
                         font: Some(Font {
@@ -611,27 +616,29 @@ impl Highlighter for MarkdownHighlighter {
                 ),
             ];
 
-            let mut best_match: Option<(usize, usize, highlighter::Format<Font>)> = None;
+            let mut best_match: Option<(usize, usize, usize, usize, highlighter::Format<Font>)> =
+                None;
 
             {
-                let mut update_best = |start, end, format| {
+                let mut update_best = |start, end, slen, elen, format| {
                     if best_match.is_none() || start < best_match.unwrap().0 {
-                        best_match = Some((start, end, format));
+                        best_match = Some((start, end, slen, elen, format));
                     }
                 };
 
                 for &(start_marker, end_marker, start_len, end_len, format) in &markers {
                     if let Some(start_pos) = remaining.find(start_marker)
-                        && let Some(end_pos) = remaining[start_pos + start_len..].find(end_marker)
+                        && let Some(end_pos) =
+                            remaining[start_pos + start_marker.len()..].find(end_marker)
                     {
                         let abs_start = cursor + start_pos;
-                        let abs_end = abs_start + start_len + end_pos + end_len;
-                        update_best(abs_start, abs_end, format);
+                        let abs_end = abs_start + start_marker.len() + end_pos + end_marker.len();
+                        update_best(abs_start, abs_end, start_len, end_len, format);
                     }
                 }
             }
 
-            let best_match_pos = best_match.as_ref().map(|(pos, _, _)| *pos);
+            let best_match_pos = best_match.as_ref().map(|(pos, _, _, _, _)| *pos);
 
             // Standard Markdown links: [label](url)
             let mut search_idx = 0;
@@ -655,9 +662,12 @@ impl Highlighter for MarkdownHighlighter {
                         && let Some(end_pos) = remaining[mid_abs..].find(')')
                     {
                         let abs_end = cursor + mid_abs + end_pos + 1;
+                        let end_len = abs_end - (cursor + mid_abs);
                         best_match = Some((
                             abs_start,
                             abs_end,
+                            1,
+                            end_len,
                             highlighter::Format {
                                 color: link_color,
                                 font: Some(Font {
@@ -695,6 +705,8 @@ impl Highlighter for MarkdownHighlighter {
                             best_match = Some((
                                 abs_start,
                                 cursor + end_offset,
+                                0,
+                                0,
                                 highlighter::Format {
                                     color: link_color,
                                     font: Some(Font {
@@ -722,6 +734,8 @@ impl Highlighter for MarkdownHighlighter {
                         best_match = Some((
                             abs_start,
                             abs_start + end_offset,
+                            0,
+                            0,
                             highlighter::Format {
                                 color: link_color,
                                 font: Some(Font {
@@ -734,8 +748,18 @@ impl Highlighter for MarkdownHighlighter {
                 }
             }
 
-            if let Some((abs_start, abs_end, format)) = best_match {
-                for byte_format in byte_formats.iter_mut().take(abs_end).skip(abs_start) {
+            if let Some((abs_start, abs_end, start_len, end_len, format)) = best_match {
+                let inner_start = (abs_start + start_len).min(abs_end);
+                let inner_end = abs_end.saturating_sub(end_len).max(inner_start);
+
+                // Start formatting marker (dimmed)
+                for byte_format in byte_formats.iter_mut().take(inner_start).skip(abs_start) {
+                    byte_format.color = marker_dim_color;
+                    byte_format.font = None;
+                }
+
+                // Styled inner content
+                for byte_format in byte_formats.iter_mut().take(inner_end).skip(inner_start) {
                     if format.color.is_some() {
                         byte_format.color = format.color;
                     }
@@ -743,6 +767,13 @@ impl Highlighter for MarkdownHighlighter {
                         byte_format.font = format.font;
                     }
                 }
+
+                // End formatting marker (dimmed)
+                for byte_format in byte_formats.iter_mut().take(abs_end).skip(inner_end) {
+                    byte_format.color = marker_dim_color;
+                    byte_format.font = None;
+                }
+
                 cursor = abs_end;
             } else {
                 break;
