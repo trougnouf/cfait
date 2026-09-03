@@ -1509,8 +1509,8 @@ pub fn view_task_row<'a>(
                         return button::Style {
                             background: Some(
                                 Color {
-                                    a: 0.05,
-                                    ..palette.warning.base.color
+                                    a: 0.15,
+                                    ..palette.primary.base.color
                                 }
                                 .into(),
                             ),
@@ -1521,8 +1521,8 @@ pub fn view_task_row<'a>(
                         button::Status::Hovered => button::Style {
                             background: Some(
                                 Color {
-                                    a: 0.03,
-                                    ..palette.background.base.text
+                                    a: 0.08,
+                                    ..palette.primary.base.color
                                 }
                                 .into(),
                             ),
