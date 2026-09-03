@@ -40,6 +40,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.hide_completed = config.hide_completed;
             app.hide_fully_completed_tags = config.hide_fully_completed_tags;
             app.hide_aliases_in_sidebar = config.hide_aliases_in_sidebar;
+            app.blur_when_unfocused = config.blur_when_unfocused;
             app.show_inline_descriptions = config.show_inline_descriptions;
             app.sort_standard_by_priority = config.sort_standard_by_priority;
             app.paused_sort_behavior = config.paused_sort_behavior;
@@ -265,6 +266,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.hide_completed = config.hide_completed;
             app.hide_fully_completed_tags = config.hide_fully_completed_tags;
             app.hide_aliases_in_sidebar = config.hide_aliases_in_sidebar;
+            app.blur_when_unfocused = config.blur_when_unfocused;
             app.show_inline_descriptions = config.show_inline_descriptions;
             app.sort_standard_by_priority = config.sort_standard_by_priority;
             app.paused_sort_behavior = config.paused_sort_behavior;
@@ -1092,6 +1094,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
         Message::SetStrikethroughCompleted(val) => {
             app.strikethrough_completed = val;
+            save_config(app);
+            Task::none()
+        }
+        Message::SetBlurWhenUnfocused(val) => {
+            app.blur_when_unfocused = val;
             save_config(app);
             Task::none()
         }

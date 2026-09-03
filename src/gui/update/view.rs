@@ -1639,6 +1639,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 }
             })
         }
+        Message::WindowFocused(focused) => {
+            app.is_window_focused = focused;
+            Task::none()
+        }
         Message::WindowResized(size) => {
             let was_narrow = app.current_window_size.width < 750.0;
             let is_narrow = size.width < 750.0;

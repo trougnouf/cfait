@@ -813,6 +813,9 @@ pub struct Config {
     pub sidebar_is_hidden: bool,
 
     #[serde(default)]
+    pub blur_when_unfocused: bool,
+
+    #[serde(default)]
     pub description_editor: String,
 
     // Logging level for both file and terminal output
@@ -935,6 +938,8 @@ pub struct SyncableConfig {
     pub show_task_goals_in_sidebar: bool,
     #[serde(default = "default_true")]
     pub show_undo_snackbar: bool,
+    #[serde(default)]
+    pub blur_when_unfocused: bool,
     #[serde(default = "default_true")]
     pub sort_collections_by_size: bool,
     #[serde(default)]
@@ -1007,6 +1012,7 @@ impl Default for Config {
             show_journal_tab: true,
             show_task_goals_in_sidebar: true,
             show_undo_snackbar: true,
+            blur_when_unfocused: false,
             sidebar_is_hidden: false,
             first_day_of_week: FirstDayOfWeek::default(),
             description_editor: String::new(),
@@ -1068,6 +1074,7 @@ impl Config {
             show_journal_tab: self.show_journal_tab,
             show_task_goals_in_sidebar: self.show_task_goals_in_sidebar,
             show_undo_snackbar: self.show_undo_snackbar,
+            blur_when_unfocused: self.blur_when_unfocused,
             sort_collections_by_size: self.sort_collections_by_size,
             first_day_of_week: self.first_day_of_week,
         }
@@ -1120,6 +1127,7 @@ impl Config {
         self.show_journal_tab = sync.show_journal_tab;
         self.show_task_goals_in_sidebar = sync.show_task_goals_in_sidebar;
         self.show_undo_snackbar = sync.show_undo_snackbar;
+        self.blur_when_unfocused = sync.blur_when_unfocused;
         self.sort_collections_by_size = sync.sort_collections_by_size;
         self.first_day_of_week = sync.first_day_of_week;
     }
@@ -1507,6 +1515,9 @@ impl Config {
             } else if trimmed.starts_with("sidebar_is_hidden =") {
                 out.push_str(line);
                 out.push_str(" # Boolean: Hide the left sidebar collections panel.");
+            } else if trimmed.starts_with("blur_when_unfocused =") {
+                out.push_str(line);
+                out.push_str(" # Boolean: Hide contents when window is unfocused (Privacy mode).");
             } else if trimmed.starts_with("description_editor =") {
                 out.push_str(line);
                 out.push_str(" # String: Editor for task descriptions. Empty uses $VISUAL/$EDITOR. 'builtin' forces internal editor.");

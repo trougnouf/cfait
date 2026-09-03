@@ -328,7 +328,7 @@ All persistent state and settings live here. Unrecognized TOML keys must not be 
 **UI & Behavior:**
 *   `default_calendar`: String HREF.
 *   `enable_local_mode`: Boolean. Allow offline `local://` collections.
-*   `hide_completed`, `hide_fully_completed_tags`, `hide_aliases_in_sidebar`: Booleans.
+*   `hide_completed`, `hide_fully_completed_tags`, `hide_aliases_in_sidebar`, `blur_when_unfocused`: Booleans.
 *   `strikethrough_completed`: Boolean. Line-through styling for done tasks.
 *   `show_inline_descriptions`: Boolean. Previews up to 3 lines of the description in the list.
 *   `ui_scale`: Float (0.5-3.0). Global zoom.

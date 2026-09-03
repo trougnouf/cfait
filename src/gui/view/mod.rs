@@ -944,6 +944,38 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         );
     }
 
+    if app.blur_when_unfocused && !app.is_window_focused {
+        let overlay = container(
+            column![
+                icon::icon(icon::LOCK)
+                    .size(48)
+                    .color(app.theme().extended_palette().background.weak.text),
+                text(rust_i18n::t!("privacy_mode"))
+                    .size(24)
+                    .font(iced::Font {
+                        weight: iced::font::Weight::Bold,
+                        ..Default::default()
+                    })
+                    .color(app.theme().extended_palette().background.weak.text),
+            ]
+            .spacing(20)
+            .align_x(iced::Alignment::Center),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .center_x(Length::Fill)
+        .center_y(Length::Fill)
+        .style(|theme: &Theme| {
+            let palette = theme.extended_palette();
+            container::Style {
+                background: Some(palette.background.base.color.into()),
+                ..Default::default()
+            }
+        });
+
+        stack_children.push(iced::widget::opaque(overlay));
+    }
+
     let content_with_modals: Element<'_, Message> = iced::widget::stack(stack_children).into();
 
     let final_content = if app.force_ssd {

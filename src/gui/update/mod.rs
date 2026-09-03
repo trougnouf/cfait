@@ -21,6 +21,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
             | Message::CloseContextMenu
             | Message::Tick
             | Message::WindowResized(_)
+            | Message::WindowFocused(_)
             | Message::ApplyWindowResize(_) => {}
             _ => {
                 app.active_context_menu = None;
@@ -126,7 +127,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::RemoteCalendarUpdated(_, _)
         | Message::RemoteCalendarCreated(_, _)
         | Message::MoveCalendar(_, _)
-        | Message::SetShowInlineDescriptions(_) => settings::handle(app, message),
+        | Message::SetShowInlineDescriptions(_)
+        | Message::SetBlurWhenUnfocused(_) => settings::handle(app, message),
 
         Message::InputChanged(_)
         | Message::DescriptionChanged(_)
@@ -242,6 +244,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::CloseWindow
         | Message::ResizeStart(_)
         | Message::WindowResized(_)
+        | Message::WindowFocused(_)
         | Message::ApplyWindowResize(_)
         | Message::JumpToTag(_)
         | Message::JumpToLocation(_)

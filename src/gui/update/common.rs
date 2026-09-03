@@ -202,6 +202,7 @@ pub fn save_config(app: &mut GuiApp) -> Config {
     cfg.show_locations_tab = app.show_locations_tab;
     cfg.show_goals_tab = app.show_goals_tab;
     cfg.sidebar_is_hidden = app.sidebar_is_hidden;
+    cfg.blur_when_unfocused = app.blur_when_unfocused;
     cfg.sort_collections_by_size = app.sort_collections_by_size;
     cfg.log_level = app.log_level;
     cfg.sync_settings = app.sync_settings;

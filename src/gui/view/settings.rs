@@ -373,6 +373,9 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 )
                 .style(crate::gui::view::tooltip_style)
                 .delay(std::time::Duration::from_millis(700)),
+                checkbox::<Message, iced::Theme, iced::Renderer>(app.blur_when_unfocused)
+                    .label(rust_i18n::t!("blur_when_unfocused"))
+                    .on_toggle(Message::SetBlurWhenUnfocused),
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.show_inline_descriptions)
                     .label("Show inline descriptions (preview up to 3 lines)")
                     .on_toggle(Message::SetShowInlineDescriptions),

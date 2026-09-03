@@ -244,6 +244,7 @@ pub enum Message {
     MinimizeWindow,
     CloseWindow,
     WindowResized(iced::Size),
+    WindowFocused(bool),
     ApplyWindowResize(usize),
     ResizeStart(ResizeDirection),
 
@@ -295,6 +296,7 @@ pub enum Message {
     OpenContextMenu(String, bool),
     CloseContextMenu,
     TogglePinnedAction(crate::config::TaskAction, bool),
+    SetBlurWhenUnfocused(bool),
     SetLogLevel(LogLevel),
     SetSyncSettings(bool),
 

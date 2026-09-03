@@ -42,6 +42,8 @@ pub fn subscription(app: &GuiApp) -> Subscription<Message> {
     // Track window metrics
     subs.push(event::listen_with(|evt, _status, _window_id| match evt {
         iced::Event::Window(window::Event::Resized(size)) => Some(Message::WindowResized(size)),
+        iced::Event::Window(window::Event::Focused) => Some(Message::WindowFocused(true)),
+        iced::Event::Window(window::Event::Unfocused) => Some(Message::WindowFocused(false)),
         _ => None,
     }));
 
