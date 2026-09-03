@@ -3,10 +3,17 @@
 // This tests the new duration range feature that allows tasks to have
 // both a minimum and maximum estimated duration (e.g., ~30m-1h).
 
+use cfait::context::TestContext;
 use cfait::model::parser::parse_duration_range;
 use cfait::model::{DateType, Task};
+use cfait::store::TaskStore;
 use chrono::{TimeZone, Utc};
 use std::collections::HashMap;
+use std::sync::Arc;
+
+fn create_store() -> TaskStore {
+    TaskStore::new(Arc::new(TestContext::new()))
+}
 
 fn parse(input: &str) -> Task {
     let aliases = HashMap::new();
@@ -86,14 +93,17 @@ fn test_duration_filter_point_query_in_range() {
     t.estimated_duration_max = Some(60);
 
     assert!(
-        t.matches_search_term("~30m"),
+        t.matches_search_term("~30m", &create_store()),
         "Should match ~30m (in range)"
     );
     assert!(
-        t.matches_search_term("~45m"),
+        t.matches_search_term("~45m", &create_store()),
         "Should match ~45m (in range)"
     );
-    assert!(t.matches_search_term("~1h"), "Should match ~1h (in range)");
+    assert!(
+        t.matches_search_term("~1h", &create_store()),
+        "Should match ~1h (in range)"
+    );
 }
 
 #[test]
@@ -104,11 +114,11 @@ fn test_duration_filter_point_query_outside_range() {
     t.estimated_duration_max = Some(60);
 
     assert!(
-        !t.matches_search_term("~15m"),
+        !t.matches_search_term("~15m", &create_store()),
         "Should NOT match ~15m (below range)"
     );
     assert!(
-        !t.matches_search_term("~2h"),
+        !t.matches_search_term("~2h", &create_store()),
         "Should NOT match ~2h (above range)"
     );
 }
@@ -120,9 +130,18 @@ fn test_duration_filter_point_estimate() {
     t.estimated_duration = Some(30);
     t.estimated_duration_max = None; // Point estimate
 
-    assert!(t.matches_search_term("~30m"), "Should match ~30m (exact)");
-    assert!(!t.matches_search_term("~29m"), "Should NOT match ~29m");
-    assert!(!t.matches_search_term("~31m"), "Should NOT match ~31m");
+    assert!(
+        t.matches_search_term("~30m", &create_store()),
+        "Should match ~30m (exact)"
+    );
+    assert!(
+        !t.matches_search_term("~29m", &create_store()),
+        "Should NOT match ~29m"
+    );
+    assert!(
+        !t.matches_search_term("~31m", &create_store()),
+        "Should NOT match ~31m"
+    );
 }
 
 #[test]
@@ -133,7 +152,10 @@ fn test_duration_filter_less_than() {
     t.estimated_duration = Some(30);
     t.estimated_duration_max = Some(60);
 
-    assert!(t.matches_search_term("~<1h"), "Task [30m-1h] can be < 1h");
+    assert!(
+        t.matches_search_term("~<1h", &create_store()),
+        "Task [30m-1h] can be < 1h"
+    );
 }
 
 #[test]
@@ -145,7 +167,7 @@ fn test_duration_filter_less_than_fail() {
     t.estimated_duration_max = Some(60);
 
     assert!(
-        !t.matches_search_term("~<30m"),
+        !t.matches_search_term("~<30m", &create_store()),
         "Task [30m-1h] cannot be < 30m"
     );
 }
@@ -158,7 +180,10 @@ fn test_duration_filter_greater_than() {
     t.estimated_duration = Some(30);
     t.estimated_duration_max = Some(60);
 
-    assert!(t.matches_search_term("~>30m"), "Task [30m-1h] can be > 30m");
+    assert!(
+        t.matches_search_term("~>30m", &create_store()),
+        "Task [30m-1h] can be > 30m"
+    );
 }
 
 #[test]
@@ -170,7 +195,7 @@ fn test_duration_filter_greater_than_fail() {
     t.estimated_duration_max = Some(60);
 
     assert!(
-        !t.matches_search_term("~>1h"),
+        !t.matches_search_term("~>1h", &create_store()),
         "Task [30m-1h] cannot be > 1h"
     );
 }
@@ -183,7 +208,10 @@ fn test_duration_filter_less_than_or_equal() {
     t.estimated_duration = Some(30);
     t.estimated_duration_max = Some(60);
 
-    assert!(t.matches_search_term("~<=1h"), "Task [30m-1h] can be <= 1h");
+    assert!(
+        t.matches_search_term("~<=1h", &create_store()),
+        "Task [30m-1h] can be <= 1h"
+    );
 }
 
 #[test]
@@ -195,7 +223,7 @@ fn test_duration_filter_less_than_or_equal_fail() {
     t.estimated_duration_max = Some(60);
 
     assert!(
-        !t.matches_search_term("~<=30m"),
+        !t.matches_search_term("~<=30m", &create_store()),
         "Task [31m-1h] cannot be <= 30m"
     );
 }
@@ -209,7 +237,7 @@ fn test_duration_filter_greater_than_or_equal() {
     t.estimated_duration_max = Some(60);
 
     assert!(
-        t.matches_search_term("~>=30m"),
+        t.matches_search_term("~>=30m", &create_store()),
         "Task [30m-1h] can be >= 30m"
     );
 }
@@ -223,7 +251,7 @@ fn test_duration_filter_greater_than_or_equal_fail() {
     t.estimated_duration_max = Some(59);
 
     assert!(
-        !t.matches_search_term("~>=1h"),
+        !t.matches_search_term("~>=1h", &create_store()),
         "Task [30m-59m] cannot be >= 1h"
     );
 }
@@ -234,11 +262,11 @@ fn test_duration_filter_no_duration() {
     let t = parse("Task");
 
     assert!(
-        !t.matches_search_term("~30m"),
+        !t.matches_search_term("~30m", &create_store()),
         "Task without duration should NOT match ~30m"
     );
     assert!(
-        !t.matches_search_term("~<1h"),
+        !t.matches_search_term("~<1h", &create_store()),
         "Task without duration should NOT match ~<1h"
     );
 }

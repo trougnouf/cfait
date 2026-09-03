@@ -3127,7 +3127,7 @@ impl TaskStore {
                 }
 
                 // Search term matching
-                if !options.search_term.is_empty() && !query.matches(t, lex) {
+                if !options.search_term.is_empty() && !query.matches(t, lex, self) {
                     return false;
                 }
 

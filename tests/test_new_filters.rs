@@ -49,19 +49,23 @@ fn test_start_date_filter_with_relative_dates() {
 
     // Filter for tasks starting after 2 days from now
     // future_task (3 days) > 2 days, so it should match
-    assert!(future_task.matches_search_term("^>2d"));
+    let store =
+        cfait::store::TaskStore::new(std::sync::Arc::new(cfait::context::TestContext::new()));
+    assert!(future_task.matches_search_term("^>2d", &store));
     // today_task (0 days) is NOT > 2 days, so it should not match
-    assert!(!today_task.matches_search_term("^>2d"));
+    assert!(!today_task.matches_search_term("^>2d", &store));
 
     // Filter for tasks starting before 5 days from now
     // Both tasks are before 5 days, so both should match
-    assert!(future_task.matches_search_term("^<5d"));
-    assert!(today_task.matches_search_term("^<5d"));
+    assert!(future_task.matches_search_term("^<5d", &store));
+    assert!(today_task.matches_search_term("^<5d", &store));
 }
 
 #[test]
 fn test_not_set_operator_with_exclamation() {
     let aliases = std::collections::HashMap::new();
+    let store =
+        cfait::store::TaskStore::new(std::sync::Arc::new(cfait::context::TestContext::new()));
 
     // Task with no start date
     let no_start = Task::new("Task without start", &aliases, None);
@@ -70,12 +74,12 @@ fn test_not_set_operator_with_exclamation() {
     let has_start = Task::new("Task ^tomorrow", &aliases, None);
 
     // Without "!" - tasks with no date should be filtered out
-    assert!(!no_start.matches_search_term("^>today"));
-    assert!(has_start.matches_search_term("^>today"));
+    assert!(!no_start.matches_search_term("^>today", &store));
+    assert!(has_start.matches_search_term("^>today", &store));
 
     // With "!" - tasks with no date should pass the filter
-    assert!(no_start.matches_search_term("^>today!"));
-    assert!(has_start.matches_search_term("^>today!"));
+    assert!(no_start.matches_search_term("^>today!", &store));
+    assert!(has_start.matches_search_term("^>today!", &store));
 }
 
 #[test]
@@ -86,6 +90,8 @@ fn test_not_set_operator_with_due_date() {
     let future_year = now.year() + 2;
     let filter = format!("@<{}-01-01", future_year);
     let filter_not_set = format!("{}!", filter);
+    let store =
+        cfait::store::TaskStore::new(std::sync::Arc::new(cfait::context::TestContext::new()));
 
     // Task with no due date
     let no_due = Task::new("Task without due", &aliases, None);
@@ -94,23 +100,25 @@ fn test_not_set_operator_with_due_date() {
     let has_due = Task::new("Task @tomorrow", &aliases, None);
 
     // Without "!" - tasks with no date should be filtered out
-    assert!(!no_due.matches_search_term(&filter));
-    assert!(has_due.matches_search_term(&filter));
+    assert!(!no_due.matches_search_term(&filter, &store));
+    assert!(has_due.matches_search_term(&filter, &store));
 
     // With "!" - tasks with no date should pass the filter
-    assert!(no_due.matches_search_term(&filter_not_set));
-    assert!(has_due.matches_search_term(&filter_not_set));
+    assert!(no_due.matches_search_term(&filter_not_set, &store));
+    assert!(has_due.matches_search_term(&filter_not_set, &store));
 }
 
 #[test]
 fn test_is_ready_token_consumed() {
     let aliases = std::collections::HashMap::new();
+    let store =
+        cfait::store::TaskStore::new(std::sync::Arc::new(cfait::context::TestContext::new()));
 
     // Create a task that doesn't contain the text "is:ready"
     let task = Task::new("Work on project", &aliases, None);
 
     // The is:ready filter should be consumed and not fail text search
-    assert!(task.matches_search_term("is:ready"));
+    assert!(task.matches_search_term("is:ready", &store));
 }
 
 #[test]

@@ -85,24 +85,34 @@ impl Query {
         }
     }
 
-    pub fn matches(&self, task: &Task, lex: &crate::model::parser::ParserLexicon) -> bool {
-        self.expr.matches(task, lex)
+    pub fn matches(
+        &self,
+        task: &Task,
+        lex: &crate::model::parser::ParserLexicon,
+        store: &crate::store::TaskStore,
+    ) -> bool {
+        self.expr.matches(task, lex, store)
     }
 }
 
 impl SearchExpr {
-    fn matches(&self, task: &Task, lex: &crate::model::parser::ParserLexicon) -> bool {
+    fn matches(
+        &self,
+        task: &Task,
+        lex: &crate::model::parser::ParserLexicon,
+        store: &crate::store::TaskStore,
+    ) -> bool {
         match self {
             SearchExpr::Term(s) => {
                 if s.is_empty() {
                     true
                 } else {
-                    task.matches_primitive(s, lex)
+                    task.matches_primitive(s, lex, store)
                 }
             }
-            SearchExpr::And(a, b) => a.matches(task, lex) && b.matches(task, lex),
-            SearchExpr::Or(a, b) => a.matches(task, lex) || b.matches(task, lex),
-            SearchExpr::Not(a) => !a.matches(task, lex),
+            SearchExpr::And(a, b) => a.matches(task, lex, store) && b.matches(task, lex, store),
+            SearchExpr::Or(a, b) => a.matches(task, lex, store) || b.matches(task, lex, store),
+            SearchExpr::Not(a) => !a.matches(task, lex, store),
         }
     }
 }
@@ -304,19 +314,24 @@ impl Parser {
 impl Task {
     /// Checks if the task matches the given search query using boolean logic.
     /// Supports implicit AND, OR (|), NOT (-), and parentheses.
-    pub fn matches_search_term(&self, query: &str) -> bool {
+    pub fn matches_search_term(&self, query: &str, store: &crate::store::TaskStore) -> bool {
         if query.trim().is_empty() {
             return true;
         }
 
         let q = Query::new(query);
         let lex_guard = crate::model::parser::LEXICON.read().unwrap();
-        q.matches(self, &lex_guard)
+        q.matches(self, &lex_guard, store)
     }
 
     /// Evaluates a single primitive search term (e.g., "#tag", "is:done", or "text").
     /// Returns true if the task matches this specific term.
-    fn matches_primitive(&self, part: &str, lex: &crate::model::parser::ParserLexicon) -> bool {
+    fn matches_primitive(
+        &self,
+        part: &str,
+        lex: &crate::model::parser::ParserLexicon,
+        store: &crate::store::TaskStore,
+    ) -> bool {
         if part.is_empty() {
             return true;
         }
@@ -342,11 +357,28 @@ impl Task {
             } else {
                 rem
             };
-            return self
-                .locations
-                .iter()
-                .chain(self.transient_desc_locs.iter())
-                .any(|l| l.to_lowercase().contains(loc_query));
+            let is_match = |t: &Task| {
+                t.locations
+                    .iter()
+                    .chain(t.transient_desc_locs.iter())
+                    .any(|l| l.to_lowercase().contains(loc_query))
+            };
+
+            if is_match(self) {
+                return true;
+            }
+            let mut curr = self.parent_uid.as_deref();
+            while let Some(p_uid) = curr {
+                if let Some(p) = store.get_task_ref(p_uid) {
+                    if is_match(p) {
+                        return true;
+                    }
+                    curr = p.parent_uid.as_deref();
+                } else {
+                    break;
+                }
+            }
+            return false;
         }
 
         // --- Duration Filter (~30m, ~<1h, ~>2h) ---
@@ -502,11 +534,28 @@ impl Task {
 
         // --- Tag Filter ---
         if let Some(tag_query) = part_lower.strip_prefix('#') {
-            return self
-                .categories
-                .iter()
-                .chain(self.transient_desc_tags.iter())
-                .any(|c| c.to_lowercase().contains(tag_query));
+            let is_match = |t: &Task| {
+                t.categories
+                    .iter()
+                    .chain(t.transient_desc_tags.iter())
+                    .any(|c| c.to_lowercase().contains(tag_query))
+            };
+
+            if is_match(self) {
+                return true;
+            }
+            let mut curr = self.parent_uid.as_deref();
+            while let Some(p_uid) = curr {
+                if let Some(p) = store.get_task_ref(p_uid) {
+                    if is_match(p) {
+                        return true;
+                    }
+                    curr = p.parent_uid.as_deref();
+                } else {
+                    break;
+                }
+            }
+            return false;
         }
 
         // --- Status Filters ---
@@ -558,20 +607,39 @@ impl Task {
 
         // --- Fallback: Text Search ---
         // Matches summary, description, categories, or location.
-        let summary_match = self.summary.to_lowercase().contains(&part_lower);
-        let desc_match = self.description.to_lowercase().contains(&part_lower);
-        let cat_match = self
-            .categories
-            .iter()
-            .chain(self.transient_desc_tags.iter())
-            .any(|c| c.to_lowercase().contains(&part_lower));
-        let loc_match = self
-            .locations
-            .iter()
-            .chain(self.transient_desc_locs.iter())
-            .any(|l| l.to_lowercase().contains(&part_lower));
+        let is_match = |t: &Task| {
+            let summary_match = t.summary.to_lowercase().contains(&part_lower);
+            let desc_match = t.description.to_lowercase().contains(&part_lower);
+            let cat_match = t
+                .categories
+                .iter()
+                .chain(t.transient_desc_tags.iter())
+                .any(|c| c.to_lowercase().contains(&part_lower));
+            let loc_match = t
+                .locations
+                .iter()
+                .chain(t.transient_desc_locs.iter())
+                .any(|l| l.to_lowercase().contains(&part_lower));
 
-        summary_match || desc_match || cat_match || loc_match
+            summary_match || desc_match || cat_match || loc_match
+        };
+
+        if is_match(self) {
+            return true;
+        }
+        let mut curr = self.parent_uid.as_deref();
+        while let Some(p_uid) = curr {
+            if let Some(p) = store.get_task_ref(p_uid) {
+                if is_match(p) {
+                    return true;
+                }
+                curr = p.parent_uid.as_deref();
+            } else {
+                break;
+            }
+        }
+
+        false
     }
 }
 
@@ -582,6 +650,8 @@ mod tests {
 
     #[test]
     fn test_basic_and_or_not() {
+        let store =
+            crate::store::TaskStore::new(std::sync::Arc::new(crate::context::TestContext::new()));
         let aliases: HashMap<String, Vec<String>> = HashMap::new();
         let mut t = Task::new("Test", &aliases, None);
         t.summary = "Work today".to_string();
@@ -591,51 +661,78 @@ mod tests {
         t.locations.push("home office".to_string());
 
         // Implicit AND (space)
-        assert!(t.matches_search_term("work today"));
+        assert!(t.matches_search_term("work today", &store));
 
         // OR using |
-        assert!(t.matches_search_term("urgent | work"));
+        assert!(t.matches_search_term("urgent | work", &store));
         // The task location is "home office", which contains "home".
         // The OR expression should evaluate to true.
-        assert!(t.matches_search_term("urgent | home"));
-        assert!(!t.matches_search_term("urgent | beach"));
+        assert!(t.matches_search_term("urgent | home", &store));
+        assert!(!t.matches_search_term("urgent | beach", &store));
 
         // NOT prefix '-'
-        assert!(!t.matches_search_term("-work"));
-        assert!(t.matches_search_term("-beach"));
+        assert!(!t.matches_search_term("-work", &store));
+        assert!(t.matches_search_term("-beach", &store));
 
         // Grouping and NOT combined: (work OR urgent) AND NOT today -> false
-        assert!(!t.matches_search_term("(work | urgent) -today"));
+        assert!(!t.matches_search_term("(work | urgent) -today", &store));
     }
 
     #[test]
     fn test_quotes_and_term() {
+        let store =
+            crate::store::TaskStore::new(std::sync::Arc::new(crate::context::TestContext::new()));
         let aliases: HashMap<String, Vec<String>> = HashMap::new();
         let mut t = Task::new("Test", &aliases, None);
         t.summary = "Big task".to_string();
 
         // Exact quoted match
-        assert!(t.matches_search_term("\"Big task\""));
+        assert!(t.matches_search_term("\"Big task\"", &store));
 
         // Partial term match
-        assert!(t.matches_search_term("big"));
+        assert!(t.matches_search_term("big", &store));
 
         // Non-matching quoted phrase
-        assert!(!t.matches_search_term("\"small task\""));
+        assert!(!t.matches_search_term("\"small task\"", &store));
     }
 
     #[test]
     fn test_tag_and_location_filters() {
+        let store =
+            crate::store::TaskStore::new(std::sync::Arc::new(crate::context::TestContext::new()));
         let aliases: HashMap<String, Vec<String>> = HashMap::new();
         let mut t = Task::new("Test", &aliases, None);
         t.categories.push("home".to_string());
         t.locations.push("Kitchen".to_string());
 
         // Tag filter using '#'
-        assert!(t.matches_search_term("#home"));
+        assert!(t.matches_search_term("#home", &store));
 
         // Location filters: 'loc:' and '@@' prefixes should both work
-        assert!(t.matches_search_term("loc:Kitchen"));
-        assert!(t.matches_search_term("@@Kitchen"));
+        assert!(t.matches_search_term("loc:Kitchen", &store));
+        assert!(t.matches_search_term("@@Kitchen", &store));
+    }
+
+    #[test]
+    fn test_ancestor_search() {
+        let mut store =
+            crate::store::TaskStore::new(std::sync::Arc::new(crate::context::TestContext::new()));
+        let aliases: HashMap<String, Vec<String>> = HashMap::new();
+
+        let mut parent = Task::new("PowerShed", &aliases, None);
+        parent.uid = "parent_uid".to_string();
+
+        let mut child = Task::new("BOM", &aliases, None);
+        child.uid = "child_uid".to_string();
+        child.parent_uid = Some("parent_uid".to_string());
+
+        let mut grandchild = Task::new("Bac d'acier", &aliases, None);
+        grandchild.uid = "grandchild_uid".to_string();
+        grandchild.parent_uid = Some("child_uid".to_string());
+
+        store.add_task(parent);
+        store.add_task(child);
+
+        assert!(grandchild.matches_search_term("PowerShed bom acier", &store));
     }
 }
