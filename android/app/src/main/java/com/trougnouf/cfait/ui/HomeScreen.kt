@@ -137,6 +137,7 @@ fun HomeScreen(
     sessionsCountAsCompletions: Boolean,
     onGlobalRefresh: () -> Unit,
     onSettings: () -> Unit,
+    strikethroughCompleted: Boolean,
     onTaskClick: (String) -> Unit,
     onDataChanged: () -> Unit,
     onMigrateLocal: (String, String) -> Unit,
@@ -2681,7 +2682,8 @@ fun HomeScreen(
                                                     onTaskAction("toggle_collapse", stableTask.task)
                                                 },
                                                 highlightRegex = highlightRegex,
-                                                highlightColor = highlightColor
+                                                highlightColor = highlightColor,
+                                                strikethroughCompleted = strikethroughCompleted
                                             )
                                         } else {
                                             // Extract payload from uid: "virtual-expand-{payload}" or "virtual-collapse-{payload}"

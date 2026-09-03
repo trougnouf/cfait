@@ -206,6 +206,7 @@ fun CfaitNavHost(
     var showQuickFilter by remember { mutableStateOf(true) }
     var quickFilterTerm by remember { mutableStateOf("is:ready") }
     var quickFilterIcon by remember { mutableStateOf("f0fa9") }
+    var strikethroughCompleted by remember { mutableStateOf(true) }
 
     // ICS Import State
     var icsContentToImport by remember { mutableStateOf<String?>(null) }
@@ -316,6 +317,7 @@ fun CfaitNavHost(
                 showQuickFilter = config.showQuickFilter
                 quickFilterTerm = config.quickFilterTerm
                 quickFilterIcon = config.quickFilterIcon
+                strikethroughCompleted = config.strikethroughCompleted
                 AlarmScheduler.scheduleNextAlarm(context, api)
                 AlarmScheduler.cleanupObsoleteNotifications(context, api)
                 NotificationHelper.updateOngoingNotifications(context, api)
@@ -530,7 +532,8 @@ fun CfaitNavHost(
                 quickFilterIcon = quickFilterIcon,
                 refreshTick = refreshTick,
                 tabPosition = tabPosition,
-                tabAutoHide = tabAutoHide, // <-- ADD THIS LINE
+                tabAutoHide = tabAutoHide,
+                strikethroughCompleted = strikethroughCompleted,
                 listStates = listStates,
                 goals = goals,
                 showCalendarsTab = showCalendarsTab,

@@ -97,7 +97,8 @@ fun TaskRow(
     isCollapsed: Boolean = false,
     onToggleCollapse: () -> Unit = {},
     highlightRegex: Regex? = null,
-    highlightColor: Color = Color.Unspecified
+    highlightColor: Color = Color.Unspecified,
+    strikethroughCompleted: Boolean = true
 ) {
     val startPadding = (task.task.depth.toInt() * 12).dp
     var expanded by remember { mutableStateOf(false) }
@@ -134,7 +135,7 @@ fun TaskRow(
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
                 val isTrash = task.task.calendarHref == "local://trash"
-                val isStrikethrough = task.task.isDone || isTrash
+                val isStrikethrough = strikethroughCompleted && (task.task.isDone || isTrash)
                 val baseStyle = MaterialTheme.typography.bodyMedium.copy(
                     color = textColor,
                     fontWeight = if (task.task.priority > 0.toUByte()) FontWeight.Medium else FontWeight.Normal,
