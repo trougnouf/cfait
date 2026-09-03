@@ -325,86 +325,90 @@ impl Highlighter for MarkdownHighlighter {
     fn highlight_line(&mut self, line: &str) -> Self::Iterator<'_> {
         let mut spans = Vec::new();
 
-        let header_color = Some(Color::from_rgb(1.0, 0.6, 0.0)); // Orange
-        let link_color = Some(Color::from_rgb(0.2, 0.7, 1.0)); // Cyan
-        let dim_color = Some(Color::from_rgba(0.5, 0.5, 0.5, 0.3)); // Very transparent gray
-        let checkbox_color = Some(Color::from_rgb(0.4, 0.8, 0.4)); // Greenish
+        let is_dark = self.is_dark;
+        let header_color = Some(if is_dark {
+            Color::from_rgb(0.3, 0.7, 1.0)
+        } else {
+            Color::from_rgb(0.1, 0.4, 0.8)
+        });
+        let link_color = Some(if is_dark {
+            Color::from_rgb(0.2, 0.7, 1.0)
+        } else {
+            Color::from_rgb(0.1, 0.5, 0.9)
+        });
+        let dim_color = Some(Color::from_rgba(0.5, 0.5, 0.5, 0.6));
+        let checkbox_color = Some(Color::from_rgb(0.4, 0.8, 0.4));
+        let list_marker_color = Some(if is_dark {
+            Color::from_rgb(0.8, 0.6, 0.0)
+        } else {
+            Color::from_rgb(0.7, 0.5, 0.0)
+        });
+        let quote_color = Some(if is_dark {
+            Color::from_rgb(0.5, 0.5, 0.5)
+        } else {
+            Color::from_rgb(0.4, 0.4, 0.4)
+        });
+        let table_color = Some(Color::from_rgb(0.3, 0.7, 0.5));
+        let code_color = Some(Color::from_rgb(0.8, 0.6, 0.4));
 
         let trimmed = line.trim_start();
-        let is_header = trimmed.starts_with("# ")
-            || trimmed.starts_with("## ")
-            || trimmed.starts_with("### ")
-            || trimmed.starts_with("#### ")
-            || trimmed.starts_with("##### ")
-            || trimmed.starts_with("###### ");
-        let _is_list =
-            trimmed.starts_with("- [") || trimmed.starts_with("* [") || trimmed.starts_with("+ [");
-        let is_table = trimmed.starts_with('|') && trimmed[1..].contains('|');
-        let table_color = Some(Color::from_rgb(0.3, 0.7, 0.5)); // Greenish
-
-        let mut cursor = 0;
-
-        // Base format for the line
-        let base_format = if is_header {
-            highlighter::Format {
-                color: header_color,
-                font: Some(Font {
-                    weight: iced::font::Weight::Bold,
-                    ..Default::default()
-                }),
-            }
-        } else if is_table {
-            highlighter::Format {
-                color: table_color,
-                font: Some(Font::MONOSPACE),
-            }
-        } else {
-            highlighter::Format {
-                color: None,
-                font: None,
-            }
-        };
-
-        let mut after_marker = 0;
         let indent = line.len() - trimmed.len();
 
-        // Find end of markdown marker
-        if is_header {
-            if trimmed.starts_with("# ") {
-                after_marker = indent + 2;
-            } else if trimmed.starts_with("## ") {
-                after_marker = indent + 3;
-            } else if trimmed.starts_with("### ") {
-                after_marker = indent + 4;
-            } else if trimmed.starts_with("#### ") {
-                after_marker = indent + 5;
-            } else if trimmed.starts_with("##### ") {
-                after_marker = indent + 6;
-            } else if trimmed.starts_with("###### ") {
-                after_marker = indent + 7;
-            }
+        let mut marker_end = indent;
+        let mut is_header = false;
+        let mut is_quote = false;
+        let mut is_table = false;
+        let mut is_code_fence = false;
+
+        if trimmed.starts_with("```") {
+            is_code_fence = true;
+            marker_end = line.len();
+        } else if trimmed.starts_with("# ") {
+            marker_end = indent + 2;
+            is_header = true;
+        } else if trimmed.starts_with("## ") {
+            marker_end = indent + 3;
+            is_header = true;
+        } else if trimmed.starts_with("### ") {
+            marker_end = indent + 4;
+            is_header = true;
+        } else if trimmed.starts_with("#### ") {
+            marker_end = indent + 5;
+            is_header = true;
+        } else if trimmed.starts_with("##### ") {
+            marker_end = indent + 6;
+            is_header = true;
+        } else if trimmed.starts_with("###### ") {
+            marker_end = indent + 7;
+            is_header = true;
+        } else if trimmed.starts_with("> ") {
+            marker_end = indent + 2;
+            is_quote = true;
+        } else if trimmed.starts_with('|') && trimmed[1..].contains('|') {
+            is_table = true;
+        } else if trimmed.starts_with("- ")
+            || trimmed.starts_with("* ")
+            || trimmed.starts_with("+ ")
+        {
+            marker_end = indent + 2;
         } else {
-            if trimmed.starts_with("- ") || trimmed.starts_with("* ") || trimmed.starts_with("+ ") {
-                after_marker = indent + 2;
-            } else {
-                let mut digit_bytes = 0;
-                for c in trimmed.chars() {
-                    if c.is_ascii_digit() {
-                        digit_bytes += c.len_utf8();
-                    } else {
-                        break;
-                    }
+            let mut digit_bytes = 0;
+            for c in trimmed.chars() {
+                if c.is_ascii_digit() {
+                    digit_bytes += c.len_utf8();
+                } else {
+                    break;
                 }
-                if digit_bytes > 0 && trimmed[digit_bytes..].starts_with(". ") {
-                    after_marker = indent + digit_bytes + 2;
-                }
+            }
+            if digit_bytes > 0 && trimmed[digit_bytes..].starts_with(". ") {
+                marker_end = indent + digit_bytes + 2;
             }
         }
 
         // Check for checkbox right after marker
-        let mut checkbox_end = 0;
-        if after_marker > 0 {
-            let remainder = &line[after_marker..];
+        let mut checkbox_end = marker_end;
+        if marker_end > indent && marker_end < line.len() {
+            let remainder = &line[marker_end..];
             if remainder.starts_with("[ ] ")
                 || remainder.starts_with("[x] ")
                 || remainder.starts_with("[X] ")
@@ -415,447 +419,93 @@ impl Highlighter for MarkdownHighlighter {
                 || remainder.starts_with("[*] ")
                 || remainder.starts_with("[~] ")
             {
-                checkbox_end = after_marker + 4;
+                checkbox_end = marker_end + 4;
             }
         }
 
-        // Push prefix and checkbox
-        if checkbox_end > 0 {
-            if after_marker > 0 {
-                spans.push((0..after_marker, base_format));
+        let base_format = if is_header {
+            highlighter::Format {
+                color: header_color,
+                font: Some(Font {
+                    weight: iced::font::Weight::Bold,
+                    ..Default::default()
+                }),
             }
+        } else if is_quote {
+            highlighter::Format {
+                color: quote_color,
+                font: Some(Font {
+                    style: iced::font::Style::Italic,
+                    ..Default::default()
+                }),
+            }
+        } else if is_table {
+            highlighter::Format {
+                color: table_color,
+                font: Some(Font::MONOSPACE),
+            }
+        } else if is_code_fence {
+            highlighter::Format {
+                color: code_color,
+                font: Some(Font::MONOSPACE),
+            }
+        } else {
+            highlighter::Format {
+                color: None,
+                font: None,
+            }
+        };
+
+        // 1. Indent
+        if indent > 0 {
             spans.push((
-                after_marker..checkbox_end,
+                0..indent,
+                highlighter::Format {
+                    color: None,
+                    font: None,
+                },
+            ));
+        }
+
+        // 2. Marker (Header #, Quote >, List bullet/number)
+        if marker_end > indent {
+            let fmt = if is_header || is_quote || is_code_fence {
+                base_format
+            } else {
+                highlighter::Format {
+                    color: list_marker_color,
+                    font: Some(Font {
+                        weight: iced::font::Weight::Bold,
+                        ..Default::default()
+                    }),
+                }
+            };
+            spans.push((indent..marker_end, fmt));
+        }
+
+        // 3. Checkbox
+        if checkbox_end > marker_end {
+            spans.push((
+                marker_end..checkbox_end,
                 highlighter::Format {
                     color: checkbox_color,
                     font: None,
                 },
             ));
+        }
 
-            let rest_of_line = &line[checkbox_end..];
-
-            if rest_of_line.is_empty() {
-                return spans.into_iter();
-            }
-
-            let mut byte_formats = vec![base_format; rest_of_line.len()];
-
-            // 1. Apply Markdown to rest_of_line
-            let mut cursor = 0;
-            while cursor < rest_of_line.len() {
-                let remaining = &rest_of_line[cursor..];
-
-                let markers = [
-                    (
-                        "<!-- uid:",
-                        "-->",
-                        9,
-                        3,
-                        highlighter::Format {
-                            color: dim_color,
-                            font: Some(Font {
-                                style: iced::font::Style::Italic,
-                                ..Default::default()
-                            }),
-                        },
-                    ),
-                    (
-                        "[[",
-                        "]]",
-                        2,
-                        2,
-                        highlighter::Format {
-                            color: link_color,
-                            font: Some(Font {
-                                weight: iced::font::Weight::Bold,
-                                ..Default::default()
-                            }),
-                        },
-                    ),
-                    (
-                        "**",
-                        "**",
-                        2,
-                        2,
-                        highlighter::Format {
-                            color: None,
-                            font: Some(Font {
-                                weight: iced::font::Weight::Bold,
-                                ..Default::default()
-                            }),
-                        },
-                    ),
-                    (
-                        "__",
-                        "__",
-                        2,
-                        2,
-                        highlighter::Format {
-                            color: None,
-                            font: Some(Font {
-                                weight: iced::font::Weight::Bold,
-                                ..Default::default()
-                            }),
-                        },
-                    ),
-                    (
-                        "~~",
-                        "~~",
-                        2,
-                        2,
-                        highlighter::Format {
-                            color: None,
-                            font: None,
-                        },
-                    ),
-                    (
-                        "*",
-                        "*",
-                        1,
-                        1,
-                        highlighter::Format {
-                            color: None,
-                            font: Some(Font {
-                                style: iced::font::Style::Italic,
-                                ..Default::default()
-                            }),
-                        },
-                    ),
-                    (
-                        "_",
-                        "_",
-                        1,
-                        1,
-                        highlighter::Format {
-                            color: None,
-                            font: Some(Font {
-                                style: iced::font::Style::Italic,
-                                ..Default::default()
-                            }),
-                        },
-                    ),
-                    (
-                        "`",
-                        "`",
-                        1,
-                        1,
-                        highlighter::Format {
-                            color: Some(Color::from_rgb(0.8, 0.6, 0.4)),
-                            font: Some(Font::MONOSPACE),
-                        },
-                    ),
-                ];
-
-                let mut best_match: Option<(usize, usize, highlighter::Format<Font>)> = None;
-
-                // Process markers first
-                {
-                    let mut update_best = |start, end, format| {
-                        if best_match.is_none() || start < best_match.unwrap().0 {
-                            best_match = Some((start, end, format));
-                        }
-                    };
-
-                    for &(start_marker, end_marker, start_len, end_len, format) in &markers {
-                        if let Some(start_pos) = remaining.find(start_marker)
-                            && let Some(end_pos) =
-                                remaining[start_pos + start_len..].find(end_marker)
-                        {
-                            let abs_start = cursor + start_pos;
-                            let abs_end = abs_start + start_len + end_pos + end_len;
-                            update_best(abs_start, abs_end, format);
-                        }
-                    }
-                }
-
-                let best_match_pos = best_match.as_ref().map(|(pos, _, _)| *pos);
-
-                // Standard Markdown links: [label](url)
-                let mut search_idx = 0;
-                while let Some(start_pos) = remaining[search_idx..].find('[') {
-                    let abs_start = cursor + search_idx + start_pos;
-
-                    // Early termination: if we already have a match that starts before this position, skip
-                    if let Some(best_pos) = best_match_pos
-                        && best_pos <= abs_start
-                    {
-                        break;
-                    }
-
-                    if remaining[search_idx + start_pos..].starts_with("[[") {
-                        search_idx += start_pos + 2;
-                        continue;
-                    }
-                    if let Some(mid_pos) = remaining[search_idx + start_pos..].find("](") {
-                        let mid_abs = search_idx + start_pos + mid_pos;
-                        let link_text = &remaining[search_idx + start_pos + 1..mid_abs];
-                        if !link_text.contains('[')
-                            && let Some(end_pos) = remaining[mid_abs..].find(')')
-                        {
-                            let abs_end = cursor + mid_abs + end_pos + 1;
-                            best_match = Some((
-                                abs_start,
-                                abs_end,
-                                highlighter::Format {
-                                    color: link_color,
-                                    font: Some(Font {
-                                        weight: iced::font::Weight::Bold,
-                                        ..Default::default()
-                                    }),
-                                },
-                            ));
-                            break;
-                        }
-                    }
-                    search_idx += start_pos + 1;
-                }
-
-                if let Some(pos) = remaining.find("://") {
-                    let mut scheme_start = pos;
-                    for (i, c) in remaining[..pos].char_indices().rev() {
-                        if c.is_ascii_alphanumeric() || c == '+' || c == '-' || c == '.' {
-                            scheme_start = i;
-                        } else {
-                            break;
-                        }
-                    }
-                    if scheme_start < pos {
-                        let abs_start = cursor + scheme_start;
-                        if best_match.is_none() || abs_start < best_match.as_ref().unwrap().0 {
-                            let mut end_offset = pos + 3;
-                            for c in remaining[pos + 3..].chars() {
-                                if c.is_whitespace() || c == ')' || c == ']' {
-                                    break;
-                                }
-                                end_offset += c.len_utf8();
-                            }
-                            if end_offset > pos + 3 {
-                                best_match = Some((
-                                    abs_start,
-                                    cursor + end_offset,
-                                    highlighter::Format {
-                                        color: link_color,
-                                        font: Some(Font {
-                                            weight: iced::font::Weight::Bold,
-                                            ..Default::default()
-                                        }),
-                                    },
-                                ));
-                            }
-                        }
-                    }
-                }
-
-                if let Some(pos) = remaining.find("mailto:") {
-                    let abs_start = cursor + pos;
-                    if best_match.is_none() || abs_start < best_match.as_ref().unwrap().0 {
-                        let mut end_offset = 7;
-                        for c in remaining[pos + 7..].chars() {
-                            if c.is_whitespace() || c == ')' || c == ']' {
-                                break;
-                            }
-                            end_offset += c.len_utf8();
-                        }
-                        if end_offset > 7 {
-                            best_match = Some((
-                                abs_start,
-                                abs_start + end_offset,
-                                highlighter::Format {
-                                    color: link_color,
-                                    font: Some(Font {
-                                        weight: iced::font::Weight::Bold,
-                                        ..Default::default()
-                                    }),
-                                },
-                            ));
-                        }
-                    }
-                }
-
-                if let Some((abs_start, abs_end, format)) = best_match {
-                    for byte_format in byte_formats.iter_mut().take(abs_end).skip(abs_start) {
-                        if format.color.is_some() {
-                            byte_format.color = format.color;
-                        }
-                        if format.font.is_some() {
-                            byte_format.font = format.font;
-                        }
-                    }
-                    cursor = abs_end;
-                } else {
-                    break;
-                }
-            }
-
-            // 2. Apply Smart Syntax to rest_of_line
-            let tokens = crate::model::parser::tokenize_smart_input(rest_of_line, false);
-            let is_dark_theme = self.is_dark;
-
-            for t in tokens {
-                if t.kind == crate::model::parser::SyntaxType::Text {
-                    continue;
-                }
-                let text = &rest_of_line[t.start..t.end];
-                let format = match t.kind {
-                    crate::model::parser::SyntaxType::Priority => {
-                        let p = text.trim_start_matches('!').parse::<u8>().unwrap_or(0);
-                        let (r, g, b) = crate::color_utils::get_priority_rgb(p, is_dark_theme);
-                        highlighter::Format {
-                            color: Some(Color::from_rgb(r, g, b)),
-                            font: Some(Font {
-                                weight: iced::font::Weight::Bold,
-                                ..Default::default()
-                            }),
-                        }
-                    }
-                    crate::model::parser::SyntaxType::DueDate => highlighter::Format {
-                        color: Some(Color::from_rgb(0.2, 0.6, 1.0)),
-                        font: None,
-                    },
-                    crate::model::parser::SyntaxType::StartDate => highlighter::Format {
-                        color: Some(Color::from_rgb(0.4, 0.8, 0.4)),
-                        font: None,
-                    },
-                    crate::model::parser::SyntaxType::Recurrence => highlighter::Format {
-                        color: Some(Color::from_rgb(0.8, 0.4, 0.8)),
-                        font: None,
-                    },
-                    crate::model::parser::SyntaxType::Duration => highlighter::Format {
-                        color: Some(Color::from_rgb(0.6, 0.6, 0.6)),
-                        font: None,
-                    },
-                    crate::model::parser::SyntaxType::Tag => {
-                        let tag_name = text.trim_start_matches('#');
-                        let (r, g, b) = crate::color_utils::generate_color(tag_name);
-                        highlighter::Format {
-                            color: Some(Color::from_rgb(r, g, b)),
-                            font: Some(Font {
-                                weight: iced::font::Weight::Bold,
-                                ..Default::default()
-                            }),
-                        }
-                    }
-                    crate::model::parser::SyntaxType::Location => highlighter::Format {
-                        color: Some(Color::from_rgb(0.8, 0.5, 0.0)),
-                        font: None,
-                    },
-                    crate::model::parser::SyntaxType::Url => highlighter::Format {
-                        color: Some(Color::from_rgb(0.2, 0.2, 0.8)),
-                        font: None,
-                    },
-                    crate::model::parser::SyntaxType::WikiLink => highlighter::Format {
-                        color: Some(Color::from_rgb(0.2, 0.7, 1.0)),
-                        font: Some(Font {
-                            weight: iced::font::Weight::Bold,
-                            ..Default::default()
-                        }),
-                    },
-                    crate::model::parser::SyntaxType::Dependency => highlighter::Format {
-                        color: Some(Color::from_rgb(0.9, 0.6, 0.2)),
-                        font: Some(Font {
-                            weight: iced::font::Weight::Bold,
-                            ..Default::default()
-                        }),
-                    },
-                    crate::model::parser::SyntaxType::Relation => highlighter::Format {
-                        color: Some(Color::from_rgb(0.4, 0.6, 0.9)), // Soft Blue
-                        font: Some(Font {
-                            weight: iced::font::Weight::Bold,
-                            ..Default::default()
-                        }),
-                    },
-                    crate::model::parser::SyntaxType::Geo => highlighter::Format {
-                        color: Some(Color::from_rgb(0.5, 0.5, 0.5)),
-                        font: None,
-                    },
-                    crate::model::parser::SyntaxType::Description => highlighter::Format {
-                        color: Some(Color::from_rgb(0.6, 0.0, 0.6)),
-                        font: None,
-                    },
-                    crate::model::parser::SyntaxType::Reminder => highlighter::Format {
-                        color: Some(Color::from_rgb(1.0, 0.4, 0.0)),
-                        font: Some(Font {
-                            weight: iced::font::Weight::Bold,
-                            ..Default::default()
-                        }),
-                    },
-                    crate::model::parser::SyntaxType::Operator => highlighter::Format {
-                        color: Some(Color::from_rgb(1.0, 0.0, 1.0)),
-                        font: Some(Font {
-                            weight: iced::font::Weight::Bold,
-                            ..Default::default()
-                        }),
-                    },
-                    crate::model::parser::SyntaxType::Goal => highlighter::Format {
-                        color: Some(Color::from_rgb(0.2, 0.8, 0.6)),
-                        font: Some(Font {
-                            weight: iced::font::Weight::Bold,
-                            ..Default::default()
-                        }),
-                    },
-                    crate::model::parser::SyntaxType::Calendar => highlighter::Format {
-                        color: Some(Color::from_rgb(0.91, 0.11, 0.38)),
-                        font: Some(Font {
-                            weight: iced::font::Weight::Bold,
-                            ..Default::default()
-                        }),
-                    },
-                    crate::model::parser::SyntaxType::Pin => highlighter::Format {
-                        color: Some(Color::from_rgb(1.0, 0.4, 0.0)),
-                        font: Some(Font {
-                            weight: iced::font::Weight::Bold,
-                            ..Default::default()
-                        }),
-                    },
-                    crate::model::parser::SyntaxType::Note => highlighter::Format {
-                        color: Some(Color::from_rgb(0.5, 0.5, 0.5)),
-                        font: Some(Font {
-                            weight: iced::font::Weight::Bold,
-                            ..Default::default()
-                        }),
-                    },
-                    _ => base_format,
-                };
-
-                for byte_format in byte_formats.iter_mut().take(t.end).skip(t.start) {
-                    if format.color.is_some() {
-                        byte_format.color = format.color;
-                    }
-                    if format.font.is_some() {
-                        byte_format.font = format.font;
-                    }
-                }
-            }
-
-            // 3. Coalesce
-            let mut current_format = byte_formats[0];
-            let mut current_start = 0;
-            for (i, byte_format) in byte_formats
-                .iter()
-                .enumerate()
-                .skip(1)
-                .take(rest_of_line.len() - 1)
-            {
-                if *byte_format != current_format && rest_of_line.is_char_boundary(i) {
-                    spans.push((
-                        checkbox_end + current_start..checkbox_end + i,
-                        current_format,
-                    ));
-                    current_format = *byte_format;
-                    current_start = i;
-                }
-            }
-            spans.push((
-                checkbox_end + current_start..checkbox_end + rest_of_line.len(),
-                current_format,
-            ));
-
+        let rest_start = checkbox_end;
+        if rest_start >= line.len() {
             return spans.into_iter();
         }
 
-        // Scan for inline elements (Links, UIDs, and Formatting)
-        while cursor < line.len() {
-            let remaining = &line[cursor..];
+        let rest_of_line = &line[rest_start..];
+        let mut byte_formats = vec![base_format; rest_of_line.len()];
+
+        // 4. Apply Markdown inline formatting to rest_of_line
+        let mut cursor = 0;
+        while cursor < rest_of_line.len() {
+            let remaining = &rest_of_line[cursor..];
 
             let markers = [
                 (
@@ -890,7 +540,7 @@ impl Highlighter for MarkdownHighlighter {
                     2,
                     2,
                     highlighter::Format {
-                        color: None, // Inherit base color
+                        color: None,
                         font: Some(Font {
                             weight: iced::font::Weight::Bold,
                             ..Default::default()
@@ -916,8 +566,11 @@ impl Highlighter for MarkdownHighlighter {
                     2,
                     2,
                     highlighter::Format {
-                        color: None,
-                        font: None,
+                        color: dim_color,
+                        font: Some(Font {
+                            style: iced::font::Style::Italic,
+                            ..Default::default()
+                        }),
                     },
                 ),
                 (
@@ -952,7 +605,7 @@ impl Highlighter for MarkdownHighlighter {
                     1,
                     1,
                     highlighter::Format {
-                        color: Some(Color::from_rgb(0.8, 0.6, 0.4)),
+                        color: code_color,
                         font: Some(Font::MONOSPACE),
                     },
                 ),
@@ -960,7 +613,6 @@ impl Highlighter for MarkdownHighlighter {
 
             let mut best_match: Option<(usize, usize, highlighter::Format<Font>)> = None;
 
-            // Process markers first
             {
                 let mut update_best = |start, end, format| {
                     if best_match.is_none() || start < best_match.unwrap().0 {
@@ -986,7 +638,6 @@ impl Highlighter for MarkdownHighlighter {
             while let Some(start_pos) = remaining[search_idx..].find('[') {
                 let abs_start = cursor + search_idx + start_pos;
 
-                // Early termination: if we already have a match that starts before this position, skip
                 if let Some(best_pos) = best_match_pos
                     && best_pos <= abs_start
                 {
@@ -1083,26 +734,180 @@ impl Highlighter for MarkdownHighlighter {
                 }
             }
 
-            if let Some((abs_start, abs_end, mut format)) = best_match {
-                if abs_start > cursor {
-                    spans.push((cursor..abs_start, base_format));
+            if let Some((abs_start, abs_end, format)) = best_match {
+                for byte_format in byte_formats.iter_mut().take(abs_end).skip(abs_start) {
+                    if format.color.is_some() {
+                        byte_format.color = format.color;
+                    }
+                    if format.font.is_some() {
+                        byte_format.font = format.font;
+                    }
                 }
-
-                if format.color.is_none() {
-                    format.color = base_format.color;
-                }
-                if format.font.is_none() {
-                    format.font = base_format.font;
-                }
-
-                spans.push((abs_start..abs_end, format));
                 cursor = abs_end;
             } else {
-                spans.push((cursor..line.len(), base_format));
                 break;
             }
         }
 
+        // 5. Apply Smart Syntax to rest_of_line
+        let tokens = crate::model::parser::tokenize_smart_input(rest_of_line, false);
+        let is_dark_theme = is_dark;
+
+        for t in tokens {
+            if t.kind == crate::model::parser::SyntaxType::Text {
+                continue;
+            }
+            let text = &rest_of_line[t.start..t.end];
+            let format = match t.kind {
+                crate::model::parser::SyntaxType::Priority => {
+                    let p = text.trim_start_matches('!').parse::<u8>().unwrap_or(0);
+                    let (r, g, b) = crate::color_utils::get_priority_rgb(p, is_dark_theme);
+                    highlighter::Format {
+                        color: Some(Color::from_rgb(r, g, b)),
+                        font: Some(Font {
+                            weight: iced::font::Weight::Bold,
+                            ..Default::default()
+                        }),
+                    }
+                }
+                crate::model::parser::SyntaxType::DueDate => highlighter::Format {
+                    color: Some(Color::from_rgb(0.2, 0.6, 1.0)),
+                    font: None,
+                },
+                crate::model::parser::SyntaxType::StartDate => highlighter::Format {
+                    color: Some(Color::from_rgb(0.4, 0.8, 0.4)),
+                    font: None,
+                },
+                crate::model::parser::SyntaxType::Recurrence => highlighter::Format {
+                    color: Some(Color::from_rgb(0.8, 0.4, 0.8)),
+                    font: None,
+                },
+                crate::model::parser::SyntaxType::Duration => highlighter::Format {
+                    color: Some(Color::from_rgb(0.6, 0.6, 0.6)),
+                    font: None,
+                },
+                crate::model::parser::SyntaxType::Tag => {
+                    let tag_name = text.trim_start_matches('#');
+                    let (r, g, b) = crate::color_utils::generate_color(tag_name);
+                    highlighter::Format {
+                        color: Some(Color::from_rgb(r, g, b)),
+                        font: Some(Font {
+                            weight: iced::font::Weight::Bold,
+                            ..Default::default()
+                        }),
+                    }
+                }
+                crate::model::parser::SyntaxType::Location => highlighter::Format {
+                    color: Some(Color::from_rgb(0.8, 0.5, 0.0)),
+                    font: None,
+                },
+                crate::model::parser::SyntaxType::Url => highlighter::Format {
+                    color: Some(Color::from_rgb(0.2, 0.2, 0.8)),
+                    font: None,
+                },
+                crate::model::parser::SyntaxType::WikiLink => highlighter::Format {
+                    color: Some(Color::from_rgb(0.2, 0.7, 1.0)),
+                    font: Some(Font {
+                        weight: iced::font::Weight::Bold,
+                        ..Default::default()
+                    }),
+                },
+                crate::model::parser::SyntaxType::Dependency => highlighter::Format {
+                    color: Some(Color::from_rgb(0.9, 0.6, 0.2)),
+                    font: Some(Font {
+                        weight: iced::font::Weight::Bold,
+                        ..Default::default()
+                    }),
+                },
+                crate::model::parser::SyntaxType::Relation => highlighter::Format {
+                    color: Some(Color::from_rgb(0.4, 0.6, 0.9)),
+                    font: Some(Font {
+                        weight: iced::font::Weight::Bold,
+                        ..Default::default()
+                    }),
+                },
+                crate::model::parser::SyntaxType::Geo => highlighter::Format {
+                    color: Some(Color::from_rgb(0.5, 0.5, 0.5)),
+                    font: None,
+                },
+                crate::model::parser::SyntaxType::Description => highlighter::Format {
+                    color: Some(Color::from_rgb(0.6, 0.0, 0.6)),
+                    font: None,
+                },
+                crate::model::parser::SyntaxType::Reminder => highlighter::Format {
+                    color: Some(Color::from_rgb(1.0, 0.4, 0.0)),
+                    font: Some(Font {
+                        weight: iced::font::Weight::Bold,
+                        ..Default::default()
+                    }),
+                },
+                crate::model::parser::SyntaxType::Operator => highlighter::Format {
+                    color: Some(Color::from_rgb(1.0, 0.0, 1.0)),
+                    font: Some(Font {
+                        weight: iced::font::Weight::Bold,
+                        ..Default::default()
+                    }),
+                },
+                crate::model::parser::SyntaxType::Goal => highlighter::Format {
+                    color: Some(Color::from_rgb(0.2, 0.8, 0.6)),
+                    font: Some(Font {
+                        weight: iced::font::Weight::Bold,
+                        ..Default::default()
+                    }),
+                },
+                crate::model::parser::SyntaxType::Calendar => highlighter::Format {
+                    color: Some(Color::from_rgb(0.91, 0.11, 0.38)),
+                    font: Some(Font {
+                        weight: iced::font::Weight::Bold,
+                        ..Default::default()
+                    }),
+                },
+                crate::model::parser::SyntaxType::Pin => highlighter::Format {
+                    color: Some(Color::from_rgb(1.0, 0.4, 0.0)),
+                    font: Some(Font {
+                        weight: iced::font::Weight::Bold,
+                        ..Default::default()
+                    }),
+                },
+                crate::model::parser::SyntaxType::Note => highlighter::Format {
+                    color: Some(Color::from_rgb(0.5, 0.5, 0.5)),
+                    font: Some(Font {
+                        weight: iced::font::Weight::Bold,
+                        ..Default::default()
+                    }),
+                },
+                _ => base_format,
+            };
+
+            for byte_format in byte_formats.iter_mut().take(t.end).skip(t.start) {
+                if format.color.is_some() {
+                    byte_format.color = format.color;
+                }
+                if format.font.is_some() {
+                    byte_format.font = format.font;
+                }
+            }
+        }
+
+        // 6. Coalesce adjacent identical formats into spans
+        let mut current_format = byte_formats[0];
+        let mut current_start = 0;
+        for (i, byte_format) in byte_formats
+            .iter()
+            .enumerate()
+            .skip(1)
+            .take(rest_of_line.len() - 1)
+        {
+            if *byte_format != current_format && rest_of_line.is_char_boundary(i) {
+                spans.push((rest_start + current_start..rest_start + i, current_format));
+                current_format = *byte_format;
+                current_start = i;
+            }
+        }
+        spans.push((
+            rest_start + current_start..rest_start + rest_of_line.len(),
+            current_format,
+        ));
         spans.into_iter()
     }
 }
