@@ -106,6 +106,13 @@ class MainActivity : ComponentActivity() {
                 when (currentTheme) {
                     "light" -> lightColorScheme()
                     "dark" -> darkColorScheme()
+                    "amoled" -> {
+                        val base = if (dynamicAvailable) dynamicDarkColorScheme(context) else darkColorScheme()
+                        base.copy(
+                            background = androidx.compose.ui.graphics.Color.Black,
+                            surface = androidx.compose.ui.graphics.Color.Black
+                        )
+                    }
                     "dynamic_light" -> if (dynamicAvailable) dynamicLightColorScheme(context) else lightColorScheme()
                     "dynamic_dark" -> if (dynamicAvailable) dynamicDarkColorScheme(context) else darkColorScheme()
                     // Auto: Prefer dynamic if available, otherwise standard

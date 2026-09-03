@@ -27,6 +27,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -111,16 +112,18 @@ fun SettingsScreen(
     val themeAutoStr = stringResource(R.string.theme_auto_detect)
     val themeLightStr = stringResource(R.string.theme_light)
     val themeDarkStr = stringResource(R.string.theme_dark)
+    val themeAmoledStr = stringResource(R.string.theme_amoled)
     val themeDynLightStr =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) stringResource(R.string.theme_dynamic_light) else ""
     val themeDynDarkStr =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) stringResource(R.string.theme_dynamic_dark) else ""
 
-    val themeOptions = remember(themeAutoStr, themeLightStr, themeDarkStr, themeDynLightStr, themeDynDarkStr) {
+    val themeOptions = remember(themeAutoStr, themeLightStr, themeDarkStr, themeAmoledStr, themeDynLightStr, themeDynDarkStr) {
         val list = mutableListOf(
             "auto" to themeAutoStr,
             "light" to themeLightStr,
-            "dark" to themeDarkStr
+            "dark" to themeDarkStr,
+            "amoled" to themeAmoledStr
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             list.add("dynamic_light" to themeDynLightStr)

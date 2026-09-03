@@ -703,6 +703,7 @@
     "theme_dynamic_dark": "Dynamic dark",
     "theme_dynamic_light": "Dynamic light",
     "theme_light": "Light",
+    "theme_amoled": "AMOLED (Pitch black)",
     "time_tracked_duration": "Time tracked (%{h}h %{m}m)",
     "timeline": "Timeline",
     "toggle_matching_logic": "Toggle matching logic",

@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -103,8 +104,8 @@ fun TaskRow(
     val startPadding = (task.task.depth.toInt() * 12).dp
     var expanded by remember { mutableStateOf(false) }
 
-    // Use the native Android dark mode state detection here if not provided directly
-    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    // Determine dark mode from the current MaterialTheme background
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
 
     val textColor = getTaskTextColor(task.task.priority.toInt(), task.task.isDone, isDark)
     val rowHighlightColor = Color(0xFFffe600).copy(alpha = 0.1f)
