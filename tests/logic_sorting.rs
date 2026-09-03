@@ -234,6 +234,7 @@ fn test_sort_standard_date_first() {
         start: None,
         is_overdue: false,
         is_paused: false,
+        is_note: false,
     };
     let low_prio_soon = SortKey {
         rank: 4,
@@ -242,6 +243,7 @@ fn test_sort_standard_date_first() {
         start: None,
         is_overdue: false,
         is_paused: false,
+        is_note: false,
     };
     // date-first: soon (low_prio_soon) should sort BEFORE late (high_prio_late)
     assert_eq!(
@@ -269,6 +271,7 @@ fn test_sort_standard_priority_first() {
         start: None,
         is_overdue: false,
         is_paused: false,
+        is_note: false,
     };
     let low_prio_soon = SortKey {
         rank: 4,
@@ -277,6 +280,7 @@ fn test_sort_standard_priority_first() {
         start: None,
         is_overdue: false,
         is_paused: false,
+        is_note: false,
     };
     // priority-first: high priority (prio=1) should sort BEFORE low priority (prio=9)
     assert_eq!(
@@ -306,6 +310,7 @@ fn test_sort_merged_rank4_rank5_priority_wins() {
         start: None,
         is_overdue: false,
         is_paused: false,
+        is_note: false,
     };
     let rank4_low_prio = SortKey {
         rank: 4,
@@ -314,6 +319,7 @@ fn test_sort_merged_rank4_rank5_priority_wins() {
         start: None,
         is_overdue: false,
         is_paused: false,
+        is_note: false,
     };
     assert_eq!(
         compare_sortkeys(
@@ -345,6 +351,7 @@ fn test_sort_merged_same_priority_date_wins() {
         start: None,
         is_overdue: false,
         is_paused: false,
+        is_note: false,
     };
     let rank5_no_date = SortKey {
         rank: 5,
@@ -353,6 +360,7 @@ fn test_sort_merged_same_priority_date_wins() {
         start: None,
         is_overdue: false,
         is_paused: false,
+        is_note: false,
     };
     // With flag=true: both map to effective_rank=4 (merged group), priority equal → date wins.
     assert_eq!(
@@ -393,6 +401,7 @@ fn test_sort_rank4_before_rank5_when_flag_off() {
         start: None,
         is_overdue: false,
         is_paused: false,
+        is_note: false,
     };
     let rank4_low_prio = SortKey {
         rank: 4,
@@ -401,6 +410,7 @@ fn test_sort_rank4_before_rank5_when_flag_off() {
         start: None,
         is_overdue: false,
         is_paused: false,
+        is_note: false,
     };
     assert_eq!(
         compare_sortkeys(
@@ -427,6 +437,7 @@ fn test_sort_urgent_ranks_always_date_first() {
         start: None,
         is_overdue: false,
         is_paused: false,
+        is_note: false,
     };
     let low_prio_soon = SortKey {
         rank: 2,
@@ -435,6 +446,7 @@ fn test_sort_urgent_ranks_always_date_first() {
         start: None,
         is_overdue: false,
         is_paused: false,
+        is_note: false,
     };
     // Rank 2 always date-first, even with the flag set to true
     assert_eq!(

@@ -144,6 +144,7 @@ Tasks sort deterministically by rank (0 to 9), then by Overdue -> Priority -> Du
 *   **Rank 9 (Trash):** In `local://trash`.
 
 *Rule:* If `sort_standard_by_priority` is enabled, Ranks 4 and 5 merge and sort by numeric Priority first, then Date.
+*Rule:* Notes (`is:note`) and Journals (`is:journal`) always sort below actionable tasks within the same rank, and automatically drop to Rank 8 if their dates are in the past.
 
 ---
 

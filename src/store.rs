@@ -3869,6 +3869,7 @@ impl TaskStore {
                             start: child_eff.effective_dtstart.clone(),
                             is_overdue: child_eff.is_overdue,
                             is_paused: child_eff.transient_is_paused,
+                            is_note: child_eff.is_note || child_eff.is_journal,
                         };
                         let b = crate::model::item::SortKey {
                             rank: best_child.sort_rank,
@@ -3877,6 +3878,7 @@ impl TaskStore {
                             start: best_child.effective_dtstart.clone(),
                             is_overdue: best_child.is_overdue,
                             is_paused: best_child.transient_is_paused,
+                            is_note: best_child.is_note || best_child.is_journal,
                         };
                         let ordering = crate::model::item::compare_sortkeys(
                             &a,
@@ -3905,7 +3907,7 @@ impl TaskStore {
                 }
 
                 if let Some(bc) = best_child_opt {
-                    if t.is_note || t.is_search_context {
+                    if t.is_note || t.is_journal || t.is_search_context {
                         best.sort_rank = bc.sort_rank;
                         best.effective_priority = bc.effective_priority;
                         best.effective_due = bc.effective_due.clone();
@@ -3920,6 +3922,7 @@ impl TaskStore {
                             start: bc.effective_dtstart.clone(),
                             is_overdue: bc.is_overdue,
                             is_paused: bc.transient_is_paused,
+                            is_note: bc.is_note || bc.is_journal,
                         };
                         let b = crate::model::item::SortKey {
                             rank: best.sort_rank,
@@ -3928,6 +3931,7 @@ impl TaskStore {
                             start: best.effective_dtstart.clone(),
                             is_overdue: best.is_overdue,
                             is_paused: best.transient_is_paused,
+                            is_note: best.is_note || best.is_journal,
                         };
                         let ordering = crate::model::item::compare_sortkeys(
                             &a,

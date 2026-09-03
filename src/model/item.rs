@@ -426,6 +426,7 @@ pub struct SortKey {
     pub start: Option<DateType>,
     pub is_overdue: bool,
     pub is_paused: bool,
+    pub is_note: bool,
 }
 
 /// Options to parameterize a comparison operation. Using a struct keeps the
@@ -538,6 +539,12 @@ pub fn compare_sortkeys(
         if paused_cmp != Ordering::Equal {
             return paused_cmp;
         }
+    }
+
+    // Tie-break: notes go below actionable tasks
+    let note_cmp = a.is_note.cmp(&b.is_note);
+    if note_cmp != Ordering::Equal {
+        return note_cmp;
     }
 
     Ordering::Equal
@@ -797,7 +804,7 @@ impl Task {
             return 8;
         }
 
-        if self.is_note {
+        if self.is_note || self.is_journal {
             let now = chrono::Utc::now();
             let is_over = if let Some(due) = &self.effective_due {
                 due.to_comparison_time() < now
@@ -922,6 +929,7 @@ impl Task {
             start: self.effective_dtstart.clone(),
             is_overdue: self.is_overdue,
             is_paused: self.transient_is_paused,
+            is_note: self.is_note || self.is_journal,
         };
         let b = SortKey {
             rank: other.sort_rank,
@@ -930,6 +938,7 @@ impl Task {
             start: other.effective_dtstart.clone(),
             is_overdue: other.is_overdue,
             is_paused: other.transient_is_paused,
+            is_note: other.is_note || other.is_journal,
         };
         compare_sortkeys(
             &a,
@@ -979,6 +988,7 @@ impl Task {
             start: self.dtstart.clone(),
             is_overdue: self.is_overdue,
             is_paused: self.transient_is_paused,
+            is_note: self.is_note || self.is_journal,
         };
         let b = SortKey {
             rank: rank_other,
@@ -987,6 +997,7 @@ impl Task {
             start: other.dtstart.clone(),
             is_overdue: other.is_overdue,
             is_paused: other.transient_is_paused,
+            is_note: other.is_note || other.is_journal,
         };
         compare_sortkeys(
             &a,
