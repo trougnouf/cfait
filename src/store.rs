@@ -3053,10 +3053,11 @@ impl TaskStore {
                             if tc.eq_ignore_ascii_case(sel) {
                                 return true;
                             }
-                            if tc.len() > sel.len() && tc[sel.len()] == b':' {
-                                if tc[..sel.len()].eq_ignore_ascii_case(sel) {
-                                    return true;
-                                }
+                            if tc.len() > sel.len()
+                                && tc[sel.len()] == b':'
+                                && tc[..sel.len()].eq_ignore_ascii_case(sel)
+                            {
+                                return true;
                             }
                             return false;
                         }
@@ -3134,11 +3135,12 @@ impl TaskStore {
                                     hit = true;
                                     break;
                                 }
-                                if l_b.len() > s_b.len() && l_b[s_b.len()] == b':' {
-                                    if l_b[..s_b.len()].eq_ignore_ascii_case(s_b) {
-                                        hit = true;
-                                        break;
-                                    }
+                                if l_b.len() > s_b.len()
+                                    && l_b[s_b.len()] == b':'
+                                    && l_b[..s_b.len()].eq_ignore_ascii_case(s_b)
+                                {
+                                    hit = true;
+                                    break;
                                 }
                             } else {
                                 let loc_lower = loc.to_lowercase();
@@ -3147,11 +3149,11 @@ impl TaskStore {
                                     hit = true;
                                     break;
                                 }
-                                if let Some(stripped) = loc_lower.strip_prefix(&sel_lower) {
-                                    if stripped.starts_with(':') {
-                                        hit = true;
-                                        break;
-                                    }
+                                if let Some(stripped) = loc_lower.strip_prefix(&sel_lower)
+                                    && stripped.starts_with(':')
+                                {
+                                    hit = true;
+                                    break;
                                 }
                             }
                         }
