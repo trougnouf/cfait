@@ -658,6 +658,7 @@
     "task_deleted": "Task %{uid} deleted.",
     "stop_reset": "Stop (reset)",
     "strikethrough_completed": "Cross-off (strikethrough) done tasks",
+    "show_inline_descriptions": "Show inline descriptions (preview up to 3 lines)",
     "support_card_title": "Support development",
     "support_clear_filters": "Clear all filters / Show all collections",
     "support_isolate_calendar": "Isolate collection / Focus tag or location",

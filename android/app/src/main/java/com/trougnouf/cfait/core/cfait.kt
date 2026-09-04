@@ -4801,6 +4801,7 @@ data class MobileConfig(
     var `maxDoneRoots`: kotlin.UInt,
     var `maxDoneSubtasks`: kotlin.UInt,
     var `showOngoingNotifications`: kotlin.Boolean,
+    var `showInlineDescriptions`: kotlin.Boolean,
     var `showQuickFilter`: kotlin.Boolean,
     var `quickFilterTerm`: kotlin.String,
     var `quickFilterIcon`: kotlin.String,
@@ -4862,6 +4863,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
             FfiConverterUInt.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterBoolean.read(buf),
@@ -4915,6 +4917,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
                 FfiConverterUInt.allocationSize(value.`maxDoneRoots`) +
                 FfiConverterUInt.allocationSize(value.`maxDoneSubtasks`) +
                 FfiConverterBoolean.allocationSize(value.`showOngoingNotifications`) +
+                FfiConverterBoolean.allocationSize(value.`showInlineDescriptions`) +
                 FfiConverterBoolean.allocationSize(value.`showQuickFilter`) +
                 FfiConverterString.allocationSize(value.`quickFilterTerm`) +
                 FfiConverterString.allocationSize(value.`quickFilterIcon`) +
@@ -4971,6 +4974,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
         FfiConverterUInt.write(value.`maxDoneRoots`, buf)
         FfiConverterUInt.write(value.`maxDoneSubtasks`, buf)
         FfiConverterBoolean.write(value.`showOngoingNotifications`, buf)
+        FfiConverterBoolean.write(value.`showInlineDescriptions`, buf)
         FfiConverterBoolean.write(value.`showQuickFilter`, buf)
         FfiConverterString.write(value.`quickFilterTerm`, buf)
         FfiConverterString.write(value.`quickFilterIcon`, buf)
@@ -5963,6 +5967,7 @@ data class MobileTaskSummary(
     var `isRelativeRecurrence`: kotlin.Boolean,
     var `parentUid`: kotlin.String?,
     var `hasDescription`: kotlin.Boolean,
+    var `descriptionInline`: kotlin.String,
     var `hasRelatedTo`: kotlin.Boolean,
     var `isSearchContext`: kotlin.Boolean,
     var `visible`: kotlin.Boolean,
@@ -6014,6 +6019,7 @@ public object FfiConverterTypeMobileTaskSummary : FfiConverterRustBuffer<MobileT
             FfiConverterBoolean.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterString.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
@@ -6059,6 +6065,7 @@ public object FfiConverterTypeMobileTaskSummary : FfiConverterRustBuffer<MobileT
                 FfiConverterBoolean.allocationSize(value.`isRelativeRecurrence`) +
                 FfiConverterOptionalString.allocationSize(value.`parentUid`) +
                 FfiConverterBoolean.allocationSize(value.`hasDescription`) +
+                FfiConverterString.allocationSize(value.`descriptionInline`) +
                 FfiConverterBoolean.allocationSize(value.`hasRelatedTo`) +
                 FfiConverterBoolean.allocationSize(value.`isSearchContext`) +
                 FfiConverterBoolean.allocationSize(value.`visible`) +
@@ -6106,6 +6113,7 @@ public object FfiConverterTypeMobileTaskSummary : FfiConverterRustBuffer<MobileT
         FfiConverterBoolean.write(value.`isRelativeRecurrence`, buf)
         FfiConverterOptionalString.write(value.`parentUid`, buf)
         FfiConverterBoolean.write(value.`hasDescription`, buf)
+        FfiConverterString.write(value.`descriptionInline`, buf)
         FfiConverterBoolean.write(value.`hasRelatedTo`, buf)
         FfiConverterBoolean.write(value.`isSearchContext`, buf)
         FfiConverterBoolean.write(value.`visible`, buf)

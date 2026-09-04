@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.trougnouf.cfait.core.MobileTaskSummary
@@ -99,7 +100,8 @@ fun TaskRow(
     onToggleCollapse: () -> Unit = {},
     highlightRegex: Regex? = null,
     highlightColor: Color = Color.Unspecified,
-    strikethroughCompleted: Boolean = true
+    strikethroughCompleted: Boolean = true,
+    showInlineDescriptions: Boolean = true
 ) {
     val startPadding = (task.task.depth.toInt() * 12).dp
     var expanded by remember { mutableStateOf(false) }
@@ -150,6 +152,24 @@ fun TaskRow(
                     text = annotatedSummary,
                     style = baseStyle,
                 )
+
+                if (showInlineDescriptions && task.task.descriptionInline.isNotEmpty() && !expanded && !task.task.isCollapsed) {
+                    val descSpans = com.trougnouf.cfait.ui.parseInlineMarkdown(
+                        task.task.descriptionInline,
+                        if (isDark) Color(0xFFAAAAAA) else Color(0xFF666666),
+                        false,
+                        highlightRegex,
+                        highlightColor
+                    )
+                    Text(
+                        text = descSpans,
+                        fontSize = 12.sp,
+                        lineHeight = 14.sp,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 2.dp, bottom = 2.dp)
+                    )
+                }
 
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),

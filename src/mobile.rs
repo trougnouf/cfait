@@ -256,6 +256,7 @@ pub struct MobileTaskSummary {
     pub is_relative_recurrence: bool,
     pub parent_uid: Option<String>,
     pub has_description: bool,
+    pub description_inline: String,
     pub has_related_to: bool,
     pub is_search_context: bool,
     pub visible: bool,
@@ -302,6 +303,7 @@ impl MobileTaskSummary {
             is_relative_recurrence: false,
             parent_uid: None,
             has_description: false,
+            description_inline: String::new(),
             has_related_to: false,
             is_search_context: false,
             visible: true,
@@ -534,6 +536,7 @@ pub struct MobileConfig {
     pub max_done_roots: u32,
     pub max_done_subtasks: u32,
     pub show_ongoing_notifications: bool,
+    pub show_inline_descriptions: bool,
     pub show_quick_filter: bool,
     pub quick_filter_term: String,
     pub quick_filter_icon: String,
@@ -1187,6 +1190,16 @@ fn task_to_summary(t: &Task, store: &TaskStore) -> MobileTaskSummary {
         is_relative_recurrence: t.is_relative_recurrence(),
         parent_uid: t.parent_uid.clone(),
         has_description: !t.description.is_empty(),
+        description_inline: if !t.description.is_empty() {
+            t.description
+                .lines()
+                .filter(|l| !l.trim().is_empty())
+                .take(3)
+                .collect::<Vec<&str>>()
+                .join("\n")
+        } else {
+            String::new()
+        },
         has_related_to: !t.related_to.is_empty(),
         is_search_context: t.is_search_context,
         visible: true,
@@ -1457,6 +1470,7 @@ impl CfaitMobile {
             max_done_roots: c.max_done_roots as u32,
             max_done_subtasks: c.max_done_subtasks as u32,
             show_ongoing_notifications: c.show_ongoing_notifications,
+            show_inline_descriptions: c.show_inline_descriptions,
             show_quick_filter: c.show_quick_filter,
             quick_filter_term: c.quick_filter_term,
             quick_filter_icon: c.quick_filter_icon,
@@ -1629,6 +1643,7 @@ impl CfaitMobile {
         c.max_done_roots = config.max_done_roots as usize;
         c.max_done_subtasks = config.max_done_subtasks as usize;
         c.show_ongoing_notifications = config.show_ongoing_notifications;
+        c.show_inline_descriptions = config.show_inline_descriptions;
         c.show_quick_filter = config.show_quick_filter;
         c.quick_filter_term = config.quick_filter_term;
         c.quick_filter_icon = config.quick_filter_icon;

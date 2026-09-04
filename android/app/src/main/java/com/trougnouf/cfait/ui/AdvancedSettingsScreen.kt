@@ -45,6 +45,7 @@ fun AdvancedSettingsScreen(
     var trashRetention by remember { mutableStateOf("14") }
     var deleteEventsOnCompletion by remember { mutableStateOf(false) }
     var strikethroughCompleted by remember { mutableStateOf(false) }
+    var showInlineDescriptions by remember { mutableStateOf(true) }
     var showOngoingNotifications by remember { mutableStateOf(true) }
     var showQuickFilter by remember { mutableStateOf(true) }
     var quickFilterTerm by remember { mutableStateOf("is:ready") }
@@ -73,6 +74,7 @@ fun AdvancedSettingsScreen(
             trashRetention = cfg.trashRetention.toString()
             deleteEventsOnCompletion = cfg.deleteEventsOnCompletion
             strikethroughCompleted = cfg.strikethroughCompleted
+            showInlineDescriptions = cfg.showInlineDescriptions
             showOngoingNotifications = cfg.showOngoingNotifications
             showQuickFilter = cfg.showQuickFilter
             quickFilterTerm = cfg.quickFilterTerm
@@ -107,6 +109,7 @@ fun AdvancedSettingsScreen(
                 trashRetention = trashRetention.toUIntOrNull() ?: 14u,
                 deleteEventsOnCompletion = deleteEventsOnCompletion,
                 strikethroughCompleted = strikethroughCompleted,
+                showInlineDescriptions = showInlineDescriptions,
                 showOngoingNotifications = showOngoingNotifications,
                 showQuickFilter = showQuickFilter,
                 quickFilterTerm = quickFilterTerm,
@@ -231,6 +234,11 @@ fun AdvancedSettingsScreen(
                 Switch(checked = strikethroughCompleted, onCheckedChange = { strikethroughCompleted = it })
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.strikethrough_completed))
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                Switch(checked = showInlineDescriptions, onCheckedChange = { showInlineDescriptions = it })
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.show_inline_descriptions))
             }
             Spacer(Modifier.height(16.dp))
             
