@@ -71,67 +71,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.show_calendars_tab = true;
             }
 
-            if !app.show_calendars_tab
-                && app.sidebar_mode == crate::gui::state::SidebarMode::Calendars
-            {
-                app.sidebar_mode = if app.show_tags_tab {
-                    crate::gui::state::SidebarMode::Categories
-                } else if app.show_locations_tab {
-                    crate::gui::state::SidebarMode::Locations
-                } else if app.show_goals_tab {
-                    crate::gui::state::SidebarMode::Goals
-                } else {
-                    crate::gui::state::SidebarMode::Journal
-                };
-            }
-            if !app.show_tags_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Categories
-            {
-                app.sidebar_mode = if app.show_calendars_tab {
-                    crate::gui::state::SidebarMode::Calendars
-                } else if app.show_locations_tab {
-                    crate::gui::state::SidebarMode::Locations
-                } else if app.show_goals_tab {
-                    crate::gui::state::SidebarMode::Goals
-                } else {
-                    crate::gui::state::SidebarMode::Journal
-                };
-            }
-            if !app.show_locations_tab
-                && app.sidebar_mode == crate::gui::state::SidebarMode::Locations
-            {
-                app.sidebar_mode = if app.show_calendars_tab {
-                    crate::gui::state::SidebarMode::Calendars
-                } else if app.show_tags_tab {
-                    crate::gui::state::SidebarMode::Categories
-                } else if app.show_goals_tab {
-                    crate::gui::state::SidebarMode::Goals
-                } else {
-                    crate::gui::state::SidebarMode::Journal
-                };
-            }
-            if !app.show_goals_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Goals {
-                app.sidebar_mode = if app.show_calendars_tab {
-                    crate::gui::state::SidebarMode::Calendars
-                } else if app.show_tags_tab {
-                    crate::gui::state::SidebarMode::Categories
-                } else if app.show_locations_tab {
-                    crate::gui::state::SidebarMode::Locations
-                } else {
-                    crate::gui::state::SidebarMode::Journal
-                };
-            }
-            if !app.show_journal_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Journal
-            {
-                app.sidebar_mode = if app.show_calendars_tab {
-                    crate::gui::state::SidebarMode::Calendars
-                } else if app.show_tags_tab {
-                    crate::gui::state::SidebarMode::Categories
-                } else if app.show_locations_tab {
-                    crate::gui::state::SidebarMode::Locations
-                } else {
-                    crate::gui::state::SidebarMode::Goals
-                };
-            }
+            app.verify_sidebar_mode();
             app.sidebar_is_hidden = config.sidebar_is_hidden;
             app.sort_collections_by_size = config.sort_collections_by_size;
             app.ob_quick_filter_term_input = config.quick_filter_term.clone();
@@ -297,67 +237,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.show_calendars_tab = true;
             }
 
-            if !app.show_calendars_tab
-                && app.sidebar_mode == crate::gui::state::SidebarMode::Calendars
-            {
-                app.sidebar_mode = if app.show_tags_tab {
-                    crate::gui::state::SidebarMode::Categories
-                } else if app.show_locations_tab {
-                    crate::gui::state::SidebarMode::Locations
-                } else if app.show_goals_tab {
-                    crate::gui::state::SidebarMode::Goals
-                } else {
-                    crate::gui::state::SidebarMode::Journal
-                };
-            }
-            if !app.show_tags_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Categories
-            {
-                app.sidebar_mode = if app.show_calendars_tab {
-                    crate::gui::state::SidebarMode::Calendars
-                } else if app.show_locations_tab {
-                    crate::gui::state::SidebarMode::Locations
-                } else if app.show_goals_tab {
-                    crate::gui::state::SidebarMode::Goals
-                } else {
-                    crate::gui::state::SidebarMode::Journal
-                };
-            }
-            if !app.show_locations_tab
-                && app.sidebar_mode == crate::gui::state::SidebarMode::Locations
-            {
-                app.sidebar_mode = if app.show_calendars_tab {
-                    crate::gui::state::SidebarMode::Calendars
-                } else if app.show_tags_tab {
-                    crate::gui::state::SidebarMode::Categories
-                } else if app.show_goals_tab {
-                    crate::gui::state::SidebarMode::Goals
-                } else {
-                    crate::gui::state::SidebarMode::Journal
-                };
-            }
-            if !app.show_goals_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Goals {
-                app.sidebar_mode = if app.show_calendars_tab {
-                    crate::gui::state::SidebarMode::Calendars
-                } else if app.show_tags_tab {
-                    crate::gui::state::SidebarMode::Categories
-                } else if app.show_locations_tab {
-                    crate::gui::state::SidebarMode::Locations
-                } else {
-                    crate::gui::state::SidebarMode::Journal
-                };
-            }
-            if !app.show_journal_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Journal
-            {
-                app.sidebar_mode = if app.show_calendars_tab {
-                    crate::gui::state::SidebarMode::Calendars
-                } else if app.show_tags_tab {
-                    crate::gui::state::SidebarMode::Categories
-                } else if app.show_locations_tab {
-                    crate::gui::state::SidebarMode::Locations
-                } else {
-                    crate::gui::state::SidebarMode::Goals
-                };
-            }
+            app.verify_sidebar_mode();
             app.sidebar_is_hidden = config.sidebar_is_hidden;
             app.sort_collections_by_size = config.sort_collections_by_size;
 
@@ -539,55 +419,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::CancelSettings => {
             app.ob_password_visible = false;
-            if !app.show_calendars_tab
-                && app.sidebar_mode == crate::gui::state::SidebarMode::Calendars
-            {
-                app.sidebar_mode = if app.show_tags_tab {
-                    crate::gui::state::SidebarMode::Categories
-                } else if app.show_locations_tab {
-                    crate::gui::state::SidebarMode::Locations
-                } else if app.show_goals_tab {
-                    crate::gui::state::SidebarMode::Goals
-                } else {
-                    crate::gui::state::SidebarMode::Journal
-                };
-            }
-            if !app.show_tags_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Categories
-            {
-                app.sidebar_mode = if app.show_calendars_tab {
-                    crate::gui::state::SidebarMode::Calendars
-                } else if app.show_locations_tab {
-                    crate::gui::state::SidebarMode::Locations
-                } else if app.show_goals_tab {
-                    crate::gui::state::SidebarMode::Goals
-                } else {
-                    crate::gui::state::SidebarMode::Journal
-                };
-            }
-            if !app.show_locations_tab
-                && app.sidebar_mode == crate::gui::state::SidebarMode::Locations
-            {
-                app.sidebar_mode = if app.show_calendars_tab {
-                    crate::gui::state::SidebarMode::Calendars
-                } else if app.show_tags_tab {
-                    crate::gui::state::SidebarMode::Categories
-                } else if app.show_goals_tab {
-                    crate::gui::state::SidebarMode::Goals
-                } else {
-                    crate::gui::state::SidebarMode::Journal
-                };
-            }
-            if !app.show_goals_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Goals {
-                app.sidebar_mode = if app.show_calendars_tab {
-                    crate::gui::state::SidebarMode::Calendars
-                } else if app.show_tags_tab {
-                    crate::gui::state::SidebarMode::Categories
-                } else if app.show_locations_tab {
-                    crate::gui::state::SidebarMode::Locations
-                } else {
-                    crate::gui::state::SidebarMode::Journal
-                };
-            }
+            app.verify_sidebar_mode();
             app.calendars.retain(|c| !c.href.starts_with("local://"));
             app.calendars.extend(app.local_cals_editing.clone());
             app.sort_calendars();

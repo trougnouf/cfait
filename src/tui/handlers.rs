@@ -789,30 +789,7 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
                 }
             }
 
-            let smart_status = sub.status;
-            sub.status = ext.status;
-            match ext.status {
-                crate::model::TaskStatus::Completed => {
-                    if sub.completion_date().is_none() {
-                        sub.set_completion_date(Some(chrono::Utc::now()));
-                    }
-                }
-                crate::model::TaskStatus::Cancelled => {
-                    if sub.completion_date().is_none() {
-                        sub.set_completion_date(Some(chrono::Utc::now()));
-                    }
-                }
-                crate::model::TaskStatus::InProcess => {
-                    if sub.last_started_at.is_none() {
-                        sub.last_started_at = Some(chrono::Utc::now().timestamp());
-                    }
-                }
-                crate::model::TaskStatus::NeedsAction => {
-                    if smart_status == crate::model::TaskStatus::Completed {
-                        sub.status = crate::model::TaskStatus::Completed;
-                    }
-                }
-            }
+            sub.apply_extracted_status(ext.status);
 
             sub.parent_uid = Some(ext.parent_uid.unwrap_or(parent_uid.clone()));
             sub.dependencies.extend(ext.dependencies);
@@ -913,30 +890,7 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
                     }
                 }
 
-                let smart_status = sub.status;
-                sub.status = ext.status;
-                match ext.status {
-                    crate::model::TaskStatus::Completed => {
-                        if sub.completion_date().is_none() {
-                            sub.set_completion_date(Some(chrono::Utc::now()));
-                        }
-                    }
-                    crate::model::TaskStatus::Cancelled => {
-                        if sub.completion_date().is_none() {
-                            sub.set_completion_date(Some(chrono::Utc::now()));
-                        }
-                    }
-                    crate::model::TaskStatus::InProcess => {
-                        if sub.last_started_at.is_none() {
-                            sub.last_started_at = Some(chrono::Utc::now().timestamp());
-                        }
-                    }
-                    crate::model::TaskStatus::NeedsAction => {
-                        if smart_status == crate::model::TaskStatus::Completed {
-                            sub.status = crate::model::TaskStatus::Completed;
-                        }
-                    }
-                }
+                sub.apply_extracted_status(ext.status);
 
                 sub.parent_uid = Some(ext.parent_uid.unwrap_or(uid.clone()));
                 sub.dependencies = ext.dependencies;
@@ -1034,57 +988,12 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
             state.tag_aliases = cfg.tag_aliases.clone();
             state.goals = cfg.goals.clone();
             state.show_calendars_tab = cfg.show_calendars_tab;
-            if !state.show_calendars_tab && state.sidebar_mode == SidebarMode::Calendars {
-                state.sidebar_mode = if state.show_tags_tab {
-                    SidebarMode::Categories
-                } else if state.show_locations_tab {
-                    SidebarMode::Locations
-                } else if state.show_goals_tab {
-                    SidebarMode::Goals
-                } else {
-                    SidebarMode::Journal
-                };
-            }
             state.show_tags_tab = cfg.show_tags_tab;
-            if !state.show_tags_tab && state.sidebar_mode == SidebarMode::Categories {
-                state.sidebar_mode = SidebarMode::Calendars;
-            }
             state.show_locations_tab = cfg.show_locations_tab;
-            if !state.show_locations_tab && state.sidebar_mode == SidebarMode::Locations {
-                state.sidebar_mode = if state.show_calendars_tab {
-                    SidebarMode::Calendars
-                } else if state.show_tags_tab {
-                    SidebarMode::Categories
-                } else if state.show_goals_tab {
-                    SidebarMode::Goals
-                } else {
-                    SidebarMode::Journal
-                };
-            }
             state.show_goals_tab = cfg.show_goals_tab;
-            if !state.show_goals_tab && state.sidebar_mode == SidebarMode::Goals {
-                state.sidebar_mode = if state.show_calendars_tab {
-                    SidebarMode::Calendars
-                } else if state.show_tags_tab {
-                    SidebarMode::Categories
-                } else if state.show_locations_tab {
-                    SidebarMode::Locations
-                } else {
-                    SidebarMode::Journal
-                };
-            }
             state.show_journal_tab = cfg.show_journal_tab;
-            if !state.show_journal_tab && state.sidebar_mode == SidebarMode::Journal {
-                state.sidebar_mode = if state.show_calendars_tab {
-                    SidebarMode::Calendars
-                } else if state.show_tags_tab {
-                    SidebarMode::Categories
-                } else if state.show_locations_tab {
-                    SidebarMode::Locations
-                } else {
-                    SidebarMode::Goals
-                };
-            }
+
+            state.verify_sidebar_mode();
             state.hide_completed = cfg.hide_completed;
             state.hide_fully_completed_tags = cfg.hide_fully_completed_tags;
             state.hide_aliases_in_sidebar = cfg.hide_aliases_in_sidebar;
@@ -1114,69 +1023,35 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
         state.quick_filter_term = cfg.quick_filter_term.clone();
         state.quick_filter_icon = cfg.quick_filter_icon.clone();
         state.show_quick_filter = cfg.show_quick_filter;
+
         state.show_calendars_tab = cfg.show_calendars_tab;
-        if !state.show_calendars_tab && state.sidebar_mode == SidebarMode::Calendars {
-            state.sidebar_mode = if state.show_tags_tab {
-                SidebarMode::Categories
-            } else if state.show_locations_tab {
-                SidebarMode::Locations
-            } else if state.show_goals_tab {
-                SidebarMode::Goals
-            } else {
-                SidebarMode::Journal
-            };
-            state.needs_redraw = true;
-        }
         state.show_tags_tab = cfg.show_tags_tab;
-        if !state.show_tags_tab && state.sidebar_mode == SidebarMode::Categories {
-            state.sidebar_mode = if state.show_calendars_tab {
-                SidebarMode::Calendars
-            } else if state.show_locations_tab {
-                SidebarMode::Locations
-            } else if state.show_goals_tab {
-                SidebarMode::Goals
-            } else {
-                SidebarMode::Journal
-            };
-            state.needs_redraw = true;
-        }
         state.show_locations_tab = cfg.show_locations_tab;
-        if !state.show_locations_tab && state.sidebar_mode == SidebarMode::Locations {
+        state.show_goals_tab = cfg.show_goals_tab;
+        state.show_journal_tab = cfg.show_journal_tab;
+
+        let old_mode = state.sidebar_mode;
+        let valid = match state.sidebar_mode {
+            SidebarMode::Calendars => state.show_calendars_tab,
+            SidebarMode::Categories => state.show_tags_tab,
+            SidebarMode::Locations => state.show_locations_tab,
+            SidebarMode::Goals => state.show_goals_tab,
+            SidebarMode::Journal => state.show_journal_tab,
+        };
+        if !valid {
             state.sidebar_mode = if state.show_calendars_tab {
                 SidebarMode::Calendars
             } else if state.show_tags_tab {
                 SidebarMode::Categories
+            } else if state.show_locations_tab {
+                SidebarMode::Locations
             } else if state.show_goals_tab {
                 SidebarMode::Goals
             } else {
                 SidebarMode::Journal
             };
-            state.needs_redraw = true;
         }
-        state.show_goals_tab = cfg.show_goals_tab;
-        if !state.show_goals_tab && state.sidebar_mode == SidebarMode::Goals {
-            state.sidebar_mode = if state.show_calendars_tab {
-                SidebarMode::Calendars
-            } else if state.show_tags_tab {
-                SidebarMode::Categories
-            } else if state.show_locations_tab {
-                SidebarMode::Locations
-            } else {
-                SidebarMode::Journal
-            };
-            state.needs_redraw = true;
-        }
-        state.show_journal_tab = cfg.show_journal_tab;
-        if !state.show_journal_tab && state.sidebar_mode == SidebarMode::Journal {
-            state.sidebar_mode = if state.show_calendars_tab {
-                SidebarMode::Calendars
-            } else if state.show_tags_tab {
-                SidebarMode::Categories
-            } else if state.show_locations_tab {
-                SidebarMode::Locations
-            } else {
-                SidebarMode::Goals
-            };
+        if state.sidebar_mode != old_mode {
             state.needs_redraw = true;
         }
     }

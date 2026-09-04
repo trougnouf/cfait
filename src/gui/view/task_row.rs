@@ -983,11 +983,7 @@ pub fn view_task_row<'a>(
                     .bytes()
                     .fold(0u32, |acc, b| acc.wrapping_add(b as u32));
 
-                // Generate random green shade from hash
-                // G is dominant (0.6-0.9), R and B add variety (0.0-0.2)
-                let r = ((hash >> 16) % 20) as f32 / 100.0; // 0.0-0.19
-                let g = 0.6 + ((hash >> 8) % 30) as f32 / 100.0; // 0.6-0.89
-                let b = (hash % 20) as f32 / 100.0; // 0.0-0.19
+                let (r, g, b) = crate::color_utils::generate_tree_color(hash);
 
                 let (icon_char, tooltip_text) = if is_tree_collapsed {
                     (

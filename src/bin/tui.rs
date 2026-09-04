@@ -219,30 +219,7 @@ async fn apply_markdown_update(
                 }
             }
 
-            let smart_status = sub.status;
-            sub.status = ext.status;
-            match ext.status {
-                cfait::model::TaskStatus::Completed => {
-                    if sub.completion_date().is_none() {
-                        sub.set_completion_date(Some(chrono::Utc::now()));
-                    }
-                }
-                cfait::model::TaskStatus::Cancelled => {
-                    if sub.completion_date().is_none() {
-                        sub.set_completion_date(Some(chrono::Utc::now()));
-                    }
-                }
-                cfait::model::TaskStatus::InProcess => {
-                    if sub.last_started_at.is_none() {
-                        sub.last_started_at = Some(chrono::Utc::now().timestamp());
-                    }
-                }
-                cfait::model::TaskStatus::NeedsAction => {
-                    if smart_status == cfait::model::TaskStatus::Completed {
-                        sub.status = cfait::model::TaskStatus::Completed;
-                    }
-                }
-            }
+            sub.apply_extracted_status(ext.status);
 
             sub.parent_uid = Some(p_uid_str);
             sub.dependencies = ext.dependencies;

@@ -477,10 +477,7 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
                             icon::PINE_TREE,
                         ];
                         let hash = cat.bytes().fold(0u32, |acc, b| acc.wrapping_add(b as u32));
-
-                        let r = ((hash >> 16) % 20) as f32 / 100.0;
-                        let g = 0.6 + ((hash >> 8) % 30) as f32 / 100.0;
-                        let b = (hash % 20) as f32 / 100.0;
+                        let (r, g, b) = crate::color_utils::generate_tree_color(hash);
 
                         let (icon_char, tree_color) = if item.is_expanded {
                             (trees[(hash % 5) as usize], Color::from_rgb(r, g, b))
@@ -670,10 +667,7 @@ pub fn view_sidebar_locations(app: &GuiApp) -> Element<'_, Message> {
                             icon::PINE_TREE,
                         ];
                         let hash = loc.bytes().fold(0u32, |acc, b| acc.wrapping_add(b as u32));
-
-                        let r = ((hash >> 16) % 20) as f32 / 100.0;
-                        let g = 0.6 + ((hash >> 8) % 30) as f32 / 100.0;
-                        let b = (hash % 20) as f32 / 100.0;
+                        let (r, g, b) = crate::color_utils::generate_tree_color(hash);
 
                         let (icon_char, tree_color) = if item.is_expanded {
                             (trees[(hash % 5) as usize], Color::from_rgb(r, g, b))

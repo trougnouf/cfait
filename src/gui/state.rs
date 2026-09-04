@@ -383,6 +383,29 @@ impl GuiApp {
             })
             .collect()
     }
+
+    pub fn verify_sidebar_mode(&mut self) {
+        let valid = match self.sidebar_mode {
+            SidebarMode::Calendars => self.show_calendars_tab,
+            SidebarMode::Categories => self.show_tags_tab,
+            SidebarMode::Locations => self.show_locations_tab,
+            SidebarMode::Goals => self.show_goals_tab,
+            SidebarMode::Journal => self.show_journal_tab,
+        };
+        if !valid {
+            self.sidebar_mode = if self.show_calendars_tab {
+                SidebarMode::Calendars
+            } else if self.show_tags_tab {
+                SidebarMode::Categories
+            } else if self.show_locations_tab {
+                SidebarMode::Locations
+            } else if self.show_goals_tab {
+                SidebarMode::Goals
+            } else {
+                SidebarMode::Journal
+            };
+        }
+    }
 }
 
 impl Default for GuiApp {

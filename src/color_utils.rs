@@ -85,6 +85,14 @@ pub fn parse_hex_to_floats(hex: &str) -> Option<(f32, f32, f32)> {
     Some((r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0))
 }
 
+/// Generates a random-looking but deterministic tree color from a hash.
+pub fn generate_tree_color(hash: u32) -> (f32, f32, f32) {
+    let r = ((hash >> 16) % 20) as f32 / 100.0;
+    let g = 0.6 + ((hash >> 8) % 30) as f32 / 100.0;
+    let b = (hash % 20) as f32 / 100.0;
+    (r, g, b)
+}
+
 /// Parse a hex color string like "#RRGGBB" or "RRGGBB" into u8 tuple.
 pub fn parse_hex_to_u8(hex: &str) -> Option<(u8, u8, u8)> {
     let hex = hex.trim_start_matches('#');

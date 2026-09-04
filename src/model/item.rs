@@ -1478,6 +1478,32 @@ impl Task {
         crate::model::RecurrenceEngine::advance(self)
     }
 
+    /// Update status based on markdown extraction, with automatic side effects (completion dates, timers).
+    pub fn apply_extracted_status(&mut self, new_status: TaskStatus) {
+        let smart_status = self.status;
+        self.status = new_status;
+        match new_status {
+            TaskStatus::Completed | TaskStatus::Cancelled => {
+                if self.completion_date().is_none() {
+                    self.set_completion_date(Some(chrono::Utc::now()));
+                }
+            }
+            TaskStatus::InProcess => {
+                if self.last_started_at.is_none() {
+                    self.last_started_at = Some(chrono::Utc::now().timestamp());
+                }
+            }
+            TaskStatus::NeedsAction => {
+                if smart_status == TaskStatus::Completed {
+                    self.status = TaskStatus::Completed;
+                } else {
+                    self.percent_complete = None;
+                    self.unmapped_properties.retain(|p| p.key != "COMPLETED");
+                }
+            }
+        }
+    }
+
     // Display-related helpers delegated to TaskDisplay trait implementation.
     pub fn to_smart_string(&self) -> String {
         crate::model::TaskDisplay::to_smart_string(self)

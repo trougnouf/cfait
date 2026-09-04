@@ -1826,30 +1826,7 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                     }
                 }
 
-                let smart_status = sub.status;
-                sub.status = ext.status;
-                match ext.status {
-                    crate::model::TaskStatus::Completed => {
-                        if sub.completion_date().is_none() {
-                            sub.set_completion_date(Some(chrono::Utc::now()));
-                        }
-                    }
-                    crate::model::TaskStatus::Cancelled => {
-                        if sub.completion_date().is_none() {
-                            sub.set_completion_date(Some(chrono::Utc::now()));
-                        }
-                    }
-                    crate::model::TaskStatus::InProcess => {
-                        if sub.last_started_at.is_none() {
-                            sub.last_started_at = Some(chrono::Utc::now().timestamp());
-                        }
-                    }
-                    crate::model::TaskStatus::NeedsAction => {
-                        if smart_status == crate::model::TaskStatus::Completed {
-                            sub.status = crate::model::TaskStatus::Completed;
-                        }
-                    }
-                }
+                sub.apply_extracted_status(ext.status);
 
                 sub.parent_uid = Some(ext.parent_uid.unwrap_or(edit_uid.clone()));
                 sub.dependencies = ext.dependencies;
@@ -1995,30 +1972,7 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                     }
                 }
 
-                let smart_status = sub.status;
-                sub.status = ext.status;
-                match ext.status {
-                    crate::model::TaskStatus::Completed => {
-                        if sub.completion_date().is_none() {
-                            sub.set_completion_date(Some(chrono::Utc::now()));
-                        }
-                    }
-                    crate::model::TaskStatus::Cancelled => {
-                        if sub.completion_date().is_none() {
-                            sub.set_completion_date(Some(chrono::Utc::now()));
-                        }
-                    }
-                    crate::model::TaskStatus::InProcess => {
-                        if sub.last_started_at.is_none() {
-                            sub.last_started_at = Some(chrono::Utc::now().timestamp());
-                        }
-                    }
-                    crate::model::TaskStatus::NeedsAction => {
-                        if smart_status == crate::model::TaskStatus::Completed {
-                            sub.status = crate::model::TaskStatus::Completed;
-                        }
-                    }
-                }
+                sub.apply_extracted_status(ext.status);
 
                 sub.parent_uid = Some(ext.parent_uid.unwrap_or(parent_uid.clone()));
                 sub.dependencies.extend(ext.dependencies);

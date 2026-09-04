@@ -1815,33 +1815,7 @@ impl TaskStore {
                 clone.percent_complete = ext.percent_complete;
                 clone.parent_uid = parent_uid.clone();
 
-                let smart_status = clone.status;
-                clone.status = ext.status;
-                match ext.status {
-                    crate::model::TaskStatus::Completed => {
-                        if clone.completion_date().is_none() {
-                            clone.set_completion_date(Some(chrono::Utc::now()));
-                        }
-                    }
-                    crate::model::TaskStatus::Cancelled => {
-                        if clone.completion_date().is_none() {
-                            clone.set_completion_date(Some(chrono::Utc::now()));
-                        }
-                    }
-                    crate::model::TaskStatus::InProcess => {
-                        if clone.last_started_at.is_none() {
-                            clone.last_started_at = Some(chrono::Utc::now().timestamp());
-                        }
-                    }
-                    crate::model::TaskStatus::NeedsAction => {
-                        if smart_status == crate::model::TaskStatus::Completed {
-                            clone.status = crate::model::TaskStatus::Completed;
-                        } else {
-                            clone.percent_complete = None;
-                            clone.unmapped_properties.retain(|p| p.key != "COMPLETED");
-                        }
-                    }
-                }
+                clone.apply_extracted_status(ext.status);
 
                 let final_href = if let Some(target) = clone.target_collection.take() {
                     crate::model::resolve_collection(&target, options.calendars, &inherited_href)
@@ -1921,30 +1895,7 @@ impl TaskStore {
                     new_task.inherit_properties(&p_cats, &p_loc, p_prio);
                 }
 
-                let smart_status = new_task.status;
-                new_task.status = ext.status;
-                match ext.status {
-                    crate::model::TaskStatus::Completed => {
-                        if new_task.completion_date().is_none() {
-                            new_task.set_completion_date(Some(chrono::Utc::now()));
-                        }
-                    }
-                    crate::model::TaskStatus::Cancelled => {
-                        if new_task.completion_date().is_none() {
-                            new_task.set_completion_date(Some(chrono::Utc::now()));
-                        }
-                    }
-                    crate::model::TaskStatus::InProcess => {
-                        if new_task.last_started_at.is_none() {
-                            new_task.last_started_at = Some(chrono::Utc::now().timestamp());
-                        }
-                    }
-                    crate::model::TaskStatus::NeedsAction => {
-                        if smart_status == crate::model::TaskStatus::Completed {
-                            new_task.status = crate::model::TaskStatus::Completed;
-                        }
-                    }
-                }
+                new_task.apply_extracted_status(ext.status);
 
                 new_task.parent_uid = parent_uid;
                 new_task.dependencies = ext.dependencies;
