@@ -61,242 +61,55 @@ pub fn parse_inline_markdown(
         }
     }
 
-    // FAST PATH: Skip expensive parsing if no markdown trigger characters are present.
-    if !text_str.contains(['[', '*', '_', '~', '`']) && !text_str.contains("http") {
-        let mut sp = span(String::new()).color(base_color);
-        if is_strikethrough {
-            sp = sp.strikethrough(true);
-        }
-        let mut spans = Vec::new();
-        push_highlighted_spans(&mut spans, text_str, sp, highlight_regex, highlight_color);
-        return spans;
-    }
-
     let mut spans = Vec::new();
-    let mut current_idx = 0;
+    let elements = crate::model::parser::parse_inline_markdown(text_str);
 
-    while current_idx < text_str.len() {
-        let remaining = &text_str[current_idx..];
-
-        let markers = [
-            ("[[", "]]", 2, 2),
-            ("**", "**", 2, 2),
-            ("__", "__", 2, 2),
-            ("~~", "~~", 2, 2),
-            ("*", "*", 1, 1),
-            ("_", "_", 1, 1),
-            ("`", "`", 1, 1),
-        ];
-
-        let mut best_match: Option<(usize, usize, &str, usize, usize)> = None;
-
-        // Process markers first
+    for el in elements {
+        let (text, mut sp) = match el {
+            crate::model::parser::InlineElement::Text(s) => {
+                (s, span(String::new()).color(base_color))
+            }
+            crate::model::parser::InlineElement::Bold { inner, .. } => (
+                inner,
+                span(String::new()).color(base_color).font(iced::Font {
+                    weight: iced::font::Weight::Bold,
+                    ..Default::default()
+                }),
+            ),
+            crate::model::parser::InlineElement::Italic { inner, .. } => (
+                inner,
+                span(String::new()).color(base_color).font(iced::Font {
+                    style: iced::font::Style::Italic,
+                    ..Default::default()
+                }),
+            ),
+            crate::model::parser::InlineElement::Strikethrough { inner, .. } => (
+                inner,
+                span(String::new()).color(base_color).strikethrough(true),
+            ),
+            crate::model::parser::InlineElement::Code { inner, .. } => (
+                inner,
+                span(String::new())
+                    .color(Color::from_rgba(0.8, 0.6, 0.4, base_color.a))
+                    .font(iced::Font::MONOSPACE),
+            ),
+            crate::model::parser::InlineElement::Link { text, url, .. } => (
+                text,
+                span(String::new())
+                    .color(Color::from_rgba(0.2, 0.7, 1.0, base_color.a))
+                    .link(url.to_string()),
+            ),
+        };
+        if is_strikethrough
+            && !matches!(
+                el,
+                crate::model::parser::InlineElement::Strikethrough { .. }
+            )
         {
-            let mut update_best = |start, end, marker, slen, elen| {
-                if best_match.is_none() || start < best_match.unwrap().0 {
-                    best_match = Some((start, end, marker, slen, elen));
-                }
-            };
-
-            for &(start_marker, end_marker, start_len, end_len) in &markers {
-                if let Some(start_pos) = remaining.find(start_marker)
-                    && let Some(end_pos) = remaining[start_pos + start_len..].find(end_marker)
-                {
-                    let abs_start = current_idx + start_pos;
-                    let abs_end = abs_start + start_len + end_pos + end_len;
-                    update_best(abs_start, abs_end, start_marker, start_len, end_len);
-                }
-            }
-        }
-
-        let best_match_pos = best_match.as_ref().map(|(pos, _, _, _, _)| *pos);
-
-        // Standard Markdown links: [label](url)
-        let mut search_idx = 0;
-        while let Some(start_pos) = remaining[search_idx..].find('[') {
-            let abs_start = current_idx + search_idx + start_pos;
-
-            // Early termination: if we already have a match that starts before this position, skip
-            if let Some(best_pos) = best_match_pos
-                && best_pos <= abs_start
-            {
-                break;
-            }
-
-            if remaining[search_idx + start_pos..].starts_with("[[") {
-                search_idx += start_pos + 2;
-                continue;
-            }
-            if let Some(mid_pos) = remaining[search_idx + start_pos..].find("](") {
-                let mid_abs = search_idx + start_pos + mid_pos;
-                let link_text = &remaining[search_idx + start_pos + 1..mid_abs];
-                if !link_text.contains('[')
-                    && let Some(end_pos) = remaining[mid_abs..].find(')')
-                {
-                    let abs_end = current_idx + mid_abs + end_pos + 1;
-                    best_match = Some((abs_start, abs_end, "[]()", 0, 0));
-                    break;
-                }
-            }
-            search_idx += start_pos + 1;
-        }
-
-        // Bare URLs (any scheme:// or mailto:)
-        if let Some(pos) = remaining.find("://") {
-            let mut scheme_start = pos;
-            for (i, c) in remaining[..pos].char_indices().rev() {
-                if c.is_ascii_alphanumeric() || c == '+' || c == '-' || c == '.' {
-                    scheme_start = i;
-                } else {
-                    break;
-                }
-            }
-            if scheme_start < pos {
-                let abs_start = current_idx + scheme_start;
-                if best_match.is_none() || abs_start < best_match.as_ref().unwrap().0 {
-                    let mut end_offset = pos + 3;
-                    for c in remaining[pos + 3..].chars() {
-                        if c.is_whitespace() || c == ')' || c == ']' {
-                            break;
-                        }
-                        end_offset += c.len_utf8();
-                    }
-                    if end_offset > pos + 3 {
-                        best_match = Some((abs_start, current_idx + end_offset, "http", 0, 0));
-                    }
-                }
-            }
-        }
-
-        if let Some(pos) = remaining.find("mailto:") {
-            let abs_start = current_idx + pos;
-            if best_match.is_none() || abs_start < best_match.as_ref().unwrap().0 {
-                let mut end_offset = 7;
-                for c in remaining[pos + 7..].chars() {
-                    if c.is_whitespace() || c == ')' || c == ']' {
-                        break;
-                    }
-                    end_offset += c.len_utf8();
-                }
-                if end_offset > 7 {
-                    best_match = Some((abs_start, abs_start + end_offset, "http", 0, 0));
-                }
-            }
-        }
-
-        if let Some((abs_start, abs_end, start_marker, start_len, end_len)) = best_match {
-            if abs_start > current_idx {
-                let text = &text_str[current_idx..abs_start];
-                let mut sp = span(String::new()).color(base_color);
-                if is_strikethrough {
-                    sp = sp.strikethrough(true);
-                }
-                push_highlighted_spans(&mut spans, text, sp, highlight_regex, highlight_color);
-            }
-
-            let chunk = &text_str[abs_start..abs_end];
-            let inner_chunk = &text_str[abs_start + start_len..abs_end - end_len];
-
-            if start_marker == "<!-- uid:" {
-                current_idx = abs_end;
-                continue;
-            }
-
-            let (display_text, mut sp) = match start_marker {
-                "[]()" => {
-                    let mid = chunk.find("](").unwrap();
-                    let display = &chunk[1..mid];
-                    let url = &chunk[mid + 2..chunk.len() - 1];
-                    (
-                        display,
-                        span(String::new())
-                            .color(Color::from_rgba(0.2, 0.7, 1.0, base_color.a))
-                            .link(url.to_string()),
-                    )
-                }
-                "http" => (
-                    chunk,
-                    span(String::new())
-                        .color(Color::from_rgba(0.2, 0.7, 1.0, base_color.a))
-                        .link(chunk.to_string()),
-                ),
-                "[[" => {
-                    let inner = &text_str[abs_start + start_len..abs_end - end_len];
-                    let (target, display) = if let Some((t, d)) = inner.split_once('|') {
-                        (t, d)
-                    } else {
-                        (inner, inner)
-                    };
-                    (
-                        display,
-                        span(String::new())
-                            .color(Color::from_rgba(0.2, 0.7, 1.0, base_color.a))
-                            .link(target.to_string()),
-                    )
-                }
-                "**" | "__" => (
-                    inner_chunk,
-                    span(String::new()).color(base_color).font(iced::Font {
-                        weight: iced::font::Weight::Bold,
-                        ..Default::default()
-                    }),
-                ),
-                "*" | "_" => (
-                    inner_chunk,
-                    span(String::new()).color(base_color).font(iced::Font {
-                        style: iced::font::Style::Italic,
-                        ..Default::default()
-                    }),
-                ),
-                "`" => (
-                    inner_chunk,
-                    span(String::new())
-                        .color(Color::from_rgba(0.8, 0.6, 0.4, base_color.a))
-                        .font(iced::Font::MONOSPACE),
-                ),
-                "~~" => (
-                    inner_chunk,
-                    span(String::new()).color(base_color).strikethrough(true),
-                ),
-                _ => (inner_chunk, span(String::new()).color(base_color)),
-            };
-
-            if is_strikethrough && start_marker != "~~" {
-                sp = sp.strikethrough(true);
-            }
-
-            push_highlighted_spans(
-                &mut spans,
-                display_text,
-                sp,
-                highlight_regex,
-                highlight_color,
-            );
-
-            current_idx = abs_end;
-        } else {
-            break;
-        }
-    }
-
-    if current_idx < text_str.len() {
-        let text = &text_str[current_idx..];
-        let mut sp = span(String::new()).color(base_color);
-        if is_strikethrough {
             sp = sp.strikethrough(true);
         }
         push_highlighted_spans(&mut spans, text, sp, highlight_regex, highlight_color);
     }
-
-    if spans.is_empty() {
-        let text = text_str;
-        let mut sp = span(String::new()).color(base_color);
-        if is_strikethrough {
-            sp = sp.strikethrough(true);
-        }
-        push_highlighted_spans(&mut spans, text, sp, highlight_regex, highlight_color);
-    }
-
     spans
 }
 use iced::{Color, Element, Length, Theme};

@@ -3907,3 +3907,214 @@ mod i18n_tests {
         }
     }
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum InlineElement<'a> {
+    Text(&'a str),
+    Bold {
+        inner: &'a str,
+        raw: &'a str,
+    },
+    Italic {
+        inner: &'a str,
+        raw: &'a str,
+    },
+    Strikethrough {
+        inner: &'a str,
+        raw: &'a str,
+    },
+    Code {
+        inner: &'a str,
+        raw: &'a str,
+    },
+    Link {
+        text: &'a str,
+        url: &'a str,
+        raw: &'a str,
+    },
+}
+
+pub fn parse_inline_markdown(text_str: &str) -> Vec<InlineElement<'_>> {
+    let mut spans = Vec::new();
+
+    if !text_str.contains(['[', '*', '_', '~', '`'])
+        && !text_str.contains("http")
+        && !text_str.contains("<!--")
+    {
+        spans.push(InlineElement::Text(text_str));
+        return spans;
+    }
+
+    let mut current_idx = 0;
+    while current_idx < text_str.len() {
+        let remaining = &text_str[current_idx..];
+        let markers = [
+            ("<!-- uid:", "-->", 9, 3),
+            ("[[", "]]", 2, 2),
+            ("**", "**", 2, 2),
+            ("__", "__", 2, 2),
+            ("~~", "~~", 2, 2),
+            ("*", "*", 1, 1),
+            ("_", "_", 1, 1),
+            ("`", "`", 1, 1),
+        ];
+
+        let mut best_match: Option<(usize, usize, &str, usize, usize)> = None;
+
+        let mut update_best = |start, end, marker, slen, elen| {
+            if best_match.is_none() || start < best_match.unwrap().0 {
+                best_match = Some((start, end, marker, slen, elen));
+            }
+        };
+
+        for &(start_marker, end_marker, start_len, end_len) in &markers {
+            if let Some(start_pos) = remaining.find(start_marker)
+                && let Some(end_pos) = remaining[start_pos + start_len..].find(end_marker)
+            {
+                let abs_start = current_idx + start_pos;
+                let abs_end = abs_start + start_len + end_pos + end_len;
+                update_best(abs_start, abs_end, start_marker, start_len, end_len);
+            }
+        }
+
+        let best_match_pos = best_match.as_ref().map(|(pos, _, _, _, _)| *pos);
+
+        let mut search_idx = 0;
+        while let Some(start_pos) = remaining[search_idx..].find('[') {
+            let abs_start = current_idx + search_idx + start_pos;
+            if let Some(best_pos) = best_match_pos
+                && best_pos <= abs_start
+            {
+                break;
+            }
+            if remaining[search_idx + start_pos..].starts_with("[[") {
+                search_idx += start_pos + 2;
+                continue;
+            }
+            if let Some(mid_pos) = remaining[search_idx + start_pos..].find("](") {
+                let mid_abs = search_idx + start_pos + mid_pos;
+                let link_text = &remaining[search_idx + start_pos + 1..mid_abs];
+                if !link_text.contains('[')
+                    && let Some(end_pos) = remaining[mid_abs..].find(')')
+                {
+                    let abs_end = current_idx + mid_abs + end_pos + 1;
+                    best_match = Some((abs_start, abs_end, "[]()", 0, 0));
+                    break;
+                }
+            }
+            search_idx += start_pos + 1;
+        }
+
+        if let Some(pos) = remaining.find("://") {
+            let mut scheme_start = pos;
+            for (i, c) in remaining[..pos].char_indices().rev() {
+                if c.is_ascii_alphanumeric() || c == '+' || c == '-' || c == '.' {
+                    scheme_start = i;
+                } else {
+                    break;
+                }
+            }
+            if scheme_start < pos {
+                let abs_start = current_idx + scheme_start;
+                if best_match.is_none() || abs_start < best_match.as_ref().unwrap().0 {
+                    let mut end_offset = pos + 3;
+                    for c in remaining[pos + 3..].chars() {
+                        if c.is_whitespace() || c == ')' || c == ']' {
+                            break;
+                        }
+                        end_offset += c.len_utf8();
+                    }
+                    if end_offset > pos + 3 {
+                        best_match = Some((abs_start, current_idx + end_offset, "http", 0, 0));
+                    }
+                }
+            }
+        }
+
+        if let Some(pos) = remaining.find("mailto:") {
+            let abs_start = current_idx + pos;
+            if best_match.is_none() || abs_start < best_match.as_ref().unwrap().0 {
+                let mut end_offset = 7;
+                for c in remaining[pos + 7..].chars() {
+                    if c.is_whitespace() || c == ')' || c == ']' {
+                        break;
+                    }
+                    end_offset += c.len_utf8();
+                }
+                if end_offset > 7 {
+                    best_match = Some((abs_start, abs_start + end_offset, "http", 0, 0));
+                }
+            }
+        }
+
+        if let Some((abs_start, abs_end, start_marker, start_len, end_len)) = best_match {
+            if abs_start > current_idx {
+                spans.push(InlineElement::Text(&text_str[current_idx..abs_start]));
+            }
+
+            let chunk = &text_str[abs_start..abs_end];
+            let inner_chunk = &text_str[abs_start + start_len..abs_end - end_len];
+
+            if start_marker == "<!-- uid:" {
+                current_idx = abs_end;
+                continue;
+            }
+
+            let el = match start_marker {
+                "[]()" => {
+                    let mid = chunk.find("](").unwrap();
+                    InlineElement::Link {
+                        text: &chunk[1..mid],
+                        url: &chunk[mid + 2..chunk.len() - 1],
+                        raw: chunk,
+                    }
+                }
+                "http" => InlineElement::Link {
+                    text: chunk,
+                    url: chunk,
+                    raw: chunk,
+                },
+                "[[]" => {
+                    let (target, display) = if let Some((t, d)) = inner_chunk.split_once('|') {
+                        (t, d)
+                    } else {
+                        (inner_chunk, inner_chunk)
+                    };
+                    InlineElement::Link {
+                        text: display,
+                        url: target,
+                        raw: chunk,
+                    }
+                }
+                "**" | "__" => InlineElement::Bold {
+                    inner: inner_chunk,
+                    raw: chunk,
+                },
+                "*" | "_" => InlineElement::Italic {
+                    inner: inner_chunk,
+                    raw: chunk,
+                },
+                "`" => InlineElement::Code {
+                    inner: inner_chunk,
+                    raw: chunk,
+                },
+                "~~" => InlineElement::Strikethrough {
+                    inner: inner_chunk,
+                    raw: chunk,
+                },
+                _ => InlineElement::Text(chunk),
+            };
+
+            spans.push(el);
+            current_idx = abs_end;
+        } else {
+            break;
+        }
+    }
+
+    if current_idx < text_str.len() {
+        spans.push(InlineElement::Text(&text_str[current_idx..]));
+    }
+
+    spans
+}

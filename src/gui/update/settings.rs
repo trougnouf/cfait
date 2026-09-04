@@ -8,15 +8,100 @@ use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp};
 use crate::gui::update::common::{apply_alias_retroactively, refresh_filtered_tasks, save_config};
-use crate::model::parser::{format_duration_compact, parse_duration, validate_alias_integrity};
+use crate::model::parser::{parse_duration, validate_alias_integrity};
 use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_TRASH_HREF, LocalCalendarRegistry, LocalStorage};
 use iced::Task;
+
+fn apply_config_to_app(app: &mut GuiApp, config: &crate::config::Config) {
+    app.core_config = config.clone();
+    app.sort_calendars();
+    app.hidden_calendars = config.hidden_calendars.clone().into_iter().collect();
+    app.disabled_calendars = config.disabled_calendars.clone().into_iter().collect();
+    app.sort_cutoff_days = config.sort_cutoff_days;
+    app.tag_aliases = config.tag_aliases.clone();
+    app.hide_completed = config.hide_completed;
+    app.hide_fully_completed_tags = config.hide_fully_completed_tags;
+    app.hide_aliases_in_sidebar = config.hide_aliases_in_sidebar;
+    app.blur_when_unfocused = config.blur_when_unfocused;
+    app.show_inline_descriptions = config.show_inline_descriptions;
+    app.sort_standard_by_priority = config.sort_standard_by_priority;
+    app.paused_sort_behavior = config.paused_sort_behavior;
+    app.sort_tiebreak_recent = config.sort_tiebreak_recent;
+    app.sort_preset = config.sort_preset;
+    app.ui_scale = config.ui_scale;
+    app.show_priority_numbers = config.show_priority_numbers;
+    app.sync_settings = config.sync_settings;
+    app.current_theme = config.theme;
+    app.quick_filter_term = config.quick_filter_term.clone();
+    app.quick_filter_icon = config.quick_filter_icon.clone();
+    app.show_quick_filter = config.show_quick_filter;
+    app.show_calendars_tab = config.show_calendars_tab;
+    app.show_tags_tab = config.show_tags_tab;
+    app.show_locations_tab = config.show_locations_tab;
+    app.show_goals_tab = config.show_goals_tab;
+    app.show_journal_tab = config.show_journal_tab;
+
+    let at_least_one_tab = app.show_calendars_tab
+        || app.show_tags_tab
+        || app.show_locations_tab
+        || app.show_goals_tab
+        || app.show_journal_tab;
+    if !at_least_one_tab {
+        app.show_calendars_tab = true;
+    }
+
+    app.verify_sidebar_mode();
+    app.sidebar_is_hidden = config.sidebar_is_hidden;
+    app.sort_collections_by_size = config.sort_collections_by_size;
+
+    app.urgent_days = config.urgent_days_horizon;
+    app.urgent_prio = config.urgent_priority_threshold;
+    app.default_priority = config.default_priority;
+    app.start_grace_period_days = config.start_grace_period_days;
+    app.auto_reminders = config.auto_reminders;
+    app.default_reminder_time = config.default_reminder_time.clone();
+    app.snooze_short_mins = config.snooze_short_mins;
+    app.create_events_for_tasks = config.create_events_for_tasks;
+    app.delete_events_on_completion = config.delete_events_on_completion;
+    app.snooze_long_mins = config.snooze_long_mins;
+    app.auto_refresh_interval_mins = config.auto_refresh_interval_mins;
+    app.strikethrough_completed = config.strikethrough_completed;
+    app.trash_retention_days = config.trash_retention_days;
+    app.sessions_count_as_completions = config.sessions_count_as_completions;
+    app.session.expanded_tags = config.expanded_tags.clone();
+    app.session.expanded_locations = config.expanded_locations.clone();
+    app.pinned_actions = config.pinned_actions.clone();
+
+    app.ob_sort_days_input = match config.sort_cutoff_days {
+        Some(d) => d.to_string(),
+        None => "".to_string(),
+    };
+    app.ob_urgent_days_input = app.urgent_days.to_string();
+    app.ob_urgent_prio_input = app.urgent_prio.to_string();
+    app.ob_default_priority_input = app.default_priority.to_string();
+    app.ob_start_grace_input = app.start_grace_period_days.to_string();
+    app.ob_snooze_short_input =
+        crate::model::parser::format_duration_compact(config.snooze_short_mins);
+    app.ob_snooze_long_input =
+        crate::model::parser::format_duration_compact(config.snooze_long_mins);
+    app.ob_auto_refresh_input =
+        crate::model::parser::format_duration_compact(config.auto_refresh_interval_mins);
+    app.ob_trash_retention_input = config.trash_retention_days.to_string();
+    app.ob_default_duration_goal_mins_input = config.default_duration_goal_mins.to_string();
+    app.ob_max_done_roots_input = config.max_done_roots.to_string();
+    app.ob_max_done_subtasks_input = config.max_done_subtasks.to_string();
+    app.ob_quick_filter_term_input = config.quick_filter_term.clone();
+    app.ob_quick_filter_icon_input = config.quick_filter_icon.clone();
+    app.log_level = config.log_level;
+    app.first_day_of_week = config.first_day_of_week;
+    crate::system::set_log_level(config.log_level.to_level_filter());
+}
 
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {
         Message::ConfigLoaded(Ok(config_box)) => {
             let config = *config_box;
-            app.core_config = config.clone();
+
             app.ob_password_visible = false;
             let locals = LocalCalendarRegistry::load(app.ctx.as_ref()).unwrap_or_default();
             app.local_cals_editing = locals.clone();
@@ -28,99 +113,15 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 .cloned()
                 .collect();
 
-            app.hidden_calendars = config.hidden_calendars.clone().into_iter().collect();
-            app.disabled_calendars = config.disabled_calendars.clone().into_iter().collect();
-            app.sort_cutoff_days = config.sort_cutoff_days;
-            app.ob_sort_days_input = match config.sort_cutoff_days {
-                Some(d) => d.to_string(),
-                None => "".to_string(),
-            };
-            app.ob_insecure = config.allow_insecure_certs;
-            app.tag_aliases = config.tag_aliases.clone();
-            app.hide_completed = config.hide_completed;
-            app.hide_fully_completed_tags = config.hide_fully_completed_tags;
-            app.hide_aliases_in_sidebar = config.hide_aliases_in_sidebar;
-            app.blur_when_unfocused = config.blur_when_unfocused;
-            app.show_inline_descriptions = config.show_inline_descriptions;
-            app.sort_standard_by_priority = config.sort_standard_by_priority;
-            app.paused_sort_behavior = config.paused_sort_behavior;
-            app.sort_tiebreak_recent = config.sort_tiebreak_recent;
-            app.sort_preset = config.sort_preset;
-            app.ui_scale = config.ui_scale;
-            app.show_priority_numbers = config.show_priority_numbers;
-            app.sync_settings = config.sync_settings;
-            app.current_theme = config.theme;
-
-            app.quick_filter_term = config.quick_filter_term.clone();
-            app.quick_filter_icon = config.quick_filter_icon.clone();
-            app.show_quick_filter = config.show_quick_filter;
-            app.show_calendars_tab = config.show_calendars_tab;
-            app.show_tags_tab = config.show_tags_tab;
-            app.show_locations_tab = config.show_locations_tab;
-            app.show_goals_tab = config.show_goals_tab;
-            app.show_journal_tab = config.show_journal_tab;
-
-            // Ensure at least one tab is visible
-            let at_least_one_tab = app.show_calendars_tab
-                || app.show_tags_tab
-                || app.show_locations_tab
-                || app.show_goals_tab
-                || app.show_journal_tab;
-            if !at_least_one_tab {
-                // If all tabs are hidden, default to showing calendars
-                app.show_calendars_tab = true;
-            }
-
-            app.verify_sidebar_mode();
-            app.sidebar_is_hidden = config.sidebar_is_hidden;
-            app.sort_collections_by_size = config.sort_collections_by_size;
-            app.ob_quick_filter_term_input = config.quick_filter_term.clone();
-            app.ob_quick_filter_icon_input = config.quick_filter_icon.clone();
-
             app.ob_url = config.url.clone();
             app.ob_user = config.username.clone();
             app.ob_pass = config.password.clone();
+            app.ob_insecure = config.allow_insecure_certs;
             app.ob_tls_client_cert_path = config.tls_client_cert_path.clone().unwrap_or_default();
             app.ob_tls_client_key_path = config.tls_client_key_path.clone().unwrap_or_default();
             app.ob_default_cal = config.default_calendar.clone();
-            app.urgent_days = config.urgent_days_horizon;
-            app.urgent_prio = config.urgent_priority_threshold;
-            app.default_priority = config.default_priority;
-            app.start_grace_period_days = config.start_grace_period_days;
-            app.ob_urgent_days_input = app.urgent_days.to_string();
-            app.ob_urgent_prio_input = app.urgent_prio.to_string();
-            app.ob_default_priority_input = app.default_priority.to_string();
-            app.ob_start_grace_input = app.start_grace_period_days.to_string();
 
-            app.auto_reminders = config.auto_reminders;
-            app.default_reminder_time = config.default_reminder_time.clone();
-            app.snooze_short_mins = config.snooze_short_mins;
-            app.create_events_for_tasks = config.create_events_for_tasks;
-            app.delete_events_on_completion = config.delete_events_on_completion;
-            app.snooze_long_mins = config.snooze_long_mins;
-            app.auto_refresh_interval_mins = config.auto_refresh_interval_mins;
-            app.strikethrough_completed = config.strikethrough_completed;
-            app.trash_retention_days = config.trash_retention_days;
-
-            app.ob_snooze_short_input = format_duration_compact(config.snooze_short_mins);
-            app.ob_snooze_long_input = format_duration_compact(config.snooze_long_mins);
-            app.ob_auto_refresh_input = format_duration_compact(config.auto_refresh_interval_mins);
-            app.ob_trash_retention_input = config.trash_retention_days.to_string();
-
-            app.ob_default_duration_goal_mins_input = config.default_duration_goal_mins.to_string();
-            app.sessions_count_as_completions = config.sessions_count_as_completions;
-
-            app.ob_max_done_roots_input = config.max_done_roots.to_string();
-            app.ob_max_done_subtasks_input = config.max_done_subtasks.to_string();
-
-            app.session.expanded_tags = config.expanded_tags.clone();
-            app.session.expanded_locations = config.expanded_locations.clone();
-            app.pinned_actions = config.pinned_actions.clone();
-            app.log_level = config.log_level;
-            app.first_day_of_week = config.first_day_of_week;
-
-            // Apply the configured log level
-            crate::system::set_log_level(config.log_level.to_level_filter());
+            apply_config_to_app(app, &config);
 
             let mut cached_cals = Cache::load_calendars(app.ctx.as_ref()).unwrap_or_default();
 
@@ -196,94 +197,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::ConfigUpdated(config_box) => {
             let config = *config_box;
-            app.core_config = config.clone();
-
-            app.sort_calendars();
-            app.hidden_calendars = config.hidden_calendars.clone().into_iter().collect();
-            app.disabled_calendars = config.disabled_calendars.clone().into_iter().collect();
-            app.sort_cutoff_days = config.sort_cutoff_days;
-            app.tag_aliases = config.tag_aliases.clone();
-            app.hide_completed = config.hide_completed;
-            app.hide_fully_completed_tags = config.hide_fully_completed_tags;
-            app.hide_aliases_in_sidebar = config.hide_aliases_in_sidebar;
-            app.blur_when_unfocused = config.blur_when_unfocused;
-            app.show_inline_descriptions = config.show_inline_descriptions;
-            app.sort_standard_by_priority = config.sort_standard_by_priority;
-            app.paused_sort_behavior = config.paused_sort_behavior;
-            app.sort_tiebreak_recent = config.sort_tiebreak_recent;
-            app.sort_preset = config.sort_preset;
-            app.ui_scale = config.ui_scale;
-            app.show_priority_numbers = config.show_priority_numbers;
-            app.sync_settings = config.sync_settings;
-            app.current_theme = config.theme;
-
-            app.quick_filter_term = config.quick_filter_term.clone();
-            app.quick_filter_icon = config.quick_filter_icon.clone();
-            app.show_quick_filter = config.show_quick_filter;
-            app.show_calendars_tab = config.show_calendars_tab;
-            app.show_tags_tab = config.show_tags_tab;
-            app.show_locations_tab = config.show_locations_tab;
-            app.show_goals_tab = config.show_goals_tab;
-            app.show_journal_tab = config.show_journal_tab;
-
-            // Ensure at least one tab is visible
-            let at_least_one_tab = app.show_calendars_tab
-                || app.show_tags_tab
-                || app.show_locations_tab
-                || app.show_goals_tab
-                || app.show_journal_tab;
-            if !at_least_one_tab {
-                // If all tabs are hidden, default to showing calendars
-                app.show_calendars_tab = true;
-            }
-
-            app.verify_sidebar_mode();
-            app.sidebar_is_hidden = config.sidebar_is_hidden;
-            app.sort_collections_by_size = config.sort_collections_by_size;
-
-            app.urgent_days = config.urgent_days_horizon;
-            app.urgent_prio = config.urgent_priority_threshold;
-            app.default_priority = config.default_priority;
-            app.start_grace_period_days = config.start_grace_period_days;
-
-            app.auto_reminders = config.auto_reminders;
-            app.default_reminder_time = config.default_reminder_time.clone();
-            app.snooze_short_mins = config.snooze_short_mins;
-            app.create_events_for_tasks = config.create_events_for_tasks;
-            app.delete_events_on_completion = config.delete_events_on_completion;
-            app.snooze_long_mins = config.snooze_long_mins;
-            app.auto_refresh_interval_mins = config.auto_refresh_interval_mins;
-            app.strikethrough_completed = config.strikethrough_completed;
-            app.trash_retention_days = config.trash_retention_days;
-
-            app.sessions_count_as_completions = config.sessions_count_as_completions;
-
-            app.session.expanded_tags = config.expanded_tags.clone();
-            app.session.expanded_locations = config.expanded_locations.clone();
-            app.pinned_actions = config.pinned_actions.clone();
-
-            app.ob_sort_days_input = match config.sort_cutoff_days {
-                Some(d) => d.to_string(),
-                None => "".to_string(),
-            };
-            app.ob_urgent_days_input = app.urgent_days.to_string();
-            app.ob_urgent_prio_input = app.urgent_prio.to_string();
-            app.ob_default_priority_input = app.default_priority.to_string();
-            app.ob_start_grace_input = app.start_grace_period_days.to_string();
-            app.ob_snooze_short_input =
-                crate::model::parser::format_duration_compact(config.snooze_short_mins);
-            app.ob_snooze_long_input =
-                crate::model::parser::format_duration_compact(config.snooze_long_mins);
-            app.ob_auto_refresh_input =
-                crate::model::parser::format_duration_compact(config.auto_refresh_interval_mins);
-            app.ob_trash_retention_input = config.trash_retention_days.to_string();
-            app.ob_default_duration_goal_mins_input = config.default_duration_goal_mins.to_string();
-            app.ob_max_done_roots_input = config.max_done_roots.to_string();
-            app.ob_max_done_subtasks_input = config.max_done_subtasks.to_string();
-            app.ob_quick_filter_term_input = config.quick_filter_term.clone();
-            app.ob_quick_filter_icon_input = config.quick_filter_icon.clone();
-            app.log_level = config.log_level;
-            crate::system::set_log_level(config.log_level.to_level_filter());
+            apply_config_to_app(app, &config);
 
             // Refresh UI without full reload
             refresh_filtered_tasks(app);
