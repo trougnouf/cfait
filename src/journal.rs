@@ -137,25 +137,13 @@ impl Journal {
                     match (prev, &action) {
                         (Action::Create(prev_t), Action::Update(t)) => {
                             let mut merged_t = t.clone();
-                            if (merged_t.etag.is_empty() || merged_t.etag == "pending_refresh")
-                                && !prev_t.etag.is_empty()
-                                && prev_t.etag != "pending_refresh"
-                            {
-                                merged_t.etag = prev_t.etag.clone();
-                                merged_t.href = prev_t.href.clone();
-                            }
+                            merged_t.inherit_metadata_if_pending(prev_t);
                             compacted[idx] = Some(Action::Create(merged_t));
                             merged = true;
                         }
                         (Action::Update(prev_t), Action::Update(t)) => {
                             let mut merged_t = t.clone();
-                            if (merged_t.etag.is_empty() || merged_t.etag == "pending_refresh")
-                                && !prev_t.etag.is_empty()
-                                && prev_t.etag != "pending_refresh"
-                            {
-                                merged_t.etag = prev_t.etag.clone();
-                                merged_t.href = prev_t.href.clone();
-                            }
+                            merged_t.inherit_metadata_if_pending(prev_t);
                             compacted[idx] = Some(Action::Update(merged_t));
                             merged = true;
                         }
@@ -166,26 +154,14 @@ impl Journal {
                         }
                         (Action::Update(prev_t), Action::Delete(t)) => {
                             let mut merged_t = t.clone();
-                            if (merged_t.etag.is_empty() || merged_t.etag == "pending_refresh")
-                                && !prev_t.etag.is_empty()
-                                && prev_t.etag != "pending_refresh"
-                            {
-                                merged_t.etag = prev_t.etag.clone();
-                                merged_t.href = prev_t.href.clone();
-                            }
+                            merged_t.inherit_metadata_if_pending(prev_t);
                             compacted[idx] = Some(Action::Delete(merged_t));
                             merged = true;
                         }
                         (Action::Create(prev_t), Action::Create(t)) => {
                             // Merge duplicates: keep the newer version (last wins)
                             let mut merged_t = t.clone();
-                            if (merged_t.etag.is_empty() || merged_t.etag == "pending_refresh")
-                                && !prev_t.etag.is_empty()
-                                && prev_t.etag != "pending_refresh"
-                            {
-                                merged_t.etag = prev_t.etag.clone();
-                                merged_t.href = prev_t.href.clone();
-                            }
+                            merged_t.inherit_metadata_if_pending(prev_t);
                             compacted[idx] = Some(Action::Create(merged_t));
                             merged = true;
                         }

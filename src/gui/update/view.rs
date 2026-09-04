@@ -1915,42 +1915,14 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::OpenUrl(target) => {
-            // Note: target can be "https://..." or "geo:lat,long"
-            let target_url = target.clone();
-            #[cfg(not(target_os = "android"))]
-            std::thread::spawn(move || {
-                #[cfg(target_os = "linux")]
-                let _ = std::process::Command::new("xdg-open")
-                    .arg(target_url)
-                    .spawn();
-                #[cfg(target_os = "windows")]
-                let _ = std::process::Command::new("explorer")
-                    .arg(target_url)
-                    .spawn();
-                #[cfg(target_os = "macos")]
-                let _ = std::process::Command::new("open").arg(target_url).spawn();
-            });
+            crate::system::open_url(&target);
             Task::none()
         }
         Message::OpenCoordinates(uid) => {
             if let Some(task) = app.store.get_task_ref(&uid)
                 && let Some(geo) = &task.geo
             {
-                let geo_target = format!("geo:{}", geo);
-                let target_url = geo_target.clone();
-                #[cfg(not(target_os = "android"))]
-                std::thread::spawn(move || {
-                    #[cfg(target_os = "linux")]
-                    let _ = std::process::Command::new("xdg-open")
-                        .arg(target_url)
-                        .spawn();
-                    #[cfg(target_os = "windows")]
-                    let _ = std::process::Command::new("explorer")
-                        .arg(target_url)
-                        .spawn();
-                    #[cfg(target_os = "macos")]
-                    let _ = std::process::Command::new("open").arg(target_url).spawn();
-                });
+                crate::system::open_url(&format!("geo:{}", geo));
             }
             Task::none()
         }
@@ -1981,16 +1953,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 if let Ok(cache_dir) = app.ctx.get_cache_dir() {
                     let path = cache_dir.join(format!("locations_{}.gpx", uuid::Uuid::new_v4()));
                     if std::fs::write(&path, gpx_string).is_ok() {
-                        let target = path.to_string_lossy().to_string();
-                        #[cfg(not(target_os = "android"))]
-                        std::thread::spawn(move || {
-                            #[cfg(target_os = "linux")]
-                            let _ = std::process::Command::new("xdg-open").arg(target).spawn();
-                            #[cfg(target_os = "windows")]
-                            let _ = std::process::Command::new("explorer").arg(target).spawn();
-                            #[cfg(target_os = "macos")]
-                            let _ = std::process::Command::new("open").arg(target).spawn();
-                        });
+                        crate::system::open_url(&path.to_string_lossy());
                     }
                 }
             }

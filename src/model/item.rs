@@ -594,6 +594,16 @@ impl Task {
             .any(|p| p.key == "X-CFAIT-RECUR-FROM-COMPLETION")
     }
 
+    pub fn inherit_metadata_if_pending(&mut self, other: &Task) {
+        if (self.etag.is_empty() || self.etag == "pending_refresh")
+            && !other.etag.is_empty()
+            && other.etag != "pending_refresh"
+        {
+            self.etag = other.etag.clone();
+            self.href = other.href.clone();
+        }
+    }
+
     fn parse_ics_datetime(v: &str) -> Option<DateTime<Utc>> {
         if v.contains('T') {
             NaiveDateTime::parse_from_str(v, "%Y%m%dT%H%M%SZ")

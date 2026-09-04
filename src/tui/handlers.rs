@@ -198,43 +198,13 @@ async fn execute_task_action(
     match action {
         OpenUrl => {
             if let Some(url) = &task.url {
-                #[cfg(not(target_os = "android"))]
-                {
-                    let target_url = url.clone();
-                    std::thread::spawn(move || {
-                        #[cfg(target_os = "linux")]
-                        let _ = std::process::Command::new("xdg-open")
-                            .arg(target_url)
-                            .spawn();
-                        #[cfg(target_os = "windows")]
-                        let _ = std::process::Command::new("explorer")
-                            .arg(target_url)
-                            .spawn();
-                        #[cfg(target_os = "macos")]
-                        let _ = std::process::Command::new("open").arg(target_url).spawn();
-                    });
-                }
+                crate::system::open_url(url);
                 state.message = rust_i18n::t!("open_url").to_string();
             }
         }
         OpenCoordinates => {
             if let Some(geo) = &task.geo {
-                #[cfg(not(target_os = "android"))]
-                {
-                    let target_url = format!("geo:{}", geo);
-                    std::thread::spawn(move || {
-                        #[cfg(target_os = "linux")]
-                        let _ = std::process::Command::new("xdg-open")
-                            .arg(target_url)
-                            .spawn();
-                        #[cfg(target_os = "windows")]
-                        let _ = std::process::Command::new("explorer")
-                            .arg(target_url)
-                            .spawn();
-                        #[cfg(target_os = "macos")]
-                        let _ = std::process::Command::new("open").arg(target_url).spawn();
-                    });
-                }
+                crate::system::open_url(&format!("geo:{}", geo));
                 state.message = rust_i18n::t!("open_coordinates").to_string();
             }
         }
@@ -263,18 +233,7 @@ async fn execute_task_action(
             if let Ok(cache_dir) = state.ctx.get_cache_dir() {
                 let path = cache_dir.join(format!("locations_{}.gpx", uuid::Uuid::new_v4()));
                 if std::fs::write(&path, gpx_string).is_ok() {
-                    #[cfg(not(target_os = "android"))]
-                    {
-                        let target = path.to_string_lossy().to_string();
-                        std::thread::spawn(move || {
-                            #[cfg(target_os = "linux")]
-                            let _ = std::process::Command::new("xdg-open").arg(target).spawn();
-                            #[cfg(target_os = "windows")]
-                            let _ = std::process::Command::new("explorer").arg(target).spawn();
-                            #[cfg(target_os = "macos")]
-                            let _ = std::process::Command::new("open").arg(target).spawn();
-                        });
-                    }
+                    crate::system::open_url(&path.to_string_lossy());
                     state.message = rust_i18n::t!("action_open_locations").to_string();
                 } else {
                     state.message = rust_i18n::t!("error_write_gpx").to_string();
@@ -1290,22 +1249,7 @@ pub async fn handle_key_event(
                     let is_url = clean_uid.contains("://") || clean_uid.starts_with("mailto:");
 
                     if is_url {
-                        #[cfg(not(target_os = "android"))]
-                        {
-                            let target_url = clean_uid.clone();
-                            std::thread::spawn(move || {
-                                #[cfg(target_os = "linux")]
-                                let _ = std::process::Command::new("xdg-open")
-                                    .arg(target_url)
-                                    .spawn();
-                                #[cfg(target_os = "windows")]
-                                let _ = std::process::Command::new("explorer")
-                                    .arg(target_url)
-                                    .spawn();
-                                #[cfg(target_os = "macos")]
-                                let _ = std::process::Command::new("open").arg(target_url).spawn();
-                            });
-                        }
+                        crate::system::open_url(&clean_uid);
                         state.message = rust_i18n::t!("open_url").to_string();
                     } else {
                         let target_uid =
@@ -3012,45 +2956,14 @@ pub async fn handle_key_event(
                             let path =
                                 cache_dir.join(format!("locations_{}.gpx", uuid::Uuid::new_v4()));
                             if std::fs::write(&path, gpx_string).is_ok() {
-                                #[cfg(not(target_os = "android"))]
-                                {
-                                    let target = path.to_string_lossy().to_string();
-                                    std::thread::spawn(move || {
-                                        #[cfg(target_os = "linux")]
-                                        let _ = std::process::Command::new("xdg-open")
-                                            .arg(target)
-                                            .spawn();
-                                        #[cfg(target_os = "windows")]
-                                        let _ = std::process::Command::new("explorer")
-                                            .arg(target)
-                                            .spawn();
-                                        #[cfg(target_os = "macos")]
-                                        let _ =
-                                            std::process::Command::new("open").arg(target).spawn();
-                                    });
-                                }
+                                crate::system::open_url(&path.to_string_lossy());
                                 state.message = rust_i18n::t!("action_open_locations").to_string();
                             } else {
                                 state.message = rust_i18n::t!("error_write_gpx").to_string();
                             }
                         }
                     } else if let Some(_geo) = &task.geo {
-                        #[cfg(not(target_os = "android"))]
-                        {
-                            let target_url = format!("geo:{}", _geo);
-                            std::thread::spawn(move || {
-                                #[cfg(target_os = "linux")]
-                                let _ = std::process::Command::new("xdg-open")
-                                    .arg(target_url)
-                                    .spawn();
-                                #[cfg(target_os = "windows")]
-                                let _ = std::process::Command::new("explorer")
-                                    .arg(target_url)
-                                    .spawn();
-                                #[cfg(target_os = "macos")]
-                                let _ = std::process::Command::new("open").arg(target_url).spawn();
-                            });
-                        }
+                        crate::system::open_url(&format!("geo:{}", _geo));
                         state.message = rust_i18n::t!("open_coordinates").to_string();
                     } else {
                         state.message = rust_i18n::t!("error_no_location").to_string();
@@ -3060,22 +2973,7 @@ pub async fn handle_key_event(
             KeyCode::Char('o') => {
                 if let Some(task) = state.get_selected_task() {
                     if let Some(_url) = &task.url {
-                        #[cfg(not(target_os = "android"))]
-                        {
-                            let target_url = _url.clone();
-                            std::thread::spawn(move || {
-                                #[cfg(target_os = "linux")]
-                                let _ = std::process::Command::new("xdg-open")
-                                    .arg(target_url)
-                                    .spawn();
-                                #[cfg(target_os = "windows")]
-                                let _ = std::process::Command::new("explorer")
-                                    .arg(target_url)
-                                    .spawn();
-                                #[cfg(target_os = "macos")]
-                                let _ = std::process::Command::new("open").arg(target_url).spawn();
-                            });
-                        }
+                        crate::system::open_url(_url);
                         state.message = rust_i18n::t!("open_url").to_string();
                     } else {
                         state.message = rust_i18n::t!("error_no_url").to_string();
@@ -4704,22 +4602,7 @@ pub async fn handle_key_event(
                     let target_uid = target_uid.clone();
                     let rel_type = rel_type.clone();
                     if rel_type == "url" {
-                        #[cfg(not(target_os = "android"))]
-                        {
-                            let target_url = target_uid.clone();
-                            std::thread::spawn(move || {
-                                #[cfg(target_os = "linux")]
-                                let _ = std::process::Command::new("xdg-open")
-                                    .arg(target_url)
-                                    .spawn();
-                                #[cfg(target_os = "windows")]
-                                let _ = std::process::Command::new("explorer")
-                                    .arg(target_url)
-                                    .spawn();
-                                #[cfg(target_os = "macos")]
-                                let _ = std::process::Command::new("open").arg(target_url).spawn();
-                            });
-                        }
+                        crate::system::open_url(&target_uid);
                         state.mode = InputMode::Normal;
                         state.message = rust_i18n::t!("open_url").to_string();
                         return None;

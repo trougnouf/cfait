@@ -138,6 +138,25 @@ pub fn init_logging(ctx: &dyn AppContext, enable_stderr: bool, level: Option<log
     }
 }
 
+pub fn open_url(url: &str) {
+    #[cfg(not(target_os = "android"))]
+    {
+        let target_url = url.to_string();
+        std::thread::spawn(move || {
+            #[cfg(target_os = "linux")]
+            let _ = std::process::Command::new("xdg-open")
+                .arg(target_url)
+                .spawn();
+            #[cfg(target_os = "windows")]
+            let _ = std::process::Command::new("explorer")
+                .arg(target_url)
+                .spawn();
+            #[cfg(target_os = "macos")]
+            let _ = std::process::Command::new("open").arg(target_url).spawn();
+        });
+    }
+}
+
 pub fn init_keyring() {
     use keyring_core::set_default_store;
 
