@@ -39,6 +39,7 @@ build() {
   # Skip compiling the problematic fallback RNG.
   # Linux's native getrandom() is used instead.
   export AWS_LC_SYS_NO_JITTER_ENTROPY=1
+  export RUST_MIN_STACK=16777216
 
   # Build both TUI and GUI
   cargo build --release --features gui
