@@ -889,6 +889,8 @@ class MarkdownTransformation(val isDark: Boolean, val api: CfaitMobile? = null) 
         val dimColor = Color(0x80808080) // Gray
         val checkboxColor = Color(0xFF66BB6A) // Greenish
         val codeColor = Color(0xFFCC9966) // Brown/Orange
+        val quoteColor = if (isDark) Color(0xFFAAAAAA) else Color(0xFF666666)
+        val tableColor = Color(0xFF4DB6AC) // Teal
 
         val inlinePatterns = listOf(
             Pair(Regex("""<!-- uid:.*?-->"""), SpanStyle(color = dimColor, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)),
@@ -923,8 +925,17 @@ class MarkdownTransformation(val isDark: Boolean, val api: CfaitMobile? = null) 
             val trimmed = line.trimStart()
             var afterMarker = 0
 
-            if (trimmed.startsWith("#")) {
+            if (trimmed.startsWith("```")) {
+                newStyles.add(AnnotatedString.Range(SpanStyle(color = codeColor, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace), 0, line.length))
+                afterMarker = line.length
+            } else if (trimmed.startsWith("#")) {
                 newStyles.add(AnnotatedString.Range(SpanStyle(color = headerColor, fontWeight = FontWeight.Bold), 0, line.length))
+                afterMarker = line.length
+            } else if (trimmed.startsWith("> ")) {
+                newStyles.add(AnnotatedString.Range(SpanStyle(color = quoteColor, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic), 0, line.length))
+                afterMarker = line.length
+            } else if (trimmed.startsWith("|") && trimmed.substring(1).contains("|")) {
+                newStyles.add(AnnotatedString.Range(SpanStyle(color = tableColor, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace), 0, line.length))
                 afterMarker = line.length
             } else if (trimmed.startsWith("- [") || trimmed.startsWith("* [") || trimmed.startsWith("+ [") || Regex("""^\d+\.\s*\[""").containsMatchIn(trimmed)) {
                 val cbStart = line.indexOf('[')
