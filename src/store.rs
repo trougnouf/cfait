@@ -3849,24 +3849,8 @@ impl TaskStore {
                     let child_eff = resolve(child_idx, tasks, map, cache, visiting, options);
 
                     if let Some(ref mut best_child) = best_child_opt {
-                        let a = crate::model::item::SortKey {
-                            rank: child_eff.sort_rank,
-                            prio: child_eff.effective_priority,
-                            due: child_eff.effective_due.clone(),
-                            start: child_eff.effective_dtstart.clone(),
-                            is_overdue: child_eff.is_overdue,
-                            is_paused: child_eff.transient_is_paused,
-                            is_note: child_eff.is_note || child_eff.is_journal,
-                        };
-                        let b = crate::model::item::SortKey {
-                            rank: best_child.sort_rank,
-                            prio: best_child.effective_priority,
-                            due: best_child.effective_due.clone(),
-                            start: best_child.effective_dtstart.clone(),
-                            is_overdue: best_child.is_overdue,
-                            is_paused: best_child.transient_is_paused,
-                            is_note: best_child.is_note || best_child.is_journal,
-                        };
+                        let a = child_eff.to_sort_key();
+                        let b = best_child.to_sort_key();
                         let ordering = crate::model::item::compare_sortkeys(
                             &a,
                             &b,
@@ -3895,31 +3879,10 @@ impl TaskStore {
 
                 if let Some(bc) = best_child_opt {
                     if t.is_note || t.is_journal || t.is_search_context {
-                        best.sort_rank = bc.sort_rank;
-                        best.effective_priority = bc.effective_priority;
-                        best.effective_due = bc.effective_due.clone();
-                        best.effective_dtstart = bc.effective_dtstart.clone();
-                        best.transient_is_paused = bc.transient_is_paused;
-                        best.transient_recent_ts = bc.transient_recent_ts;
+                        best.copy_transient_sort_fields_from(&bc);
                     } else {
-                        let a = crate::model::item::SortKey {
-                            rank: bc.sort_rank,
-                            prio: bc.effective_priority,
-                            due: bc.effective_due.clone(),
-                            start: bc.effective_dtstart.clone(),
-                            is_overdue: bc.is_overdue,
-                            is_paused: bc.transient_is_paused,
-                            is_note: bc.is_note || bc.is_journal,
-                        };
-                        let b = crate::model::item::SortKey {
-                            rank: best.sort_rank,
-                            prio: best.effective_priority,
-                            due: best.effective_due.clone(),
-                            start: best.effective_dtstart.clone(),
-                            is_overdue: best.is_overdue,
-                            is_paused: best.transient_is_paused,
-                            is_note: best.is_note || best.is_journal,
-                        };
+                        let a = bc.to_sort_key();
+                        let b = best.to_sort_key();
                         let ordering = crate::model::item::compare_sortkeys(
                             &a,
                             &b,
@@ -3938,12 +3901,7 @@ impl TaskStore {
                             }
                         });
                         if ordering == std::cmp::Ordering::Less {
-                            best.sort_rank = bc.sort_rank;
-                            best.effective_priority = bc.effective_priority;
-                            best.effective_due = bc.effective_due.clone();
-                            best.effective_dtstart = bc.effective_dtstart.clone();
-                            best.transient_is_paused = bc.transient_is_paused;
-                            best.transient_recent_ts = bc.transient_recent_ts;
+                            best.copy_transient_sort_fields_from(&bc);
                         }
                     }
                 }

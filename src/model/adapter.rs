@@ -56,6 +56,45 @@ const HANDLED_KEYS: &[&str] = &[
 pub struct IcsAdapter;
 
 impl IcsAdapter {
+    fn date_type_to_property(name: &str, dt: &DateType, add_day: bool) -> icalendar::Property {
+        match dt {
+            DateType::AllDay(d) => {
+                let mut p = icalendar::Property::new(
+                    name,
+                    (if add_day {
+                        *d + chrono::Duration::days(1)
+                    } else {
+                        *d
+                    })
+                    .format("%Y%m%d")
+                    .to_string(),
+                );
+                p.add_parameter("VALUE", "DATE");
+                p
+            }
+            DateType::Specific(t) => {
+                icalendar::Property::new(name, t.format("%Y%m%dT%H%M%SZ").to_string())
+            }
+            DateType::Month(y, m) => {
+                let mut d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
+                if add_day {
+                    let next_m = if *m == 12 { 1 } else { *m + 1 };
+                    let next_y = if *m == 12 { *y + 1 } else { *y };
+                    d = NaiveDate::from_ymd_opt(next_y, next_m, 1).unwrap();
+                }
+                let mut p = icalendar::Property::new(name, d.format("%Y%m%d").to_string());
+                p.add_parameter("VALUE", "DATE");
+                p
+            }
+            DateType::Year(y) => {
+                let d = NaiveDate::from_ymd_opt(if add_day { y + 1 } else { *y }, 1, 1).unwrap();
+                let mut p = icalendar::Property::new(name, d.format("%Y%m%d").to_string());
+                p.add_parameter("VALUE", "DATE");
+                p
+            }
+        }
+    }
+
     fn fix_rrule_until(rrule: &str, is_time: bool) -> String {
         let parts: Vec<&str> = rrule.split(';').collect();
         let mut new_parts = Vec::new();
@@ -252,61 +291,32 @@ impl IcsAdapter {
         };
 
         if let Some(dt) = &emit_dtstart {
+            todo.append_property(Self::date_type_to_property("DTSTART", dt, false));
             match dt {
-                DateType::AllDay(d) => {
-                    let mut p = icalendar::Property::new("DTSTART", d.format("%Y%m%d").to_string());
-                    p.add_parameter("VALUE", "DATE");
-                    todo.append_property(p);
-                }
-                DateType::Specific(t) => {
-                    todo.add_property("DTSTART", t.format("%Y%m%dT%H%M%SZ").to_string());
-                }
                 DateType::Month(y, m) => {
-                    let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
-                    let mut p = icalendar::Property::new("DTSTART", d.format("%Y%m%d").to_string());
-                    p.add_parameter("VALUE", "DATE");
-                    todo.append_property(p);
                     todo.add_property("X-CFAIT-FUZZY-START", format!("{:04}-{:02}", y, m));
                 }
                 DateType::Year(y) => {
-                    let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
-                    let mut p = icalendar::Property::new("DTSTART", d.format("%Y%m%d").to_string());
-                    p.add_parameter("VALUE", "DATE");
-                    todo.append_property(p);
                     todo.add_property("X-CFAIT-FUZZY-START", format!("{:04}", y));
                 }
+                _ => {}
             }
         }
 
         if let Some(dt) = &emit_due {
+            todo.append_property(Self::date_type_to_property(
+                "DUE",
+                dt,
+                matches!(dt, DateType::Month(_, _) | DateType::Year(_)),
+            ));
             match dt {
-                DateType::AllDay(d) => {
-                    let mut p = icalendar::Property::new("DUE", d.format("%Y%m%d").to_string());
-                    p.add_parameter("VALUE", "DATE");
-                    todo.append_property(p);
-                }
-                DateType::Specific(t) => {
-                    todo.add_property("DUE", t.format("%Y%m%dT%H%M%SZ").to_string());
-                }
                 DateType::Month(y, m) => {
-                    let next_m = if *m == 12 { 1 } else { *m + 1 };
-                    let next_y = if *m == 12 { *y + 1 } else { *y };
-                    let d = NaiveDate::from_ymd_opt(next_y, next_m, 1)
-                        .unwrap()
-                        .pred_opt()
-                        .unwrap();
-                    let mut p = icalendar::Property::new("DUE", d.format("%Y%m%d").to_string());
-                    p.add_parameter("VALUE", "DATE");
-                    todo.append_property(p);
                     todo.add_property("X-CFAIT-FUZZY-DUE", format!("{:04}-{:02}", y, m));
                 }
                 DateType::Year(y) => {
-                    let d = NaiveDate::from_ymd_opt(*y, 12, 31).unwrap();
-                    let mut p = icalendar::Property::new("DUE", d.format("%Y%m%d").to_string());
-                    p.add_parameter("VALUE", "DATE");
-                    todo.append_property(p);
                     todo.add_property("X-CFAIT-FUZZY-DUE", format!("{:04}", y));
                 }
+                _ => {}
             }
         }
 
@@ -2036,55 +2046,15 @@ impl IcsAdapter {
             }
         }
 
-        match start_dt {
-            DateType::AllDay(d) => {
-                let mut p = icalendar::Property::new("DTSTART", d.format("%Y%m%d").to_string());
-                p.add_parameter("VALUE", "DATE");
-                event.append_property(p);
-            }
-            DateType::Specific(t) => {
-                event.add_property("DTSTART", t.format("%Y%m%dT%H%M%SZ").to_string());
-            }
-            DateType::Month(y, m) => {
-                let d = NaiveDate::from_ymd_opt(y, m, 1).unwrap();
-                let mut p = icalendar::Property::new("DTSTART", d.format("%Y%m%d").to_string());
-                p.add_parameter("VALUE", "DATE");
-                event.append_property(p);
-            }
-            DateType::Year(y) => {
-                let d = NaiveDate::from_ymd_opt(y, 1, 1).unwrap();
-                let mut p = icalendar::Property::new("DTSTART", d.format("%Y%m%d").to_string());
-                p.add_parameter("VALUE", "DATE");
-                event.append_property(p);
-            }
-        }
-
-        match end_dt {
-            DateType::AllDay(d) => {
-                let next_day = d + chrono::Duration::days(1);
-                let mut p =
-                    icalendar::Property::new("DTEND", next_day.format("%Y%m%d").to_string());
-                p.add_parameter("VALUE", "DATE");
-                event.append_property(p);
-            }
-            DateType::Specific(t) => {
-                event.add_property("DTEND", t.format("%Y%m%dT%H%M%SZ").to_string());
-            }
-            DateType::Month(y, m) => {
-                let next_m = if m == 12 { 1 } else { m + 1 };
-                let next_y = if m == 12 { y + 1 } else { y };
-                let d = NaiveDate::from_ymd_opt(next_y, next_m, 1).unwrap();
-                let mut p = icalendar::Property::new("DTEND", d.format("%Y%m%d").to_string());
-                p.add_parameter("VALUE", "DATE");
-                event.append_property(p);
-            }
-            DateType::Year(y) => {
-                let d = NaiveDate::from_ymd_opt(y + 1, 1, 1).unwrap();
-                let mut p = icalendar::Property::new("DTEND", d.format("%Y%m%d").to_string());
-                p.add_parameter("VALUE", "DATE");
-                event.append_property(p);
-            }
-        }
+        event.append_property(Self::date_type_to_property("DTSTART", &start_dt, false));
+        event.append_property(Self::date_type_to_property(
+            "DTEND",
+            &end_dt,
+            matches!(
+                end_dt,
+                DateType::AllDay(_) | DateType::Month(_, _) | DateType::Year(_)
+            ),
+        ));
 
         let mut calendar = Calendar::new();
         calendar.push(event);

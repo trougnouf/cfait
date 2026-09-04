@@ -175,45 +175,26 @@ pub fn view_task_row<'a>(
     highlight_color: Color,
 ) -> Element<'a, Message> {
     match item {
-        crate::store::TaskListItem::ExpandGroup(key, depth) => {
+        crate::store::TaskListItem::ExpandGroup(key, depth)
+        | crate::store::TaskListItem::CollapseGroup(key, depth) => {
+            let is_expand = matches!(item, crate::store::TaskListItem::ExpandGroup(_, _));
             let indent_size = if app.active_cal_href.is_some() {
                 *depth * 12
             } else {
                 0
             };
             let indent = Space::new().width(Length::Fixed(indent_size as f32));
-            let btn = button(
-                row![
-                    icon::icon(icon::ARROW_EXPAND_DOWN)
-                        .size(16)
-                        .color(Color::from_rgb(0.5, 0.5, 0.8)),
-                    text("Expand completed tasks")
-                        .size(12)
-                        .color(Color::from_rgb(0.5, 0.5, 0.8))
-                ]
-                .spacing(8)
-                .align_y(iced::Alignment::Center),
-            )
-            .style(iced::widget::button::text)
-            .width(Length::Fill)
-            .on_press(Message::ToggleDoneGroup(key.clone()));
-            focusable(row![indent, btn]).id(row_id).into()
-        }
-        crate::store::TaskListItem::CollapseGroup(key, depth) => {
-            let indent_size = if app.active_cal_href.is_some() {
-                *depth * 12
+            let (icon_char, label) = if is_expand {
+                (icon::ARROW_EXPAND_DOWN, "Expand completed tasks")
             } else {
-                0
+                (icon::ARROW_EXPAND_UP, "Collapse completed tasks")
             };
-            let indent = Space::new().width(Length::Fixed(indent_size as f32));
             let btn = button(
                 row![
-                    icon::icon(icon::ARROW_EXPAND_UP)
+                    icon::icon(icon_char)
                         .size(16)
                         .color(Color::from_rgb(0.5, 0.5, 0.8)),
-                    text("Collapse completed tasks")
-                        .size(12)
-                        .color(Color::from_rgb(0.5, 0.5, 0.8))
+                    text(label).size(12).color(Color::from_rgb(0.5, 0.5, 0.8))
                 ]
                 .spacing(8)
                 .align_y(iced::Alignment::Center),

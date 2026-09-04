@@ -551,6 +551,27 @@ pub fn compare_sortkeys(
 }
 
 impl Task {
+    pub fn to_sort_key(&self) -> SortKey {
+        SortKey {
+            rank: self.sort_rank,
+            prio: self.effective_priority,
+            due: self.effective_due.clone(),
+            start: self.effective_dtstart.clone(),
+            is_overdue: self.is_overdue,
+            is_paused: self.transient_is_paused,
+            is_note: self.is_note || self.is_journal,
+        }
+    }
+
+    pub fn copy_transient_sort_fields_from(&mut self, other: &Self) {
+        self.sort_rank = other.sort_rank;
+        self.effective_priority = other.effective_priority;
+        self.effective_due = other.effective_due.clone();
+        self.effective_dtstart = other.effective_dtstart.clone();
+        self.transient_is_paused = other.transient_is_paused;
+        self.transient_recent_ts = other.transient_recent_ts;
+    }
+
     pub fn get_effective_goal(&self) -> Option<crate::config::Goal> {
         if let Some(g) = &self.goal {
             return Some(g.clone());
@@ -932,24 +953,8 @@ impl Task {
                 .then_with(|| self.summary.cmp(&other.summary));
         }
 
-        let a = SortKey {
-            rank: self.sort_rank,
-            prio: self.effective_priority,
-            due: self.effective_due.clone(),
-            start: self.effective_dtstart.clone(),
-            is_overdue: self.is_overdue,
-            is_paused: self.transient_is_paused,
-            is_note: self.is_note || self.is_journal,
-        };
-        let b = SortKey {
-            rank: other.sort_rank,
-            prio: other.effective_priority,
-            due: other.effective_due.clone(),
-            start: other.effective_dtstart.clone(),
-            is_overdue: other.is_overdue,
-            is_paused: other.transient_is_paused,
-            is_note: other.is_note || other.is_journal,
-        };
+        let a = self.to_sort_key();
+        let b = other.to_sort_key();
         compare_sortkeys(
             &a,
             &b,
@@ -991,24 +996,16 @@ impl Task {
             eff_blocked_other,
             opts.sort_preset,
         );
-        let a = SortKey {
-            rank: rank_self,
-            prio: self.priority,
-            due: self.due.clone(),
-            start: self.dtstart.clone(),
-            is_overdue: self.is_overdue,
-            is_paused: self.transient_is_paused,
-            is_note: self.is_note || self.is_journal,
-        };
-        let b = SortKey {
-            rank: rank_other,
-            prio: other.priority,
-            due: other.due.clone(),
-            start: other.dtstart.clone(),
-            is_overdue: other.is_overdue,
-            is_paused: other.transient_is_paused,
-            is_note: other.is_note || other.is_journal,
-        };
+        let mut a = self.to_sort_key();
+        a.rank = rank_self;
+        a.prio = self.priority;
+        a.due = self.due.clone();
+        a.start = self.dtstart.clone();
+        let mut b = other.to_sort_key();
+        b.rank = rank_other;
+        b.prio = other.priority;
+        b.due = other.due.clone();
+        b.start = other.dtstart.clone();
         compare_sortkeys(
             &a,
             &b,

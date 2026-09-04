@@ -7,6 +7,41 @@ use iced::advanced::text::highlighter::{self, Highlighter};
 use iced::{Color, Font};
 use std::ops::Range;
 
+pub fn get_syntax_style(kind: SyntaxType, text: &str, is_dark: bool) -> (Option<Color>, bool) {
+    match kind {
+        SyntaxType::Priority => {
+            let p = text.trim_start_matches('!').parse::<u8>().unwrap_or(0);
+            let (r, g, b) = color_utils::get_priority_rgb(p, is_dark);
+            (Some(Color::from_rgb(r, g, b)), true)
+        }
+        SyntaxType::DueDate => (Some(Color::from_rgb(0.2, 0.6, 1.0)), false),
+        SyntaxType::StartDate => (Some(Color::from_rgb(0.4, 0.8, 0.4)), false),
+        SyntaxType::Recurrence => (Some(Color::from_rgb(0.8, 0.4, 0.8)), false),
+        SyntaxType::Duration => (Some(Color::from_rgb(0.6, 0.6, 0.6)), false),
+        SyntaxType::Tag => {
+            let tag_name = text.trim_start_matches('#');
+            let (r, g, b) = color_utils::generate_color(tag_name);
+            (Some(Color::from_rgb(r, g, b)), true)
+        }
+        SyntaxType::Text => (None, false),
+        SyntaxType::Location => (Some(Color::from_rgb(0.8, 0.5, 0.0)), false),
+        SyntaxType::Url => (Some(Color::from_rgb(0.2, 0.2, 0.8)), false),
+        SyntaxType::WikiLink => (Some(Color::from_rgb(0.2, 0.7, 1.0)), true),
+        SyntaxType::Dependency => (Some(Color::from_rgb(0.9, 0.6, 0.2)), true),
+        SyntaxType::Relation => (Some(Color::from_rgb(0.4, 0.6, 0.9)), true),
+        SyntaxType::Geo => (Some(Color::from_rgb(0.5, 0.5, 0.5)), false),
+        SyntaxType::Description => (Some(Color::from_rgb(0.6, 0.0, 0.6)), false),
+        SyntaxType::Reminder => (Some(Color::from_rgb(1.0, 0.4, 0.0)), true),
+        SyntaxType::Filter => (Some(Color::from_rgb(0.0, 0.8, 0.8)), false),
+        SyntaxType::Operator => (Some(Color::from_rgb(1.0, 0.0, 1.0)), true),
+        SyntaxType::Goal => (Some(Color::from_rgb(0.2, 0.8, 0.6)), true),
+        SyntaxType::Collection => (Some(Color::from_rgb(0.9, 0.4, 0.4)), true),
+        SyntaxType::Calendar => (Some(Color::from_rgb(0.91, 0.11, 0.38)), true),
+        SyntaxType::Pin => (Some(Color::from_rgb(1.0, 0.4, 0.0)), true),
+        SyntaxType::Note => (Some(Color::from_rgb(0.5, 0.5, 0.5)), true),
+    }
+}
+
 // 1. Add state field
 pub struct SmartInputHighlighter {
     is_dark: bool,
@@ -47,143 +82,18 @@ impl Highlighter for SmartInputHighlighter {
         let spans: Vec<(Range<usize>, Self::Highlight)> = tokens
             .into_iter()
             .map(|t| {
-                let format = match t.kind {
-                    SyntaxType::Priority => {
-                        let text = &line[t.start..t.end];
-                        let p = text.trim_start_matches('!').parse::<u8>().unwrap_or(0);
-
-                        // 5. Pass self.is_dark to the color utility
-                        let (r, g, b) = color_utils::get_priority_rgb(p, self.is_dark);
-
-                        highlighter::Format {
-                            color: Some(Color::from_rgb(r, g, b)),
-                            font: Some(Font {
-                                weight: iced::font::Weight::Bold,
-                                ..Default::default()
-                            }),
-                        }
-                    }
-                    SyntaxType::DueDate => highlighter::Format {
-                        color: Some(Color::from_rgb(0.2, 0.6, 1.0)),
-                        font: None,
-                    },
-                    SyntaxType::StartDate => highlighter::Format {
-                        color: Some(Color::from_rgb(0.4, 0.8, 0.4)),
-                        font: None,
-                    },
-                    SyntaxType::Recurrence => highlighter::Format {
-                        color: Some(Color::from_rgb(0.8, 0.4, 0.8)),
-                        font: None,
-                    },
-                    SyntaxType::Duration => highlighter::Format {
-                        color: Some(Color::from_rgb(0.6, 0.6, 0.6)),
-                        font: None,
-                    },
-                    SyntaxType::Tag => {
-                        let text = &line[t.start..t.end];
-                        let tag_name = text.trim_start_matches('#');
-                        let (r, g, b) = color_utils::generate_color(tag_name);
-                        highlighter::Format {
-                            color: Some(Color::from_rgb(r, g, b)),
-                            font: Some(Font {
-                                weight: iced::font::Weight::Bold,
-                                ..Default::default()
-                            }),
-                        }
-                    }
-                    SyntaxType::Text => highlighter::Format {
-                        color: None,
-                        font: None,
-                    },
-                    SyntaxType::Location => highlighter::Format {
-                        color: Some(Color::from_rgb(0.8, 0.5, 0.0)),
-                        font: None,
-                    },
-                    SyntaxType::Url => highlighter::Format {
-                        color: Some(Color::from_rgb(0.2, 0.2, 0.8)),
-                        font: None,
-                    },
-                    SyntaxType::WikiLink => highlighter::Format {
-                        color: Some(Color::from_rgb(0.2, 0.7, 1.0)),
-                        font: Some(Font {
+                let text = &line[t.start..t.end];
+                let (opt_color, is_bold) =
+                    crate::gui::view::syntax::get_syntax_style(t.kind, text, self.is_dark);
+                let format = highlighter::Format {
+                    color: opt_color,
+                    font: if is_bold {
+                        Some(Font {
                             weight: iced::font::Weight::Bold,
                             ..Default::default()
-                        }),
-                    },
-                    SyntaxType::Dependency => highlighter::Format {
-                        color: Some(Color::from_rgb(0.9, 0.6, 0.2)), // Orange
-                        font: Some(Font {
-                            weight: iced::font::Weight::Bold,
-                            ..Default::default()
-                        }),
-                    },
-                    SyntaxType::Relation => highlighter::Format {
-                        color: Some(Color::from_rgb(0.4, 0.6, 0.9)), // Soft Blue
-                        font: Some(Font {
-                            weight: iced::font::Weight::Bold,
-                            ..Default::default()
-                        }),
-                    },
-                    SyntaxType::Geo => highlighter::Format {
-                        color: Some(Color::from_rgb(0.5, 0.5, 0.5)),
-                        font: None,
-                    },
-                    SyntaxType::Description => highlighter::Format {
-                        color: Some(Color::from_rgb(0.6, 0.0, 0.6)),
-                        font: None,
-                    },
-                    SyntaxType::Reminder => highlighter::Format {
-                        color: Some(Color::from_rgb(1.0, 0.4, 0.0)),
-                        font: Some(Font {
-                            weight: iced::font::Weight::Bold,
-                            ..Default::default()
-                        }),
-                    },
-                    SyntaxType::Filter => highlighter::Format {
-                        color: Some(Color::from_rgb(0.0, 0.8, 0.8)), // Cyan
-                        font: None,
-                    },
-                    SyntaxType::Operator => highlighter::Format {
-                        color: Some(Color::from_rgb(1.0, 0.0, 1.0)), // Magenta for boolean ops
-                        font: Some(Font {
-                            weight: iced::font::Weight::Bold,
-                            ..Default::default()
-                        }),
-                    },
-                    SyntaxType::Goal => highlighter::Format {
-                        color: Some(Color::from_rgb(0.2, 0.8, 0.6)), // Sea Green
-                        font: Some(Font {
-                            weight: iced::font::Weight::Bold,
-                            ..Default::default()
-                        }),
-                    },
-                    SyntaxType::Collection => highlighter::Format {
-                        color: Some(Color::from_rgb(0.9, 0.4, 0.4)), // Soft red
-                        font: Some(Font {
-                            weight: iced::font::Weight::Bold,
-                            ..Default::default()
-                        }),
-                    },
-                    SyntaxType::Calendar => highlighter::Format {
-                        color: Some(Color::from_rgb(0.91, 0.11, 0.38)), // #E91E63 Pink
-                        font: Some(Font {
-                            weight: iced::font::Weight::Bold,
-                            ..Default::default()
-                        }),
-                    },
-                    SyntaxType::Pin => highlighter::Format {
-                        color: Some(Color::from_rgb(1.0, 0.4, 0.0)), // Orange for pin
-                        font: Some(Font {
-                            weight: iced::font::Weight::Bold,
-                            ..Default::default()
-                        }),
-                    },
-                    SyntaxType::Note => highlighter::Format {
-                        color: Some(Color::from_rgb(0.5, 0.5, 0.5)),
-                        font: Some(Font {
-                            weight: iced::font::Weight::Bold,
-                            ..Default::default()
-                        }),
+                        })
+                    } else {
+                        None
                     },
                 };
                 (t.start..t.end, format)
@@ -789,125 +699,21 @@ impl Highlighter for MarkdownHighlighter {
                 continue;
             }
             let text = &rest_of_line[t.start..t.end];
-            let format = match t.kind {
-                crate::model::parser::SyntaxType::Priority => {
-                    let p = text.trim_start_matches('!').parse::<u8>().unwrap_or(0);
-                    let (r, g, b) = crate::color_utils::get_priority_rgb(p, is_dark_theme);
-                    highlighter::Format {
-                        color: Some(Color::from_rgb(r, g, b)),
-                        font: Some(Font {
+            let (opt_color, is_bold) = get_syntax_style(t.kind, text, is_dark_theme);
+            let format = if opt_color.is_some() || is_bold {
+                highlighter::Format {
+                    color: opt_color,
+                    font: if is_bold {
+                        Some(Font {
                             weight: iced::font::Weight::Bold,
                             ..Default::default()
-                        }),
-                    }
+                        })
+                    } else {
+                        None
+                    },
                 }
-                crate::model::parser::SyntaxType::DueDate => highlighter::Format {
-                    color: Some(Color::from_rgb(0.2, 0.6, 1.0)),
-                    font: None,
-                },
-                crate::model::parser::SyntaxType::StartDate => highlighter::Format {
-                    color: Some(Color::from_rgb(0.4, 0.8, 0.4)),
-                    font: None,
-                },
-                crate::model::parser::SyntaxType::Recurrence => highlighter::Format {
-                    color: Some(Color::from_rgb(0.8, 0.4, 0.8)),
-                    font: None,
-                },
-                crate::model::parser::SyntaxType::Duration => highlighter::Format {
-                    color: Some(Color::from_rgb(0.6, 0.6, 0.6)),
-                    font: None,
-                },
-                crate::model::parser::SyntaxType::Tag => {
-                    let tag_name = text.trim_start_matches('#');
-                    let (r, g, b) = crate::color_utils::generate_color(tag_name);
-                    highlighter::Format {
-                        color: Some(Color::from_rgb(r, g, b)),
-                        font: Some(Font {
-                            weight: iced::font::Weight::Bold,
-                            ..Default::default()
-                        }),
-                    }
-                }
-                crate::model::parser::SyntaxType::Location => highlighter::Format {
-                    color: Some(Color::from_rgb(0.8, 0.5, 0.0)),
-                    font: None,
-                },
-                crate::model::parser::SyntaxType::Url => highlighter::Format {
-                    color: Some(Color::from_rgb(0.2, 0.2, 0.8)),
-                    font: None,
-                },
-                crate::model::parser::SyntaxType::WikiLink => highlighter::Format {
-                    color: Some(Color::from_rgb(0.2, 0.7, 1.0)),
-                    font: Some(Font {
-                        weight: iced::font::Weight::Bold,
-                        ..Default::default()
-                    }),
-                },
-                crate::model::parser::SyntaxType::Dependency => highlighter::Format {
-                    color: Some(Color::from_rgb(0.9, 0.6, 0.2)),
-                    font: Some(Font {
-                        weight: iced::font::Weight::Bold,
-                        ..Default::default()
-                    }),
-                },
-                crate::model::parser::SyntaxType::Relation => highlighter::Format {
-                    color: Some(Color::from_rgb(0.4, 0.6, 0.9)),
-                    font: Some(Font {
-                        weight: iced::font::Weight::Bold,
-                        ..Default::default()
-                    }),
-                },
-                crate::model::parser::SyntaxType::Geo => highlighter::Format {
-                    color: Some(Color::from_rgb(0.5, 0.5, 0.5)),
-                    font: None,
-                },
-                crate::model::parser::SyntaxType::Description => highlighter::Format {
-                    color: Some(Color::from_rgb(0.6, 0.0, 0.6)),
-                    font: None,
-                },
-                crate::model::parser::SyntaxType::Reminder => highlighter::Format {
-                    color: Some(Color::from_rgb(1.0, 0.4, 0.0)),
-                    font: Some(Font {
-                        weight: iced::font::Weight::Bold,
-                        ..Default::default()
-                    }),
-                },
-                crate::model::parser::SyntaxType::Operator => highlighter::Format {
-                    color: Some(Color::from_rgb(1.0, 0.0, 1.0)),
-                    font: Some(Font {
-                        weight: iced::font::Weight::Bold,
-                        ..Default::default()
-                    }),
-                },
-                crate::model::parser::SyntaxType::Goal => highlighter::Format {
-                    color: Some(Color::from_rgb(0.2, 0.8, 0.6)),
-                    font: Some(Font {
-                        weight: iced::font::Weight::Bold,
-                        ..Default::default()
-                    }),
-                },
-                crate::model::parser::SyntaxType::Calendar => highlighter::Format {
-                    color: Some(Color::from_rgb(0.91, 0.11, 0.38)),
-                    font: Some(Font {
-                        weight: iced::font::Weight::Bold,
-                        ..Default::default()
-                    }),
-                },
-                crate::model::parser::SyntaxType::Pin => highlighter::Format {
-                    color: Some(Color::from_rgb(1.0, 0.4, 0.0)),
-                    font: Some(Font {
-                        weight: iced::font::Weight::Bold,
-                        ..Default::default()
-                    }),
-                },
-                crate::model::parser::SyntaxType::Note => highlighter::Format {
-                    color: Some(Color::from_rgb(0.5, 0.5, 0.5)),
-                    font: Some(Font {
-                        weight: iced::font::Weight::Bold,
-                        ..Default::default()
-                    }),
-                },
-                _ => base_format,
+            } else {
+                base_format
             };
 
             for byte_format in byte_formats.iter_mut().take(t.end).skip(t.start) {

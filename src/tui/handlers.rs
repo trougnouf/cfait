@@ -30,6 +30,18 @@ fn is_undo(key: &KeyEvent) -> bool {
         && !key.modifiers.contains(KeyModifiers::SHIFT)
 }
 
+fn dispatch_intent_tui(state: &mut AppState, intent: AppIntent, action_tx: &Sender<Action>) {
+    let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
+    let actions = state.apply_task_intent(&intent, &config);
+    state.refresh_filtered_view();
+    if !actions.is_empty() {
+        let tx = action_tx.clone();
+        tokio::spawn(async move {
+            let _ = tx.send(Action::PersistBatch(actions)).await;
+        });
+    }
+}
+
 fn is_redo(key: &KeyEvent) -> bool {
     (matches!(key.code, KeyCode::Char('y') | KeyCode::Char('Y'))
         && key.modifiers.contains(KeyModifiers::CONTROL))
@@ -1111,22 +1123,11 @@ pub async fn handle_key_event(
                 KeyCode::Char('c') => {
                     /* Complete */
                     if let Some((t, _)) = state.store.get_task_mut(&task.uid) {
-                        // Dismiss alarm first (optional but clean)
                         t.dismiss_alarm(&alarm_uid);
                         let uid = t.uid.clone();
-                        // Close popup
                         state.active_alarm = None;
-                        // Compute changes via centralized logic
-                        let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
-                        let intent = AppIntent::ToggleTask { uid: uid.clone() };
-                        let actions = state.apply_task_intent(&intent, &config);
-                        state.refresh_filtered_view();
+                        dispatch_intent_tui(state, AppIntent::ToggleTask { uid }, action_tx);
                         update_alarms(state);
-
-                        let tx = action_tx.clone();
-                        tokio::spawn(async move {
-                            let _ = tx.send(Action::PersistBatch(actions)).await;
-                        });
                     }
                     return None;
                 }
@@ -1136,18 +1137,8 @@ pub async fn handle_key_event(
                         t.dismiss_alarm(&alarm_uid);
                         let uid = t.uid.clone();
                         state.active_alarm = None;
-
-                        // Apply cancel logic via centralized logic
-                        let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
-                        let intent = AppIntent::CancelTask { uid: uid.clone() };
-                        let actions = state.apply_task_intent(&intent, &config);
-                        state.refresh_filtered_view();
+                        dispatch_intent_tui(state, AppIntent::CancelTask { uid }, action_tx);
                         update_alarms(state);
-
-                        let tx = action_tx.clone();
-                        tokio::spawn(async move {
-                            let _ = tx.send(Action::PersistBatch(actions)).await;
-                        });
                     }
                     return None;
                 }
@@ -2455,7 +2446,6 @@ pub async fn handle_key_event(
                             return None;
                         }
                         let uid = view_task.uid.clone();
-                        let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
 
                         let intent = if is_shift {
                             if view_task.rrule.is_some() {
@@ -2468,15 +2458,8 @@ pub async fn handle_key_event(
                         } else {
                             AppIntent::ToggleTask { uid: uid.clone() }
                         };
-
-                        let actions = state.apply_task_intent(&intent, &config);
-                        state.refresh_filtered_view();
+                        dispatch_intent_tui(state, intent, action_tx);
                         update_alarms(state);
-
-                        let tx = action_tx.clone();
-                        tokio::spawn(async move {
-                            let _ = tx.send(Action::PersistBatch(actions)).await;
-                        });
                     }
                 } else if state.active_focus == Focus::Sidebar
                     && state.sidebar_mode == SidebarMode::Calendars
@@ -2504,37 +2487,18 @@ pub async fn handle_key_event(
             KeyCode::Char('s') => {
                 if let Some(task) = state.get_selected_task() {
                     let uid = task.uid.clone();
-                    let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                     let intent = if task.status == TaskStatus::InProcess {
-                        AppIntent::PauseTask { uid: uid.clone() }
+                        AppIntent::PauseTask { uid }
                     } else {
-                        AppIntent::StartTask { uid: uid.clone() }
+                        AppIntent::StartTask { uid }
                     };
-
-                    let actions = state.apply_task_intent(&intent, &config);
-                    if !actions.is_empty() {
-                        state.refresh_filtered_view();
-                        let tx = action_tx.clone();
-                        tokio::spawn(async move {
-                            let _ = tx.send(Action::PersistBatch(actions)).await;
-                        });
-                    }
+                    dispatch_intent_tui(state, intent, action_tx);
                     return None;
                 }
             }
             KeyCode::Char('S') => {
                 if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone()) {
-                    let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
-                    let intent = AppIntent::StopTask { uid: uid.clone() };
-
-                    let actions = state.apply_task_intent(&intent, &config);
-                    if !actions.is_empty() {
-                        state.refresh_filtered_view();
-                        let tx = action_tx.clone();
-                        tokio::spawn(async move {
-                            let _ = tx.send(Action::PersistBatch(actions)).await;
-                        });
-                    }
+                    dispatch_intent_tui(state, AppIntent::StopTask { uid }, action_tx);
                     return None;
                 }
             }
@@ -2543,17 +2507,8 @@ pub async fn handle_key_event(
                     if state.sidebar_mode == SidebarMode::Journal {
                         // Safe ignore
                     } else if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone()) {
-                        let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
-                        let intent = AppIntent::CancelTask { uid: uid.clone() };
-
-                        let actions = state.apply_task_intent(&intent, &config);
-                        state.refresh_filtered_view();
+                        dispatch_intent_tui(state, AppIntent::CancelTask { uid }, action_tx);
                         update_alarms(state);
-
-                        let tx = action_tx.clone();
-                        tokio::spawn(async move {
-                            let _ = tx.send(Action::PersistBatch(actions)).await;
-                        });
                     }
                 } else if state.active_focus == Focus::Sidebar
                     && state.sidebar_mode == SidebarMode::Goals
@@ -2580,55 +2535,29 @@ pub async fn handle_key_event(
                     && page.is_task
                 {
                     let uid = page.key.clone();
-                    let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
-                    let intent = AppIntent::DeleteTaskTree { uid: uid.clone() };
-                    let actions = state.apply_task_intent(&intent, &config);
-                    state.refresh_filtered_view();
-                    if state.journal_editing_uid == Some(uid) {
+                    let uid_clone = uid.clone();
+                    dispatch_intent_tui(state, AppIntent::DeleteTaskTree { uid }, action_tx);
+                    if state.journal_editing_uid == Some(uid_clone) {
                         state.journal_editing_uid = None;
-                    }
-                    if !actions.is_empty() {
-                        let tx = action_tx.clone();
-                        tokio::spawn(async move {
-                            let _ = tx.send(Action::PersistBatch(actions)).await;
-                        });
                     }
                 }
             }
             KeyCode::Char('+') => {
                 if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone()) {
-                    let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
-                    let intent = AppIntent::ChangePriority {
-                        uid: uid.clone(),
-                        delta: 1,
-                    };
-
-                    let actions = state.apply_task_intent(&intent, &config);
-                    state.refresh_filtered_view();
-                    if !actions.is_empty() {
-                        let tx = action_tx.clone();
-                        tokio::spawn(async move {
-                            let _ = tx.send(Action::PersistBatch(actions)).await;
-                        });
-                    }
+                    dispatch_intent_tui(
+                        state,
+                        AppIntent::ChangePriority { uid, delta: 1 },
+                        action_tx,
+                    );
                 }
             }
             KeyCode::Char('-') => {
                 if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone()) {
-                    let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
-                    let intent = AppIntent::ChangePriority {
-                        uid: uid.clone(),
-                        delta: -1,
-                    };
-
-                    let actions = state.apply_task_intent(&intent, &config);
-                    state.refresh_filtered_view();
-                    if !actions.is_empty() {
-                        let tx = action_tx.clone();
-                        tokio::spawn(async move {
-                            let _ = tx.send(Action::PersistBatch(actions)).await;
-                        });
-                    }
+                    dispatch_intent_tui(
+                        state,
+                        AppIntent::ChangePriority { uid, delta: -1 },
+                        action_tx,
+                    );
                 }
             }
             KeyCode::Delete => {
@@ -2663,21 +2592,13 @@ pub async fn handle_key_event(
                             }
                         }
                     } else if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone()) {
-                        let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                         let intent = if key.modifiers.contains(KeyModifiers::CONTROL) {
-                            AppIntent::DeleteTaskTree { uid: uid.clone() }
+                            AppIntent::DeleteTaskTree { uid }
                         } else {
-                            AppIntent::DeleteTask { uid: uid.clone() }
+                            AppIntent::DeleteTask { uid }
                         };
-
-                        let actions = state.apply_task_intent(&intent, &config);
-                        state.refresh_filtered_view();
+                        dispatch_intent_tui(state, intent, action_tx);
                         update_alarms(state);
-
-                        let tx = action_tx.clone();
-                        tokio::spawn(async move {
-                            let _ = tx.send(Action::PersistBatch(actions)).await;
-                        });
                     }
                 } else if state.active_focus == Focus::Sidebar
                     && state.sidebar_mode == SidebarMode::Goals
@@ -2704,18 +2625,10 @@ pub async fn handle_key_event(
                     && page.is_task
                 {
                     let uid = page.key.clone();
-                    let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
-                    let intent = AppIntent::DeleteTaskTree { uid: uid.clone() };
-                    let actions = state.apply_task_intent(&intent, &config);
-                    state.refresh_filtered_view();
-                    if state.journal_editing_uid == Some(uid) {
+                    let uid_clone = uid.clone();
+                    dispatch_intent_tui(state, AppIntent::DeleteTaskTree { uid }, action_tx);
+                    if state.journal_editing_uid == Some(uid_clone) {
                         state.journal_editing_uid = None;
-                    }
-                    if !actions.is_empty() {
-                        let tx = action_tx.clone();
-                        tokio::spawn(async move {
-                            let _ = tx.send(Action::PersistBatch(actions)).await;
-                        });
                     }
                 }
             }
@@ -2729,22 +2642,16 @@ pub async fn handle_key_event(
                 };
 
                 if let Some((child_uid, parent_uid)) = data {
-                    let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
-                    let intent = AppIntent::MakeChild {
-                        uid: child_uid.clone(),
-                        parent_uid: parent_uid.clone(),
-                    };
-
-                    let actions = state.apply_task_intent(&intent, &config);
+                    dispatch_intent_tui(
+                        state,
+                        AppIntent::MakeChild {
+                            uid: child_uid,
+                            parent_uid,
+                        },
+                        action_tx,
+                    );
                     if !state.yank_lock_active {
                         state.yanked_uid = None;
-                    }
-                    state.refresh_filtered_view();
-                    if !actions.is_empty() {
-                        let tx = action_tx.clone();
-                        tokio::spawn(async move {
-                            let _ = tx.send(Action::PersistBatch(actions)).await;
-                        });
                     }
                 }
             }
@@ -2812,17 +2719,7 @@ pub async fn handle_key_event(
             }
             KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone()) {
-                    let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
-                    let intent = AppIntent::DuplicateTaskTree { uid: uid.clone() };
-
-                    let actions = state.apply_task_intent(&intent, &config);
-                    state.refresh_filtered_view();
-                    if !actions.is_empty() {
-                        let tx = action_tx.clone();
-                        tokio::spawn(async move {
-                            let _ = tx.send(Action::PersistBatch(actions)).await;
-                        });
-                    }
+                    dispatch_intent_tui(state, AppIntent::DuplicateTaskTree { uid }, action_tx);
                 }
             }
             KeyCode::Char('[') => {
@@ -2993,22 +2890,16 @@ pub async fn handle_key_event(
                     if curr_uid == yanked_uid {
                         state.message = rust_i18n::t!("error_cannot_depend_on_self").to_string();
                     } else {
-                        let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
-                        let intent = AppIntent::AddDependency {
-                            uid: curr_uid.clone(),
-                            blocker_uid: yanked_uid.clone(),
-                        };
-
-                        let actions = state.apply_task_intent(&intent, &config);
+                        dispatch_intent_tui(
+                            state,
+                            AppIntent::AddDependency {
+                                uid: curr_uid,
+                                blocker_uid: yanked_uid,
+                            },
+                            action_tx,
+                        );
                         if !state.yank_lock_active {
                             state.yanked_uid = None;
-                        }
-                        state.refresh_filtered_view();
-                        if !actions.is_empty() {
-                            let tx = action_tx.clone();
-                            tokio::spawn(async move {
-                                let _ = tx.send(Action::PersistBatch(actions)).await;
-                            });
                         }
                     }
                 }
@@ -3032,22 +2923,16 @@ pub async fn handle_key_event(
                             state.message =
                                 rust_i18n::t!("error_cannot_relate_to_self").to_string();
                         } else {
-                            let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
-                            let intent = AppIntent::AddRelatedTo {
-                                uid: curr_uid.clone(),
-                                related_uid: yanked_uid.clone(),
-                            };
-
-                            let actions = state.apply_task_intent(&intent, &config);
+                            dispatch_intent_tui(
+                                state,
+                                AppIntent::AddRelatedTo {
+                                    uid: curr_uid,
+                                    related_uid: yanked_uid,
+                                },
+                                action_tx,
+                            );
                             if !state.yank_lock_active {
                                 state.yanked_uid = None;
-                            }
-                            state.refresh_filtered_view();
-                            if !actions.is_empty() {
-                                let tx = action_tx.clone();
-                                tokio::spawn(async move {
-                                    let _ = tx.send(Action::PersistBatch(actions)).await;
-                                });
                             }
                         }
                     }
@@ -3087,17 +2972,7 @@ pub async fn handle_key_event(
                     && view_task.parent_uid.is_some()
                 {
                     let uid = view_task.uid.clone();
-                    let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
-                    let intent = AppIntent::RemoveParent { uid: uid.clone() };
-
-                    let actions = state.apply_task_intent(&intent, &config);
-                    state.refresh_filtered_view();
-                    if !actions.is_empty() {
-                        let tx = action_tx.clone();
-                        tokio::spawn(async move {
-                            let _ = tx.send(Action::PersistBatch(actions)).await;
-                        });
-                    }
+                    dispatch_intent_tui(state, AppIntent::RemoveParent { uid }, action_tx);
                 }
             }
             KeyCode::Char('X') => {
@@ -3245,19 +3120,14 @@ pub async fn handle_key_event(
                             }
                         }
 
-                        let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
-                        let intent = AppIntent::SetTreeCollapse {
-                            uid: uid.clone(),
-                            collapsed: new_state,
-                        };
-                        let actions = state.apply_task_intent(&intent, &config);
-                        state.refresh_filtered_view();
-                        if !actions.is_empty() {
-                            let tx = action_tx.clone();
-                            tokio::spawn(async move {
-                                let _ = tx.send(Action::PersistBatch(actions)).await;
-                            });
-                        }
+                        dispatch_intent_tui(
+                            state,
+                            AppIntent::SetTreeCollapse {
+                                uid,
+                                collapsed: new_state,
+                            },
+                            action_tx,
+                        );
                     }
                 } else if state.active_focus == Focus::Sidebar {
                     match state.sidebar_mode {
@@ -3300,19 +3170,13 @@ pub async fn handle_key_event(
                                 && let Some(page) = state.cached_journal_pages.get(idx)
                             {
                                 if page.is_task {
-                                    let config =
-                                        Config::load(state.ctx.as_ref()).unwrap_or_default();
-                                    let intent = AppIntent::ToggleTreeCollapse {
-                                        uid: page.key.clone(),
-                                    };
-                                    let actions = state.apply_task_intent(&intent, &config);
-                                    state.refresh_filtered_view();
-                                    if !actions.is_empty() {
-                                        let tx = action_tx.clone();
-                                        tokio::spawn(async move {
-                                            let _ = tx.send(Action::PersistBatch(actions)).await;
-                                        });
-                                    }
+                                    dispatch_intent_tui(
+                                        state,
+                                        AppIntent::ToggleTreeCollapse {
+                                            uid: page.key.clone(),
+                                        },
+                                        action_tx,
+                                    );
                                 } else {
                                     let key = page.key.clone();
                                     if !state.expanded_tags.remove(&key) {
@@ -3682,19 +3546,13 @@ pub async fn handle_key_event(
                                 && let Some(page) = state.cached_journal_pages.get(idx)
                             {
                                 if page.is_task {
-                                    let config =
-                                        Config::load(state.ctx.as_ref()).unwrap_or_default();
-                                    let intent = AppIntent::ToggleTreeCollapse {
-                                        uid: page.key.clone(),
-                                    };
-                                    let actions = state.apply_task_intent(&intent, &config);
-                                    state.refresh_filtered_view();
-                                    if !actions.is_empty() {
-                                        let tx = action_tx.clone();
-                                        tokio::spawn(async move {
-                                            let _ = tx.send(Action::PersistBatch(actions)).await;
-                                        });
-                                    }
+                                    dispatch_intent_tui(
+                                        state,
+                                        AppIntent::ToggleTreeCollapse {
+                                            uid: page.key.clone(),
+                                        },
+                                        action_tx,
+                                    );
                                 } else {
                                     let key = page.key.clone();
                                     if !state.expanded_tags.remove(&key) {
@@ -4424,41 +4282,28 @@ pub async fn handle_key_event(
                 };
 
                 if let Some((uid, target_href)) = data {
-                    let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                     let intent = if state.moving_tree {
                         AppIntent::MoveTaskTree {
-                            uid: uid.clone(),
+                            uid,
                             target_href: target_href.clone(),
                         }
                     } else {
                         AppIntent::MoveTask {
-                            uid: uid.clone(),
+                            uid,
                             target_href: target_href.clone(),
                         }
                     };
 
-                    let actions = state.apply_task_intent(&intent, &config);
+                    dispatch_intent_tui(state, intent, action_tx);
 
                     if state.sidebar_mode == SidebarMode::Journal {
-                        state.active_cal_href = Some(target_href.clone());
+                        state.active_cal_href = Some(target_href);
                     }
 
-                    state.refresh_filtered_view();
-                    // Update alarms immediately if needed (task moved, though move doesn't clear completion)
-                    // Moving a task keeps its alarms but might change visibility.
-                    // For safety, re-sync alarms.
                     update_alarms(state);
-
                     state.message = rust_i18n::t!("moving_task").to_string();
                     state.mode = InputMode::Normal;
                     state.moving_task_uid = None;
-
-                    if !actions.is_empty() {
-                        let tx = action_tx.clone();
-                        tokio::spawn(async move {
-                            let _ = tx.send(Action::PersistBatch(actions)).await;
-                        });
-                    }
                 } else {
                     state.mode = InputMode::Normal;
                     state.moving_task_uid = None;
@@ -4552,44 +4397,34 @@ pub async fn handle_key_event(
                     && let Some((target_uid, _, rel_type)) = state.relationship_items.get(idx)
                     && let Some(curr_uid) = state.get_selected_task().map(|t| t.uid.clone())
                 {
-                    let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                     let mut intent = None;
 
                     if rel_type == "dependency" {
                         intent = Some(AppIntent::RemoveDependency {
-                            uid: curr_uid.clone(),
+                            uid: curr_uid,
                             blocker_uid: target_uid.clone(),
                         });
                     } else if rel_type == "related_to" {
                         intent = Some(AppIntent::RemoveRelatedTo {
-                            uid: curr_uid.clone(),
+                            uid: curr_uid,
                             related_uid: target_uid.clone(),
                         });
                     } else if rel_type == "related_from" {
                         intent = Some(AppIntent::RemoveRelatedTo {
                             uid: target_uid.clone(),
-                            related_uid: curr_uid.clone(),
+                            related_uid: curr_uid,
                         });
                     } else if rel_type == "blocking" {
                         intent = Some(AppIntent::RemoveDependency {
                             uid: target_uid.clone(),
-                            blocker_uid: curr_uid.clone(),
+                            blocker_uid: curr_uid,
                         });
                     } else if rel_type == "parent" {
-                        intent = Some(AppIntent::RemoveParent {
-                            uid: curr_uid.clone(),
-                        });
+                        intent = Some(AppIntent::RemoveParent { uid: curr_uid });
                     }
 
                     if let Some(i) = intent {
-                        let actions = state.apply_task_intent(&i, &config);
-                        state.refresh_filtered_view();
-                        if !actions.is_empty() {
-                            let tx = action_tx.clone();
-                            tokio::spawn(async move {
-                                let _ = tx.send(Action::PersistBatch(actions)).await;
-                            });
-                        }
+                        dispatch_intent_tui(state, i, action_tx);
                     }
                     state.mode = InputMode::Normal;
                     state.message = String::new();
