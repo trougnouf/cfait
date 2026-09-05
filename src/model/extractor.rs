@@ -579,56 +579,62 @@ pub fn serialize_task_tree(
             continue;
         }
 
-        let mut in_degree: HashMap<&str, usize> = HashMap::new();
-        let mut graph: HashMap<&str, Vec<&str>> = HashMap::new();
-
-        for t in list.iter() {
-            in_degree.insert(t.uid.as_str(), 0);
+        let n = list.len();
+        let mut uid_to_idx: HashMap<&str, usize> = HashMap::with_capacity(n);
+        for (i, t) in list.iter().enumerate() {
+            uid_to_idx.insert(t.uid.as_str(), i);
         }
 
-        for t in list.iter() {
+        let mut in_degree = vec![0usize; n];
+        let mut graph = vec![Vec::new(); n];
+
+        for (i, t) in list.iter().enumerate() {
             for dep in &t.dependencies {
-                if uids_in_list.contains(dep.as_str()) {
-                    *in_degree.entry(t.uid.as_str()).or_insert(0) += 1;
-                    graph.entry(dep.as_str()).or_default().push(t.uid.as_str());
+                if let Some(&dep_idx) = uid_to_idx.get(dep.as_str()) {
+                    in_degree[i] += 1;
+                    graph[dep_idx].push(i);
                 }
             }
         }
 
-        let mut result = Vec::with_capacity(list.len());
-        let mut remaining = list.clone();
+        let mut result = Vec::with_capacity(n);
+        let mut processed = vec![false; n];
+        let mut remaining_count = n;
 
-        while !remaining.is_empty() {
+        while remaining_count > 0 {
             let mut progressed = false;
-            for i in 0..remaining.len() {
-                let uid = remaining[i].uid.as_str();
-                if *in_degree.get(uid).unwrap_or(&0) == 0 {
-                    let task = remaining.remove(i);
-                    if let Some(dependents) = graph.get(task.uid.as_str()) {
-                        for dep in dependents {
-                            if let Some(deg) = in_degree.get_mut(*dep) {
-                                *deg = deg.saturating_sub(1);
-                            }
-                        }
+            for i in 0..n {
+                if !processed[i] && in_degree[i] == 0 {
+                    processed[i] = true;
+                    remaining_count -= 1;
+                    result.push(i);
+                    for &dependent in &graph[i] {
+                        in_degree[dependent] = in_degree[dependent].saturating_sub(1);
                     }
-                    result.push(task);
                     progressed = true;
                     break;
                 }
             }
             if !progressed {
-                let task = remaining.remove(0);
-                if let Some(dependents) = graph.get(task.uid.as_str()) {
-                    for dep in dependents {
-                        if let Some(deg) = in_degree.get_mut(*dep) {
-                            *deg = deg.saturating_sub(1);
+                for i in 0..n {
+                    if !processed[i] {
+                        processed[i] = true;
+                        remaining_count -= 1;
+                        result.push(i);
+                        for &dependent in &graph[i] {
+                            in_degree[dependent] = in_degree[dependent].saturating_sub(1);
                         }
+                        break;
                     }
                 }
-                result.push(task);
             }
         }
-        *list = result;
+
+        let mut old_list = std::mem::take(list);
+        let mut opt_list: Vec<Option<&crate::model::Task>> = old_list.drain(..).map(Some).collect();
+        for &idx in &result {
+            list.push(opt_list[idx].take().unwrap());
+        }
     }
 
     struct SerializeContext<'a> {

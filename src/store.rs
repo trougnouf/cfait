@@ -215,25 +215,27 @@ pub fn organize_hierarchy(
     }
 
     fn topological_sort(list: &mut Vec<Task>) {
-        if list.len() <= 1 {
+        let n = list.len();
+        if n <= 1 {
             return;
         }
 
-        let mut uids_in_list = HashSet::new();
-        for t in list.iter() {
-            uids_in_list.insert(t.uid.as_str());
+        let mut uid_to_idx: HashMap<&str, usize> = HashMap::with_capacity(n);
+        for (i, t) in list.iter().enumerate() {
+            uid_to_idx.insert(t.uid.as_str(), i);
         }
 
         let mut needs_sort = false;
-        for t in list.iter() {
+        let mut in_degree = vec![0usize; n];
+        let mut graph = vec![Vec::new(); n];
+
+        for (i, t) in list.iter().enumerate() {
             for dep in &t.dependencies {
-                if uids_in_list.contains(dep.as_str()) {
+                if let Some(&dep_idx) = uid_to_idx.get(dep.as_str()) {
+                    in_degree[i] += 1;
+                    graph[dep_idx].push(i);
                     needs_sort = true;
-                    break;
                 }
-            }
-            if needs_sort {
-                break;
             }
         }
 
@@ -241,57 +243,44 @@ pub fn organize_hierarchy(
             return;
         }
 
-        let mut in_degree: HashMap<String, usize> = HashMap::new();
-        let mut graph: HashMap<String, Vec<String>> = HashMap::new();
+        let mut result = Vec::with_capacity(n);
+        let mut processed = vec![false; n];
+        let mut remaining = n;
 
-        for t in list.iter() {
-            in_degree.insert(t.uid.clone(), 0);
-        }
-
-        for t in list.iter() {
-            for dep in &t.dependencies {
-                if uids_in_list.contains(dep.as_str()) {
-                    *in_degree.entry(t.uid.clone()).or_insert(0) += 1;
-                    graph.entry(dep.clone()).or_default().push(t.uid.clone());
-                }
-            }
-        }
-
-        let mut result = Vec::with_capacity(list.len());
-        let mut remaining = std::mem::take(list);
-
-        while !remaining.is_empty() {
+        while remaining > 0 {
             let mut progressed = false;
-            for i in 0..remaining.len() {
-                let uid = &remaining[i].uid;
-                if *in_degree.get(uid).unwrap_or(&0) == 0 {
-                    let task = remaining.remove(i);
-                    if let Some(dependents) = graph.get(&task.uid) {
-                        for dep in dependents {
-                            if let Some(deg) = in_degree.get_mut(dep) {
-                                *deg = deg.saturating_sub(1);
-                            }
-                        }
+            for i in 0..n {
+                if !processed[i] && in_degree[i] == 0 {
+                    processed[i] = true;
+                    remaining -= 1;
+                    result.push(i);
+                    for &dependent in &graph[i] {
+                        in_degree[dependent] = in_degree[dependent].saturating_sub(1);
                     }
-                    result.push(task);
                     progressed = true;
                     break;
                 }
             }
             if !progressed {
-                let task = remaining.remove(0);
-                if let Some(dependents) = graph.get(&task.uid) {
-                    for dep in dependents {
-                        if let Some(deg) = in_degree.get_mut(dep) {
-                            *deg = deg.saturating_sub(1);
+                for i in 0..n {
+                    if !processed[i] {
+                        processed[i] = true;
+                        remaining -= 1;
+                        result.push(i);
+                        for &dependent in &graph[i] {
+                            in_degree[dependent] = in_degree[dependent].saturating_sub(1);
                         }
+                        break;
                     }
                 }
-                result.push(task);
             }
         }
 
-        *list = result;
+        let mut old_list = std::mem::take(list);
+        let mut opt_list: Vec<Option<Task>> = old_list.drain(..).map(Some).collect();
+        for &idx in &result {
+            list.push(opt_list[idx].take().unwrap());
+        }
     }
 
     topological_sort(&mut roots);
@@ -2883,22 +2872,24 @@ impl TaskStore {
             .collect();
 
         // Pre-calculate effective ancestry states to avoid redundant O(depth) tree walks
-        let mut eff_blocked_map = HashMap::new();
-        let mut eff_future_map = HashMap::new();
+        let mut eff_blocked_map: HashMap<&str, bool> =
+            HashMap::with_capacity(all_allowed_refs.len());
+        let mut eff_future_map: HashMap<&str, bool> =
+            HashMap::with_capacity(all_allowed_refs.len());
 
         for t in &all_allowed_refs {
             eff_blocked_map.insert(
-                t.uid.clone(),
+                t.uid.as_str(),
                 check_is_effectively_blocked(t, &completed_uids),
             );
-            eff_future_map.insert(t.uid.clone(), check_is_effectively_future(t));
+            eff_future_map.insert(t.uid.as_str(), check_is_effectively_future(t));
         }
 
         // 3) Define the filtering pipeline as a reusable closure.
         // This allows us to calculate the final tasks, and recalculate aggregates ignoring specific filters for OR modes.
         let run_pipeline = |ignore_categories: bool,
                             ignore_locations: bool|
-         -> (Vec<&Task>, HashSet<String>) {
+         -> (Vec<&Task>, HashSet<&str>) {
             // Pre-filter to strip out irrelevant system tasks and respect the focus boundary once
             let scoped_refs: Vec<&Task> = all_allowed_refs
                 .iter()
@@ -2948,10 +2939,10 @@ impl TaskStore {
                         // InProcess (ongoing) tasks should be considered actionable/ready
                         // even if they would otherwise be treated as blocked or start in the future.
                         if t.status != TaskStatus::InProcess {
-                            if *eff_future_map.get(&t.uid).unwrap_or(&false) {
+                            if *eff_future_map.get(t.uid.as_str()).unwrap_or(&false) {
                                 return false;
                             }
-                            if *eff_blocked_map.get(&t.uid).unwrap_or(&false) {
+                            if *eff_blocked_map.get(t.uid.as_str()).unwrap_or(&false) {
                                 return false;
                             }
                         }
@@ -2966,7 +2957,7 @@ impl TaskStore {
                         }
                     }
 
-                    if is_blocked_mode && !eff_blocked_map.get(&t.uid).unwrap_or(&false) {
+                    if is_blocked_mode && !eff_blocked_map.get(t.uid.as_str()).unwrap_or(&false) {
                         return false;
                     }
 
@@ -3129,66 +3120,68 @@ impl TaskStore {
                 || (!ignore_categories && !options.selected_categories.is_empty())
                 || (!ignore_locations && !options.selected_locations.is_empty());
 
-            let mut valid_direct_matches = HashSet::new();
-            let mut expanded = HashSet::new();
+            let mut valid_direct_matches: HashSet<&str> = HashSet::new();
+            let mut expanded: HashSet<&str> = HashSet::new();
 
             if needs_expansion {
-                let mut children_map = HashMap::new();
+                let mut children_map: HashMap<&str, Vec<&str>> = HashMap::new();
                 for t in &scoped_refs {
                     if let Some(p) = &t.parent_uid {
                         children_map
-                            .entry(p.clone())
-                            .or_insert_with(Vec::new)
-                            .push(t.uid.clone());
+                            .entry(p.as_str())
+                            .or_default()
+                            .push(t.uid.as_str());
                     }
                 }
 
-                let mut direct_matches_initial = HashSet::new();
+                let mut direct_matches_initial: HashSet<&str> = HashSet::new();
                 for t in &scoped_refs {
                     if is_match(t) {
-                        direct_matches_initial.insert(t.uid.clone());
+                        direct_matches_initial.insert(t.uid.as_str());
                     }
                 }
 
-                let mut expand_queue: Vec<String> =
-                    direct_matches_initial.iter().cloned().collect();
+                let mut expand_queue: Vec<&str> = direct_matches_initial.into_iter().collect();
                 let mut idx = 0;
                 while idx < expand_queue.len() {
-                    let curr = expand_queue[idx].clone();
+                    let curr = expand_queue[idx];
                     idx += 1;
 
-                    if !expanded.insert(curr.clone()) {
+                    if !expanded.insert(curr) {
                         continue;
                     }
 
-                    if let Some(children) = children_map.get(&curr) {
+                    if let Some(children) = children_map.get(curr) {
                         for child in children {
-                            expand_queue.push(child.clone());
+                            expand_queue.push(*child);
                         }
                     }
                 }
 
                 for t in &base_refs {
-                    if expanded.contains(&t.uid) {
-                        valid_direct_matches.insert(t.uid.clone());
+                    if expanded.contains(t.uid.as_str()) {
+                        valid_direct_matches.insert(t.uid.as_str());
                     }
                 }
             } else {
                 for t in &base_refs {
-                    valid_direct_matches.insert(t.uid.clone());
-                    expanded.insert(t.uid.clone());
+                    valid_direct_matches.insert(t.uid.as_str());
+                    expanded.insert(t.uid.as_str());
                 }
             }
 
             // Global ancestry resolution
-            let mut context_matches = HashSet::new();
-            for uid in &valid_direct_matches {
-                let mut curr = uid.clone();
-                while let Some(p) = self.get_task_ref(&curr).and_then(|t| t.parent_uid.clone()) {
-                    if !context_matches.insert(p.clone()) {
+            let mut context_matches: HashSet<&str> = HashSet::new();
+            for &uid in &valid_direct_matches {
+                let mut curr = uid;
+                while let Some(p) = self
+                    .get_task_ref(curr)
+                    .and_then(|t| t.parent_uid.as_deref())
+                {
+                    if !context_matches.insert(p) {
                         break;
                     }
-                    curr = p.clone();
+                    curr = p;
                 }
             }
 
@@ -3196,14 +3189,15 @@ impl TaskStore {
                 .iter()
                 .copied()
                 .filter(|t| {
-                    valid_direct_matches.contains(&t.uid) || context_matches.contains(&t.uid)
+                    valid_direct_matches.contains(t.uid.as_str())
+                        || context_matches.contains(t.uid.as_str())
                 })
                 .collect();
 
             // Inject parents from outside scoped_refs
             let scoped_uids: HashSet<&str> = scoped_refs.iter().map(|t| t.uid.as_str()).collect();
-            for ctx_uid in &context_matches {
-                if !scoped_uids.contains(ctx_uid.as_str())
+            for &ctx_uid in &context_matches {
+                if !scoped_uids.contains(ctx_uid)
                     && let Some(t) = self.get_task_ref(ctx_uid)
                 {
                     filtered_refs.push(t);
@@ -3645,7 +3639,7 @@ impl TaskStore {
             .into_iter()
             .map(|t_ref| {
                 let mut t = t_ref.clone();
-                t.is_search_context = !direct_matches.contains(&t.uid);
+                t.is_search_context = !direct_matches.contains(t.uid.as_str());
                 t.transient_is_paused = t.is_paused();
                 t.transient_recent_ts = t
                     .last_modified_date()
@@ -3656,7 +3650,7 @@ impl TaskStore {
                 t.is_blocked = check_is_blocked_explicit(&t, &completed_uids);
                 t.is_implicitly_blocked = !t.is_blocked
                     && eff_blocked_map
-                        .get(&t.uid)
+                        .get(t.uid.as_str())
                         .copied()
                         .unwrap_or_else(|| check_is_effectively_blocked(&t, &completed_uids));
                 // Penalize blocked tasks by lowering their effective priority so they sort after non-blocked
@@ -3680,10 +3674,10 @@ impl TaskStore {
         // Dependency due-date propagation
         // If task A depends on task B, B is the blocking task.
         // B should inherit A's effective_due if it is sooner.
-        let mut blocking_to_blocked: HashMap<String, Vec<usize>> = HashMap::new();
+        let mut blocking_to_blocked: HashMap<&str, Vec<usize>> = HashMap::new();
         for (i, t) in final_tasks_processed.iter().enumerate() {
             for dep in &t.dependencies {
-                blocking_to_blocked.entry(dep.clone()).or_default().push(i);
+                blocking_to_blocked.entry(dep.as_str()).or_default().push(i);
             }
         }
 
@@ -3693,7 +3687,7 @@ impl TaskStore {
         fn resolve_deps_due(
             idx: usize,
             tasks: &[Task],
-            blocking_to_blocked: &HashMap<String, Vec<usize>>,
+            blocking_to_blocked: &HashMap<&str, Vec<usize>>,
             cache: &mut HashMap<usize, Option<DateType>>,
             visiting: &mut HashSet<usize>,
         ) -> Option<DateType> {
@@ -3707,7 +3701,7 @@ impl TaskStore {
             visiting.insert(idx);
             let mut min_d = tasks[idx].effective_due.clone();
 
-            let uid = &tasks[idx].uid;
+            let uid = tasks[idx].uid.as_str();
             if let Some(blocked_indices) = blocking_to_blocked.get(uid) {
                 for &b_idx in blocked_indices {
                     let d = resolve_deps_due(b_idx, tasks, blocking_to_blocked, cache, visiting);
@@ -3772,7 +3766,7 @@ impl TaskStore {
                 .unwrap_or(false);
             t.is_implicitly_future = !t.is_future_start
                 && eff_future_map
-                    .get(&t.uid)
+                    .get(t.uid.as_str())
                     .copied()
                     .unwrap_or_else(|| check_is_effectively_future(t));
             t.is_overdue = t
@@ -3814,10 +3808,10 @@ impl TaskStore {
         }
 
         // Children map (index-based) used by propagation resolution
-        let mut map: HashMap<String, Vec<usize>> = HashMap::new();
+        let mut map: HashMap<&str, Vec<usize>> = HashMap::new();
         for (i, t) in final_tasks_processed.iter().enumerate() {
             if let Some(p) = &t.parent_uid {
-                map.entry(p.clone()).or_default().push(i);
+                map.entry(p.as_str()).or_default().push(i);
             }
         }
 
@@ -3825,7 +3819,7 @@ impl TaskStore {
         fn resolve(
             idx: usize,
             tasks: &[Task],
-            map: &HashMap<String, Vec<usize>>,
+            map: &HashMap<&str, Vec<usize>>,
             cache: &mut HashMap<usize, Task>,
             visiting: &mut HashSet<usize>,
             options: &FilterOptions,
@@ -3843,7 +3837,7 @@ impl TaskStore {
 
             let is_suppressed = t.status.is_done() || t.is_blocked || t.is_implicitly_blocked;
 
-            if !is_suppressed && let Some(children) = map.get(&t.uid) {
+            if !is_suppressed && let Some(children) = map.get(t.uid.as_str()) {
                 let mut best_child_opt: Option<Task> = None;
                 for &child_idx in children {
                     let child_eff = resolve(child_idx, tasks, map, cache, visiting, options);
