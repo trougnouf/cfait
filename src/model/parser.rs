@@ -3924,6 +3924,7 @@ pub fn parse_inline_markdown(text_str: &str) -> Vec<InlineElement<'_>> {
 
     if !text_str.contains(['[', '*', '_', '~', '`'])
         && !text_str.contains("http")
+        && !text_str.contains("mailto:")
         && !text_str.contains("<!--")
     {
         spans.push(InlineElement::Text(text_str));
@@ -4059,7 +4060,7 @@ pub fn parse_inline_markdown(text_str: &str) -> Vec<InlineElement<'_>> {
                     url: chunk,
                     raw: chunk,
                 },
-                "[[]" => {
+                "[[" => {
                     let (target, display) = if let Some((t, d)) = inner_chunk.split_once('|') {
                         (t, d)
                     } else {
