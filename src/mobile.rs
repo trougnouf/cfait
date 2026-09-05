@@ -8,7 +8,7 @@ pub enum MobileFirstDayOfWeek {
     Sunday,
 }
 
-use crate::alarm_index::AlarmIndex;
+use crate::alarm_index::{AlarmIndex, AlarmIndexEntry};
 use crate::cache::Cache;
 use crate::client::RustyClient;
 use crate::config::Config;
@@ -659,15 +659,7 @@ impl CfaitMobile {
     pub fn suggest(&self, input: String, cursor_byte_idx: i32) -> Vec<MobileSuggestion> {
         let config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
         let cals_list = self.get_calendars();
-        let calendars: Vec<crate::model::CalendarListEntry> = cals_list
-            .into_iter()
-            .map(|c| crate::model::CalendarListEntry {
-                name: c.name,
-                href: c.href,
-                color: c.color,
-                supports_vjournal: None,
-            })
-            .collect();
+        let calendars = mobile_calendars_to_model(&cals_list);
 
         let cursor_utf16_idx = cursor_byte_idx; // Kotlin passes UTF-16 index
         let mut byte_to_utf16 = std::collections::BTreeMap::new();
@@ -874,10 +866,7 @@ impl CfaitMobile {
 
     pub fn get_task_tree_markdown(&self, uid: String) -> String {
         let store = self.controller.store.blocking_lock();
-        let mut cals = crate::cache::Cache::load_calendars(self.ctx.as_ref()).unwrap_or_default();
-        if let Ok(locals) = crate::storage::LocalCalendarRegistry::load(self.ctx.as_ref()) {
-            cals.extend(locals);
-        }
+        let cals = load_all_calendar_entries(self.ctx.as_ref());
         let is_journal = store
             .get_task_ref(&uid)
             .map(|t| t.is_journal)
@@ -1197,6 +1186,52 @@ fn task_to_summary(t: &Task, store: &TaskStore) -> MobileTaskSummary {
         visible: true,
         is_collapsed: t.collapsed,
     }
+}
+
+/// Merge remote (Cache) and local (LocalCalendarRegistry) calendar entries into one list.
+fn load_all_calendar_entries(ctx: &dyn AppContext) -> Vec<crate::model::CalendarListEntry> {
+    let mut cals = crate::cache::Cache::load_calendars(ctx).unwrap_or_default();
+    if let Ok(locals) = crate::storage::LocalCalendarRegistry::load(ctx) {
+        cals.extend(locals);
+    }
+    cals
+}
+
+/// Convert the FFI-facing `MobileCalendar` list into the core `CalendarListEntry` list.
+fn mobile_calendars_to_model(cals: &[MobileCalendar]) -> Vec<crate::model::CalendarListEntry> {
+    cals.iter()
+        .map(|c| crate::model::CalendarListEntry {
+            name: c.name.clone(),
+            href: c.href.clone(),
+            color: c.color.clone(),
+            supports_vjournal: None,
+        })
+        .collect()
+}
+
+/// Filter firing alarm-index entries against the store and map them to FFI records.
+fn firing_entries_to_mobile(
+    store: &TaskStore,
+    entries: Vec<AlarmIndexEntry>,
+) -> Vec<MobileAlarmInfo> {
+    entries
+        .into_iter()
+        .filter(|e| {
+            store.get_task_ref(&e.task_uid).is_some_and(|task| {
+                !task.status.is_done()
+                    && task.calendar_href != crate::storage::LOCAL_TRASH_HREF
+                    && task.calendar_href != "local://recovery"
+            })
+        })
+        .map(|e| MobileAlarmInfo {
+            task_uid: e.task_uid,
+            alarm_uid: e.alarm_uid,
+            title: e.task_title,
+            body: e
+                .description
+                .unwrap_or_else(|| rust_i18n::t!("reminder").to_string()),
+        })
+        .collect()
 }
 
 #[derive(uniffi::Object)]
@@ -1874,28 +1909,7 @@ impl CfaitMobile {
 
     pub fn load_from_cache(&self) {
         // Load all disk data BEFORE acquiring the store lock
-        let mut loaded_calendars = Vec::new();
-
-        if let Ok(locals) = LocalCalendarRegistry::load(self.ctx.as_ref()) {
-            for loc in locals {
-                match LocalStorage::load_for_href(self.ctx.as_ref(), &loc.href) {
-                    Ok(mut tasks) => {
-                        crate::journal::Journal::apply_to_tasks(
-                            self.ctx.as_ref(),
-                            &mut tasks,
-                            &loc.href,
-                        );
-                        loaded_calendars.push((loc.href, tasks));
-                    }
-                    Err(e) => {
-                        #[cfg(target_os = "android")]
-                        log::error!("Failed to load {} - data corruption: {}", loc.href, e);
-                        #[cfg(not(target_os = "android"))]
-                        eprintln!("Failed to load {} - data corruption: {}", loc.href, e);
-                    }
-                }
-            }
-        }
+        let mut loaded_calendars = self.load_all_local_calendars();
         if let Ok(cals) = Cache::load_calendars(self.ctx.as_ref()) {
             for cal in cals {
                 if cal.href.starts_with("local://") {
@@ -2019,26 +2033,7 @@ impl CfaitMobile {
 
         if !firing_entries.is_empty() {
             let store = self.controller.store.blocking_lock();
-            return firing_entries
-                .into_iter()
-                .filter(|e| {
-                    if let Some(task) = store.get_task_ref(&e.task_uid) {
-                        !task.status.is_done()
-                            && task.calendar_href != crate::storage::LOCAL_TRASH_HREF
-                            && task.calendar_href != "local://recovery"
-                    } else {
-                        false
-                    }
-                })
-                .map(|e| MobileAlarmInfo {
-                    task_uid: e.task_uid,
-                    alarm_uid: e.alarm_uid,
-                    title: e.task_title,
-                    body: e
-                        .description
-                        .unwrap_or_else(|| rust_i18n::t!("reminder").to_string()),
-                })
-                .collect();
+            return firing_entries_to_mobile(&store, firing_entries);
         }
 
         let index = AlarmIndex::load(self.ctx.as_ref());
@@ -2047,26 +2042,7 @@ impl CfaitMobile {
             if !firing_from_disk.is_empty() {
                 *self.alarm_index_cache.blocking_lock() = Some(index);
                 let store = self.controller.store.blocking_lock();
-                return firing_from_disk
-                    .into_iter()
-                    .filter(|e| {
-                        if let Some(task) = store.get_task_ref(&e.task_uid) {
-                            !task.status.is_done()
-                                && task.calendar_href != crate::storage::LOCAL_TRASH_HREF
-                                && task.calendar_href != "local://recovery"
-                        } else {
-                            false
-                        }
-                    })
-                    .map(|e| MobileAlarmInfo {
-                        task_uid: e.task_uid,
-                        alarm_uid: e.alarm_uid,
-                        title: e.task_title,
-                        body: e
-                            .description
-                            .unwrap_or_else(|| rust_i18n::t!("reminder").to_string()),
-                    })
-                    .collect();
+                return firing_entries_to_mobile(&store, firing_from_disk);
             } else {
                 return Vec::new();
             }
@@ -2907,55 +2883,9 @@ impl CfaitMobile {
         #[cfg(target_os = "android")]
         log::debug!("add_task_smart: '{}'", input);
         let mut config = Config::load(self.ctx.as_ref()).unwrap_or_default();
-        let (clean_input_1, new_goals) = crate::model::extract_inline_goals(&input);
-        let (clean_input, new_aliases) = crate::model::extract_inline_aliases(&clean_input_1);
-
-        let config_changed = !new_goals.is_empty() || !new_aliases.is_empty();
-
-        if !new_goals.is_empty() {
-            config.goals.extend(new_goals);
-        }
-
-        if !new_aliases.is_empty() {
-            for (k, v) in &new_aliases {
-                crate::model::validate_alias_integrity(k, v, &config.tag_aliases)
-                    .map_err(MobileError::from)?;
-            }
-            config.tag_aliases.extend(new_aliases.clone());
-
-            let mut store = self.controller.store.lock().await;
-            let all_modified: Vec<_> = new_aliases
-                .iter()
-                .flat_map(|(key, tags)| store.apply_alias_retroactively(key, tags))
-                .collect();
-            drop(store);
-            if !all_modified.is_empty() {
-                for t in all_modified {
-                    self.controller
-                        .update_task(t)
-                        .await
-                        .map_err(MobileError::from)?;
-                }
-            }
-        }
-
-        if config_changed {
-            let old_config = Config::load(self.ctx.as_ref()).unwrap_or_default();
-            config.update_sync_timestamp_if_changed(&old_config);
-            config.save(self.ctx.as_ref()).map_err(MobileError::from)?;
-
-            let trimmed = clean_input.trim();
-            if trimmed.is_empty()
-                || (!trimmed.contains(' ')
-                    && (trimmed.starts_with('#')
-                        || trimmed.starts_with("@@")
-                        || trimmed.to_lowercase().starts_with("loc:")))
-            {
-                return Ok("ALIAS_UPDATED".to_string());
-            }
-        }
-        if clean_input.trim().is_empty() {
-            return Ok("".to_string());
+        let (clean_input, early_return) = self.apply_inline_metadata(&input, &mut config).await?;
+        if let Some(ret) = early_return {
+            return Ok(ret);
         }
         let def_time = NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
         let mut task = Task::new(&clean_input, &config.tag_aliases, def_time);
@@ -2981,33 +2911,7 @@ impl CfaitMobile {
             !task.alarms.is_empty()
         );
 
-        let mobile_calendars = self.get_calendars();
-        let calendars: Vec<crate::model::item::CalendarListEntry> = mobile_calendars
-            .clone()
-            .into_iter()
-            .map(|c| crate::model::item::CalendarListEntry {
-                name: c.name,
-                href: c.href,
-                color: c.color,
-                supports_vjournal: None,
-            })
-            .collect();
-        let active_cal = self.session.lock().await.active_calendar_href.clone();
-        let inherited_href = active_cal
-            .or(config.default_calendar.clone())
-            .unwrap_or_else(|| {
-                mobile_calendars
-                    .iter()
-                    .find(|c| c.is_visible && !c.is_disabled)
-                    .map(|c| c.href.clone())
-                    .unwrap_or_else(|| LOCAL_CALENDAR_HREF.to_string())
-            });
-
-        task.calendar_href = if let Some(target) = task.target_collection.take() {
-            crate::model::resolve_collection(&target, &calendars, &inherited_href)
-        } else {
-            inherited_href.clone()
-        };
+        self.resolve_task_calendar(&mut task, &config).await;
 
         let uid = self
             .controller
@@ -3032,57 +2936,9 @@ impl CfaitMobile {
         log::debug!("add_task_with_description: '{}'", input);
 
         let mut config = Config::load(self.ctx.as_ref()).unwrap_or_default();
-        let (clean_input_1, new_goals) = crate::model::extract_inline_goals(&input);
-        let (clean_input, new_aliases) = crate::model::extract_inline_aliases(&clean_input_1);
-
-        let config_changed = !new_goals.is_empty() || !new_aliases.is_empty();
-
-        if !new_goals.is_empty() {
-            config.goals.extend(new_goals);
-        }
-
-        if !new_aliases.is_empty() {
-            for (k, v) in &new_aliases {
-                crate::model::validate_alias_integrity(k, v, &config.tag_aliases)
-                    .map_err(MobileError::from)?;
-            }
-            config.tag_aliases.extend(new_aliases.clone());
-
-            let mut store = self.controller.store.lock().await;
-            let all_modified: Vec<_> = new_aliases
-                .iter()
-                .flat_map(|(key, tags)| store.apply_alias_retroactively(key, tags))
-                .collect();
-            drop(store);
-
-            if !all_modified.is_empty() {
-                for t in all_modified {
-                    self.controller
-                        .update_task(t)
-                        .await
-                        .map_err(MobileError::from)?;
-                }
-            }
-        }
-
-        if config_changed {
-            let old_config = Config::load(self.ctx.as_ref()).unwrap_or_default();
-            config.update_sync_timestamp_if_changed(&old_config);
-            config.save(self.ctx.as_ref()).map_err(MobileError::from)?;
-
-            let trimmed = clean_input.trim();
-            if trimmed.is_empty()
-                || (!trimmed.contains(' ')
-                    && (trimmed.starts_with('#')
-                        || trimmed.starts_with("@@")
-                        || trimmed.to_lowercase().starts_with("loc:")))
-            {
-                return Ok("ALIAS_UPDATED".to_string());
-            }
-        }
-
-        if clean_input.trim().is_empty() {
-            return Ok("".to_string());
+        let (clean_input, early_return) = self.apply_inline_metadata(&input, &mut config).await?;
+        if let Some(ret) = early_return {
+            return Ok(ret);
         }
 
         let def_time =
@@ -3114,33 +2970,7 @@ impl CfaitMobile {
             }
         }
 
-        let mobile_calendars = self.get_calendars();
-        let calendars: Vec<crate::model::item::CalendarListEntry> = mobile_calendars
-            .clone()
-            .into_iter()
-            .map(|c| crate::model::item::CalendarListEntry {
-                name: c.name,
-                href: c.href,
-                color: c.color,
-                supports_vjournal: None,
-            })
-            .collect();
-        let active_cal = self.session.lock().await.active_calendar_href.clone();
-        let inherited_href = active_cal
-            .or(config.default_calendar.clone())
-            .unwrap_or_else(|| {
-                mobile_calendars
-                    .iter()
-                    .find(|c| c.is_visible && !c.is_disabled)
-                    .map(|c| c.href.clone())
-                    .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string())
-            });
-
-        task.calendar_href = if let Some(target) = task.target_collection.take() {
-            crate::model::resolve_collection(&target, &calendars, &inherited_href)
-        } else {
-            inherited_href.clone()
-        };
+        self.resolve_task_calendar(&mut task, &config).await;
 
         let parent_props = (
             task.categories.clone(),
@@ -3244,15 +3074,7 @@ impl CfaitMobile {
         let def_time = NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
 
         let calendars = self.get_calendars();
-        let calendars_model: Vec<crate::model::CalendarListEntry> = calendars
-            .into_iter()
-            .map(|c| crate::model::item::CalendarListEntry {
-                name: c.name,
-                href: c.href,
-                color: c.color,
-                supports_vjournal: None,
-            })
-            .collect();
+        let calendars_model = mobile_calendars_to_model(&calendars);
 
         let mut store = self.controller.store.lock().await;
         let mut temp_task = match store.get_task_ref(&uid) {
@@ -3445,10 +3267,7 @@ impl CfaitMobile {
         let def_time =
             chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
 
-        let mut cals = crate::cache::Cache::load_calendars(self.ctx.as_ref()).unwrap_or_default();
-        if let Ok(locals) = crate::storage::LocalCalendarRegistry::load(self.ctx.as_ref()) {
-            cals.extend(locals);
-        }
+        let cals = load_all_calendar_entries(self.ctx.as_ref());
 
         let mut store = self.controller.store.lock().await;
         let is_journal = store
@@ -3886,15 +3705,9 @@ impl CfaitMobile {
         Ok(())
     }
 
-    async fn apply_connection(&self, config: Config) -> Result<String, MobileError> {
-        let (client, cals, _, _, warning) =
-            RustyClient::connect_with_fallback(self.ctx.clone(), config, Some("Android"))
-                .await
-                .map_err(MobileError::from)?;
-        *self.controller.client.lock().await = Some(client.clone());
-        let fetch_result = client.get_all_tasks(&cals).await;
-        let mut store = self.controller.store.lock().await;
-        store.clear();
+    /// Load every local calendar from disk, applying the journal, returning (href, tasks) pairs.
+    fn load_all_local_calendars(&self) -> Vec<(String, Vec<Task>)> {
+        let mut out = Vec::new();
         if let Ok(locals) = LocalCalendarRegistry::load(self.ctx.as_ref()) {
             for loc in locals {
                 match LocalStorage::load_for_href(self.ctx.as_ref(), &loc.href) {
@@ -3904,7 +3717,7 @@ impl CfaitMobile {
                             &mut tasks,
                             &loc.href,
                         );
-                        store.insert(loc.href, tasks);
+                        out.push((loc.href, tasks));
                     }
                     Err(e) => {
                         #[cfg(target_os = "android")]
@@ -3915,6 +3728,112 @@ impl CfaitMobile {
                 }
             }
         }
+        out
+    }
+
+    /// Load the on-disk cache for a single remote href into the store (no-op if unreadable).
+    fn load_cached_remote_into_store(&self, store: &mut TaskStore, href: &str) {
+        if let Ok((mut cached, _)) = Cache::load(self.ctx.as_ref(), href) {
+            crate::journal::Journal::apply_to_tasks(self.ctx.as_ref(), &mut cached, href);
+            store.insert(href.to_string(), cached);
+        }
+    }
+
+    /// Extract inline goals/aliases from `input`, persist config changes, and apply alias
+    /// retroactions to existing tasks. Returns `(clean_input, early_return)` where
+    /// `early_return = Some(value)` means the caller should `return Ok(value)` immediately.
+    async fn apply_inline_metadata(
+        &self,
+        input: &str,
+        config: &mut Config,
+    ) -> Result<(String, Option<String>), MobileError> {
+        let (clean_input_1, new_goals) = crate::model::extract_inline_goals(input);
+        let (clean_input, new_aliases) = crate::model::extract_inline_aliases(&clean_input_1);
+
+        let config_changed = !new_goals.is_empty() || !new_aliases.is_empty();
+
+        if !new_goals.is_empty() {
+            config.goals.extend(new_goals);
+        }
+
+        if !new_aliases.is_empty() {
+            for (k, v) in &new_aliases {
+                crate::model::validate_alias_integrity(k, v, &config.tag_aliases)
+                    .map_err(MobileError::from)?;
+            }
+            config.tag_aliases.extend(new_aliases.clone());
+
+            let mut store = self.controller.store.lock().await;
+            let all_modified: Vec<_> = new_aliases
+                .iter()
+                .flat_map(|(key, tags)| store.apply_alias_retroactively(key, tags))
+                .collect();
+            drop(store);
+            for t in all_modified {
+                self.controller
+                    .update_task(t)
+                    .await
+                    .map_err(MobileError::from)?;
+            }
+        }
+
+        if config_changed {
+            let old_config = Config::load(self.ctx.as_ref()).unwrap_or_default();
+            config.update_sync_timestamp_if_changed(&old_config);
+            config.save(self.ctx.as_ref()).map_err(MobileError::from)?;
+
+            let trimmed = clean_input.trim();
+            if trimmed.is_empty()
+                || (!trimmed.contains(' ')
+                    && (trimmed.starts_with('#')
+                        || trimmed.starts_with("@@")
+                        || trimmed.to_lowercase().starts_with("loc:")))
+            {
+                return Ok((clean_input, Some("ALIAS_UPDATED".to_string())));
+            }
+        }
+        if clean_input.trim().is_empty() {
+            return Ok((clean_input, Some(String::new())));
+        }
+        Ok((clean_input, None))
+    }
+
+    /// Resolve the destination calendar for a freshly-parsed task, honouring an explicit
+    /// `target_collection`, the active session calendar, the config default, and the first
+    /// visible calendar as a last resort. Mutates `task.calendar_href` accordingly.
+    async fn resolve_task_calendar(&self, task: &mut Task, config: &Config) {
+        let mobile_calendars = self.get_calendars();
+        let calendars = mobile_calendars_to_model(&mobile_calendars);
+        let active_cal = self.session.lock().await.active_calendar_href.clone();
+        let inherited_href = active_cal
+            .or(config.default_calendar.clone())
+            .unwrap_or_else(|| {
+                mobile_calendars
+                    .iter()
+                    .find(|c| c.is_visible && !c.is_disabled)
+                    .map(|c| c.href.clone())
+                    .unwrap_or_else(|| LOCAL_CALENDAR_HREF.to_string())
+            });
+
+        task.calendar_href = if let Some(target) = task.target_collection.take() {
+            crate::model::resolve_collection(&target, &calendars, &inherited_href)
+        } else {
+            inherited_href
+        };
+    }
+
+    async fn apply_connection(&self, config: Config) -> Result<String, MobileError> {
+        let (client, cals, _, _, warning) =
+            RustyClient::connect_with_fallback(self.ctx.clone(), config, Some("Android"))
+                .await
+                .map_err(MobileError::from)?;
+        *self.controller.client.lock().await = Some(client.clone());
+        let fetch_result = client.get_all_tasks(&cals).await;
+        let mut store = self.controller.store.lock().await;
+        store.clear();
+        for (href, tasks) in self.load_all_local_calendars() {
+            store.insert(href, tasks);
+        }
         match fetch_result {
             Ok(results) => {
                 let mut fetched_hrefs = HashSet::new();
@@ -3924,31 +3843,16 @@ impl CfaitMobile {
                     fetched_hrefs.insert(href);
                 }
                 for cal in &cals {
-                    if !cal.href.starts_with("local://")
-                        && !fetched_hrefs.contains(&cal.href)
-                        && let Ok((mut cached, _)) = Cache::load(self.ctx.as_ref(), &cal.href)
-                    {
-                        crate::journal::Journal::apply_to_tasks(
-                            self.ctx.as_ref(),
-                            &mut cached,
-                            &cal.href,
-                        );
-                        store.insert(cal.href.clone(), cached);
+                    if !cal.href.starts_with("local://") && !fetched_hrefs.contains(&cal.href) {
+                        self.load_cached_remote_into_store(&mut store, &cal.href);
                     }
                 }
             }
             Err(e) => {
                 for cal in &cals {
-                    if !cal.href.starts_with("local://")
-                        && !store.calendars.contains_key(&cal.href)
-                        && let Ok((mut cached, _)) = Cache::load(self.ctx.as_ref(), &cal.href)
+                    if !cal.href.starts_with("local://") && !store.calendars.contains_key(&cal.href)
                     {
-                        crate::journal::Journal::apply_to_tasks(
-                            self.ctx.as_ref(),
-                            &mut cached,
-                            &cal.href,
-                        );
-                        store.insert(cal.href.clone(), cached);
+                        self.load_cached_remote_into_store(&mut store, &cal.href);
                     }
                 }
                 drop(store);
