@@ -52,6 +52,17 @@ struct StepResult {
     warnings: Vec<String>,
 }
 
+/// Outcome of attempting to resolve a 412 Precondition Failed on an update.
+enum ConflictResolution {
+    /// A merged/normalized task was produced; retry the sync loop with this action.
+    Resolved(Box<Action>, String),
+    /// A hard conflict that cannot be auto-resolved; create a "Conflict Copy".
+    HardConflict,
+    /// A transient failure (e.g., could not fetch the server version). The action stays
+    /// queued so the next sync retries, instead of duplicating the task.
+    RetryLater(String),
+}
+
 impl StepResult {
     fn new(outcome: StepOutcome) -> Self {
         Self {
@@ -292,7 +303,7 @@ impl RustyClient {
             Err(WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED))
             | Err(WebDavError::PreconditionFailed(_)) => {
                 if task.uid == "cfait-global-settings-v1"
-                    && let Some(server_task) = self.fetch_remote_task(&path).await
+                    && let Ok(Some(server_task)) = self.fetch_remote_task(&path).await
                 {
                     return Ok(
                         StepResult::new(StepOutcome::ServerWins(Box::new(server_task)))
@@ -303,26 +314,31 @@ impl RustyClient {
                     );
                 }
 
-                if let Some((resolution, msg)) = self.attempt_conflict_resolution(task).await {
-                    Ok(
-                        StepResult::new(StepOutcome::RetryWith(Box::new(resolution)))
-                            .with_warning(msg),
-                    )
-                } else {
-                    let mut conflict_copy = task.clone();
-                    conflict_copy.uid = uuid::Uuid::new_v4().to_string();
-                    conflict_copy.summary = format!("{} (Conflict Copy)", task.summary);
-                    conflict_copy.href = String::new();
-                    conflict_copy.etag = String::new();
-                    Ok(
-                        StepResult::new(StepOutcome::RetryWith(Box::new(Action::Create(
-                            conflict_copy,
-                        ))))
-                        .with_warning(
-                            rust_i18n::t!("sync_conflict_412", summary = task.summary.clone())
-                                .to_string(),
-                        ),
-                    )
+                match self.attempt_conflict_resolution(task).await {
+                    ConflictResolution::Resolved(resolution, msg) => {
+                        Ok(StepResult::new(StepOutcome::RetryWith(resolution)).with_warning(msg))
+                    }
+                    ConflictResolution::RetryLater(msg) => {
+                        // Transient failure (e.g., could not fetch the server version). Leave the
+                        // action queued so the next sync retries, instead of duplicating the task.
+                        Err(msg)
+                    }
+                    ConflictResolution::HardConflict => {
+                        let mut conflict_copy = task.clone();
+                        conflict_copy.uid = uuid::Uuid::new_v4().to_string();
+                        conflict_copy.summary = format!("{} (Conflict Copy)", task.summary);
+                        conflict_copy.href = String::new();
+                        conflict_copy.etag = String::new();
+                        Ok(
+                            StepResult::new(StepOutcome::RetryWith(Box::new(Action::Create(
+                                conflict_copy,
+                            ))))
+                            .with_warning(
+                                rust_i18n::t!("sync_conflict_412", summary = task.summary.clone())
+                                    .to_string(),
+                            ),
+                        )
+                    }
                 }
             }
             Err(WebDavError::BadStatusCode(StatusCode::NOT_FOUND)) => Ok(StepResult::new(
@@ -843,17 +859,50 @@ impl RustyClient {
         Ok((warnings, synced_tasks))
     }
 
-    async fn attempt_conflict_resolution(&self, local_task: &Task) -> Option<(Action, String)> {
-        let (cached_tasks, _) =
-            crate::cache::Cache::load(self.ctx.as_ref(), &local_task.calendar_href).ok()?;
-        let base_task = cached_tasks.iter().find(|t| t.uid == local_task.uid)?;
-
-        let server_task = self.fetch_remote_task(&local_task.href).await?;
+    async fn attempt_conflict_resolution(&self, local_task: &Task) -> ConflictResolution {
+        // Fetch the current server state first. If we cannot retrieve it (network blip,
+        // slow server, 5xx), we must not duplicate the task: leave the action queued so the
+        // next sync attempt can retry the merge. This avoids spurious "Conflict Copy" tasks
+        // when the server is merely slow or temporarily unreachable.
+        let server_task = match self.fetch_remote_task(&local_task.href).await {
+            Ok(Some(t)) => t,
+            Ok(None) => {
+                // The task is gone from the server (404 / empty REPORT). Preserve the local
+                // edits as a conflict copy rather than silently dropping them.
+                return ConflictResolution::HardConflict;
+            }
+            Err(msg) => {
+                return ConflictResolution::RetryLater(
+                    rust_i18n::t!(
+                        "sync_conflict_fetch_failed",
+                        summary = local_task.summary.clone(),
+                        error = msg
+                    )
+                    .to_string(),
+                );
+            }
+        };
 
         let clean_etag = |e: &str| e.trim_start_matches("W/").trim_matches('"').to_string();
+
+        // If the server's current etag matches the one we sent (after normalization), the
+        // server state is unchanged since our last fetch. The 412 is therefore spurious,
+        // but we cannot safely retry the PUT: a retry with the same (or reformatted) etag
+        // could 412 again and, since RetryWith reinserts at the queue front, loop forever.
+        // Preserve the local edits as a conflict copy instead. This matches the previous
+        // behavior for this case.
         if clean_etag(&server_task.etag) == clean_etag(&local_task.etag) {
-            return None;
+            return ConflictResolution::HardConflict;
         }
+
+        let (cached_tasks, _) =
+            match crate::cache::Cache::load(self.ctx.as_ref(), &local_task.calendar_href) {
+                Ok(v) => v,
+                Err(_) => return ConflictResolution::HardConflict,
+            };
+        let Some(base_task) = cached_tasks.iter().find(|t| t.uid == local_task.uid) else {
+            return ConflictResolution::HardConflict;
+        };
 
         if let Some(merged) = three_way_merge(base_task, local_task, &server_task) {
             let msg = rust_i18n::t!(
@@ -861,10 +910,10 @@ impl RustyClient {
                 summary = local_task.summary.clone()
             )
             .to_string();
-            return Some((Action::Update(merged), msg));
+            ConflictResolution::Resolved(Box::new(Action::Update(merged)), msg)
+        } else {
+            ConflictResolution::HardConflict
         }
-
-        None
     }
 
     async fn execute_move(

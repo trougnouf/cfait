@@ -668,6 +668,7 @@
     "sync_settings": "Sync settings & aliases via CalDAV",
     "sync_conflict_412": "Conflict (412) on task '%{summary}'. Merge failed. Creating copy.",
     "sync_conflict_resolved": "Conflict (412) on '%{summary}' resolved via 3-way merge.",
+    "sync_conflict_fetch_failed": "Conflict (412) on '%{summary}': could not fetch server version (%{error}). Will retry on next sync.",
     "sync_conflict_412_fallback": "Conflict (412-Fallback) on task '%{summary}'. Creating copy.",
     "sync_conflict_creation": "Creation conflict: Task '%{summary}' already exists on server. Mark as synced.",
     "sync_conflict_delete": "Conflict on delete task '%{summary}'. Forcing delete.",

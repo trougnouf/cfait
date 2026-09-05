@@ -95,7 +95,8 @@ pub mod test_hooks {
     use crate::journal::Action;
     use std::sync::{Mutex, OnceLock};
 
-    pub type FetchRemoteHook = Box<dyn Fn(&str) -> Option<Task> + Send + Sync + 'static>;
+    pub type FetchRemoteHook =
+        Box<dyn Fn(&str) -> Result<Option<Task>, String> + Send + Sync + 'static>;
     pub type ForceSyncErrorHook =
         Box<dyn Fn(&Action) -> Option<anyhow::Error> + Send + Sync + 'static>;
 
@@ -1268,7 +1269,15 @@ impl RustyClient {
         Ok(results)
     }
 
-    pub(crate) async fn fetch_remote_task(&self, task_href: &str) -> Option<Task> {
+    /// Fetch a single remote task by its href.
+    ///
+    /// Returns:
+    /// - `Ok(Some(task))` when the task exists on the server.
+    /// - `Ok(None)` when the task is gone (404, or the REPORT returned no resource).
+    ///   Callers treat this as a server-side deletion.
+    /// - `Err(msg)` on a transient failure (network error, 5xx, parse error). Callers
+    ///   should retry later rather than duplicate the task.
+    pub(crate) async fn fetch_remote_task(&self, task_href: &str) -> Result<Option<Task>, String> {
         // Test hook injection (tests can override)
         #[cfg(any(test, feature = "test_hooks"))]
         {
@@ -1279,30 +1288,38 @@ impl RustyClient {
             }
         }
 
-        if let Some(client) = &self.client {
-            let path_href = strip_host(task_href);
-            let parent_path = if let Some(idx) = path_href.rfind('/') {
-                &path_href[..=idx]
-            } else {
-                "/"
-            };
+        let Some(client) = &self.client else {
+            return Ok(None);
+        };
+        let path_href = strip_host(task_href);
+        let parent_path = if let Some(idx) = path_href.rfind('/') {
+            &path_href[..=idx]
+        } else {
+            "/"
+        };
 
-            let req = GetCalendarResources::new(parent_path).with_hrefs(vec![path_href.clone()]);
+        let req = GetCalendarResources::new(parent_path).with_hrefs(vec![path_href.clone()]);
 
-            if let Ok(resp) = client.request(req).await
-                && let Some(item) = resp.resources.into_iter().next()
-                && let Ok(content) = item.content
-            {
-                return IcsAdapter::from_ics(
-                    &content.data,
-                    content.etag,
-                    item.href,
-                    parent_path.to_string(),
-                )
-                .ok();
+        match client.request(req).await {
+            Ok(resp) => {
+                if let Some(item) = resp.resources.into_iter().next()
+                    && let Ok(content) = item.content
+                {
+                    return IcsAdapter::from_ics(
+                        &content.data,
+                        content.etag,
+                        item.href,
+                        parent_path.to_string(),
+                    )
+                    .map(Some)
+                    .map_err(|e| format!("Failed to parse server task: {}", e));
+                }
+                // REPORT succeeded but returned no resource: the task is gone.
+                Ok(None)
             }
+            Err(WebDavError::BadStatusCode(StatusCode::NOT_FOUND)) => Ok(None),
+            Err(e) => Err(format!("Failed to fetch server task: {:?}", e)),
         }
-        None
     }
 
     async fn fetch_calendar_tasks_internal(
