@@ -51,7 +51,6 @@ fun AdvancedSettingsScreen(
     var deleteEventsOnCompletion by remember { mutableStateOf(false) }
     var strikethroughCompleted by remember { mutableStateOf(false) }
     var showInlineDescriptions by remember { mutableStateOf(true) }
-    var showOngoingNotifications by remember { mutableStateOf(true) }
     var showQuickFilter by remember { mutableStateOf(true) }
     var quickFilterTerm by remember { mutableStateOf("is:ready") }
     var quickFilterIcon by remember { mutableStateOf("f0fa9") }
@@ -83,7 +82,6 @@ fun AdvancedSettingsScreen(
             deleteEventsOnCompletion = cfg.deleteEventsOnCompletion
             strikethroughCompleted = cfg.strikethroughCompleted
             showInlineDescriptions = cfg.showInlineDescriptions
-            showOngoingNotifications = cfg.showOngoingNotifications
             showQuickFilter = cfg.showQuickFilter
             quickFilterTerm = cfg.quickFilterTerm
             quickFilterIcon = cfg.quickFilterIcon
@@ -121,7 +119,6 @@ fun AdvancedSettingsScreen(
                 deleteEventsOnCompletion = deleteEventsOnCompletion,
                 strikethroughCompleted = strikethroughCompleted,
                 showInlineDescriptions = showInlineDescriptions,
-                showOngoingNotifications = showOngoingNotifications,
                 showQuickFilter = showQuickFilter,
                 quickFilterTerm = quickFilterTerm,
                 quickFilterIcon = quickFilterIcon,
@@ -547,30 +544,6 @@ fun AdvancedSettingsScreen(
                 modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
             )
 
-            HorizontalDivider(Modifier.padding(vertical = 16.dp))
-
-            // Notifications Section
-            Text(
-                stringResource(R.string.notifications),
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Switch(
-                    checked = showOngoingNotifications,
-                    onCheckedChange = { showOngoingNotifications = it }
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.show_ongoing_notifications_label))
-            }
-            Text(
-                stringResource(R.string.show_ongoing_notifications_explain),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
-            )
             HorizontalDivider(Modifier.padding(vertical = 16.dp))
 
             Text(

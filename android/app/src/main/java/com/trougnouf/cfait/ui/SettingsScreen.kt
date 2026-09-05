@@ -78,6 +78,7 @@ fun SettingsScreen(
     var allCalendars by remember { mutableStateOf<List<MobileCalendar>>(emptyList()) }
     var disabledSet by remember { mutableStateOf<Set<String>>(emptySet()) }
     var autoRemind by remember { mutableStateOf(true) }
+    var showOngoingNotifications by remember { mutableStateOf(true) }
     var defTime by remember { mutableStateOf("08:00") }
     var autoRefresh by remember { mutableStateOf("30m") }
     var createEventsForTasks by remember { mutableStateOf(false) }
@@ -215,6 +216,7 @@ fun SettingsScreen(
         allCalendars = api.getCalendars()
         disabledSet = allCalendars.filter { it.isDisabled }.map { it.href }.toSet()
         autoRemind = cfg.autoReminders
+        showOngoingNotifications = cfg.showOngoingNotifications
         defTime = cfg.defaultReminderTime
         autoRefresh = formatDuration(cfg.autoRefreshInterval)
         createEventsForTasks = cfg.createEventsForTasks
@@ -286,6 +288,7 @@ fun SettingsScreen(
             syncSettings = syncSettings,
             disabledCalendars = disabledSet.toList(),
             autoReminders = autoRemind,
+            showOngoingNotifications = showOngoingNotifications,
             defaultReminderTime = defTime,
             snoozeShort = sShort,
             createEventsForTasks = createEventsForTasks,
@@ -667,6 +670,20 @@ fun SettingsScreen(
                         singleLine = true
                     )
                 }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                    Switch(
+                        checked = showOngoingNotifications,
+                        onCheckedChange = { showOngoingNotifications = it; saveToDisk() }
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.show_ongoing_notifications_label))
+                }
+                Text(
+                    stringResource(R.string.show_ongoing_notifications_explain),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 48.dp, top = 4.dp, bottom = 8.dp)
+                )
 
             }
 
