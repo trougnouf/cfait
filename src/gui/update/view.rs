@@ -997,10 +997,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                             .journal_editing_href
                             .clone()
                             .or_else(|| app.active_cal_href.clone());
-                        match bound {
-                            Some(h) if app.collection_visible(&h) => false,
-                            _ => true,
-                        }
+                        !matches!(bound, Some(h) if app.collection_visible(&h))
                     };
                     if needs_fallback {
                         app.journal_editing_uid = None;

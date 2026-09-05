@@ -2696,6 +2696,133 @@ impl TaskStore {
         ctx
     }
 
+    /// Check whether a task matches the selected category filters.
+    /// Supports hierarchical matching (`work:project` matches `work`), the
+    /// `UNCATEGORIZED_ID` sentinel, and AND/OR logic via `match_all`.
+    fn task_matches_categories(t: &Task, selected: &HashSet<String>, match_all: bool) -> bool {
+        if selected.is_empty() {
+            return true;
+        }
+        let filter_uncategorized = selected.contains(UNCATEGORIZED_ID);
+        let check_match = |task_cat: &str, selected: &str| -> bool {
+            if task_cat.is_ascii() && selected.is_ascii() {
+                let tc = task_cat.as_bytes();
+                let sel = selected.as_bytes();
+                if tc.eq_ignore_ascii_case(sel) {
+                    return true;
+                }
+                if tc.len() > sel.len()
+                    && tc[sel.len()] == b':'
+                    && tc[..sel.len()].eq_ignore_ascii_case(sel)
+                {
+                    return true;
+                }
+                return false;
+            }
+            let tc_lower = task_cat.to_lowercase();
+            let sel_lower = selected.to_lowercase();
+            if tc_lower == sel_lower {
+                return true;
+            }
+            if let Some(stripped) = tc_lower.strip_prefix(&sel_lower) {
+                return stripped.starts_with(':');
+            }
+            false
+        };
+
+        if match_all {
+            for sel in selected {
+                if sel == UNCATEGORIZED_ID {
+                    if !t.categories.is_empty() || !t.transient_desc_tags.is_empty() {
+                        return false;
+                    }
+                } else {
+                    let mut has = false;
+                    for c in t.categories.iter().chain(t.transient_desc_tags.iter()) {
+                        if check_match(c, sel) {
+                            has = true;
+                            break;
+                        }
+                    }
+                    if !has {
+                        return false;
+                    }
+                }
+            }
+        } else {
+            let mut hit = false;
+            if filter_uncategorized && t.categories.is_empty() && t.transient_desc_tags.is_empty() {
+                hit = true;
+            } else {
+                for sel in selected {
+                    if sel != UNCATEGORIZED_ID {
+                        for c in t.categories.iter().chain(t.transient_desc_tags.iter()) {
+                            if check_match(c, sel) {
+                                hit = true;
+                                break;
+                            }
+                        }
+                    }
+                    if hit {
+                        break;
+                    }
+                }
+            }
+            if !hit {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Check whether a task matches the selected location filters.
+    /// Uses OR logic (a task has at most one location) with hierarchical matching.
+    fn task_matches_locations(t: &Task, selected: &HashSet<String>) -> bool {
+        if selected.is_empty() {
+            return true;
+        }
+        if t.locations.is_empty() && t.transient_desc_locs.is_empty() {
+            return false;
+        }
+        let mut hit = false;
+        for loc in t.locations.iter().chain(t.transient_desc_locs.iter()) {
+            for sel in selected {
+                if loc.is_ascii() && sel.is_ascii() {
+                    let l_b = loc.as_bytes();
+                    let s_b = sel.as_bytes();
+                    if l_b.eq_ignore_ascii_case(s_b) {
+                        hit = true;
+                        break;
+                    }
+                    if l_b.len() > s_b.len()
+                        && l_b[s_b.len()] == b':'
+                        && l_b[..s_b.len()].eq_ignore_ascii_case(s_b)
+                    {
+                        hit = true;
+                        break;
+                    }
+                } else {
+                    let loc_lower = loc.to_lowercase();
+                    let sel_lower = sel.to_lowercase();
+                    if loc_lower == sel_lower {
+                        hit = true;
+                        break;
+                    }
+                    if let Some(stripped) = loc_lower.strip_prefix(&sel_lower)
+                        && stripped.starts_with(':')
+                    {
+                        hit = true;
+                        break;
+                    }
+                }
+            }
+            if hit {
+                break;
+            }
+        }
+        hit
+    }
+
     /// Main filter pipeline that performs multi-stage filtering and returns
     /// prepared results (cloned tasks and aggregated category/location lists).
     pub fn filter(&self, options: FilterOptions) -> FilterResult {
@@ -2962,127 +3089,20 @@ impl TaskStore {
 
             let is_match = |t: &Task| -> bool {
                 // Category matching
-                if !ignore_categories && !options.selected_categories.is_empty() {
-                    let filter_uncategorized =
-                        options.selected_categories.contains(UNCATEGORIZED_ID);
-                    let check_match = |task_cat: &str, selected: &str| -> bool {
-                        if task_cat.is_ascii() && selected.is_ascii() {
-                            let tc = task_cat.as_bytes();
-                            let sel = selected.as_bytes();
-                            if tc.eq_ignore_ascii_case(sel) {
-                                return true;
-                            }
-                            if tc.len() > sel.len()
-                                && tc[sel.len()] == b':'
-                                && tc[..sel.len()].eq_ignore_ascii_case(sel)
-                            {
-                                return true;
-                            }
-                            return false;
-                        }
-                        let tc_lower = task_cat.to_lowercase();
-                        let sel_lower = selected.to_lowercase();
-                        if tc_lower == sel_lower {
-                            return true;
-                        }
-                        if let Some(stripped) = tc_lower.strip_prefix(&sel_lower) {
-                            return stripped.starts_with(':');
-                        }
-                        false
-                    };
-
-                    if options.match_all_categories {
-                        for sel in options.selected_categories {
-                            if sel == UNCATEGORIZED_ID {
-                                if !t.categories.is_empty() || !t.transient_desc_tags.is_empty() {
-                                    return false;
-                                }
-                            } else {
-                                let mut has = false;
-                                for c in t.categories.iter().chain(t.transient_desc_tags.iter()) {
-                                    if check_match(c, sel) {
-                                        has = true;
-                                        break;
-                                    }
-                                }
-                                if !has {
-                                    return false;
-                                }
-                            }
-                        }
-                    } else {
-                        let mut hit = false;
-                        if filter_uncategorized
-                            && t.categories.is_empty()
-                            && t.transient_desc_tags.is_empty()
-                        {
-                            hit = true;
-                        } else {
-                            for sel in options.selected_categories {
-                                if sel != UNCATEGORIZED_ID {
-                                    for c in t.categories.iter().chain(t.transient_desc_tags.iter())
-                                    {
-                                        if check_match(c, sel) {
-                                            hit = true;
-                                            break;
-                                        }
-                                    }
-                                }
-                                if hit {
-                                    break;
-                                }
-                            }
-                        }
-                        if !hit {
-                            return false;
-                        }
-                    }
+                if !ignore_categories
+                    && !Self::task_matches_categories(
+                        t,
+                        options.selected_categories,
+                        options.match_all_categories,
+                    )
+                {
+                    return false;
                 }
 
                 // Location matching
-                if !ignore_locations && !options.selected_locations.is_empty() {
-                    if t.locations.is_empty() && t.transient_desc_locs.is_empty() {
-                        return false;
-                    }
-                    let mut hit = false;
-                    for loc in t.locations.iter().chain(t.transient_desc_locs.iter()) {
-                        for sel in options.selected_locations {
-                            if loc.is_ascii() && sel.is_ascii() {
-                                let l_b = loc.as_bytes();
-                                let s_b = sel.as_bytes();
-                                if l_b.eq_ignore_ascii_case(s_b) {
-                                    hit = true;
-                                    break;
-                                }
-                                if l_b.len() > s_b.len()
-                                    && l_b[s_b.len()] == b':'
-                                    && l_b[..s_b.len()].eq_ignore_ascii_case(s_b)
-                                {
-                                    hit = true;
-                                    break;
-                                }
-                            } else {
-                                let loc_lower = loc.to_lowercase();
-                                let sel_lower = sel.to_lowercase();
-                                if loc_lower == sel_lower {
-                                    hit = true;
-                                    break;
-                                }
-                                if let Some(stripped) = loc_lower.strip_prefix(&sel_lower)
-                                    && stripped.starts_with(':')
-                                {
-                                    hit = true;
-                                    break;
-                                }
-                            }
-                        }
-                        if hit {
-                            break;
-                        }
-                    }
-                    if !hit {
-                        return false;
-                    }
+                if !ignore_locations && !Self::task_matches_locations(t, options.selected_locations)
+                {
+                    return false;
                 }
 
                 // Search term matching
@@ -3406,7 +3426,14 @@ impl TaskStore {
                 continue;
             }
             for t in map.values() {
-                if t.is_journal {
+                if t.is_journal
+                    && Self::task_matches_categories(
+                        t,
+                        options.selected_categories,
+                        options.match_all_categories,
+                    )
+                    && Self::task_matches_locations(t, options.selected_locations)
+                {
                     journal_tasks.push(t);
                 }
             }

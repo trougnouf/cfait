@@ -1318,20 +1318,16 @@ pub fn view_sidebar_journal(app: &GuiApp) -> Element<'_, Message> {
         index_col = index_col.push(item_row);
     }
 
-    let index_scroll = scrollable(
-        index_col.padding(iced::Padding {
-            top: 0.0,
-            right: 10.0,
-            bottom: 0.0,
-            left: 0.0,
-        }),
-    )
+    let index_scroll = scrollable(index_col.padding(iced::Padding {
+        top: 0.0,
+        right: 10.0,
+        bottom: 0.0,
+        left: 0.0,
+    }))
     .height(Length::Fill)
-    .direction(
-        iced::widget::scrollable::Direction::Vertical(
-            iced::widget::scrollable::Scrollbar::new().width(6),
-        ),
-    );
+    .direction(iced::widget::scrollable::Direction::Vertical(
+        iced::widget::scrollable::Scrollbar::new().width(6),
+    ));
 
     column![
         quick_jumps,

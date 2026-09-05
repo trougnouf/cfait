@@ -232,6 +232,7 @@ Tasks tagged with `is:permanent` act as endless trackers. When checked off (Comp
     *   *Right Click:* Opens **Full Context Menu** at cursor coordinates.
     *   *Ellipsis (`...`) Click:* Opens **Partial Context Menu** anchored to the button (shows unpinned actions).
 *   **Modals:** Hovering overlays with dimmed backdrops (Move Task, ICS Import, Alarm Notification).
+*   **Tooltips:** Any GUI button that has an associated keyboard shortcut must include that shortcut in its tooltip (when applicable).
 
 ### 5.2. Terminal Interface (TUI)
 *Powered by `ratatui`. Keyboard-only paradigm.*
