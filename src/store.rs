@@ -960,7 +960,10 @@ impl TaskStore {
                     let expected_summary =
                         crate::model::parser::strip_quotes(&path_segments[segment_idx])
                             .to_lowercase();
-                    if p_task.summary.to_lowercase().contains(&expected_summary) {
+                    if crate::model::matcher::contains_ignore_case(
+                        &p_task.summary,
+                        &expected_summary,
+                    ) {
                         if segment_idx == 0 {
                             break;
                         }
@@ -1100,94 +1103,78 @@ impl TaskStore {
 
         let target_summary =
             crate::model::parser::strip_quotes(path_segments.last().unwrap()).to_lowercase();
-        matches.sort_by(|a, b| {
-            let a_starts = a.1.to_lowercase().starts_with(&target_summary);
-            let b_starts = b.1.to_lowercase().starts_with(&target_summary);
-            b_starts.cmp(&a_starts).then_with(|| a.1.cmp(&b.1))
-        });
+        // Precompute the lowercase summary and the starts-with flag once per candidate,
+        // instead of calling .to_lowercase() on every comparator invocation during sort.
+        let mut keyed: Vec<(String, String, bool)> = matches
+            .into_iter()
+            .map(|(uid, summary)| {
+                let starts = summary.to_lowercase().starts_with(&target_summary);
+                (uid, summary, starts)
+            })
+            .collect();
+        keyed.sort_by(|a, b| b.2.cmp(&a.2).then_with(|| a.1.cmp(&b.1)));
+        let mut matches: Vec<(String, String)> = keyed
+            .into_iter()
+            .map(|(uid, summary, _)| (uid, summary))
+            .collect();
         matches.dedup_by(|a, b| a.0 == b.0);
         matches
     }
 
+    /// Resolve a list of human-readable dependency/relation references into UIDs,
+    /// emitting warnings for ambiguous or unresolved references and auto-healing
+    /// references that point into the trash/recovery calendars.
+    fn resolve_ref_list(
+        &self,
+        refs: &[String],
+        context_uid: &str,
+        rel_type: &str,
+        warnings: &mut Vec<DependencyWarning>,
+    ) -> Vec<String> {
+        let mut resolved = Vec::new();
+        for r in refs {
+            let uid = if r.len() == 36 && uuid::Uuid::parse_str(r).is_ok() {
+                r.clone()
+            } else {
+                match self.resolve_dependency_ref(r, Some(context_uid)) {
+                    Ok(resolved_uid) => resolved_uid,
+                    Err(_) => {
+                        let candidates = self.get_dependency_candidates(r, Some(context_uid));
+                        if candidates.len() > 1 {
+                            warnings.push(DependencyWarning::Ambiguous {
+                                raw: r.clone(),
+                                source_task_uid: context_uid.to_string(),
+                                relation_type: rel_type.to_string(),
+                                candidates,
+                            });
+                        } else {
+                            warnings.push(DependencyWarning::NotFound { raw: r.clone() });
+                        }
+                        r.clone()
+                    }
+                }
+            };
+
+            // Auto-heal: strip references that point to trashed/recovered tasks
+            if let Some(t) = self.get_task_ref(&uid)
+                && (t.calendar_href == crate::storage::LOCAL_TRASH_HREF
+                    || t.calendar_href == "local://recovery")
+            {
+                continue;
+            }
+
+            resolved.push(uid);
+        }
+        resolved.sort();
+        resolved.dedup();
+        resolved
+    }
+
     pub fn resolve_dependencies(&self, task: &mut Task) -> Vec<DependencyWarning> {
-        let mut resolved_deps = Vec::new();
         let mut warnings = Vec::new();
-
-        for dep in &task.dependencies {
-            let uid = if dep.len() == 36 && uuid::Uuid::parse_str(dep).is_ok() {
-                dep.clone()
-            } else {
-                match self.resolve_dependency_ref(dep, Some(&task.uid)) {
-                    Ok(resolved_uid) => resolved_uid,
-                    Err(_) => {
-                        let candidates = self.get_dependency_candidates(dep, Some(&task.uid));
-                        if candidates.len() > 1 {
-                            warnings.push(DependencyWarning::Ambiguous {
-                                raw: dep.clone(),
-                                source_task_uid: task.uid.clone(),
-                                relation_type: "dep".to_string(),
-                                candidates,
-                            });
-                        } else {
-                            warnings.push(DependencyWarning::NotFound { raw: dep.clone() });
-                        }
-                        dep.clone()
-                    }
-                }
-            };
-
-            // Auto-heal: Strip out dependencies that point to trashed/recovered tasks
-            if let Some(t) = self.get_task_ref(&uid)
-                && (t.calendar_href == crate::storage::LOCAL_TRASH_HREF
-                    || t.calendar_href == "local://recovery")
-            {
-                continue;
-            }
-
-            resolved_deps.push(uid);
-        }
-        resolved_deps.sort();
-        resolved_deps.dedup();
-        task.dependencies = resolved_deps;
-
-        let mut resolved_rels = Vec::new();
-        for rel in &task.related_to {
-            let uid = if rel.len() == 36 && uuid::Uuid::parse_str(rel).is_ok() {
-                rel.clone()
-            } else {
-                match self.resolve_dependency_ref(rel, Some(&task.uid)) {
-                    Ok(resolved_uid) => resolved_uid,
-                    Err(_) => {
-                        let candidates = self.get_dependency_candidates(rel, Some(&task.uid));
-                        if candidates.len() > 1 {
-                            warnings.push(DependencyWarning::Ambiguous {
-                                raw: rel.clone(),
-                                source_task_uid: task.uid.clone(),
-                                relation_type: "rel".to_string(),
-                                candidates,
-                            });
-                        } else {
-                            warnings.push(DependencyWarning::NotFound { raw: rel.clone() });
-                        }
-                        rel.clone()
-                    }
-                }
-            };
-
-            // Auto-heal: Strip out relations that point to trashed/recovered tasks
-            if let Some(t) = self.get_task_ref(&uid)
-                && (t.calendar_href == crate::storage::LOCAL_TRASH_HREF
-                    || t.calendar_href == "local://recovery")
-            {
-                continue;
-            }
-
-            resolved_rels.push(uid);
-        }
-        resolved_rels.sort();
-        resolved_rels.dedup();
-        task.related_to = resolved_rels;
-
+        task.dependencies =
+            self.resolve_ref_list(&task.dependencies, &task.uid, "dep", &mut warnings);
+        task.related_to = self.resolve_ref_list(&task.related_to, &task.uid, "rel", &mut warnings);
         warnings
     }
 
@@ -1968,18 +1955,18 @@ impl TaskStore {
     /// Returns a list of all descendant UIDs for a given root.
     pub fn get_descendant_uids(&self, root_uid: &str) -> Vec<String> {
         let mut descendants = Vec::new();
-        let mut queue = vec![root_uid.to_string()];
+        let mut queue: Vec<&str> = vec![root_uid];
 
-        let mut visited = HashSet::new();
+        let mut visited: HashSet<&str> = HashSet::new();
         while let Some(curr) = queue.pop() {
-            if !visited.insert(curr.clone()) {
+            if !visited.insert(curr) {
                 continue;
             }
             if curr != root_uid {
-                descendants.push(curr.clone());
+                descendants.push(curr.to_string());
             }
-            if let Some(children) = self.children_index.get(&curr) {
-                queue.extend(children.clone());
+            if let Some(children) = self.children_index.get(curr) {
+                queue.extend(children.iter().map(|s| s.as_str()));
             }
         }
         descendants
@@ -2874,6 +2861,9 @@ impl TaskStore {
             eff_future_map.insert(t.uid.as_str(), check_is_effectively_future(t));
         }
 
+        // Parse the search query once; run_pipeline is invoked up to 3 times below.
+        let query = crate::model::matcher::Query::new(options.search_term);
+
         // 3) Define the filtering pipeline as a reusable closure.
         // This allows us to calculate the final tasks, and recalculate aggregates ignoring specific filters for OR modes.
         let run_pipeline = |ignore_categories: bool,
@@ -2969,8 +2959,6 @@ impl TaskStore {
                     true
                 })
                 .collect();
-
-            let query = crate::model::matcher::Query::new(options.search_term);
 
             let is_match = |t: &Task| -> bool {
                 // Category matching
@@ -3253,13 +3241,24 @@ impl TaskStore {
                             continue;
                         }
 
-                        cat_present_lower.insert(current_lower.clone());
-                        cat_display_names
-                            .entry(current_lower.clone())
-                            .or_insert_with(|| current_hierarchy.clone());
+                        // seen_for_task now owns one copy. For the persistent maps, only
+                        // allocate a key when this hierarchy level is new across all tasks;
+                        // cat_present_lower and cat_display_names stay in sync, so one check
+                        // guards both. The active-count entry consumes current_lower (no clone).
+                        let already_present = cat_present_lower.contains(&current_lower);
+                        if !already_present {
+                            cat_present_lower.insert(current_lower.clone());
+                            cat_display_names
+                                .entry(current_lower.clone())
+                                .or_insert_with(|| current_hierarchy.clone());
+                        }
 
                         if is_active {
-                            *cat_active_counts.entry(current_lower.clone()).or_insert(0) += 1;
+                            if let Some(v) = cat_active_counts.get_mut(&current_lower) {
+                                *v += 1;
+                            } else {
+                                cat_active_counts.insert(current_lower.clone(), 1);
+                            }
                         }
                     }
                 }
@@ -3344,8 +3343,17 @@ impl TaskStore {
                     .unwrap_or(parts.last().unwrap())
                     .to_string();
 
-                let prefix = format!("{}:", key);
-                let has_children = sorted_keys.iter().any(|k| k.starts_with(&prefix));
+                // sorted_keys is sorted, so a key has children iff the immediately
+                // following key starts with "{key}:". O(log n) lookup instead of O(n) scan.
+                let has_children = sorted_keys
+                    .binary_search(key)
+                    .ok()
+                    .map(|idx| {
+                        idx + 1 < sorted_keys.len()
+                            && sorted_keys[idx + 1].starts_with(key)
+                            && sorted_keys[idx + 1].as_bytes().get(key.len()) == Some(&b':')
+                    })
+                    .unwrap_or(false);
 
                 let alias_key_to_check = if is_location {
                     format!("@@{}", key)
@@ -3740,6 +3748,12 @@ impl TaskStore {
         }
 
         // 6) Compute rank, sort order, and transient UI fields for the final tasks.
+        // Cache the parent's resolved tags/locations: siblings share a parent, so without
+        // a cache we would rebuild the same HashSet/Vec once per child.
+        let empty_parent_tags: HashSet<String> = HashSet::new();
+        let empty_parent_locs: Vec<String> = Vec::new();
+        let mut parent_visual_cache: HashMap<String, (HashSet<String>, Vec<String>)> =
+            HashMap::new();
         for t in final_tasks_processed.iter_mut() {
             let eff_blocked = t.is_blocked || t.is_implicitly_blocked;
             t.sort_rank = t.calculate_base_rank(
@@ -3780,17 +3794,18 @@ impl TaskStore {
             t.tree_location_count = *tree_loc_counts.get(&t.uid).unwrap_or(&0);
 
             let (p_tags, p_loc) = if let Some(p_uid) = &t.parent_uid {
-                if let Some(p) = self.get_task_ref(p_uid) {
-                    (p.categories.iter().cloned().collect(), p.locations.clone())
-                } else {
-                    (HashSet::new(), Vec::new())
-                }
+                let entry = parent_visual_cache.entry(p_uid.clone()).or_insert_with(|| {
+                    self.get_task_ref(p_uid)
+                        .map(|p| (p.categories.iter().cloned().collect(), p.locations.clone()))
+                        .unwrap_or_default()
+                });
+                (&entry.0, &entry.1)
             } else {
-                (HashSet::new(), Vec::new())
+                (&empty_parent_tags, &empty_parent_locs)
             };
 
             let (visible_tags, visible_locations) =
-                t.resolve_visual_attributes(&p_tags, &p_loc, options.tag_aliases);
+                t.resolve_visual_attributes(p_tags, p_loc, options.tag_aliases);
             t.visible_categories = visible_tags;
             t.visible_locations = visible_locations;
         }

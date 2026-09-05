@@ -1216,8 +1216,9 @@ pub fn tokenize_smart_input(input: &str, is_search_query: bool) -> Vec<SyntaxTok
                 (start_idx..words.len()).find(|&idx| !words[idx].2.trim().is_empty())
             };
 
-            let is_in = lex.exact.get(&clean_val.to_lowercase()) == Some(&ExactToken::In);
-            let is_next = lex.exact.get(&clean_val.to_lowercase()) == Some(&ExactToken::Next);
+            let clean_val_lower = clean_val.to_lowercase();
+            let is_in = lex.exact.get(&clean_val_lower) == Some(&ExactToken::In);
+            let is_next = lex.exact.get(&clean_val_lower) == Some(&ExactToken::Next);
 
             if is_in
                 || (clean_val.is_empty()
@@ -2970,9 +2971,10 @@ pub fn apply_smart_input(
                 rem
             };
 
-            let is_in = lex.exact.get(&clean_val.to_lowercase()) == Some(&ExactToken::In)
+            let clean_val_lower = clean_val.to_lowercase();
+            let is_in = lex.exact.get(&clean_val_lower) == Some(&ExactToken::In)
                 || clean_val.eq_ignore_ascii_case("in");
-            let is_next = lex.exact.get(&clean_val.to_lowercase()) == Some(&ExactToken::Next)
+            let is_next = lex.exact.get(&clean_val_lower) == Some(&ExactToken::Next)
                 || clean_val.eq_ignore_ascii_case("next");
 
             if is_in && i + consumed < stream.len() {
