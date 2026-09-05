@@ -241,16 +241,18 @@ impl AlarmIndex {
                             }
                         };
 
-                        // Check for implicit due date alarm
-                        if let Some(due) = &task.due {
-                            let dt = due.to_utc_with_default_time(default_time);
-                            add_implicit(dt, "Due now", "due");
-                        }
-
-                        // Check for implicit start date alarm
-                        if let Some(start) = &task.dtstart {
-                            let dt = start.to_utc_with_default_time(default_time);
-                            add_implicit(dt, "Starting now", "start");
+                        let triggers = [
+                            (task.due.as_ref(), "due", "Due now"),
+                            (task.dtstart.as_ref(), "start", "Starting now"),
+                        ];
+                        for (date_opt, type_key, desc) in triggers {
+                            if let Some(d) = date_opt {
+                                add_implicit(
+                                    d.to_utc_with_default_time(default_time),
+                                    desc,
+                                    type_key,
+                                );
+                            }
                         }
                     }
                 }

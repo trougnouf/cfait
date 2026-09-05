@@ -290,58 +290,41 @@ impl ParserLexicon {
             ExactToken::Unit(LexiconUnit::Minutes),
         );
 
-        add_exact(
-            "parser_weekdays_mo",
-            "mon,monday,mondays",
-            ExactToken::Weekday("MO"),
-        );
-        add_exact(
-            "parser_weekdays_tu",
-            "tu,tue,tuesday,tuesdays",
-            ExactToken::Weekday("TU"),
-        );
-        add_exact(
-            "parser_weekdays_we",
-            "we,wed,wednesday,wednesdays",
-            ExactToken::Weekday("WE"),
-        );
-        add_exact(
-            "parser_weekdays_th",
-            "th,thu,thursday,thursdays",
-            ExactToken::Weekday("TH"),
-        );
-        add_exact(
-            "parser_weekdays_fr",
-            "fr,fri,friday,fridays",
-            ExactToken::Weekday("FR"),
-        );
-        add_exact(
-            "parser_weekdays_sa",
-            "sa,sat,saturday,saturdays",
-            ExactToken::Weekday("SA"),
-        );
-        add_exact(
-            "parser_weekdays_su",
-            "su,sun,sunday,sundays",
-            ExactToken::Weekday("SU"),
-        );
+        for (code, en) in [
+            ("MO", "mon,monday,mondays"),
+            ("TU", "tu,tue,tuesday,tuesdays"),
+            ("WE", "we,wed,wednesday,wednesdays"),
+            ("TH", "th,thu,thursday,thursdays"),
+            ("FR", "fr,fri,friday,fridays"),
+            ("SA", "sa,sat,saturday,saturdays"),
+            ("SU", "su,sun,sunday,sundays"),
+        ] {
+            add_exact(
+                &format!("parser_weekdays_{}", code.to_lowercase()),
+                en,
+                ExactToken::Weekday(code),
+            );
+        }
 
-        add_exact("parser_months_jan", "jan,january", ExactToken::Month(1));
-        add_exact("parser_months_feb", "feb,february", ExactToken::Month(2));
-        add_exact("parser_months_mar", "mar,march", ExactToken::Month(3));
-        add_exact("parser_months_apr", "apr,april", ExactToken::Month(4));
-        add_exact("parser_months_may", "may", ExactToken::Month(5));
-        add_exact("parser_months_jun", "jun,june", ExactToken::Month(6));
-        add_exact("parser_months_jul", "jul,july", ExactToken::Month(7));
-        add_exact("parser_months_aug", "aug,august", ExactToken::Month(8));
-        add_exact(
-            "parser_months_sep",
-            "sep,sept,september",
-            ExactToken::Month(9),
-        );
-        add_exact("parser_months_oct", "oct,october", ExactToken::Month(10));
-        add_exact("parser_months_nov", "nov,november", ExactToken::Month(11));
-        add_exact("parser_months_dec", "dec,december", ExactToken::Month(12));
+        for (i, (key, en)) in [
+            ("parser_months_jan", "jan,january"),
+            ("parser_months_feb", "feb,february"),
+            ("parser_months_mar", "mar,march"),
+            ("parser_months_apr", "apr,april"),
+            ("parser_months_may", "may"),
+            ("parser_months_jun", "jun,june"),
+            ("parser_months_jul", "jul,july"),
+            ("parser_months_aug", "aug,august"),
+            ("parser_months_sep", "sep,sept,september"),
+            ("parser_months_oct", "oct,october"),
+            ("parser_months_nov", "nov,november"),
+            ("parser_months_dec", "dec,december"),
+        ]
+        .iter()
+        .enumerate()
+        {
+            add_exact(key, en, ExactToken::Month(i as u32 + 1));
+        }
 
         add_exact("parser_is_note", "is:note", ExactToken::IsNote);
         add_exact("parser_is_page", "is:page,is:journal", ExactToken::IsPage);

@@ -51,16 +51,14 @@ fn is_redo(key: &KeyEvent) -> bool {
 }
 
 fn handle_text_undo(state: &mut AppState) {
-    if let Some(prev) = state.text_undo_stack.pop() {
-        state.text_redo_stack.push(state.input_buffer.clone());
+    if let Some(prev) = state.text_history.pop_undo(state.input_buffer.clone()) {
         state.input_buffer = prev;
         state.cursor_position = state.input_buffer.chars().count();
     }
 }
 
 fn handle_text_redo(state: &mut AppState) {
-    if let Some(next) = state.text_redo_stack.pop() {
-        state.text_undo_stack.push(state.input_buffer.clone());
+    if let Some(next) = state.text_history.pop_redo(state.input_buffer.clone()) {
         state.input_buffer = next;
         state.cursor_position = state.input_buffer.chars().count();
     }
@@ -152,30 +150,7 @@ fn update_action_menu_filter(state: &mut AppState) {
                 return true;
             }
             let label = a.label().to_lowercase();
-            use crate::config::TaskAction::*;
-            let matches_alias = match a {
-                ToggleDetails => filter == "l" || filter == "details",
-                CompleteAndShift => filter == "r" || filter == "rep" || filter == "repeat",
-                ToggleTimer => filter == "s" || filter == "start" || filter == "pause",
-                StopTimer => filter == "stop",
-                AddSession => filter == "t" || filter == "log",
-                IncreasePriority => filter == "+" || filter == "up",
-                DecreasePriority => filter == "-" || filter == "down",
-                Edit => filter == "e",
-                EditTree => filter == "tree" || filter == "edit",
-                Yank => filter == "y" || filter == "copy",
-                TogglePin => filter == "p" || filter == "pin",
-                CreateSubtask => filter == "c" || filter == "sub",
-                DuplicateTree => filter == "d" || filter == "dup",
-                CompleteTree => filter == "tree" || filter == "complete",
-                Promote => filter == "<" || filter == "outdent",
-                Move => filter == "m",
-                Cancel => filter == "x",
-                Delete | DeleteTree => filter == "del" || filter == "rm",
-                OpenUrl => filter == "o" || filter == "url" || filter == "link",
-                OpenCoordinates | OpenLocations => filter == "g" || filter == "map",
-                Focus => filter == "f" || filter == "focus",
-            };
+            let matches_alias = a.search_aliases().contains(&filter.as_str());
             label.contains(&filter) || matches_alias
         })
         .collect();

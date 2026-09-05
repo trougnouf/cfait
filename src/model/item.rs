@@ -105,44 +105,40 @@ impl DateType {
         }
     }
 
-    /// For sorting/comparison: snap fuzzy dates to the LAST second of the period
-    pub fn to_comparison_time(&self) -> DateTime<Utc> {
+    pub fn end_date_naive(&self) -> NaiveDate {
         match self {
-            DateType::AllDay(d) => {
-                safe_local_to_utc(*d, chrono::NaiveTime::from_hms_opt(23, 59, 59).unwrap())
-            }
-            DateType::Specific(dt) => *dt,
             DateType::Month(y, m) => {
                 let next_m = if *m == 12 { 1 } else { *m + 1 };
                 let next_y = if *m == 12 { *y + 1 } else { *y };
-                let d = NaiveDate::from_ymd_opt(next_y, next_m, 1)
+                NaiveDate::from_ymd_opt(next_y, next_m, 1)
                     .unwrap()
                     .pred_opt()
-                    .unwrap();
-                safe_local_to_utc(d, chrono::NaiveTime::from_hms_opt(23, 59, 59).unwrap())
+                    .unwrap()
             }
-            DateType::Year(y) => {
-                let d = NaiveDate::from_ymd_opt(*y, 12, 31).unwrap();
-                safe_local_to_utc(d, chrono::NaiveTime::from_hms_opt(23, 59, 59).unwrap())
-            }
+            DateType::Year(y) => NaiveDate::from_ymd_opt(*y, 12, 31).unwrap(),
+            _ => self.to_date_naive(),
+        }
+    }
+
+    /// For sorting/comparison: snap fuzzy dates to the LAST second of the period
+    pub fn to_comparison_time(&self) -> DateTime<Utc> {
+        match self {
+            DateType::Specific(dt) => *dt,
+            _ => safe_local_to_utc(
+                self.end_date_naive(),
+                chrono::NaiveTime::from_hms_opt(23, 59, 59).unwrap(),
+            ),
         }
     }
 
     /// For start date logic: snap fuzzy dates to the FIRST second of the period
     pub fn to_start_comparison_time(&self) -> DateTime<Utc> {
         match self {
-            DateType::AllDay(d) => {
-                safe_local_to_utc(*d, chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap())
-            }
             DateType::Specific(dt) => *dt,
-            DateType::Month(y, m) => {
-                let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
-                safe_local_to_utc(d, chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap())
-            }
-            DateType::Year(y) => {
-                let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
-                safe_local_to_utc(d, chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap())
-            }
+            _ => safe_local_to_utc(
+                self.to_date_naive(),
+                chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+            ),
         }
     }
 
@@ -166,13 +162,7 @@ impl DateType {
     pub fn to_utc_with_default_time(&self, default_time: NaiveTime) -> DateTime<Utc> {
         match self {
             DateType::Specific(dt) => *dt,
-            DateType::AllDay(d) => safe_local_to_utc(*d, default_time),
-            DateType::Month(y, m) => {
-                safe_local_to_utc(NaiveDate::from_ymd_opt(*y, *m, 1).unwrap(), default_time)
-            }
-            DateType::Year(y) => {
-                safe_local_to_utc(NaiveDate::from_ymd_opt(*y, 1, 1).unwrap(), default_time)
-            }
+            _ => safe_local_to_utc(self.to_date_naive(), default_time),
         }
     }
 }

@@ -483,46 +483,33 @@ pub fn spawn_alarm_actor(
                     // 2. Implicit Alarms (Auto-Reminders)
                     // Only if enabled AND the task doesn't already have an alarm covering this specific moment.
                     if config.auto_reminders && !task.is_journal {
-                        // Check Due Date
-                        if let Some(due) = &task.due {
-                            let trigger_dt = due.to_utc_with_default_time(default_time);
+                        let triggers = [
+                            (task.due.as_ref(), "due", "alarm_due_now"),
+                            (task.dtstart.as_ref(), "start", "alarm_task_starting"),
+                        ];
+                        for (date_opt, type_key, desc_key) in triggers {
+                            if let Some(d) = date_opt {
+                                let trigger_dt = d.to_utc_with_default_time(default_time);
 
-                            // Don't fire if ANY alarm (even acknowledged/dismissed) exists for this exact time.
-                            // This prevents firing on restart after dismissal.
-                            if !task.has_alarm_at(trigger_dt) {
-                                // Encode the timestamp into the UID so the UI knows exactly what time to write back
-                                let ts_str = trigger_dt.to_rfc3339();
-                                let implicit_alarm = Alarm {
-                                    uid: format!("implicit_due:|{}|{}", ts_str, task.uid),
-                                    action: "DISPLAY".to_string(),
-                                    trigger: AlarmTrigger::Absolute(trigger_dt),
-                                    description: Some(rust_i18n::t!("alarm_due_now").to_string()),
-                                    acknowledged: None,
-                                    related_to_uid: None,
-                                    relation_type: None,
-                                };
-                                check_list.push((implicit_alarm, true));
-                            }
-                        }
-
-                        // Check Start Date (Same logic)
-                        if let Some(start) = &task.dtstart {
-                            let trigger_dt = start.to_utc_with_default_time(default_time);
-
-                            if !task.has_alarm_at(trigger_dt) {
-                                let ts_str = trigger_dt.to_rfc3339();
-                                let implicit_alarm = Alarm {
-                                    uid: format!("implicit_start:|{}|{}", ts_str, task.uid),
-                                    action: "DISPLAY".to_string(),
-                                    trigger: AlarmTrigger::Absolute(trigger_dt),
-                                    description: Some(
-                                        rust_i18n::t!("alarm_task_starting").to_string(),
-                                    ),
-                                    acknowledged: None,
-                                    related_to_uid: None,
-                                    relation_type: None,
-                                };
-                                check_list.push((implicit_alarm, true));
+                                // Don't fire if ANY alarm (even acknowledged/dismissed) exists for this exact time.
+                                // This prevents firing on restart after dismissal.
+                                if !task.has_alarm_at(trigger_dt) {
+                                    // Encode the timestamp into the UID so the UI knows exactly what time to write back
+                                    let ts_str = trigger_dt.to_rfc3339();
+                                    let implicit_alarm = Alarm {
+                                        uid: format!(
+                                            "implicit_{}:|{}|{}",
+                                            type_key, ts_str, task.uid
+                                        ),
+                                        action: "DISPLAY".to_string(),
+                                        trigger: AlarmTrigger::Absolute(trigger_dt),
+                                        description: Some(rust_i18n::t!(desc_key).to_string()),
+                                        acknowledged: None,
+                                        related_to_uid: None,
+                                        relation_type: None,
+                                    };
+                                    check_list.push((implicit_alarm, true));
+                                }
                             }
                         }
                     }

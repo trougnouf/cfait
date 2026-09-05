@@ -197,8 +197,7 @@ pub struct AppState {
     pub undo_stack: Vec<crate::journal::UndoRecord>,
     pub redo_stack: Vec<crate::journal::UndoRecord>,
 
-    pub text_undo_stack: Vec<String>,
-    pub text_redo_stack: Vec<String>,
+    pub text_history: crate::model::session::TextHistory,
     pub search_highlight_regex: Option<std::rc::Rc<regex::Regex>>,
 }
 
@@ -334,8 +333,7 @@ impl AppState {
             needs_redraw: false,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
-            text_undo_stack: Vec::new(),
-            text_redo_stack: Vec::new(),
+            text_history: crate::model::session::TextHistory::default(),
             search_highlight_regex: None,
         }
     }
@@ -621,11 +619,7 @@ impl AppState {
         self.input_buffer.insert(byte_index, new_char);
         self.move_cursor_right();
         if old != self.input_buffer {
-            self.text_undo_stack.push(old);
-            self.text_redo_stack.clear();
-            if self.text_undo_stack.len() > 50 {
-                self.text_undo_stack.remove(0);
-            }
+            self.text_history.push(old);
         }
     }
     pub fn delete_char(&mut self) {
@@ -637,19 +631,14 @@ impl AppState {
             self.input_buffer = before.chain(after).collect();
             self.move_cursor_left();
             if old != self.input_buffer {
-                self.text_undo_stack.push(old);
-                self.text_redo_stack.clear();
-                if self.text_undo_stack.len() > 50 {
-                    self.text_undo_stack.remove(0);
-                }
+                self.text_history.push(old);
             }
         }
     }
     pub fn reset_input(&mut self) {
         self.input_buffer.clear();
         self.cursor_position = 0;
-        self.text_undo_stack.clear();
-        self.text_redo_stack.clear();
+        self.text_history.clear();
     }
     fn clamp_cursor(&self, new_cursor_pos: usize) -> usize {
         new_cursor_pos.clamp(0, self.input_buffer.chars().count())

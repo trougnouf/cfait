@@ -76,56 +76,36 @@ fn dispatch_and_select_next_row(app: &mut GuiApp, intent: AppIntent, uid: String
 }
 
 fn handle_gui_text_undo(app: &mut GuiApp) {
-    let do_input = |app: &mut GuiApp| {
-        let prev = app.input_undo_stack.pop().unwrap();
-        app.input_redo_stack.push(app.input_value.text());
-        app.input_value = text_editor::Content::with_text(&prev);
-        app.input_value
-            .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
-    };
-    let do_desc = |app: &mut GuiApp| {
-        let prev = app.desc_undo_stack.pop().unwrap();
-        app.desc_redo_stack.push(app.description_value.text());
-        app.description_value = text_editor::Content::with_text(&prev);
-        app.description_value
-            .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
-    };
-
-    if app.last_edited_field == 0 && !app.input_undo_stack.is_empty() {
-        do_input(app);
-    } else if app.last_edited_field == 1 && !app.desc_undo_stack.is_empty() {
-        do_desc(app);
-    } else if !app.input_undo_stack.is_empty() {
-        do_input(app);
-    } else if !app.desc_undo_stack.is_empty() {
-        do_desc(app);
+    let is_desc = app.last_edited_field == 1 || app.input_history.undo.is_empty();
+    if is_desc {
+        if let Some(prev) = app.desc_history.pop_undo(app.description_value.text()) {
+            app.description_value = text_editor::Content::with_text(&prev);
+            app.description_value
+                .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
+        }
+    } else {
+        if let Some(prev) = app.input_history.pop_undo(app.input_value.text()) {
+            app.input_value = text_editor::Content::with_text(&prev);
+            app.input_value
+                .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
+        }
     }
 }
 
 fn handle_gui_text_redo(app: &mut GuiApp) {
-    let do_input = |app: &mut GuiApp| {
-        let next = app.input_redo_stack.pop().unwrap();
-        app.input_undo_stack.push(app.input_value.text());
-        app.input_value = text_editor::Content::with_text(&next);
-        app.input_value
-            .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
-    };
-    let do_desc = |app: &mut GuiApp| {
-        let next = app.desc_redo_stack.pop().unwrap();
-        app.desc_undo_stack.push(app.description_value.text());
-        app.description_value = text_editor::Content::with_text(&next);
-        app.description_value
-            .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
-    };
-
-    if app.last_edited_field == 0 && !app.input_redo_stack.is_empty() {
-        do_input(app);
-    } else if app.last_edited_field == 1 && !app.desc_redo_stack.is_empty() {
-        do_desc(app);
-    } else if !app.input_redo_stack.is_empty() {
-        do_input(app);
-    } else if !app.desc_redo_stack.is_empty() {
-        do_desc(app);
+    let is_desc = app.last_edited_field == 1 || app.input_history.redo.is_empty();
+    if is_desc {
+        if let Some(next) = app.desc_history.pop_redo(app.description_value.text()) {
+            app.description_value = text_editor::Content::with_text(&next);
+            app.description_value
+                .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
+        }
+    } else {
+        if let Some(next) = app.input_history.pop_redo(app.input_value.text()) {
+            app.input_value = text_editor::Content::with_text(&next);
+            app.input_value
+                .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
+        }
     }
 }
 
@@ -249,8 +229,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             if is_desc {
                 let current = app.description_value.text();
-                app.desc_undo_stack.push(current.clone());
-                app.desc_redo_stack.clear();
+                app.desc_history.push(current.clone());
 
                 let mut new_text = current[..range.start].to_string();
                 new_text.push_str(&text);
@@ -265,8 +244,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 iced::widget::operation::focus(iced::widget::Id::new("description_input"))
             } else {
                 let current = app.input_value.text();
-                app.input_undo_stack.push(current.clone());
-                app.input_redo_stack.clear();
+                app.input_history.push(current.clone());
 
                 let mut new_text = current[..range.start].to_string();
                 new_text.push_str(&text);
@@ -294,13 +272,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             let old_text = app.input_value.text();
             app.input_value.perform(action);
-            let new_text = app.input_value.text();
-            if old_text != new_text {
-                app.input_undo_stack.push(old_text);
-                app.input_redo_stack.clear();
-                if app.input_undo_stack.len() > 50 {
-                    app.input_undo_stack.remove(0);
-                }
+            if old_text != app.input_value.text() {
+                app.input_history.push(old_text);
                 app.last_edited_field = 0;
             }
             Task::none()
@@ -350,13 +323,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 }
             }
 
-            let new_text = app.description_value.text();
-            if old_text != new_text {
-                app.desc_undo_stack.push(old_text);
-                app.desc_redo_stack.clear();
-                if app.desc_undo_stack.len() > 50 {
-                    app.desc_undo_stack.remove(0);
-                }
+            if old_text != app.description_value.text() {
+                app.desc_history.push(old_text);
                 app.last_edited_field = 1;
             }
 
@@ -387,10 +355,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.input_value
                 .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
 
-            app.input_undo_stack.clear();
-            app.input_redo_stack.clear();
-            app.desc_undo_stack.clear();
-            app.desc_redo_stack.clear();
+            app.input_history.clear();
+            app.desc_history.clear();
             app.last_edited_field = 0;
 
             app.active_focus = Focus::AddTaskInput;
@@ -446,10 +412,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
                 app.description_value = text_editor::Content::with_text(&task_description);
 
-                app.input_undo_stack.clear();
-                app.input_redo_stack.clear();
-                app.desc_undo_stack.clear();
-                app.desc_redo_stack.clear();
+                app.input_history.clear();
+                app.desc_history.clear();
                 app.last_edited_field = 0;
 
                 app.editing_uid = Some(task_uid.clone());
@@ -481,10 +445,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     );
                     app.description_value = text_editor::Content::with_text(&tree_md);
 
-                    app.input_undo_stack.clear();
-                    app.input_redo_stack.clear();
-                    app.desc_undo_stack.clear();
-                    app.desc_redo_stack.clear();
+                    app.input_history.clear();
+                    app.desc_history.clear();
                     app.last_edited_field = 1;
 
                     app.editing_tree_uid = Some(task_uid.clone());
@@ -532,10 +494,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::CancelEdit => {
-            app.input_undo_stack.clear();
-            app.input_redo_stack.clear();
-            app.desc_undo_stack.clear();
-            app.desc_redo_stack.clear();
+            app.input_history.clear();
+            app.desc_history.clear();
 
             app.input_value = text_editor::Content::new();
             app.description_value = text_editor::Content::new();
@@ -1505,10 +1465,8 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
     };
     use crate::model::{Task as TodoTask, extract_inline_aliases};
 
-    app.input_undo_stack.clear();
-    app.input_redo_stack.clear();
-    app.desc_undo_stack.clear();
-    app.desc_redo_stack.clear();
+    app.input_history.clear();
+    app.desc_history.clear();
 
     let raw_text = app.input_value.text();
     let text_to_submit = raw_text.trim().to_string();

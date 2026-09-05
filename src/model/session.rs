@@ -6,6 +6,45 @@ use crate::config::Config;
 use crate::store::{FilterOptions, FilterResult, TaskStore};
 use std::collections::HashSet;
 
+/// A small undo/redo history for a single text buffer.
+#[derive(Clone, Debug, Default)]
+pub struct TextHistory {
+    pub undo: Vec<String>,
+    pub redo: Vec<String>,
+}
+
+impl TextHistory {
+    pub fn push(&mut self, text: String) {
+        if self.undo.last() != Some(&text) {
+            self.undo.push(text);
+            self.redo.clear();
+            if self.undo.len() > 50 {
+                self.undo.remove(0);
+            }
+        }
+    }
+    pub fn pop_undo(&mut self, current: String) -> Option<String> {
+        if let Some(prev) = self.undo.pop() {
+            self.redo.push(current);
+            Some(prev)
+        } else {
+            None
+        }
+    }
+    pub fn pop_redo(&mut self, current: String) -> Option<String> {
+        if let Some(next) = self.redo.pop() {
+            self.undo.push(current);
+            Some(next)
+        } else {
+            None
+        }
+    }
+    pub fn clear(&mut self) {
+        self.undo.clear();
+        self.redo.clear();
+    }
+}
+
 /// Unified session state held by the Rust core for each active client.
 #[cfg_attr(feature = "mobile", derive(uniffi::Record))]
 #[derive(Clone, Debug, Default)]

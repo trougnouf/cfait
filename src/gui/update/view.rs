@@ -343,88 +343,14 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
         }
         Message::SidebarInteractSpace => {
-            match app.sidebar_mode {
-                SidebarMode::Calendars => {
-                    let cals = app.get_filtered_calendars();
-                    if let Some(cal) = cals.get(app.sidebar_selection_idx) {
-                        let is_visible = !app.hidden_calendars.contains(&cal.href);
-                        return handle(
-                            app,
-                            Message::ToggleCalendarVisibility(cal.href.clone(), !is_visible),
-                        );
-                    }
-                }
-                SidebarMode::Categories => {
-                    let cats = &app.cached_categories;
-                    if let Some(cat) = cats.get(app.sidebar_selection_idx) {
-                        return handle(app, Message::CategoryToggled(cat.full_key.clone()));
-                    }
-                }
-                SidebarMode::Locations => {
-                    let locs = &app.cached_locations;
-                    if let Some(loc) = locs.get(app.sidebar_selection_idx) {
-                        return handle(app, Message::LocationToggled(loc.full_key.clone()));
-                    }
-                }
-                SidebarMode::Journal => {}
-                SidebarMode::Goals => {
-                    let mut keys: Vec<_> = app.core_config.goals.keys().cloned().collect();
-                    keys.sort();
-                    if let Some(key) = keys.get(app.sidebar_selection_idx) {
-                        if key.starts_with('#') {
-                            return handle(
-                                app,
-                                Message::JumpToTag(key.trim_start_matches('#').to_string()),
-                            );
-                        } else if key.starts_with("@@") {
-                            return handle(
-                                app,
-                                Message::JumpToLocation(key.trim_start_matches("@@").to_string()),
-                            );
-                        }
-                    }
-                }
+            if let Some(msg) = app.get_sidebar_action(false) {
+                return handle(app, msg);
             }
             Task::none()
         }
         Message::SidebarInteractEnter => {
-            match app.sidebar_mode {
-                SidebarMode::Calendars => {
-                    let cals = app.get_filtered_calendars();
-                    if let Some(cal) = cals.get(app.sidebar_selection_idx) {
-                        return handle(app, Message::SelectCalendar(cal.href.clone()));
-                    }
-                }
-                SidebarMode::Categories => {
-                    let cats = &app.cached_categories;
-                    if let Some(cat) = cats.get(app.sidebar_selection_idx) {
-                        return handle(app, Message::CategoryToggled(cat.full_key.clone()));
-                    }
-                }
-                SidebarMode::Locations => {
-                    let locs = &app.cached_locations;
-                    if let Some(loc) = locs.get(app.sidebar_selection_idx) {
-                        return handle(app, Message::LocationToggled(loc.full_key.clone()));
-                    }
-                }
-                SidebarMode::Journal => {}
-                SidebarMode::Goals => {
-                    let mut keys: Vec<_> = app.core_config.goals.keys().cloned().collect();
-                    keys.sort();
-                    if let Some(key) = keys.get(app.sidebar_selection_idx) {
-                        if key.starts_with('#') {
-                            return handle(
-                                app,
-                                Message::JumpToTag(key.trim_start_matches('#').to_string()),
-                            );
-                        } else if key.starts_with("@@") {
-                            return handle(
-                                app,
-                                Message::JumpToLocation(key.trim_start_matches("@@").to_string()),
-                            );
-                        }
-                    }
-                }
+            if let Some(msg) = app.get_sidebar_action(true) {
+                return handle(app, msg);
             }
             Task::none()
         }
@@ -565,13 +491,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     .perform(iced::widget::text_editor::Action::Edit(
                         iced::widget::text_editor::Edit::Insert('\t'),
                     ));
-                let new_text = app.description_value.text();
-                if old_text != new_text {
-                    app.desc_undo_stack.push(old_text);
-                    app.desc_redo_stack.clear();
-                    if app.desc_undo_stack.len() > 50 {
-                        app.desc_undo_stack.remove(0);
-                    }
+                if old_text != app.description_value.text() {
+                    app.desc_history.push(old_text);
                     app.last_edited_field = 1;
                 }
                 Task::none()
@@ -697,13 +618,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::SelectNext => {
             if app.active_focus == crate::gui::state::Focus::Sidebar {
-                let max = match app.sidebar_mode {
-                    SidebarMode::Calendars => app.get_filtered_calendars().len(),
-                    SidebarMode::Categories => app.cached_categories.len(),
-                    SidebarMode::Locations => app.cached_locations.len(),
-                    SidebarMode::Journal => 31, // Mini-calendar has ~31 days
-                    SidebarMode::Goals => app.core_config.goals.len(),
-                };
+                let max = app.get_sidebar_len();
                 if max > 0 {
                     app.sidebar_selection_idx = (app.sidebar_selection_idx + 1) % max;
                     let y_offset =
@@ -807,13 +722,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::SelectPrev => {
             if app.active_focus == crate::gui::state::Focus::Sidebar {
-                let max = match app.sidebar_mode {
-                    SidebarMode::Calendars => app.get_filtered_calendars().len(),
-                    SidebarMode::Categories => app.cached_categories.len(),
-                    SidebarMode::Locations => app.cached_locations.len(),
-                    SidebarMode::Journal => 31, // Mini-calendar has ~31 days
-                    SidebarMode::Goals => app.core_config.goals.len(),
-                };
+                let max = app.get_sidebar_len();
                 if max > 0 {
                     if app.sidebar_selection_idx == 0 {
                         app.sidebar_selection_idx = max.saturating_sub(1);

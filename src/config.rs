@@ -328,9 +328,6 @@ impl LogLevel {
 fn default_true() -> bool {
     true
 }
-fn default_cutoff() -> Option<u32> {
-    Some(30)
-}
 
 // Configuration version constant for migration handling
 const CURRENT_CONFIG_VERSION: u32 = 2;
@@ -414,6 +411,32 @@ impl TaskAction {
             TaskAction::Focus => rust_i18n::t!("focus_hide_others").to_string(),
             TaskAction::EditTree => rust_i18n::t!("edit_tree_title").to_string(),
             TaskAction::CompleteTree => rust_i18n::t!("action_complete_tree").to_string(),
+        }
+    }
+
+    pub fn search_aliases(&self) -> &'static [&'static str] {
+        match self {
+            TaskAction::ToggleDetails => &["l", "details"],
+            TaskAction::CompleteAndShift => &["r", "rep", "repeat"],
+            TaskAction::ToggleTimer => &["s", "start", "pause"],
+            TaskAction::StopTimer => &["stop"],
+            TaskAction::AddSession => &["t", "log"],
+            TaskAction::IncreasePriority => &["+", "up"],
+            TaskAction::DecreasePriority => &["-", "down"],
+            TaskAction::Edit => &["e"],
+            TaskAction::EditTree => &["tree", "edit"],
+            TaskAction::Yank => &["y", "copy"],
+            TaskAction::TogglePin => &["p", "pin"],
+            TaskAction::CreateSubtask => &["c", "sub"],
+            TaskAction::DuplicateTree => &["d", "dup"],
+            TaskAction::CompleteTree => &["tree", "complete"],
+            TaskAction::Promote => &["<", "outdent"],
+            TaskAction::Move => &["m"],
+            TaskAction::Cancel => &["x"],
+            TaskAction::Delete | TaskAction::DeleteTree => &["del", "rm"],
+            TaskAction::OpenUrl => &["o", "url", "link"],
+            TaskAction::OpenCoordinates | TaskAction::OpenLocations => &["g", "map"],
+            TaskAction::Focus => &["f", "focus"],
         }
     }
 }
@@ -513,10 +536,6 @@ fn default_urgent_prio() -> u8 {
     1
 }
 
-fn default_enable_local_mode() -> bool {
-    true
-}
-
 fn default_start_grace_period() -> u32 {
     1
 }
@@ -546,17 +565,10 @@ fn default_delete_events_on_completion() -> bool {
     false
 }
 
-fn default_refresh_interval() -> u32 {
-    30
-}
-
 fn default_max_done_roots() -> usize {
     20
 }
 
-fn default_ui_scale() -> f32 {
-    1.0
-}
 fn default_max_done_subtasks() -> usize {
     5
 }
@@ -576,18 +588,6 @@ fn default_trash_retention() -> u32 {
 
 fn default_duration_goal_mins() -> u32 {
     60
-}
-
-fn default_window_width() -> f32 {
-    1024.0
-}
-
-fn default_window_height() -> f32 {
-    768.0
-}
-
-fn default_log_level() -> LogLevel {
-    LogLevel::Warn
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, EnumIter)]
@@ -664,191 +664,101 @@ impl fmt::Display for AppTheme {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
+#[serde(default)]
 pub struct Config {
     /// IMPORTANT FOR DEVELOPERS:
     /// If you add a new action to `default_pinned_actions()` or modify a default
     /// collection that existing users should inherit, you MUST increment
     /// `CURRENT_CONFIG_VERSION` and add a migration step in `Config::load()`.
     /// Otherwise, existing users' saved configs will override your new defaults.
-    #[serde(default)]
     pub config_version: u32,
-
     pub url: String,
     pub username: String,
 
-    // Skip saving to disk, but allow reading (with default) for migration!
-    #[serde(skip_serializing, default)]
+    #[serde(skip_serializing)]
     pub password: String,
 
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tls_client_cert_path: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tls_client_key_path: Option<String>,
 
-    #[serde(default)]
     pub allow_insecure_certs: bool,
-    #[serde(default)]
     pub disabled_calendars: Vec<String>,
-
     pub default_calendar: Option<String>,
-    #[serde(default = "default_enable_local_mode")]
     pub enable_local_mode: bool,
-    #[serde(default)]
     pub hide_completed: bool,
-    #[serde(default)]
     pub strikethrough_completed: bool,
-    #[serde(default = "default_true")]
     pub hide_fully_completed_tags: bool,
-    #[serde(default = "default_true")]
     pub hide_aliases_in_sidebar: bool,
-    #[serde(default = "default_true")]
     pub show_inline_descriptions: bool,
-    #[serde(default = "default_ui_scale")]
     pub ui_scale: f32,
-    #[serde(default = "default_cutoff")]
     pub sort_cutoff_days: Option<u32>,
     /// When `true`, rank-4 (standard tasks with a due date within the cutoff) are sorted
     /// by priority first, then by due date.  Default is `false` (date-first).
-    #[serde(default)]
     pub sort_standard_by_priority: bool,
-    #[serde(default)]
     pub paused_sort_behavior: PausedSortBehavior,
-    #[serde(default)]
     pub sort_tiebreak_recent: bool,
     /// Priority order for sorting tasks within the urgent/due soon/started ranks.
     /// See `SortPreset` enum for available options.
-    #[serde(default)]
     pub sort_preset: SortPreset,
-    #[serde(default)]
     pub theme: AppTheme,
 
     // Optional language/locale selection. None = use system default.
-    #[serde(default)]
     pub language: Option<String>,
-
-    #[serde(default)]
     pub first_day_of_week: FirstDayOfWeek,
-
-    #[serde(default = "default_urgent_days")]
     pub urgent_days_horizon: u32,
-    #[serde(default = "default_urgent_prio")]
     pub urgent_priority_threshold: u8,
-    #[serde(default = "default_priority")]
     pub default_priority: u8,
-    #[serde(default = "default_start_grace_period")]
     pub start_grace_period_days: u32,
-
-    #[serde(default = "default_auto_remind")]
     pub auto_reminders: bool,
-    #[serde(default = "default_remind_time")]
     pub default_reminder_time: String, // Format "HH:MM"
-
-    #[serde(default = "default_snooze_1")]
     pub snooze_short_mins: u32,
-    #[serde(default = "default_snooze_2")]
     pub snooze_long_mins: u32,
-
-    #[serde(default = "default_create_events")]
     pub create_events_for_tasks: bool,
-
-    #[serde(default = "default_delete_events_on_completion")]
     pub delete_events_on_completion: bool,
-
-    #[serde(default = "default_refresh_interval")]
     pub auto_refresh_interval_mins: u32,
 
     // Default retention for local trash. This setting has been moved to the
     // Advanced Settings UI; default value reduced to 14 days.
-    #[serde(default = "default_trash_retention")]
     pub trash_retention_days: u32, // Integer: Days to keep items in local trash before permanent delete. 0 to disable trash.
-
-    #[serde(default = "default_duration_goal_mins")]
     pub default_duration_goal_mins: u32,
-
-    #[serde(default)]
     pub sessions_count_as_completions: bool,
-
-    #[serde(default = "default_max_done_roots")]
     pub max_done_roots: usize,
-    #[serde(default = "default_max_done_subtasks")]
     pub max_done_subtasks: usize,
-
-    #[serde(default = "default_true")]
     pub show_ongoing_notifications: bool,
-    #[serde(default = "default_true")]
     pub show_priority_numbers: bool,
-
-    #[serde(default = "default_pinned_actions")]
     pub pinned_actions: Vec<TaskAction>,
-
-    #[serde(default = "default_quick_filter_term")]
     pub quick_filter_term: String,
-    #[serde(default = "default_quick_filter_icon")]
     pub quick_filter_icon: String,
-    #[serde(default = "default_true")]
     pub show_quick_filter: bool,
-
-    #[serde(default = "default_true")]
     pub show_calendars_tab: bool,
-
-    #[serde(default = "default_true")]
     pub show_tags_tab: bool,
-
-    #[serde(default = "default_true")]
     pub show_locations_tab: bool,
-
-    #[serde(default = "default_true")]
     pub show_goals_tab: bool,
-
-    #[serde(default = "default_true")]
     pub show_journal_tab: bool,
-
-    #[serde(default = "default_true")]
     pub show_task_goals_in_sidebar: bool,
-
-    #[serde(default = "default_true")]
     pub show_undo_snackbar: bool,
-
-    #[serde(default)]
     pub sidebar_is_hidden: bool,
-
-    #[serde(default)]
     pub blur_when_unfocused: bool,
-
-    #[serde(default)]
     pub description_editor: String,
 
     // Logging level for both file and terminal output
-    #[serde(default = "default_log_level")]
     pub log_level: LogLevel,
 
     // Maps are typically at the end in TOML
-    #[serde(default)]
     pub hidden_calendars: Vec<String>,
-    #[serde(default)]
     pub collection_order: Vec<String>,
-    #[serde(default)]
     pub tag_aliases: HashMap<String, Vec<String>>,
-    #[serde(default)]
     pub goals: HashMap<String, Goal>,
 
     // UI State
-    #[serde(default)]
     pub expanded_tags: Vec<String>,
-    #[serde(default)]
     pub expanded_locations: Vec<String>,
-
-    #[serde(default = "default_true")]
     pub sync_settings: bool,
-    #[serde(default)]
     pub settings_updated_at: i64,
-
-    #[serde(default = "default_window_width")]
     pub window_width: f32,
-    #[serde(default = "default_window_height")]
     pub window_height: f32,
-
-    #[serde(default = "default_true")]
     pub sort_collections_by_size: bool,
 }
 
@@ -1001,9 +911,22 @@ impl Default for Config {
             max_done_subtasks: 5,
             show_ongoing_notifications: true,
             show_priority_numbers: true,
-            pinned_actions: default_pinned_actions(),
-            quick_filter_term: default_quick_filter_term(),
-            quick_filter_icon: default_quick_filter_icon(),
+            pinned_actions: vec![
+                TaskAction::OpenUrl,
+                TaskAction::OpenCoordinates,
+                TaskAction::ToggleDetails,
+                TaskAction::ToggleTimer,
+                TaskAction::IncreasePriority,
+                TaskAction::DecreasePriority,
+                TaskAction::Cancel,
+                TaskAction::Edit,
+                TaskAction::EditTree,
+                TaskAction::Yank,
+                TaskAction::CreateSubtask,
+                TaskAction::Focus,
+            ],
+            quick_filter_term: "is:ready".to_string(),
+            quick_filter_icon: "f0fa9".to_string(),
             show_quick_filter: true,
             show_calendars_tab: true,
             show_tags_tab: true,
@@ -1016,14 +939,14 @@ impl Default for Config {
             sidebar_is_hidden: false,
             first_day_of_week: FirstDayOfWeek::default(),
             description_editor: String::new(),
-            log_level: default_log_level(),
+            log_level: LogLevel::Warn,
             expanded_tags: vec!["j:pages".to_string()],
             expanded_locations: Vec::new(),
             sync_settings: true,
             settings_updated_at: 0,
             goals: HashMap::new(),
-            window_width: default_window_width(),
-            window_height: default_window_height(),
+            window_width: 1024.0,
+            window_height: 768.0,
             sort_collections_by_size: true,
         }
     }

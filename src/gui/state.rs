@@ -297,15 +297,65 @@ pub struct GuiApp {
     pub undo_stack: Vec<crate::journal::UndoRecord>,
     pub redo_stack: Vec<crate::journal::UndoRecord>,
 
-    pub input_undo_stack: Vec<String>,
-    pub input_redo_stack: Vec<String>,
-    pub desc_undo_stack: Vec<String>,
-    pub desc_redo_stack: Vec<String>,
+    pub input_history: crate::model::session::TextHistory,
+    pub desc_history: crate::model::session::TextHistory,
     pub last_edited_field: u8, // 0 for main input, 1 for description
     pub editor_maximized: bool,
 }
 
 impl GuiApp {
+    pub fn get_sidebar_len(&self) -> usize {
+        match self.sidebar_mode {
+            SidebarMode::Calendars => self.get_filtered_calendars().len(),
+            SidebarMode::Categories => self.cached_categories.len(),
+            SidebarMode::Locations => self.cached_locations.len(),
+            SidebarMode::Journal => 31,
+            SidebarMode::Goals => self.core_config.goals.len(),
+        }
+    }
+
+    pub fn get_sidebar_action(&self, is_enter: bool) -> Option<crate::gui::message::Message> {
+        let idx = self.sidebar_selection_idx;
+        match self.sidebar_mode {
+            SidebarMode::Calendars => self.get_filtered_calendars().get(idx).map(|c| {
+                if is_enter {
+                    crate::gui::message::Message::SelectCalendar(c.href.clone())
+                } else {
+                    crate::gui::message::Message::ToggleCalendarVisibility(
+                        c.href.clone(),
+                        self.hidden_calendars.contains(&c.href),
+                    )
+                }
+            }),
+            SidebarMode::Categories => self
+                .cached_categories
+                .get(idx)
+                .map(|c| crate::gui::message::Message::CategoryToggled(c.full_key.clone())),
+            SidebarMode::Locations => self
+                .cached_locations
+                .get(idx)
+                .map(|c| crate::gui::message::Message::LocationToggled(c.full_key.clone())),
+            SidebarMode::Goals => {
+                let mut keys: Vec<_> = self.core_config.goals.keys().cloned().collect();
+                keys.sort();
+                keys.get(idx).and_then(|key| {
+                    if key.starts_with('#') {
+                        Some(crate::gui::message::Message::JumpToTag(
+                            key.trim_start_matches('#').to_string(),
+                        ))
+                    } else if key.starts_with("@@") {
+                        Some(crate::gui::message::Message::JumpToLocation(
+                            key.trim_start_matches("@@").to_string(),
+                        ))
+                    } else {
+                        None
+                    }
+                })
+            }
+            SidebarMode::Journal => None,
+        }
+    }
+
     pub fn sort_calendars(&mut self) {
         let order = self.core_config.collection_order.clone();
         let sort_by_size = self.sort_collections_by_size;
@@ -679,10 +729,8 @@ impl Default for GuiApp {
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
 
-            input_undo_stack: Vec::new(),
-            input_redo_stack: Vec::new(),
-            desc_undo_stack: Vec::new(),
-            desc_redo_stack: Vec::new(),
+            input_history: crate::model::session::TextHistory::default(),
+            desc_history: crate::model::session::TextHistory::default(),
             last_edited_field: 0,
             editor_maximized: false,
         }
