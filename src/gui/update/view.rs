@@ -22,11 +22,7 @@ fn flush_journal_save(app: &mut GuiApp) {
         Some(uid.clone())
     } else {
         let date = app.journal_date;
-        let href = app
-            .journal_editing_href
-            .clone()
-            .or(app.active_cal_href.clone())
-            .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
+        let href = app.resolve_journal_href(date);
 
         let existing_opt = app
             .store
@@ -74,6 +70,23 @@ fn flush_journal_save(app: &mut GuiApp) {
         {
             let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(actions));
         }
+    }
+}
+
+/// Load the daily-note content for `date` from `href` into the journal editor,
+/// leaving `journal_editing_uid` untouched (callers keep it `None` for the
+/// daily-note view).
+fn load_daily_note_into(app: &mut GuiApp, href: &str, date: chrono::NaiveDate) {
+    if let Some(entry) = app.store.get_journal_entry(href, date) {
+        let md = crate::model::extractor::serialize_task_tree(
+            &app.store,
+            &entry.uid,
+            &app.calendars,
+            true,
+        );
+        app.journal_editor_content = iced::widget::text_editor::Content::with_text(&md);
+    } else {
+        app.journal_editor_content = iced::widget::text_editor::Content::new();
     }
 }
 
@@ -953,27 +966,53 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 *focus = Focus::Sidebar;
             }
             if mode == SidebarMode::Journal {
-                let d = app.journal_date;
                 if app.journal_date_input.is_empty() {
-                    app.journal_date_input = d.format("%Y-%m-%d").to_string();
+                    app.journal_date_input = app.journal_date.format("%Y-%m-%d").to_string();
                 }
-                let href = app
-                    .journal_editing_href
-                    .clone()
-                    .or(app.active_cal_href.clone())
-                    .unwrap_or_default();
-                app.journal_editing_uid = None;
-                if let Some(entry) = app.store.get_journal_entry(&href, d) {
-                    let md = crate::model::extractor::serialize_task_tree(
-                        &app.store,
-                        &entry.uid,
-                        &app.calendars,
-                        true,
-                    );
-                    app.journal_editor_content = iced::widget::text_editor::Content::with_text(&md);
-                    app.journal_editing_uid = Some(entry.uid.clone());
+                if !app.journal_initialized {
+                    // First visit since app start: default to today's daily
+                    // note in the current write collection.
+                    app.journal_initialized = true;
+                    app.journal_date = chrono::Local::now().date_naive();
+                    let today = app.journal_date;
+                    app.journal_date_input = today.format("%Y-%m-%d").to_string();
+                    let href = app.resolve_journal_href(today);
+                    app.journal_editing_uid = None;
+                    app.journal_title_input.clear();
+                    load_daily_note_into(app, &href, today);
                 } else {
-                    app.journal_editor_content = iced::widget::text_editor::Content::new();
+                    // Subsequent visit: restore whatever page/date was left,
+                    // but fall back to today's daily note if the bound
+                    // page/collection no longer exists or is filtered out.
+                    let needs_fallback = if let Some(uid) = app.journal_editing_uid.clone() {
+                        match app.store.get_task_ref(&uid) {
+                            Some(t) if t.is_journal && app.collection_visible(&t.calendar_href) => {
+                                app.active_cal_href = Some(t.calendar_href.clone());
+                                false
+                            }
+                            _ => true,
+                        }
+                    } else {
+                        let bound = app
+                            .journal_editing_href
+                            .clone()
+                            .or_else(|| app.active_cal_href.clone());
+                        match bound {
+                            Some(h) if app.collection_visible(&h) => false,
+                            _ => true,
+                        }
+                    };
+                    if needs_fallback {
+                        app.journal_editing_uid = None;
+                        app.journal_title_input.clear();
+                        app.journal_date = chrono::Local::now().date_naive();
+                        let today = app.journal_date;
+                        app.journal_date_input = today.format("%Y-%m-%d").to_string();
+                        let href = app.resolve_journal_href(today);
+                        app.journal_editing_href = Some(href.clone());
+                        app.active_cal_href = Some(href.clone());
+                        load_daily_note_into(app, &href, today);
+                    }
                 }
             }
             refresh_filtered_tasks(app);
@@ -985,11 +1024,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.journal_title_input.clear();
             app.journal_date = date;
             app.journal_date_input = date.format("%Y-%m-%d").to_string();
-            let href = app
-                .journal_editing_href
-                .clone()
-                .or(app.active_cal_href.clone())
-                .unwrap_or_default();
+            let href = app.resolve_journal_href(date);
 
             if let Some(entry) = app.store.get_journal_entry(&href, date) {
                 let md = crate::model::extractor::serialize_task_tree(
@@ -1132,11 +1167,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 flush_journal_save(app);
                 app.journal_editing_uid = None;
                 app.journal_date = parsed;
-                let href = app
-                    .journal_editing_href
-                    .clone()
-                    .or(app.active_cal_href.clone())
-                    .unwrap_or_default();
+                let href = app.resolve_journal_href(parsed);
                 if let Some(entry) = app.store.get_journal_entry(&href, parsed) {
                     let md = crate::model::extractor::serialize_task_tree(
                         &app.store,

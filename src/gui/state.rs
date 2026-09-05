@@ -99,6 +99,10 @@ pub struct GuiApp {
     pub journal_editing_uid: Option<String>,
     pub journal_title_input: String,
     pub journal_debounce_version: usize,
+    /// Whether the Journal tab has been opened at least once since app start.
+    /// The first visit defaults to today's daily note; later visits restore
+    /// whatever page/date the user left the tab on.
+    pub journal_initialized: bool,
 
     // Preferences
     pub hide_completed: bool,
@@ -355,6 +359,61 @@ impl GuiApp {
         }
     }
 
+    /// Resolve the collection (calendar href) the journal editor should bind to
+    /// for the given date: an explicitly chosen journal collection, then the
+    /// active (write) collection, then the first visible journal-supporting
+    /// calendar (preferring one that already has an entry for `date`), finally
+    /// the local calendar. Mirrors the resolution used by the journal main pane
+    /// so the editor and the highlighted collection button stay in sync.
+    pub fn resolve_journal_href(&self, date: chrono::NaiveDate) -> String {
+        if let Some(h) = self
+            .journal_editing_href
+            .clone()
+            .or_else(|| self.active_cal_href.clone())
+        {
+            return h;
+        }
+        let mut visible: Vec<&CalendarListEntry> = self
+            .calendars
+            .iter()
+            .filter(|c| {
+                let supports = if c.href.starts_with("local://") {
+                    true
+                } else {
+                    c.supports_vjournal.unwrap_or(false)
+                };
+                supports
+                    && !self.hidden_calendars.contains(&c.href)
+                    && !self.disabled_calendars.contains(&c.href)
+                    && c.href != crate::storage::LOCAL_TRASH_HREF
+                    && c.href != "local://recovery"
+            })
+            .collect();
+        visible.sort_by_key(|c| {
+            if self.store.get_journal_entry(&c.href, date).is_some() {
+                0
+            } else {
+                1
+            }
+        });
+        visible
+            .first()
+            .map(|c| c.href.clone())
+            .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string())
+    }
+
+    /// Whether a collection is present and currently visible (not hidden or
+    /// disabled, not the trash/recovery pseudo-calendars).
+    pub fn collection_visible(&self, href: &str) -> bool {
+        self.calendars.iter().any(|c| {
+            c.href == href
+                && !self.hidden_calendars.contains(&c.href)
+                && !self.disabled_calendars.contains(&c.href)
+                && c.href != crate::storage::LOCAL_TRASH_HREF
+                && c.href != "local://recovery"
+        })
+    }
+
     pub fn sort_calendars(&mut self) {
         let order = self.core_config.collection_order.clone();
         let sort_by_size = self.sort_collections_by_size;
@@ -549,6 +608,7 @@ impl Default for GuiApp {
             journal_editing_uid: None,
             journal_title_input: String::new(),
             journal_debounce_version: 0,
+            journal_initialized: false,
 
             hovered_tag_uid: None,
 
