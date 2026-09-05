@@ -677,6 +677,20 @@ impl RustyClient {
                 }
             }
 
+            // Fallback: if still nothing found, try Nextcloud's CalDAV root path
+            if calendars.is_empty()
+                && user_configured_path != "/remote.php/dav"
+                && user_configured_path != "/remote.php/dav/"
+                && let Ok(nc_fallback) = self.perform_calendar_discovery("/remote.php/dav").await
+                && !nc_fallback.is_empty()
+            {
+                calendars = nc_fallback;
+                let base_uri = self.client.as_ref().unwrap().base_url();
+                if let (Some(scheme), Some(authority)) = (base_uri.scheme(), base_uri.authority()) {
+                    corrected_url = Some(format!("{}://{}/remote.php/dav", scheme, authority));
+                }
+            }
+
             // Include local calendars; but only show recovery/trash if they contain tasks
             if let Ok(local_cals) = LocalCalendarRegistry::load(self.ctx.as_ref()) {
                 for local_cal in local_cals {
