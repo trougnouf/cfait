@@ -1158,7 +1158,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 .as_ref()
                 .and_then(|h| crate::color_utils::parse_hex_to_floats(h))
                 .map(|(r, g, b)| Color::from_rgb(r, g, b))
-                .unwrap_or(Color::from_rgb(0.5, 0.5, 0.5));
+                .unwrap_or(Color::from_rgb(0.2, 0.4, 0.8));
 
             let color_btn = button(
                 text(icon::PALETTE_COLOR.to_string())
