@@ -280,7 +280,7 @@ jobs:
         run: |
           echo "=== Benchmark environment ==="
           echo "Date: $(date -u)"
-          echo "Hostname: $(hostname)"
+          echo "Hostname: $(cat /proc/sys/kernel/hostname 2>/dev/null || echo unknown)"
           echo "--- CPU ---"
           nproc
           grep -m1 "model name" /proc/cpuinfo || true

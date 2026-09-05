@@ -15,6 +15,26 @@ static CMD_HELD: AtomicBool = AtomicBool::new(false);
 pub static ACTIVE_FOCUS: std::sync::LazyLock<std::sync::RwLock<Focus>> =
     std::sync::LazyLock::new(|| std::sync::RwLock::new(Focus::default()));
 
+/// Maps a digit character (1-5) to the corresponding sidebar tab message.
+/// Uses `modified_key` (the logical character with modifiers like Shift applied,
+/// except Ctrl) so it matches the character the user actually typed on their
+/// layout — e.g. on programmer Dvorak, "1" is Shift+key, and this still matches.
+fn digit_sidebar_message(modified_key: &keyboard::Key) -> Option<Message> {
+    let s = match modified_key.as_ref() {
+        keyboard::Key::Character(s) => s,
+        _ => return None,
+    };
+    let mode = match s {
+        "1" => SidebarMode::Calendars,
+        "2" => SidebarMode::Categories,
+        "3" => SidebarMode::Locations,
+        "4" => SidebarMode::Goals,
+        "5" => SidebarMode::Journal,
+        _ => return None,
+    };
+    Some(Message::SidebarModeChanged(mode))
+}
+
 pub fn subscription(app: &GuiApp) -> Subscription<Message> {
     let mut subs = Vec::new();
 
@@ -185,7 +205,13 @@ fn handle_hotkey(
 
     // Allow certain keys to bypass capture (e.g. Escape to unfocus, Ctrl+S to save)
     if status == iced::event::Status::Captured {
-        if let iced::Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) = &evt {
+        if let iced::Event::Keyboard(keyboard::Event::KeyPressed {
+            key,
+            modifiers,
+            modified_key,
+            ..
+        }) = &evt
+        {
             if *key == keyboard::Key::Named(Named::Escape) {
                 return Some(Message::EscCaptured);
             }
@@ -210,13 +236,16 @@ fn handle_hotkey(
                         }
                     }
                     "y" => return Some(Message::Redo),
-                    "1" => return Some(Message::SidebarModeChanged(SidebarMode::Calendars)),
-                    "2" => return Some(Message::SidebarModeChanged(SidebarMode::Categories)),
-                    "3" => return Some(Message::SidebarModeChanged(SidebarMode::Locations)),
-                    "4" => return Some(Message::SidebarModeChanged(SidebarMode::Goals)),
-                    "5" => return Some(Message::SidebarModeChanged(SidebarMode::Journal)),
                     _ => {}
                 }
+            }
+
+            // Ctrl/Cmd + digit: switch sidebar tab by logical character
+            // (matches the typed digit on any layout; works even from a text field)
+            if is_cmd
+                && let Some(msg) = digit_sidebar_message(modified_key)
+            {
+                return Some(msg);
             }
 
             // If we are definitely not in a text input, steal navigation keys back from Iced's Scrollables/Buttons.
@@ -246,7 +275,13 @@ fn handle_hotkey(
         return None;
     }
 
-    if let iced::Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) = evt {
+    if let iced::Event::Keyboard(keyboard::Event::KeyPressed {
+        key,
+        modifiers,
+        modified_key,
+        ..
+    }) = evt
+    {
         // Catch zoom shortcuts and other modifiers BEFORE we ignore modifier combinations.
         let is_cmd = modifiers.command() || modifiers.control();
 
@@ -285,21 +320,28 @@ fn handle_hotkey(
                         }
                     }
                     "y" => return Some(Message::Redo),
-                    "1" => return Some(Message::SidebarModeChanged(SidebarMode::Calendars)),
-                    "2" => return Some(Message::SidebarModeChanged(SidebarMode::Categories)),
-                    "3" => return Some(Message::SidebarModeChanged(SidebarMode::Locations)),
-                    "4" => return Some(Message::SidebarModeChanged(SidebarMode::Goals)),
-                    "5" => return Some(Message::SidebarModeChanged(SidebarMode::Journal)),
                     _ => {}
                 }
             } else if let keyboard::Key::Named(Named::Delete) = key.as_ref() {
                 return Some(Message::KeyboardDeleteTaskTree);
+            }
+
+            // Ctrl/Cmd + digit: switch sidebar tab by logical character
+            // (matches the typed digit on any layout; works even from a text field)
+            if let Some(msg) = digit_sidebar_message(&modified_key) {
+                return Some(msg);
             }
         }
 
         // Ignore if Ctrl/Alt/Cmd is held for everything else
         if modifiers.command() || modifiers.control() || modifiers.alt() {
             return None;
+        }
+
+        // Bare digit: switch sidebar tab by logical character (matches the typed
+        // digit on any layout, e.g. Shift+key on programmer Dvorak)
+        if let Some(msg) = digit_sidebar_message(&modified_key) {
+            return Some(msg);
         }
 
         match key.as_ref() {
@@ -340,13 +382,8 @@ fn handle_hotkey(
                     ("/", false) => Some(Message::FocusSearch),
                     ("/", true) => Some(Message::OpenHelp(crate::help::HelpTab::Shortcuts)),
                     ("?", _) => Some(Message::OpenHelp(crate::help::HelpTab::Shortcuts)),
-                    // Fallback to match exact char for symbols and numbers
+                    // Fallback to match exact char for symbols
                     _ => match s {
-                        "1" => Some(Message::SidebarModeChanged(SidebarMode::Calendars)),
-                        "2" => Some(Message::SidebarModeChanged(SidebarMode::Categories)),
-                        "3" => Some(Message::SidebarModeChanged(SidebarMode::Locations)),
-                        "4" => Some(Message::SidebarModeChanged(SidebarMode::Goals)),
-                        "5" => Some(Message::SidebarModeChanged(SidebarMode::Journal)),
                         "*" => Some(Message::ClearAllFilters),
                         "+" | "=" => Some(Message::ChangePrioritySelected(1)),
                         "-" => Some(Message::ChangePrioritySelected(-1)),
