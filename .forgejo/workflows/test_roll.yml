@@ -251,3 +251,63 @@ jobs:
             "$TAG_NAME"
 
           echo "✅ Rolling release updated successfully with all assets!"
+
+  # --- JOB: BENCHMARK (report-only, runs after the rolling uploads) ---
+  # Runs the criterion benchmarks in `benches/` and uploads the timing output
+  # plus the per-benchmark reports as an artifact. This job is non-gating: a
+  # regression or a bench crash does not fail the PR/master push.
+  #
+  # It is sequenced after the rolling artifact uploads (needs the rolling
+  # jobs) so the ~5-minute bench run never delays the release artifacts. It
+  # only requires `test` to have passed (don't bench broken code); a failed
+  # rolling build does not block it.
+  bench:
+    needs: [test, rolling-android, rolling-windows, rolling-flatpak]
+    if: always() && needs.test.result == 'success'
+    runs-on: self-hosted-arch
+    container:
+      image: local/arch-builder
+      volumes:
+        - cargo-registry:/usr/local/cargo/registry
+      env:
+        RUSTFLAGS: "-C debuginfo=0"
+    continue-on-error: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Print system load
+        run: |
+          echo "=== Benchmark environment ==="
+          echo "Date: $(date -u)"
+          echo "Hostname: $(hostname)"
+          echo "--- CPU ---"
+          nproc
+          grep -m1 "model name" /proc/cpuinfo || true
+          echo "--- Load average (1/5/15 min) ---"
+          cat /proc/loadavg
+          uptime || true
+          echo "--- Memory ---"
+          free -h || true
+
+      - name: Run benchmarks (criterion)
+        continue-on-error: true
+        run: |
+          cargo bench --bench core --locked 2>&1 | tee bench-output.txt
+
+      - name: Package criterion reports
+        if: always()
+        run: |
+          if [ -d target/criterion ]; then
+            tar -czf criterion-reports.tar.gz -C target criterion
+          fi
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: bench-results-${{ github.sha }}
+          path: |
+            bench-output.txt
+            criterion-reports.tar.gz
+          retention-days: 14

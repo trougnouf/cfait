@@ -124,6 +124,11 @@ uuid = { version = "1.24", features = ["v4"] }
 serial_test = "4.0"
 uniffi_meta = "0.32"
 # Required to run the bindgen binary
+criterion = "0.5" # For the `benches/` benchmarks (`cargo bench`)
+
+[[bench]]
+name = "core"
+harness = false
 
 [features]
 default = ["tui"]
