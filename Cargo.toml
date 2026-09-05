@@ -38,10 +38,10 @@ name = "cfait"
 # --- COMMON (Core Logic) ---
 chrono = { version = "0.4", features = ["serde"] }
 icalendar = "0.17"
-uuid = { version = "1.24", features = ["v4"] }
+uuid = { version = "1.26", features = ["v4"] }
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros", "fs", "io-util"] }
 camino = "1.2"
-libdav = { git = "https://git.sr.ht/~whynothugo/libdav", rev = "30debd36a52e06cf5e57f3d5a199b4e3f96d353d" }
+libdav = "0.11"
 http = "1.5"
 hyper-util = { version = "0.1", features = ["client", "client-legacy", "http1", "tokio"] }
 hyper-rustls = { version = "0.27", features = ["native-tokio"] }
@@ -120,11 +120,11 @@ ndk-context = "0.1"
 [dev-dependencies]
 mockito = "1.7" # For mocking the HTTP server
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros", "fs", "io-util"] }
-uuid = { version = "1.24", features = ["v4"] }
+uuid = { version = "1.26", features = ["v4"] }
 serial_test = "4.0"
 uniffi_meta = "0.32"
 # Required to run the bindgen binary
-criterion = "0.5" # For the `benches/` benchmarks (`cargo bench`)
+criterion = "0.8" # For the `benches/` benchmarks (`cargo bench`)
 
 [[bench]]
 name = "core"
