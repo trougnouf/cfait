@@ -598,34 +598,30 @@ pub fn serialize_task_tree(
         }
 
         let mut result = Vec::with_capacity(n);
-        let mut processed = vec![false; n];
-        let mut remaining_count = n;
 
-        while remaining_count > 0 {
-            let mut progressed = false;
-            for i in 0..n {
-                if !processed[i] && in_degree[i] == 0 {
-                    processed[i] = true;
-                    remaining_count -= 1;
-                    result.push(i);
-                    for &dependent in &graph[i] {
-                        in_degree[dependent] = in_degree[dependent].saturating_sub(1);
-                    }
-                    progressed = true;
-                    break;
+        // Kahn's algorithm using a min-heap keyed by index. The list is already
+        // deterministically sorted (created date, then summary); always emitting the
+        // smallest available index preserves that ordering (and stable git diffs)
+        // while reducing the sort from O(V^2) to O((V+E) log V).
+        let mut zero_in_degree: std::collections::BinaryHeap<std::cmp::Reverse<usize>> = (0..n)
+            .filter(|&i| in_degree[i] == 0)
+            .map(std::cmp::Reverse)
+            .collect();
+
+        while let Some(std::cmp::Reverse(i)) = zero_in_degree.pop() {
+            result.push(i);
+            for &dependent in &graph[i] {
+                in_degree[dependent] -= 1;
+                if in_degree[dependent] == 0 {
+                    zero_in_degree.push(std::cmp::Reverse(dependent));
                 }
             }
-            if !progressed {
-                for i in 0..n {
-                    if !processed[i] {
-                        processed[i] = true;
-                        remaining_count -= 1;
-                        result.push(i);
-                        for &dependent in &graph[i] {
-                            in_degree[dependent] = in_degree[dependent].saturating_sub(1);
-                        }
-                        break;
-                    }
+        }
+
+        if result.len() < n {
+            for (i, &deg) in in_degree.iter().enumerate() {
+                if deg > 0 {
+                    result.push(i);
                 }
             }
         }

@@ -244,34 +244,31 @@ pub fn organize_hierarchy(
         }
 
         let mut result = Vec::with_capacity(n);
-        let mut processed = vec![false; n];
-        let mut remaining = n;
 
-        while remaining > 0 {
-            let mut progressed = false;
-            for i in 0..n {
-                if !processed[i] && in_degree[i] == 0 {
-                    processed[i] = true;
-                    remaining -= 1;
-                    result.push(i);
-                    for &dependent in &graph[i] {
-                        in_degree[dependent] = in_degree[dependent].saturating_sub(1);
-                    }
-                    progressed = true;
-                    break;
+        // Kahn's algorithm using a min-heap keyed by index. The input list is already
+        // sorted by rank/priority, so "lowest index" encodes that order; always
+        // emitting the smallest available index preserves the original selection
+        // priority while reducing the sort from O(V^2) to O((V+E) log V).
+        let mut zero_in_degree: std::collections::BinaryHeap<std::cmp::Reverse<usize>> = (0..n)
+            .filter(|&i| in_degree[i] == 0)
+            .map(std::cmp::Reverse)
+            .collect();
+
+        while let Some(std::cmp::Reverse(i)) = zero_in_degree.pop() {
+            result.push(i);
+            for &dependent in &graph[i] {
+                in_degree[dependent] -= 1;
+                if in_degree[dependent] == 0 {
+                    zero_in_degree.push(std::cmp::Reverse(dependent));
                 }
             }
-            if !progressed {
-                for i in 0..n {
-                    if !processed[i] {
-                        processed[i] = true;
-                        remaining -= 1;
-                        result.push(i);
-                        for &dependent in &graph[i] {
-                            in_degree[dependent] = in_degree[dependent].saturating_sub(1);
-                        }
-                        break;
-                    }
+        }
+
+        // If there's a cycle, some nodes weren't added. Add them in index order to not lose data.
+        if result.len() < n {
+            for (i, &deg) in in_degree.iter().enumerate() {
+                if deg > 0 {
+                    result.push(i);
                 }
             }
         }
@@ -3244,27 +3241,33 @@ impl TaskStore {
             } else {
                 let mut seen_for_task = HashSet::new();
                 for cat in t.categories.iter().chain(t.transient_desc_tags.iter()) {
+                    let cat_lower = cat.to_lowercase();
                     let parts: Vec<&str> = cat.split(':').collect();
-                    let mut current_hierarchy = String::with_capacity(cat.len());
+                    let parts_lower: Vec<&str> = cat_lower.split(':').collect();
 
-                    for (i, part) in parts.iter().enumerate() {
+                    let mut current_hierarchy = String::with_capacity(cat.len());
+                    let mut current_lower = String::with_capacity(cat.len());
+
+                    for (i, (part, part_lower)) in parts.iter().zip(parts_lower.iter()).enumerate()
+                    {
                         if i > 0 {
                             current_hierarchy.push(':');
+                            current_lower.push(':');
                         }
                         current_hierarchy.push_str(part);
+                        current_lower.push_str(part_lower);
 
-                        let lower_key = current_hierarchy.to_lowercase();
-                        if !seen_for_task.insert(lower_key.clone()) {
+                        if !seen_for_task.insert(current_lower.clone()) {
                             continue;
                         }
 
-                        cat_present_lower.insert(lower_key.clone());
+                        cat_present_lower.insert(current_lower.clone());
                         cat_display_names
-                            .entry(lower_key.clone())
+                            .entry(current_lower.clone())
                             .or_insert_with(|| current_hierarchy.clone());
 
                         if is_active {
-                            *cat_active_counts.entry(lower_key.clone()).or_insert(0) += 1;
+                            *cat_active_counts.entry(current_lower.clone()).or_insert(0) += 1;
                         }
                     }
                 }
@@ -3816,38 +3819,43 @@ impl TaskStore {
         }
 
         // Resolve function used to compute the 'best' child result used in some UI heuristics.
+        // Returns (SortKey, transient_recent_ts, summary) to avoid cloning entire Task structs.
+        type ResolvedSortTuple = (crate::model::item::SortKey, i64, String);
+
         fn resolve(
             idx: usize,
             tasks: &[Task],
             map: &HashMap<&str, Vec<usize>>,
-            cache: &mut HashMap<usize, Task>,
+            cache: &mut HashMap<usize, ResolvedSortTuple>,
             visiting: &mut HashSet<usize>,
             options: &FilterOptions,
-        ) -> Task {
+        ) -> ResolvedSortTuple {
             if let Some(cached) = cache.get(&idx) {
                 return cached.clone();
             }
+
+            let t = &tasks[idx];
+            let mut best_sort = t.to_sort_key();
+            let mut best_ts = t.transient_recent_ts;
+            let best_summary = t.summary.clone();
+
             if visiting.contains(&idx) {
-                return tasks[idx].clone();
+                return (best_sort, best_ts, best_summary);
             }
 
             visiting.insert(idx);
-            let t = &tasks[idx];
-            let mut best = t.clone();
 
             let is_suppressed = t.status.is_done() || t.is_blocked || t.is_implicitly_blocked;
 
             if !is_suppressed && let Some(children) = map.get(t.uid.as_str()) {
-                let mut best_child_opt: Option<Task> = None;
+                let mut best_child_opt: Option<ResolvedSortTuple> = None;
                 for &child_idx in children {
                     let child_eff = resolve(child_idx, tasks, map, cache, visiting, options);
 
                     if let Some(ref mut best_child) = best_child_opt {
-                        let a = child_eff.to_sort_key();
-                        let b = best_child.to_sort_key();
                         let ordering = crate::model::item::compare_sortkeys(
-                            &a,
-                            &b,
+                            &child_eff.0,
+                            &best_child.0,
                             options.default_priority,
                             options.sort_standard_by_priority,
                             options.sort_preset,
@@ -3856,11 +3864,11 @@ impl TaskStore {
                         .then_with(|| {
                             if options.sort_tiebreak_recent {
                                 best_child
-                                    .transient_recent_ts
-                                    .cmp(&child_eff.transient_recent_ts)
-                                    .then_with(|| child_eff.summary.cmp(&best_child.summary))
+                                    .1
+                                    .cmp(&child_eff.1)
+                                    .then_with(|| child_eff.2.cmp(&best_child.2))
                             } else {
-                                child_eff.summary.cmp(&best_child.summary)
+                                child_eff.2.cmp(&best_child.2)
                             }
                         });
                         if ordering == std::cmp::Ordering::Less {
@@ -3873,13 +3881,16 @@ impl TaskStore {
 
                 if let Some(bc) = best_child_opt {
                     if t.is_note || t.is_journal || t.is_search_context {
-                        best.copy_transient_sort_fields_from(&bc);
+                        best_sort.rank = bc.0.rank;
+                        best_sort.prio = bc.0.prio;
+                        best_sort.due = bc.0.due.clone();
+                        best_sort.start = bc.0.start.clone();
+                        best_sort.is_paused = bc.0.is_paused;
+                        best_ts = bc.1;
                     } else {
-                        let a = bc.to_sort_key();
-                        let b = best.to_sort_key();
                         let ordering = crate::model::item::compare_sortkeys(
-                            &a,
-                            &b,
+                            &bc.0,
+                            &best_sort,
                             options.default_priority,
                             options.sort_standard_by_priority,
                             options.sort_preset,
@@ -3887,27 +3898,31 @@ impl TaskStore {
                         )
                         .then_with(|| {
                             if options.sort_tiebreak_recent {
-                                best.transient_recent_ts
-                                    .cmp(&bc.transient_recent_ts)
-                                    .then_with(|| bc.summary.cmp(&best.summary))
+                                best_ts.cmp(&bc.1).then_with(|| bc.2.cmp(&best_summary))
                             } else {
-                                bc.summary.cmp(&best.summary)
+                                bc.2.cmp(&best_summary)
                             }
                         });
                         if ordering == std::cmp::Ordering::Less {
-                            best.copy_transient_sort_fields_from(&bc);
+                            best_sort.rank = bc.0.rank;
+                            best_sort.prio = bc.0.prio;
+                            best_sort.due = bc.0.due.clone();
+                            best_sort.start = bc.0.start.clone();
+                            best_sort.is_paused = bc.0.is_paused;
+                            best_ts = bc.1;
                         }
                     }
                 }
             }
 
             visiting.remove(&idx);
-            cache.insert(idx, best.clone());
-            best
+            let result = (best_sort, best_ts, best_summary);
+            cache.insert(idx, result.clone());
+            result
         }
 
         // Run propagation resolver for every node to produce any necessary transient values.
-        let mut cache: HashMap<usize, Task> = HashMap::new();
+        let mut cache: HashMap<usize, ResolvedSortTuple> = HashMap::new();
         let mut visiting: HashSet<usize> = HashSet::new();
         for i in 0..final_tasks_processed.len() {
             if !cache.contains_key(&i) {
@@ -3928,12 +3943,12 @@ impl TaskStore {
         for (i, t) in final_tasks_processed.iter_mut().enumerate() {
             t.has_subtasks = parent_uids.contains(&t.uid);
             if let Some(best) = cache.get(&i) {
-                t.sort_rank = best.sort_rank;
-                t.effective_priority = best.effective_priority;
-                t.effective_due = best.effective_due.clone();
-                t.effective_dtstart = best.effective_dtstart.clone();
-                t.transient_is_paused = best.transient_is_paused;
-                t.transient_recent_ts = best.transient_recent_ts;
+                t.sort_rank = best.0.rank;
+                t.effective_priority = best.0.prio;
+                t.effective_due = best.0.due.clone();
+                t.effective_dtstart = best.0.start.clone();
+                t.transient_is_paused = best.0.is_paused;
+                t.transient_recent_ts = best.1;
             }
         }
 
