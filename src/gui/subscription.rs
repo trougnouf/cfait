@@ -210,11 +210,19 @@ fn handle_hotkey(
                         }
                     }
                     "y" => return Some(Message::Redo),
+                    "1" => return Some(Message::SidebarModeChanged(SidebarMode::Calendars)),
+                    "2" => return Some(Message::SidebarModeChanged(SidebarMode::Categories)),
+                    "3" => return Some(Message::SidebarModeChanged(SidebarMode::Locations)),
+                    "4" => return Some(Message::SidebarModeChanged(SidebarMode::Goals)),
+                    "5" => return Some(Message::SidebarModeChanged(SidebarMode::Journal)),
                     _ => {}
                 }
             }
 
-            // If we are definitely not in a text input, steal navigation keys back from Iced's Scrollables/Buttons
+            // If we are definitely not in a text input, steal navigation keys back from Iced's Scrollables/Buttons.
+            // Only Named keys belong here: scrollables/buttons capture arrows, enter, and space,
+            // but never character keys. Character keys in this block would only ever be stolen
+            // from text editors/inputs (which capture them), which is a bug.
             if let Ok(focus) = ACTIVE_FOCUS.read()
                 && (*focus == Focus::MainList || *focus == Focus::Sidebar)
             {
@@ -231,17 +239,6 @@ fn handle_hotkey(
                             return Some(Message::ToggleSelected);
                         }
                     }
-                    keyboard::Key::Character(s) => match s.to_lowercase().as_str() {
-                        "1" => return Some(Message::SidebarModeChanged(SidebarMode::Calendars)),
-                        "2" => return Some(Message::SidebarModeChanged(SidebarMode::Categories)),
-                        "3" => return Some(Message::SidebarModeChanged(SidebarMode::Locations)),
-                        "4" => return Some(Message::SidebarModeChanged(SidebarMode::Goals)),
-                        "5" => return Some(Message::SidebarModeChanged(SidebarMode::Journal)),
-                        "j" => return Some(Message::SelectNext),
-                        "k" => return Some(Message::SelectPrev),
-                        "*" => return Some(Message::ClearAllFilters),
-                        _ => {}
-                    },
                     _ => {}
                 }
             }
@@ -288,6 +285,11 @@ fn handle_hotkey(
                         }
                     }
                     "y" => return Some(Message::Redo),
+                    "1" => return Some(Message::SidebarModeChanged(SidebarMode::Calendars)),
+                    "2" => return Some(Message::SidebarModeChanged(SidebarMode::Categories)),
+                    "3" => return Some(Message::SidebarModeChanged(SidebarMode::Locations)),
+                    "4" => return Some(Message::SidebarModeChanged(SidebarMode::Goals)),
+                    "5" => return Some(Message::SidebarModeChanged(SidebarMode::Journal)),
                     _ => {}
                 }
             } else if let keyboard::Key::Named(Named::Delete) = key.as_ref() {
