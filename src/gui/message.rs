@@ -25,6 +25,53 @@ pub type LoadedResult = Result<
     String,
 >;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NumericField {
+    SortDays,
+    UrgentDays,
+    UrgentPrio,
+    DefaultPriority,
+    StartGrace,
+    TrashRetention,
+    DefaultDurationGoal,
+    MaxDoneRoots,
+    MaxDoneSubtasks,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StringField {
+    SnoozeShort,
+    SnoozeLong,
+    AutoRefresh,
+    QuickFilterTerm,
+    QuickFilterIcon,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BoolField {
+    HideCompleted,
+    HideFullyCompletedTags,
+    HideAliasesInSidebar,
+    SortStandardByPriority,
+    SortTiebreakRecent,
+    AutoReminders,
+    CreateEventsForTasks,
+    DeleteEventsOnCompletion,
+    SessionsCountAsCompletions,
+    ShowPriorityNumbers,
+    ShowInlineDescriptions,
+    SyncSettings,
+    BlurWhenUnfocused,
+    ShowQuickFilter,
+    ShowCalendarsTab,
+    ShowTagsTab,
+    ShowLocationsTab,
+    ShowGoalsTab,
+    ShowJournalTab,
+    ShowTaskGoalsInSidebar,
+    SortCollectionsBySize,
+    StrikethroughCompleted,
+    ObInsecure,
+}
+
 #[derive(Debug, Clone)]
 pub enum Message {
     // --- Settings & Onboarding ---
@@ -32,7 +79,6 @@ pub enum Message {
     ObUserChanged(String),
     ObPassChanged(String),
     ToggleObPasswordVisibility,
-    ObInsecureToggled(bool),
     SetTlsClientCertPath(String),
     SetTlsClientKeyPath(String),
     ToggleCalendarVisibility(String, bool),
@@ -140,7 +186,6 @@ pub enum Message {
 
     // --- View & Filter ---
     OpenWikiLink(String, Option<String>),
-    SetShowInlineDescriptions(bool),
     ToggleChildLock,
     ToggleYankLock,
     SetMinDuration(Option<u32>),
@@ -223,7 +268,6 @@ pub enum Message {
     // --- System & Network Events ---
     ConfigLoaded(Result<Box<Config>, String>),
     ConfigUpdated(Box<Config>),
-    ObSortDaysChanged(String),
     ThemeChanged(AppTheme),
     Loaded(LoadedResult),
     TasksRefreshed(Result<(String, Vec<TodoTask>), String>),
@@ -249,13 +293,6 @@ pub enum Message {
     ResizeStart(ResizeDirection),
 
     // --- Settings Input Fields ---
-    ObUrgentDaysChanged(String),
-    ObUrgentPrioChanged(String),
-    ObDefaultPriorityChanged(String),
-    ObStartGraceChanged(String),
-    SetTrashRetention(String),
-    SetDefaultDurationGoalMins(String),
-    SetSessionsCountAsCompletions(bool),
     SetLanguage(String),
     SetFirstDayOfWeek(crate::config::FirstDayOfWeek),
     JournalDateInputChanged(String),
@@ -270,22 +307,7 @@ pub enum Message {
     DismissAlarm(String, String),
     SnoozeCustomInput(String),
     SnoozeCustomSubmit(String, String),
-    SetAutoReminders(bool),
     SetDefaultReminderTime(String),
-    SetSnoozeShort(String),
-    SetSnoozeLong(String),
-    SetAutoRefreshInterval(String),
-
-    SetShowQuickFilter(bool),
-    SetQuickFilterTerm(String),
-    SetQuickFilterIcon(String),
-    SetShowCalendarsTab(bool),
-    SetShowTagsTab(bool),
-    SetShowLocationsTab(bool),
-    SetShowGoalsTab(bool),
-    SetShowJournalTab(bool),
-    SetShowTaskGoalsInSidebar(bool),
-    SetSortCollectionsBySize(bool),
 
     OpenJournalPage(String),
     CreateJournalPage,
@@ -296,19 +318,14 @@ pub enum Message {
     OpenContextMenu(String, bool),
     CloseContextMenu,
     TogglePinnedAction(crate::config::TaskAction, bool),
-    SetBlurWhenUnfocused(bool),
     SetLogLevel(LogLevel),
-    SetSyncSettings(bool),
 
     // --- Advanced Settings ---
     ToggleAdvancedSettings(bool),
-    SetMaxDoneRoots(String),
-    SetMaxDoneSubtasks(String),
-    SetShowPriorityNumbers(bool),
 
-    SetCreateEventsForTasks(bool),
-    SetDeleteEventsOnCompletion(bool),
-    SetStrikethroughCompleted(bool),
+    SetNumericField(NumericField, String),
+    SetStringField(StringField, String),
+    ToggleField(BoolField, bool),
     DeleteAllCalendarEvents,
     BackfillEventsComplete(Result<usize, String>),
 

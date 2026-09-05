@@ -8,7 +8,7 @@ use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp};
 use crate::gui::update::common::{apply_alias_retroactively, refresh_filtered_tasks, save_config};
-use crate::model::parser::{parse_duration, validate_alias_integrity};
+use crate::model::parser::validate_alias_integrity;
 use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_TRASH_HREF, LocalCalendarRegistry, LocalStorage};
 use iced::Task;
 
@@ -277,10 +277,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::ObDefaultCalChanged(v) => {
             app.ob_default_cal = Some(v);
             save_config(app);
-            Task::none()
-        }
-        Message::ObInsecureToggled(val) => {
-            app.ob_insecure = val;
             Task::none()
         }
         Message::SetTlsClientCertPath(val) => {
@@ -616,145 +612,18 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             save_config(app);
             Task::none()
         }
-        Message::ObSortDaysChanged(val) => {
-            if val.is_empty() || val.chars().all(|c| c.is_numeric()) {
-                app.ob_sort_days_input = val.clone();
-
-                if val.trim().is_empty() {
-                    app.sort_cutoff_days = None;
-                } else if let Ok(n) = val.trim().parse::<u32>() {
-                    app.sort_cutoff_days = Some(n);
-                }
-                save_config(app);
-                refresh_filtered_tasks(app);
-            }
-            Task::none()
-        }
-        Message::ObUrgentDaysChanged(val) => {
-            if val.is_empty() || val.chars().all(|c| c.is_numeric()) {
-                app.ob_urgent_days_input = val.clone();
-                if let Ok(n) = val.trim().parse::<u32>() {
-                    app.urgent_days = n;
-                    save_config(app);
-                    refresh_filtered_tasks(app);
-                }
-            }
-            Task::none()
-        }
-        Message::ObUrgentPrioChanged(val) => {
-            if val.is_empty() || val.chars().all(|c| c.is_numeric()) {
-                app.ob_urgent_prio_input = val.clone();
-                if let Ok(n) = val.trim().parse::<u8>() {
-                    app.urgent_prio = n;
-                    save_config(app);
-                    refresh_filtered_tasks(app);
-                }
-            }
-            Task::none()
-        }
-        Message::ObDefaultPriorityChanged(val) => {
-            if val.is_empty() || val.chars().all(|c| c.is_numeric()) {
-                app.ob_default_priority_input = val.clone();
-                if let Ok(n) = val.trim().parse::<u8>()
-                    && n > 0
-                {
-                    app.default_priority = n;
-                    save_config(app);
-                    refresh_filtered_tasks(app);
-                }
-            }
-            Task::none()
-        }
-        Message::ObStartGraceChanged(val) => {
-            if val.is_empty() || val.chars().all(|c| c.is_numeric()) {
-                app.ob_start_grace_input = val.clone();
-                if let Ok(n) = val.trim().parse::<u32>() {
-                    app.start_grace_period_days = n;
-                    save_config(app);
-                    refresh_filtered_tasks(app);
-                }
-            }
-            Task::none()
-        }
-        Message::SetAutoReminders(val) => {
-            app.auto_reminders = val;
-            save_config(app);
-            Task::none()
-        }
         Message::SetDefaultReminderTime(val) => {
             app.default_reminder_time = val;
             save_config(app);
             Task::none()
         }
-        Message::SetSnoozeShort(val) => {
-            app.ob_snooze_short_input = val.clone();
-            if let Some(n) = parse_duration(&val) {
-                app.snooze_short_mins = n;
-                save_config(app);
-            }
-            Task::none()
-        }
-        Message::SetSnoozeLong(val) => {
-            app.ob_snooze_long_input = val.clone();
-            if let Some(n) = parse_duration(&val) {
-                app.snooze_long_mins = n;
-                save_config(app);
-            }
-            Task::none()
-        }
-        Message::SetTrashRetention(val) => {
-            if val.is_empty() || val.chars().all(|c| c.is_numeric()) {
-                app.ob_trash_retention_input = val.clone();
-                if let Ok(n) = val.trim().parse::<u32>() {
-                    app.trash_retention_days = n;
-                    save_config(app);
-                }
-            }
-            Task::none()
-        }
-        Message::SetDefaultDurationGoalMins(val) => {
-            if val.is_empty() || val.chars().all(|c| c.is_numeric()) {
-                app.ob_default_duration_goal_mins_input = val.clone();
-                if let Ok(n) = val.trim().parse::<u32>() {
-                    app.core_config.default_duration_goal_mins = n;
-                    save_config(app);
-                    crate::gui::update::common::refresh_filtered_tasks(app);
-                }
-            }
-            Task::none()
-        }
-        Message::SetSessionsCountAsCompletions(val) => {
-            app.sessions_count_as_completions = val;
-            app.core_config.sessions_count_as_completions = val;
-            save_config(app);
-            crate::gui::update::common::refresh_filtered_tasks(app);
-            Task::none()
-        }
-        Message::SetAutoRefreshInterval(val) => {
-            app.ob_auto_refresh_input = val.clone();
-            if let Some(n) = parse_duration(&val) {
-                app.auto_refresh_interval_mins = n;
-                save_config(app);
-            }
-            Task::none()
-        }
-
-        Message::SetFirstDayOfWeek(val) => {
-            app.first_day_of_week = val;
-            save_config(app);
-            Task::none()
-        }
         Message::SetLanguage(lang) => {
-            // Persist the user's language selection in the GUI app state.
-            // `lang == "auto"` means follow system/default.
             let lang_opt = if lang == "auto" {
                 None
             } else {
                 Some(lang.clone())
             };
             app.language = lang_opt.clone();
-
-            // Apply immediately to rust_i18n and rebuild parser lexicon
             if let Some(ref l) = lang_opt {
                 crate::config::set_locale_with_fallback(l);
             } else if let Some(sys_lang) = sys_locale::get_locale() {
@@ -762,50 +631,37 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             } else {
                 crate::model::parser::rebuild_lexicon();
             }
-
-            // Also save the selection into the persistent Config so it's cross-platform.
-            // Load existing config (or default), set language, then save.
             let mut cfg = app.core_config.clone();
             cfg.language = app.language.clone();
             app.core_config = cfg.clone();
             let _ = cfg.save(app.ctx.as_ref());
-
+            Task::none()
+        }
+        Message::SetFirstDayOfWeek(val) => {
+            app.first_day_of_week = val;
+            save_config(app);
             Task::none()
         }
         Message::ToggleAdvancedSettings(val) => {
             app.show_advanced_settings = val;
             Task::none()
         }
-        Message::SetMaxDoneRoots(val) => {
-            if val.is_empty() || val.chars().all(|c| c.is_numeric()) {
-                app.ob_max_done_roots_input = val;
-                save_config(app);
-                refresh_filtered_tasks(app);
+        Message::SetLogLevel(level) => {
+            app.log_level = level;
+            app.core_config.log_level = level;
+            save_config(app);
+            crate::system::set_log_level(level.to_level_filter());
+            Task::none()
+        }
+        Message::TogglePinnedAction(action, enabled) => {
+            if enabled {
+                if !app.pinned_actions.contains(&action) {
+                    app.pinned_actions.push(action);
+                }
+            } else {
+                app.pinned_actions.retain(|a| *a != action);
             }
-            Task::none()
-        }
-        Message::SetMaxDoneSubtasks(val) => {
-            if val.is_empty() || val.chars().all(|c| c.is_numeric()) {
-                app.ob_max_done_subtasks_input = val;
-                save_config(app);
-                refresh_filtered_tasks(app);
-            }
-            Task::none()
-        }
-        Message::SetShowPriorityNumbers(val) => {
-            app.show_priority_numbers = val;
-            save_config(app);
-            refresh_filtered_tasks(app);
-            Task::none()
-        }
-        Message::SetShowInlineDescriptions(val) => {
-            app.show_inline_descriptions = val;
-            save_config(app);
-            Task::none() // Doesn't affect sorting/filtering, UI will just redraw
-        }
-        Message::SetSyncSettings(val) => {
-            app.sync_settings = val;
-            save_config(app);
+            crate::gui::update::common::save_config(app);
             Task::none()
         }
         Message::MoveCalendar(href, direction) => {
@@ -818,7 +674,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     current_order.push(cal.href.clone());
                 }
             }
-
             if let Some(idx) = current_order.iter().position(|h| h == &href) {
                 let new_idx = (idx as i32 + direction as i32)
                     .clamp(0, (current_order.len() - 1) as i32)
@@ -833,162 +688,204 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
-        Message::SetLogLevel(level) => {
-            app.log_level = level;
-            app.core_config.log_level = level;
-            save_config(app);
-            // Apply the new log level immediately
-            crate::system::set_log_level(level.to_level_filter());
-            Task::none()
-        }
 
-        Message::SetCreateEventsForTasks(val) => {
-            let was_disabled = !app.create_events_for_tasks;
-            app.create_events_for_tasks = val;
-            save_config(app);
-
-            if val
-                && was_disabled
-                && let Some(client) = &app.client
-            {
-                let all_tasks: Vec<_> = app
-                    .store
-                    .calendars
-                    .values()
-                    .flat_map(|m| m.values())
-                    .cloned()
-                    .collect();
-
-                let delete_on_completion = app.delete_events_on_completion;
-
-                return Task::perform(
-                    async_backfill_events_wrapper(
-                        client.clone(),
-                        all_tasks,
-                        val,
-                        delete_on_completion,
-                    ),
-                    Message::BackfillEventsComplete,
-                );
-            }
-            Task::none()
-        }
-        Message::SetDeleteEventsOnCompletion(val) => {
-            app.delete_events_on_completion = val;
-            save_config(app);
-            Task::none()
-        }
-
-        Message::SetStrikethroughCompleted(val) => {
-            app.strikethrough_completed = val;
-            save_config(app);
-            Task::none()
-        }
-        Message::SetBlurWhenUnfocused(val) => {
-            app.blur_when_unfocused = val;
-            save_config(app);
-            Task::none()
-        }
-        Message::TogglePinnedAction(action, enabled) => {
-            if enabled {
-                if !app.pinned_actions.contains(&action) {
-                    app.pinned_actions.push(action);
+        Message::SetNumericField(field, val) => {
+            if val.is_empty() || val.chars().all(|c| c.is_numeric()) {
+                match field {
+                    crate::gui::message::NumericField::SortDays => {
+                        app.ob_sort_days_input = val.clone();
+                        app.sort_cutoff_days = if val.trim().is_empty() {
+                            None
+                        } else {
+                            val.trim().parse().ok()
+                        };
+                    }
+                    crate::gui::message::NumericField::UrgentDays => {
+                        app.ob_urgent_days_input = val.clone();
+                        if let Ok(n) = val.trim().parse() {
+                            app.urgent_days = n;
+                        }
+                    }
+                    crate::gui::message::NumericField::UrgentPrio => {
+                        app.ob_urgent_prio_input = val.clone();
+                        if let Ok(n) = val.trim().parse() {
+                            app.urgent_prio = n;
+                        }
+                    }
+                    crate::gui::message::NumericField::DefaultPriority => {
+                        app.ob_default_priority_input = val.clone();
+                        if let Ok(n) = val.trim().parse()
+                            && n > 0
+                        {
+                            app.default_priority = n;
+                        }
+                    }
+                    crate::gui::message::NumericField::StartGrace => {
+                        app.ob_start_grace_input = val.clone();
+                        if let Ok(n) = val.trim().parse() {
+                            app.start_grace_period_days = n;
+                        }
+                    }
+                    crate::gui::message::NumericField::TrashRetention => {
+                        app.ob_trash_retention_input = val.clone();
+                        if let Ok(n) = val.trim().parse() {
+                            app.trash_retention_days = n;
+                        }
+                    }
+                    crate::gui::message::NumericField::DefaultDurationGoal => {
+                        app.ob_default_duration_goal_mins_input = val.clone();
+                        if let Ok(n) = val.trim().parse() {
+                            app.core_config.default_duration_goal_mins = n;
+                        }
+                    }
+                    crate::gui::message::NumericField::MaxDoneRoots => {
+                        app.ob_max_done_roots_input = val.clone();
+                    }
+                    crate::gui::message::NumericField::MaxDoneSubtasks => {
+                        app.ob_max_done_subtasks_input = val.clone();
+                    }
                 }
-            } else {
-                app.pinned_actions.retain(|a| *a != action);
+                save_config(app);
+                refresh_filtered_tasks(app);
             }
-            crate::gui::update::common::save_config(app);
             Task::none()
         }
-        Message::SetShowQuickFilter(val) => {
-            app.show_quick_filter = val;
+        Message::SetStringField(field, val) => {
+            match field {
+                crate::gui::message::StringField::SnoozeShort => {
+                    app.ob_snooze_short_input = val.clone();
+                    if let Some(n) = crate::model::parser::parse_duration(&val) {
+                        app.snooze_short_mins = n;
+                    }
+                }
+                crate::gui::message::StringField::SnoozeLong => {
+                    app.ob_snooze_long_input = val.clone();
+                    if let Some(n) = crate::model::parser::parse_duration(&val) {
+                        app.snooze_long_mins = n;
+                    }
+                }
+                crate::gui::message::StringField::AutoRefresh => {
+                    app.ob_auto_refresh_input = val.clone();
+                    if let Some(n) = crate::model::parser::parse_duration(&val) {
+                        app.auto_refresh_interval_mins = n;
+                    }
+                }
+                crate::gui::message::StringField::QuickFilterTerm => {
+                    app.ob_quick_filter_term_input = val.clone();
+                    app.quick_filter_term = val;
+                    refresh_filtered_tasks(app);
+                }
+                crate::gui::message::StringField::QuickFilterIcon => {
+                    app.ob_quick_filter_icon_input = val.clone();
+                    app.quick_filter_icon = val;
+                }
+            }
             save_config(app);
             Task::none()
         }
-        Message::SetShowCalendarsTab(val) => {
-            if update_tab_visibility(
-                app,
-                val,
-                |a| &mut a.show_calendars_tab,
-                crate::gui::state::SidebarMode::Calendars,
-            ) {
-                save_config(app);
-                crate::gui::update::common::refresh_filtered_tasks(app);
+        Message::ToggleField(field, val) => {
+            use crate::gui::message::BoolField;
+            match field {
+                BoolField::HideCompleted => app.hide_completed = val,
+                BoolField::HideFullyCompletedTags => app.hide_fully_completed_tags = val,
+                BoolField::HideAliasesInSidebar => app.hide_aliases_in_sidebar = val,
+                BoolField::SortStandardByPriority => app.sort_standard_by_priority = val,
+                BoolField::SortTiebreakRecent => app.sort_tiebreak_recent = val,
+                BoolField::AutoReminders => app.auto_reminders = val,
+                BoolField::DeleteEventsOnCompletion => app.delete_events_on_completion = val,
+                BoolField::SessionsCountAsCompletions => {
+                    app.sessions_count_as_completions = val;
+                    app.core_config.sessions_count_as_completions = val;
+                }
+                BoolField::ShowPriorityNumbers => app.show_priority_numbers = val,
+                BoolField::ShowInlineDescriptions => app.show_inline_descriptions = val,
+                BoolField::SyncSettings => app.sync_settings = val,
+                BoolField::BlurWhenUnfocused => app.blur_when_unfocused = val,
+                BoolField::ShowQuickFilter => app.show_quick_filter = val,
+                BoolField::ShowTaskGoalsInSidebar => {
+                    app.core_config.show_task_goals_in_sidebar = val
+                }
+                BoolField::ObInsecure => app.ob_insecure = val,
+                BoolField::CreateEventsForTasks => {
+                    let was_disabled = !app.create_events_for_tasks;
+                    app.create_events_for_tasks = val;
+                    save_config(app);
+                    if val
+                        && was_disabled
+                        && let Some(client) = &app.client
+                    {
+                        let all_tasks: Vec<_> = app
+                            .store
+                            .calendars
+                            .values()
+                            .flat_map(|m| m.values())
+                            .cloned()
+                            .collect();
+                        return Task::perform(
+                            async_backfill_events_wrapper(
+                                client.clone(),
+                                all_tasks,
+                                val,
+                                app.delete_events_on_completion,
+                            ),
+                            Message::BackfillEventsComplete,
+                        );
+                    }
+                    return Task::none();
+                }
+                BoolField::ShowCalendarsTab => {
+                    update_tab_visibility(
+                        app,
+                        val,
+                        |a| &mut a.show_calendars_tab,
+                        crate::gui::state::SidebarMode::Calendars,
+                    );
+                }
+                BoolField::ShowTagsTab => {
+                    update_tab_visibility(
+                        app,
+                        val,
+                        |a| &mut a.show_tags_tab,
+                        crate::gui::state::SidebarMode::Categories,
+                    );
+                }
+                BoolField::ShowLocationsTab => {
+                    update_tab_visibility(
+                        app,
+                        val,
+                        |a| &mut a.show_locations_tab,
+                        crate::gui::state::SidebarMode::Locations,
+                    );
+                }
+                BoolField::ShowGoalsTab => {
+                    update_tab_visibility(
+                        app,
+                        val,
+                        |a| &mut a.show_goals_tab,
+                        crate::gui::state::SidebarMode::Goals,
+                    );
+                }
+                BoolField::ShowJournalTab => {
+                    update_tab_visibility(
+                        app,
+                        val,
+                        |a| &mut a.show_journal_tab,
+                        crate::gui::state::SidebarMode::Journal,
+                    );
+                }
+                BoolField::SortCollectionsBySize => {
+                    app.sort_collections_by_size = val;
+                    app.sort_calendars();
+                }
+                BoolField::StrikethroughCompleted => app.strikethrough_completed = val,
             }
-            Task::none()
-        }
-        Message::SetShowTagsTab(val) => {
-            if update_tab_visibility(
-                app,
-                val,
-                |a| &mut a.show_tags_tab,
-                crate::gui::state::SidebarMode::Categories,
-            ) {
-                save_config(app);
-                crate::gui::update::common::refresh_filtered_tasks(app);
-            }
-            Task::none()
-        }
-        Message::SetShowLocationsTab(val) => {
-            if update_tab_visibility(
-                app,
-                val,
-                |a| &mut a.show_locations_tab,
-                crate::gui::state::SidebarMode::Locations,
-            ) {
-                save_config(app);
-                crate::gui::update::common::refresh_filtered_tasks(app);
-            }
-            Task::none()
-        }
-        Message::SetShowGoalsTab(val) => {
-            if update_tab_visibility(
-                app,
-                val,
-                |a| &mut a.show_goals_tab,
-                crate::gui::state::SidebarMode::Goals,
-            ) {
-                save_config(app);
-                crate::gui::update::common::refresh_filtered_tasks(app);
-            }
-            Task::none()
-        }
-        Message::SetShowJournalTab(val) => {
-            if update_tab_visibility(
-                app,
-                val,
-                |a| &mut a.show_journal_tab,
-                crate::gui::state::SidebarMode::Journal,
-            ) {
-                save_config(app);
-                crate::gui::update::common::refresh_filtered_tasks(app);
-            }
-            Task::none()
-        }
-        Message::SetShowTaskGoalsInSidebar(val) => {
-            app.core_config.show_task_goals_in_sidebar = val;
             save_config(app);
-            crate::gui::update::common::refresh_filtered_tasks(app);
-            Task::none()
-        }
-        Message::SetSortCollectionsBySize(val) => {
-            app.sort_collections_by_size = val;
-            save_config(app);
-            app.sort_calendars();
-            crate::gui::update::common::refresh_filtered_tasks(app);
-            Task::none()
-        }
-        Message::SetQuickFilterTerm(val) => {
-            app.ob_quick_filter_term_input = val.clone();
-            app.quick_filter_term = val;
-            save_config(app);
-            refresh_filtered_tasks(app);
-            Task::none()
-        }
-        Message::SetQuickFilterIcon(val) => {
-            app.ob_quick_filter_icon_input = val.clone();
-            app.quick_filter_icon = val;
-            save_config(app);
+            if field != BoolField::ObInsecure
+                && field != BoolField::AutoReminders
+                && field != BoolField::DeleteEventsOnCompletion
+            {
+                refresh_filtered_tasks(app);
+            }
             Task::none()
         }
         Message::DeleteAllCalendarEvents => {

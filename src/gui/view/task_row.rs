@@ -933,155 +933,111 @@ pub fn view_task_row<'a>(
                     continue;
                 }
 
-                let (icon_element, msg, style_mode): (Element<'a, Message>, Message, u8) =
-                    match action {
-                        TaskAction::CompleteAndShift => (
-                            icon::icon(icon::REPEAT).size(14).into(),
-                            Message::ToggleTaskShift(task.uid.clone()),
-                            0,
-                        ),
-                        TaskAction::ToggleDetails => {
-                            let mut icon_row = row![].spacing(2).align_y(iced::Alignment::Center);
-                            if has_info {
-                                icon_row =
-                                    icon_row.push(icon::icon(icon::INFO).size(14).line_height(1.0));
-                            }
-                            if has_time {
-                                icon_row = icon_row.push(
-                                    icon::icon(icon::TIMER_SETTINGS).size(14).line_height(1.0),
-                                );
-                            }
-                            let style = if is_expanded { 3 } else { 0 };
-                            (
-                                icon_row.into(),
-                                Message::ToggleDetails(task.uid.clone()),
-                                style,
-                            )
-                        }
-                        TaskAction::ToggleTimer => {
-                            if task.status == crate::model::TaskStatus::InProcess {
-                                (
-                                    icon::icon(icon::PAUSE).size(14).into(),
-                                    Message::PauseTask(task.uid.clone()),
-                                    0,
-                                )
-                            } else {
-                                (
-                                    icon::icon(icon::PLAY).size(14).into(),
-                                    Message::StartTask(task.uid.clone()),
-                                    0,
-                                )
-                            }
-                        }
-                        TaskAction::StopTimer => (
-                            icon::icon(icon::DEBUG_STOP).size(14).into(),
-                            Message::StopTask(task.uid.clone()),
-                            0,
-                        ),
-                        TaskAction::AddSession => {
-                            let style =
-                                if app.adding_session_uid.as_deref() == Some(task.uid.as_str()) {
-                                    3
-                                } else {
-                                    0
-                                };
-                            (
-                                icon::icon(icon::TIMER_PLUS).size(14).into(),
-                                Message::StartAddSession(task.uid.clone()),
-                                style,
-                            )
-                        }
-                        TaskAction::IncreasePriority => (
-                            icon::icon(icon::PLUS).size(14).into(),
-                            Message::ChangePriority(index, 1),
-                            0,
-                        ),
-                        TaskAction::DecreasePriority => (
-                            icon::icon(icon::MINUS).size(14).into(),
-                            Message::ChangePriority(index, -1),
-                            0,
-                        ),
-                        TaskAction::Focus => (
-                            icon::icon(app.focus_icon).size(14).into(),
-                            Message::FocusSelected,
-                            0,
-                        ),
-                        TaskAction::Edit => (
-                            icon::icon(icon::EDIT).size(14).into(),
-                            Message::EditTaskStart(index),
-                            0,
-                        ),
-                        TaskAction::Yank => (
-                            icon::icon(icon::LINK).size(14).into(),
-                            Message::YankTask(task.uid.clone()),
-                            0,
-                        ),
-                        TaskAction::TogglePin => (
-                            icon::icon(icon::THUMB_TACK).size(14).into(),
-                            Message::TogglePin(task.uid.clone()),
-                            0,
-                        ),
-                        TaskAction::CreateSubtask => (
-                            icon::icon(icon::CREATE_CHILD).size(14).into(),
-                            Message::StartCreateChild(task.uid.clone()),
-                            0,
-                        ),
-                        TaskAction::DuplicateTree => (
-                            icon::icon(icon::CLONE).size(14).into(),
-                            Message::DuplicateTask(task.uid.clone()),
-                            0,
-                        ),
-                        TaskAction::CompleteTree => (
-                            icon::icon(icon::LIST_CHECK).size(14).into(),
-                            Message::CompleteTree(task.uid.clone()),
-                            0,
-                        ),
-                        TaskAction::Promote => (
-                            icon::icon(icon::ELEVATOR_UP).size(14).into(),
-                            Message::RemoveParent(task.uid.clone()),
-                            0,
-                        ),
-                        TaskAction::Move => (
-                            icon::icon(icon::MOVE).size(14).into(),
-                            Message::StartMoveTask(task.uid.clone()),
-                            0,
-                        ),
-                        TaskAction::Cancel => (
-                            icon::icon(icon::CROSS).size(14).into(),
-                            Message::SetTaskStatus(index, crate::model::TaskStatus::Cancelled),
-                            1,
-                        ),
-                        TaskAction::Delete => (
-                            icon::icon(icon::TRASH).size(14).into(),
-                            Message::DeleteTask(index),
-                            1,
-                        ),
-                        TaskAction::DeleteTree => (
-                            icon::icon(icon::TRASH).size(14).into(),
-                            Message::DeleteTaskTree(task.uid.clone()),
-                            2,
-                        ),
-                        TaskAction::OpenCoordinates => (
-                            icon::icon(icon::MAP_LOCATION_DOT).size(14).into(),
-                            Message::OpenCoordinates(task.uid.clone()),
-                            0,
-                        ),
-                        TaskAction::OpenLocations => (
-                            icon::icon(icon::MAP_MARKER_MULTIPLE).size(14).into(),
-                            Message::OpenLocations(task.uid.clone()),
-                            0,
-                        ),
-                        TaskAction::OpenUrl => (
-                            icon::icon(icon::URL_CHECK).size(14).into(),
-                            Message::OpenUrl(task.url.clone().unwrap()),
-                            0,
-                        ),
-                        TaskAction::EditTree => (
-                            icon::icon(icon::EDIT_TREE).size(14).into(),
-                            Message::EditTaskTree(task.uid.clone()),
-                            0,
-                        ),
-                    };
+                let (icon_char, msg, style_mode) = match action {
+                    TaskAction::CompleteAndShift => {
+                        (icon::REPEAT, Message::ToggleTaskShift(task.uid.clone()), 0)
+                    }
+                    TaskAction::ToggleDetails => (
+                        icon::INFO, // Overridden below
+                        Message::ToggleDetails(task.uid.clone()),
+                        if is_expanded { 3 } else { 0 },
+                    ),
+                    TaskAction::ToggleTimer => (
+                        if task.status == crate::model::TaskStatus::InProcess {
+                            icon::PAUSE
+                        } else {
+                            icon::PLAY
+                        },
+                        if task.status == crate::model::TaskStatus::InProcess {
+                            Message::PauseTask(task.uid.clone())
+                        } else {
+                            Message::StartTask(task.uid.clone())
+                        },
+                        0,
+                    ),
+                    TaskAction::StopTimer => {
+                        (icon::DEBUG_STOP, Message::StopTask(task.uid.clone()), 0)
+                    }
+                    TaskAction::AddSession => (
+                        icon::TIMER_PLUS,
+                        Message::StartAddSession(task.uid.clone()),
+                        if app.adding_session_uid.as_deref() == Some(task.uid.as_str()) {
+                            3
+                        } else {
+                            0
+                        },
+                    ),
+                    TaskAction::IncreasePriority => {
+                        (icon::PLUS, Message::ChangePriority(index, 1), 0)
+                    }
+                    TaskAction::DecreasePriority => {
+                        (icon::MINUS, Message::ChangePriority(index, -1), 0)
+                    }
+                    TaskAction::Focus => (app.focus_icon, Message::FocusSelected, 0),
+                    TaskAction::Edit => (icon::EDIT, Message::EditTaskStart(index), 0),
+                    TaskAction::Yank => (icon::LINK, Message::YankTask(task.uid.clone()), 0),
+                    TaskAction::TogglePin => {
+                        (icon::THUMB_TACK, Message::TogglePin(task.uid.clone()), 0)
+                    }
+                    TaskAction::CreateSubtask => (
+                        icon::CREATE_CHILD,
+                        Message::StartCreateChild(task.uid.clone()),
+                        0,
+                    ),
+                    TaskAction::DuplicateTree => {
+                        (icon::CLONE, Message::DuplicateTask(task.uid.clone()), 0)
+                    }
+                    TaskAction::CompleteTree => {
+                        (icon::LIST_CHECK, Message::CompleteTree(task.uid.clone()), 0)
+                    }
+                    TaskAction::Promote => (
+                        icon::ELEVATOR_UP,
+                        Message::RemoveParent(task.uid.clone()),
+                        0,
+                    ),
+                    TaskAction::Move => (icon::MOVE, Message::StartMoveTask(task.uid.clone()), 0),
+                    TaskAction::Cancel => (
+                        icon::CROSS,
+                        Message::SetTaskStatus(index, crate::model::TaskStatus::Cancelled),
+                        1,
+                    ),
+                    TaskAction::Delete => (icon::TRASH, Message::DeleteTask(index), 1),
+                    TaskAction::DeleteTree => {
+                        (icon::TRASH, Message::DeleteTaskTree(task.uid.clone()), 2)
+                    }
+                    TaskAction::OpenCoordinates => (
+                        icon::MAP_LOCATION_DOT,
+                        Message::OpenCoordinates(task.uid.clone()),
+                        0,
+                    ),
+                    TaskAction::OpenLocations => (
+                        icon::MAP_MARKER_MULTIPLE,
+                        Message::OpenLocations(task.uid.clone()),
+                        0,
+                    ),
+                    TaskAction::OpenUrl => (
+                        icon::URL_CHECK,
+                        Message::OpenUrl(task.url.clone().unwrap()),
+                        0,
+                    ),
+                    TaskAction::EditTree => {
+                        (icon::EDIT_TREE, Message::EditTaskTree(task.uid.clone()), 0)
+                    }
+                };
+
+                let icon_element: Element<'a, Message> = if *action == TaskAction::ToggleDetails {
+                    let mut icon_row = row![].spacing(2).align_y(iced::Alignment::Center);
+                    if has_info {
+                        icon_row = icon_row.push(icon::icon(icon::INFO).size(14).line_height(1.0));
+                    }
+                    if has_time {
+                        icon_row = icon_row
+                            .push(icon::icon(icon::TIMER_SETTINGS).size(14).line_height(1.0));
+                    }
+                    icon_row.into()
+                } else {
+                    icon::icon(icon_char).size(14).into()
+                };
 
                 let style_mode_mapped = if style_mode == 2 { 1 } else { style_mode };
                 let btn = button(icon_element)

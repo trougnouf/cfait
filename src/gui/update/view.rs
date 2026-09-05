@@ -384,7 +384,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::ToggleHideCompletedToggle => {
             let new_val = !app.hide_completed;
-            handle(app, Message::ToggleHideCompleted(new_val))
+            super::update(
+                app,
+                Message::ToggleField(crate::gui::message::BoolField::HideCompleted, new_val),
+            )
         }
         Message::OpenContextMenu(uid, is_full) => {
             let mut pt = iced::Point::new(
@@ -1291,7 +1294,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::ToggleSortStandardByPriorityToggle => {
             let new_val = !app.sort_standard_by_priority;
-            handle(app, Message::ToggleSortStandardByPriority(new_val))
+            super::update(
+                app,
+                Message::ToggleField(
+                    crate::gui::message::BoolField::SortStandardByPriority,
+                    new_val,
+                ),
+            )
         }
         Message::SelectCalendar(href) => {
             app.active_focus = Focus::Sidebar;

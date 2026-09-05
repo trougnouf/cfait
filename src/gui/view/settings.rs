@@ -248,7 +248,10 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             text(rust_i18n::t!("notifications_and_reminders")).size(20),
             checkbox::<Message, iced::Theme, iced::Renderer>(app.auto_reminders)
                 .label(rust_i18n::t!("auto_remind_on_due_start_label"))
-                .on_toggle(Message::SetAutoReminders),
+                .on_toggle(|v| Message::ToggleField(
+                    crate::gui::message::BoolField::AutoReminders,
+                    v
+                )),
             row![
                 text(rust_i18n::t!("default_time_label")).width(Length::Fixed(200.0)),
                 text_input("09:00", &app.default_reminder_time)
@@ -262,12 +265,18 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             row![
                 text(rust_i18n::t!("short_label")),
                 text_input("1h", &app.ob_snooze_short_input)
-                    .on_input(Message::SetSnoozeShort)
+                    .on_input(|v| Message::SetStringField(
+                        crate::gui::message::StringField::SnoozeShort,
+                        v
+                    ))
                     .width(Length::Fixed(60.0))
                     .padding(5),
                 text(rust_i18n::t!("long_label")),
                 text_input("1d", &app.ob_snooze_long_input)
-                    .on_input(Message::SetSnoozeLong)
+                    .on_input(|v| Message::SetStringField(
+                        crate::gui::message::StringField::SnoozeLong,
+                        v
+                    ))
                     .width(Length::Fixed(60.0))
                     .padding(5)
             ]
@@ -276,7 +285,10 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             row![
                 text(rust_i18n::t!("sync_interval_label")).width(Length::Fixed(200.0)),
                 text_input("30m", &app.ob_auto_refresh_input)
-                    .on_input(Message::SetAutoRefreshInterval)
+                    .on_input(|v| Message::SetStringField(
+                        crate::gui::message::StringField::AutoRefresh,
+                        v
+                    ))
                     .width(Length::Fixed(60.0))
                     .padding(5)
             ]
@@ -289,7 +301,12 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                     checkbox::<Message, iced::Theme, iced::Renderer>(app.create_events_for_tasks)
                         .label(rust_i18n::t!("create_calendar_events_for_tasks_with_dates"));
                 if !app.deleting_events {
-                    cb.on_toggle(Message::SetCreateEventsForTasks)
+                    cb.on_toggle(|v| {
+                        Message::ToggleField(
+                            crate::gui::message::BoolField::CreateEventsForTasks,
+                            v,
+                        )
+                    })
                 } else {
                     cb
                 }
@@ -304,7 +321,12 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 )
                 .label(rust_i18n::t!("delete_calendar_events_on_completion_label"));
                 if !app.deleting_events {
-                    cb.on_toggle(Message::SetDeleteEventsOnCompletion)
+                    cb.on_toggle(|v| {
+                        Message::ToggleField(
+                            crate::gui::message::BoolField::DeleteEventsOnCompletion,
+                            v,
+                        )
+                    })
                 } else {
                     cb
                 }
@@ -341,7 +363,12 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             let hide_fully_ui: Element<_> = if !app.hide_completed {
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.hide_fully_completed_tags)
                     .label(rust_i18n::t!("hide_fully_completed_tags"))
-                    .on_toggle(Message::ToggleHideFullyCompletedTags)
+                    .on_toggle(|v| {
+                        Message::ToggleField(
+                            crate::gui::message::BoolField::HideFullyCompletedTags,
+                            v,
+                        )
+                    })
                     .into()
             } else {
                 Space::new().width(0).into()
@@ -362,12 +389,18 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                     }),
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.hide_completed)
                     .label(rust_i18n::t!("hide_completed_and_canceled_tasks"))
-                    .on_toggle(Message::ToggleHideCompleted),
+                    .on_toggle(|v| Message::ToggleField(
+                        crate::gui::message::BoolField::HideCompleted,
+                        v
+                    )),
                 hide_fully_ui,
                 tooltip(
                     checkbox::<Message, iced::Theme, iced::Renderer>(app.hide_aliases_in_sidebar)
                         .label(rust_i18n::t!("hide_aliases_in_sidebar"))
-                        .on_toggle(Message::ToggleHideAliasesInSidebar),
+                        .on_toggle(|v| Message::ToggleField(
+                            crate::gui::message::BoolField::HideAliasesInSidebar,
+                            v
+                        )),
                     text(rust_i18n::t!("hide_aliases_in_sidebar_tooltip")).size(12),
                     tooltip::Position::Top
                 )
@@ -375,28 +408,52 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 .delay(std::time::Duration::from_millis(700)),
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.blur_when_unfocused)
                     .label(rust_i18n::t!("blur_when_unfocused"))
-                    .on_toggle(Message::SetBlurWhenUnfocused),
+                    .on_toggle(|v| Message::ToggleField(
+                        crate::gui::message::BoolField::BlurWhenUnfocused,
+                        v
+                    )),
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.show_inline_descriptions)
                     .label("Show inline descriptions (preview up to 3 lines)")
-                    .on_toggle(Message::SetShowInlineDescriptions),
+                    .on_toggle(|v| Message::ToggleField(
+                        crate::gui::message::BoolField::ShowInlineDescriptions,
+                        v
+                    )),
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.show_priority_numbers)
                     .label(rust_i18n::t!("show_priority_numbers"))
-                    .on_toggle(Message::SetShowPriorityNumbers),
+                    .on_toggle(|v| Message::ToggleField(
+                        crate::gui::message::BoolField::ShowPriorityNumbers,
+                        v
+                    )),
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.show_calendars_tab)
                     .label(rust_i18n::t!("show_calendars_tab"))
-                    .on_toggle(Message::SetShowCalendarsTab),
+                    .on_toggle(|v| Message::ToggleField(
+                        crate::gui::message::BoolField::ShowCalendarsTab,
+                        v
+                    )),
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.show_tags_tab)
                     .label(rust_i18n::t!("show_tags_tab"))
-                    .on_toggle(Message::SetShowTagsTab),
+                    .on_toggle(|v| Message::ToggleField(
+                        crate::gui::message::BoolField::ShowTagsTab,
+                        v
+                    )),
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.show_locations_tab)
                     .label(rust_i18n::t!("show_locations_tab"))
-                    .on_toggle(Message::SetShowLocationsTab),
+                    .on_toggle(|v| Message::ToggleField(
+                        crate::gui::message::BoolField::ShowLocationsTab,
+                        v
+                    )),
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.show_journal_tab)
                     .label(rust_i18n::t!("show_journal_tab"))
-                    .on_toggle(Message::SetShowJournalTab),
+                    .on_toggle(|v| Message::ToggleField(
+                        crate::gui::message::BoolField::ShowJournalTab,
+                        v
+                    )),
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.strikethrough_completed)
                     .label(rust_i18n::t!("strikethrough_completed"))
-                    .on_toggle(Message::SetStrikethroughCompleted),
+                    .on_toggle(|v| Message::ToggleField(
+                        crate::gui::message::BoolField::StrikethroughCompleted,
+                        v
+                    )),
                 Space::new().height(10),
                 text(rust_i18n::t!("settings_sorting"))
                     .size(16)
@@ -405,10 +462,16 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                     }),
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.sort_standard_by_priority)
                     .label(rust_i18n::t!("sort_standard_by_priority_label"))
-                    .on_toggle(Message::ToggleSortStandardByPriority),
+                    .on_toggle(|v| Message::ToggleField(
+                        crate::gui::message::BoolField::SortStandardByPriority,
+                        v
+                    )),
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.sort_tiebreak_recent)
                     .label(rust_i18n::t!("sort_tiebreak_recent"))
-                    .on_toggle(Message::ToggleSortTiebreakRecent),
+                    .on_toggle(|v| Message::ToggleField(
+                        crate::gui::message::BoolField::SortTiebreakRecent,
+                        v
+                    )),
                 Space::new().height(5),
                 row![
                     text(rust_i18n::t!("settings_paused_tasks")).width(Length::Fixed(200.0)),
@@ -461,7 +524,10 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 row![
                     text(rust_i18n::t!("due_within_days")).width(Length::Fixed(150.0)),
                     text_input("1", &app.ob_urgent_days_input)
-                        .on_input(Message::ObUrgentDaysChanged)
+                        .on_input(|v| Message::SetNumericField(
+                            crate::gui::message::NumericField::UrgentDays,
+                            v
+                        ))
                         .width(Length::Fixed(60.0))
                         .padding(5)
                 ]
@@ -470,7 +536,10 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 row![
                     text(rust_i18n::t!("priority_le")).width(Length::Fixed(150.0)),
                     text_input("1", &app.ob_urgent_prio_input)
-                        .on_input(Message::ObUrgentPrioChanged)
+                        .on_input(|v| Message::SetNumericField(
+                            crate::gui::message::NumericField::UrgentPrio,
+                            v
+                        ))
                         .width(Length::Fixed(60.0))
                         .padding(5)
                 ]
@@ -484,7 +553,10 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 row![
                     text(rust_i18n::t!("priority_cutoff_days")).width(Length::Fixed(150.0)),
                     text_input("30", &app.ob_sort_days_input)
-                        .on_input(Message::ObSortDaysChanged)
+                        .on_input(|v| Message::SetNumericField(
+                            crate::gui::message::NumericField::SortDays,
+                            v
+                        ))
                         .width(Length::Fixed(60.0))
                         .padding(5)
                 ]
@@ -496,7 +568,10 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 row![
                     text(rust_i18n::t!("start_grace_days")).width(Length::Fixed(150.0)),
                     text_input("1", &app.ob_start_grace_input)
-                        .on_input(Message::ObStartGraceChanged)
+                        .on_input(|v| Message::SetNumericField(
+                            crate::gui::message::NumericField::StartGrace,
+                            v
+                        ))
                         .width(Length::Fixed(60.0))
                         .padding(5)
                 ]
@@ -510,7 +585,10 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 row![
                     text(rust_i18n::t!("default_priority_label")).width(Length::Fixed(150.0)),
                     text_input("5", &app.ob_default_priority_input)
-                        .on_input(Message::ObDefaultPriorityChanged)
+                        .on_input(|v| Message::SetNumericField(
+                            crate::gui::message::NumericField::DefaultPriority,
+                            v
+                        ))
                         .width(Length::Fixed(60.0))
                         .padding(5)
                 ]
@@ -524,7 +602,10 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 row![
                     text(rust_i18n::t!("max_completed_tasks_root")).width(Length::Fixed(200.0)),
                     text_input("20", &app.ob_max_done_roots_input)
-                        .on_input(Message::SetMaxDoneRoots)
+                        .on_input(|v| Message::SetNumericField(
+                            crate::gui::message::NumericField::MaxDoneRoots,
+                            v
+                        ))
                         .width(Length::Fixed(60.0))
                         .padding(5)
                 ]
@@ -537,7 +618,10 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 row![
                     text(rust_i18n::t!("max_completed_subtasks")).width(Length::Fixed(200.0)),
                     text_input("5", &app.ob_max_done_subtasks_input)
-                        .on_input(Message::SetMaxDoneSubtasks)
+                        .on_input(|v| Message::SetNumericField(
+                            crate::gui::message::NumericField::MaxDoneSubtasks,
+                            v
+                        ))
                         .width(Length::Fixed(60.0))
                         .padding(5)
                 ]
@@ -609,7 +693,10 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 row![
                     text(rust_i18n::t!("trash_retention_days_label")).width(Length::Fixed(200.0)),
                     text_input("14", &app.ob_trash_retention_input)
-                        .on_input(Message::SetTrashRetention)
+                        .on_input(|v| Message::SetNumericField(
+                            crate::gui::message::NumericField::TrashRetention,
+                            v
+                        ))
                         .width(Length::Fixed(60.0))
                         .padding(5)
                 ]
@@ -622,7 +709,10 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 row![
                     text(rust_i18n::t!("implicit_goal_duration")).width(Length::Fixed(200.0)),
                     text_input("60", &app.ob_default_duration_goal_mins_input)
-                        .on_input(Message::SetDefaultDurationGoalMins)
+                        .on_input(|v| Message::SetNumericField(
+                            crate::gui::message::NumericField::DefaultDurationGoal,
+                            v
+                        ))
                         .width(Length::Fixed(60.0))
                         .padding(5)
                 ]
@@ -634,7 +724,10 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 Space::new().height(5),
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.sessions_count_as_completions)
                     .label(rust_i18n::t!("sessions_count_as_completions"))
-                    .on_toggle(Message::SetSessionsCountAsCompletions),
+                    .on_toggle(|v| Message::ToggleField(
+                        crate::gui::message::BoolField::SessionsCountAsCompletions,
+                        v
+                    )),
                 Space::new().height(10),
                 text(rust_i18n::t!("logging_label")).size(18),
                 row![
@@ -656,16 +749,25 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 text(rust_i18n::t!("quick_filter_title")).size(18),
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.show_quick_filter)
                     .label(rust_i18n::t!("quick_filter_show_button"))
-                    .on_toggle(Message::SetShowQuickFilter),
+                    .on_toggle(|v| Message::ToggleField(
+                        crate::gui::message::BoolField::ShowQuickFilter,
+                        v
+                    )),
                 checkbox::<Message, iced::Theme, iced::Renderer>(
                     app.core_config.show_task_goals_in_sidebar
                 )
                 .label("Show task-specific goals in the sidebar")
-                .on_toggle(Message::SetShowTaskGoalsInSidebar),
+                .on_toggle(|v| Message::ToggleField(
+                    crate::gui::message::BoolField::ShowTaskGoalsInSidebar,
+                    v
+                )),
                 row![
                     text(rust_i18n::t!("quick_filter_search_term")).width(Length::Fixed(150.0)),
                     text_input("is:ready", &app.ob_quick_filter_term_input)
-                        .on_input(Message::SetQuickFilterTerm)
+                        .on_input(|v| Message::SetStringField(
+                            crate::gui::message::StringField::QuickFilterTerm,
+                            v
+                        ))
                         .width(Length::Fill)
                         .padding(5)
                 ]
@@ -674,7 +776,10 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 row![
                     text(rust_i18n::t!("quick_filter_icon")).width(Length::Fixed(150.0)),
                     text_input("f0fa9", &app.ob_quick_filter_icon_input)
-                        .on_input(Message::SetQuickFilterIcon)
+                        .on_input(|v| Message::SetStringField(
+                            crate::gui::message::StringField::QuickFilterIcon,
+                            v
+                        ))
                         .width(Length::Fill)
                         .padding(5)
                 ]
@@ -788,7 +893,10 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             text(rust_i18n::t!("goals")).size(20),
             checkbox::<Message, iced::Theme, iced::Renderer>(app.show_goals_tab)
                 .label(rust_i18n::t!("show_goals_tab"))
-                .on_toggle(Message::SetShowGoalsTab),
+                .on_toggle(|v| Message::ToggleField(
+                    crate::gui::message::BoolField::ShowGoalsTab,
+                    v
+                )),
             Space::new().height(5),
             input_row,
             iced::widget::rule::horizontal(1)
@@ -985,7 +1093,10 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             row![
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.sort_collections_by_size)
                     .label(rust_i18n::t!("sort_collections_by_size"))
-                    .on_toggle(Message::SetSortCollectionsBySize),
+                    .on_toggle(|v| Message::ToggleField(
+                        crate::gui::message::BoolField::SortCollectionsBySize,
+                        v
+                    )),
             ]
             .align_y(iced::Alignment::Center)
         ]
@@ -1266,7 +1377,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
 
     let insecure_check = checkbox::<Message, iced::Theme, iced::Renderer>(app.ob_insecure)
         .label(rust_i18n::t!("allow_insecure_ssl"))
-        .on_toggle(Message::ObInsecureToggled)
+        .on_toggle(|v| Message::ToggleField(crate::gui::message::BoolField::ObInsecure, v))
         .size(16)
         .text_size(14);
 
@@ -1318,7 +1429,10 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 insecure_check,
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.sync_settings)
                     .label(rust_i18n::t!("sync_settings"))
-                    .on_toggle(Message::SetSyncSettings),
+                    .on_toggle(|v| Message::ToggleField(
+                        crate::gui::message::BoolField::SyncSettings,
+                        v
+                    )),
                 save_connect_btn
             ]
             .spacing(15)
