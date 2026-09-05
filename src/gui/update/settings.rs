@@ -691,6 +691,19 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
         Message::SetNumericField(field, val) => {
             if val.is_empty() || val.chars().all(|c| c.is_numeric()) {
+                // Helper: set the input string and parse into a target field.
+                // `input` is the ob_*_input field, `target` is the parsed config field.
+                macro_rules! set_num {
+                    ($input:ident, $target:expr) => {{
+                        app.$input = val.clone();
+                        if let Ok(n) = val.trim().parse() {
+                            $target = n;
+                        }
+                    }};
+                    ($input:ident) => {{
+                        app.$input = val.clone();
+                    }};
+                }
                 match field {
                     crate::gui::message::NumericField::SortDays => {
                         app.ob_sort_days_input = val.clone();
@@ -701,16 +714,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         };
                     }
                     crate::gui::message::NumericField::UrgentDays => {
-                        app.ob_urgent_days_input = val.clone();
-                        if let Ok(n) = val.trim().parse() {
-                            app.urgent_days = n;
-                        }
+                        set_num!(ob_urgent_days_input, app.urgent_days);
                     }
                     crate::gui::message::NumericField::UrgentPrio => {
-                        app.ob_urgent_prio_input = val.clone();
-                        if let Ok(n) = val.trim().parse() {
-                            app.urgent_prio = n;
-                        }
+                        set_num!(ob_urgent_prio_input, app.urgent_prio);
                     }
                     crate::gui::message::NumericField::DefaultPriority => {
                         app.ob_default_priority_input = val.clone();
@@ -721,16 +728,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         }
                     }
                     crate::gui::message::NumericField::StartGrace => {
-                        app.ob_start_grace_input = val.clone();
-                        if let Ok(n) = val.trim().parse() {
-                            app.start_grace_period_days = n;
-                        }
+                        set_num!(ob_start_grace_input, app.start_grace_period_days);
                     }
                     crate::gui::message::NumericField::TrashRetention => {
-                        app.ob_trash_retention_input = val.clone();
-                        if let Ok(n) = val.trim().parse() {
-                            app.trash_retention_days = n;
-                        }
+                        set_num!(ob_trash_retention_input, app.trash_retention_days);
                     }
                     crate::gui::message::NumericField::DefaultDurationGoal => {
                         app.ob_default_duration_goal_mins_input = val.clone();
@@ -739,10 +740,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         }
                     }
                     crate::gui::message::NumericField::MaxDoneRoots => {
-                        app.ob_max_done_roots_input = val.clone();
+                        set_num!(ob_max_done_roots_input);
                     }
                     crate::gui::message::NumericField::MaxDoneSubtasks => {
-                        app.ob_max_done_subtasks_input = val.clone();
+                        set_num!(ob_max_done_subtasks_input);
                     }
                 }
                 save_config(app);

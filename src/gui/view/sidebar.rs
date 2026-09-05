@@ -196,6 +196,215 @@ pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
     .into()
 }
 
+// --- Shared aggregate item row builder ---
+// Used by both tags and locations to avoid ~120 lines of duplication.
+/// Which kind of aggregate item (tag or location) to render.
+/// Determines the message variants produced by the row's buttons.
+#[derive(Clone, Copy)]
+enum AggregateKind {
+    Tag,
+    Location,
+}
+
+impl AggregateKind {
+    fn on_toggle(self, s: String) -> Message {
+        match self {
+            Self::Tag => Message::CategoryToggled(s),
+            Self::Location => Message::LocationToggled(s),
+        }
+    }
+    fn on_focus(self, s: String) -> Message {
+        match self {
+            Self::Tag => Message::FocusTag(s),
+            Self::Location => Message::FocusLocation(s),
+        }
+    }
+    fn on_collapse(self, s: String) -> Message {
+        match self {
+            Self::Tag => Message::ToggleTagCollapse(s),
+            Self::Location => Message::ToggleLocationCollapse(s),
+        }
+    }
+    fn on_hover(self, o: Option<String>) -> Message {
+        match self {
+            Self::Tag => Message::TagHovered(o),
+            Self::Location => Message::TagHovered(None),
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_aggregate_item_row<'a>(
+    item: &'a crate::store::AggregateItem,
+    is_kb_selected: bool,
+    is_selected: bool,
+    is_hovered: bool,
+    theme: Theme,
+    kind: AggregateKind,
+    icon_selected: char,
+    icon_unselected: char,
+    icon_size: f32,
+    uncolored_icon: bool,
+    prefix: Option<&'static str>,
+) -> Element<'a, Message> {
+    let key = &item.full_key;
+    let count = item.count;
+    let display_name = &item.display_name;
+
+    let (r, g, b) = color_utils::generate_color(key);
+    let item_color = Color::from_rgb(r, g, b);
+
+    let icon_char = if is_selected {
+        icon_selected
+    } else {
+        icon_unselected
+    };
+
+    let icon_btn = if uncolored_icon {
+        let icon_color = if is_selected {
+            Color::from_rgb(1.0, 0.6, 0.0)
+        } else {
+            Color::from_rgb(0.5, 0.5, 0.5)
+        };
+        button(icon::icon(icon_char).size(icon_size).color(icon_color))
+            .style(button::text)
+            .padding(2)
+            .on_press(kind.on_toggle(key.clone()))
+    } else {
+        let icon_content = icon::icon(icon_char).size(icon_size);
+        button(icon_content)
+            .style(move |_theme: &Theme, status: button::Status| {
+                let color = if status == button::Status::Hovered || is_selected || is_hovered {
+                    item_color
+                } else {
+                    Color {
+                        a: 0.5,
+                        ..item_color
+                    }
+                };
+                button::Style {
+                    text_color: color,
+                    background: None,
+                    ..button::Style::default()
+                }
+            })
+            .padding(2)
+            .on_press(kind.on_toggle(key.clone()))
+    };
+
+    let label_content: Element<'_, Message> = if let Some(prefix) = prefix {
+        let text_color = if is_hovered {
+            item_color
+        } else {
+            theme.extended_palette().background.base.text
+        };
+        let prefix_str = if display_name.contains('=') {
+            ""
+        } else {
+            prefix
+        };
+        rich_text![
+            span(prefix_str).color(item_color),
+            span(format!("{} ({})", display_name, count)).color(text_color)
+        ]
+        .size(16)
+        .on_link_click(never)
+        .into()
+    } else {
+        let label_color = if is_hovered {
+            theme.extended_palette().primary.base.color
+        } else {
+            theme.extended_palette().background.base.text
+        };
+        text(format!("{} ({})", display_name, count))
+            .size(16)
+            .color(label_color)
+            .into()
+    };
+
+    let label_btn = button(
+        container(label_content)
+            .width(Length::Shrink)
+            .align_x(iced::alignment::Horizontal::Left),
+    )
+    .style(move |theme: &Theme, status| {
+        let mut st = iced::widget::button::text(theme, status);
+        if is_kb_selected {
+            st.border = iced::Border {
+                width: 1.0,
+                color: theme.extended_palette().primary.base.color,
+                radius: 4.0.into(),
+            };
+        }
+        st
+    })
+    .padding(2)
+    .on_press(kind.on_toggle(key.clone()));
+
+    let focus_btn = button(icon::icon(icon::ARROW_RIGHT).size(14))
+        .style(button::text)
+        .padding(2)
+        .on_press(kind.on_focus(key.clone()));
+
+    let focus_tooltip = tooltip(
+        focus_btn,
+        text(rust_i18n::t!("focus_hide_others")).size(12),
+        tooltip::Position::Left,
+    )
+    .style(tooltip_style)
+    .delay(Duration::from_millis(700));
+
+    let expand_btn: Element<'_, Message> = if item.has_children {
+        let trees = [
+            icon::TREE_FA,
+            icon::TREE_FAE,
+            icon::TREE_MD,
+            icon::PALM_TREE,
+            icon::PINE_TREE,
+        ];
+        let hash = key.bytes().fold(0u32, |acc, b| acc.wrapping_add(b as u32));
+        let (tr, tg, tb) = crate::color_utils::generate_tree_color(hash);
+        let (icon_char, tree_color) = if item.is_expanded {
+            (trees[(hash % 5) as usize], Color::from_rgb(tr, tg, tb))
+        } else {
+            (icon::FAMILY_TREE, Color::from_rgb(0.7, 0.42, 0.0))
+        };
+        button(icon::icon(icon_char).size(14).color(tree_color))
+            .style(button::text)
+            .padding(2)
+            .on_press(kind.on_collapse(key.clone()))
+            .into()
+    } else {
+        Space::new().width(Length::Fixed(0.0)).into()
+    };
+
+    let indent = Space::new().width(Length::Fixed(item.depth as f32 * 15.0));
+
+    let item_row = row![
+        indent,
+        icon_btn,
+        label_btn,
+        Space::new().width(Length::Fill),
+        expand_btn,
+        focus_tooltip
+    ]
+    .spacing(3)
+    .align_y(iced::Alignment::Center)
+    .padding(iced::Padding {
+        right: 15.0,
+        ..Default::default()
+    });
+
+    if matches!(kind, AggregateKind::Tag) {
+        MouseArea::new(item_row)
+            .on_enter(kind.on_hover(Some(key.clone())))
+            .on_exit(kind.on_hover(None))
+            .into()
+    } else {
+        item_row.into()
+    }
+}
+
 // --- CATEGORIES ---
 pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
     let all_cats = &app.cached_categories;
@@ -360,161 +569,35 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
             .padding(10)
         ]
     } else {
+        let theme = app.theme();
         column(
             all_cats
                 .iter()
                 .enumerate()
-                .map(|(i, item)| {
+                .map(move |(i, item)| {
                     let cat = &item.full_key;
                     let is_kb_selected = app.active_focus == crate::gui::state::Focus::Sidebar
                         && app.sidebar_selection_idx == i;
-                    let count = item.count;
-                    let is_hovered = app.hovered_tag_uid.as_ref() == Some(cat);
                     let is_selected = app.session.selected_categories.contains(cat);
-                    let cat_clone_toggle = cat.clone();
-                    let cat_clone_focus = cat.clone();
-
-                    let (r, g, b) = color_utils::generate_color(cat);
-                    let tag_color = Color::from_rgb(r, g, b);
-
-                    let icon_char = if is_selected {
-                        icon::TAG_CHECK
+                    let is_hovered = app.hovered_tag_uid.as_ref() == Some(cat);
+                    let prefix = if cat == UNCATEGORIZED_ID {
+                        None
                     } else {
-                        icon::TAG_OUTLINE
+                        Some("#")
                     };
-
-                    let icon_content = icon::icon(icon_char).size(16);
-
-                    let icon_btn = button(icon_content)
-                        .style(move |_theme: &Theme, status: button::Status| {
-                            let color =
-                                if status == button::Status::Hovered || is_selected || is_hovered {
-                                    tag_color
-                                } else {
-                                    Color {
-                                        a: 0.5,
-                                        ..tag_color
-                                    }
-                                };
-
-                            button::Style {
-                                text_color: color,
-                                background: None,
-                                ..button::Style::default()
-                            }
-                        })
-                        .padding(2)
-                        .on_press(Message::CategoryToggled(cat_clone_toggle.clone()));
-
-                    let label_content: Element<'_, Message> = if cat == UNCATEGORIZED_ID {
-                        let color = if is_hovered {
-                            app.theme().extended_palette().primary.base.color
-                        } else {
-                            app.theme().extended_palette().background.base.text
-                        };
-                        text(format!("{} ({})", item.display_name, count))
-                            .size(16)
-                            .color(color)
-                            .into()
-                    } else {
-                        let text_color = if is_hovered {
-                            tag_color
-                        } else {
-                            app.theme().extended_palette().background.base.text
-                        };
-                        let prefix = if item.display_name.contains('=') {
-                            ""
-                        } else {
-                            "#"
-                        };
-                        rich_text![
-                            span(prefix).color(tag_color),
-                            span(format!("{} ({})", item.display_name, count)).color(text_color)
-                        ]
-                        .size(16)
-                        .on_link_click(never)
-                        .into()
-                    };
-
-                    let label_btn = button(
-                        container(label_content)
-                            .width(Length::Shrink)
-                            .align_x(iced::alignment::Horizontal::Left),
+                    build_aggregate_item_row(
+                        item,
+                        is_kb_selected,
+                        is_selected,
+                        is_hovered,
+                        theme.clone(),
+                        AggregateKind::Tag,
+                        icon::TAG_CHECK,
+                        icon::TAG_OUTLINE,
+                        16.0,
+                        false,
+                        prefix,
                     )
-                    .style(move |theme: &Theme, status| {
-                        let mut st = iced::widget::button::text(theme, status);
-                        if is_kb_selected {
-                            st.border = iced::Border {
-                                width: 1.0,
-                                color: theme.extended_palette().primary.base.color,
-                                radius: 4.0.into(),
-                            };
-                        }
-                        st
-                    })
-                    .padding(2)
-                    .on_press(Message::CategoryToggled(cat_clone_toggle));
-
-                    let focus_btn = button(icon::icon(icon::ARROW_RIGHT).size(14))
-                        .style(button::text)
-                        .padding(2)
-                        .on_press(Message::FocusTag(cat_clone_focus));
-
-                    let focus_tooltip = tooltip(
-                        focus_btn,
-                        text(rust_i18n::t!("focus_hide_others")).size(12),
-                        tooltip::Position::Left,
-                    )
-                    .style(tooltip_style)
-                    .delay(Duration::from_millis(700));
-
-                    let expand_btn: Element<'_, Message> = if item.has_children {
-                        let trees = [
-                            icon::TREE_FA,
-                            icon::TREE_FAE,
-                            icon::TREE_MD,
-                            icon::PALM_TREE,
-                            icon::PINE_TREE,
-                        ];
-                        let hash = cat.bytes().fold(0u32, |acc, b| acc.wrapping_add(b as u32));
-                        let (r, g, b) = crate::color_utils::generate_tree_color(hash);
-
-                        let (icon_char, tree_color) = if item.is_expanded {
-                            (trees[(hash % 5) as usize], Color::from_rgb(r, g, b))
-                        } else {
-                            (icon::FAMILY_TREE, Color::from_rgb(0.7, 0.42, 0.0))
-                        };
-
-                        button(icon::icon(icon_char).size(14).color(tree_color))
-                            .style(button::text)
-                            .padding(2)
-                            .on_press(Message::ToggleTagCollapse(cat.clone()))
-                            .into()
-                    } else {
-                        Space::new().width(Length::Fixed(0.0)).into()
-                    };
-
-                    let indent = Space::new().width(Length::Fixed(item.depth as f32 * 15.0));
-
-                    let item_row = row![
-                        indent,
-                        icon_btn,
-                        label_btn,
-                        Space::new().width(Length::Fill),
-                        expand_btn,
-                        focus_tooltip
-                    ]
-                    .spacing(3)
-                    .align_y(iced::Alignment::Center)
-                    .padding(iced::Padding {
-                        right: 15.0,
-                        ..Default::default()
-                    });
-
-                    MouseArea::new(item_row)
-                        .on_enter(Message::TagHovered(Some(cat.clone())))
-                        .on_exit(Message::TagHovered(None))
-                        .into()
                 })
                 .collect::<Vec<_>>(),
         )
@@ -598,109 +681,29 @@ pub fn view_sidebar_locations(app: &GuiApp) -> Element<'_, Message> {
         .padding(10)
         .into()
     } else {
+        let theme = app.theme();
         let list = column(
             all_locs
                 .iter()
                 .enumerate()
-                .map(|(i, item)| {
+                .map(move |(i, item)| {
                     let loc = &item.full_key;
                     let is_kb_selected = app.active_focus == crate::gui::state::Focus::Sidebar
                         && app.sidebar_selection_idx == i;
-                    let count = item.count;
                     let is_selected = app.session.selected_locations.contains(loc);
-                    let loc_clone_toggle = loc.clone();
-                    let loc_clone_focus = loc.clone();
-
-                    let (icon_char, icon_color) = if is_selected {
-                        (icon::CHECK_CIRCLE, Color::from_rgb(1.0, 0.6, 0.0))
-                    } else {
-                        (icon::MAP_PIN, Color::from_rgb(0.5, 0.5, 0.5))
-                    };
-
-                    let icon_btn = button(icon::icon(icon_char).size(14).color(icon_color))
-                        .style(button::text)
-                        .padding(2)
-                        .on_press(Message::LocationToggled(loc_clone_toggle.clone()));
-
-                    let label = rich_text![span(format!("{} ({})", item.display_name, count))]
-                        .size(14)
-                        .on_link_click(never);
-
-                    let label_btn = button(
-                        container(label)
-                            .width(Length::Shrink)
-                            .align_x(iced::alignment::Horizontal::Left),
+                    build_aggregate_item_row(
+                        item,
+                        is_kb_selected,
+                        is_selected,
+                        false,
+                        theme.clone(),
+                        AggregateKind::Location,
+                        icon::CHECK_CIRCLE,
+                        icon::MAP_PIN,
+                        14.0,
+                        true,
+                        None,
                     )
-                    .style(move |theme: &Theme, status| {
-                        let mut st = iced::widget::button::text(theme, status);
-                        if is_kb_selected {
-                            st.border = iced::Border {
-                                width: 1.0,
-                                color: theme.extended_palette().primary.base.color,
-                                radius: 4.0.into(),
-                            };
-                        }
-                        st
-                    })
-                    .padding(2)
-                    .on_press(Message::LocationToggled(loc_clone_toggle));
-
-                    let focus_btn = button(icon::icon(icon::ARROW_RIGHT).size(14))
-                        .style(button::text)
-                        .padding(2)
-                        .on_press(Message::FocusLocation(loc_clone_focus));
-
-                    let focus_tooltip = tooltip(
-                        focus_btn,
-                        text(rust_i18n::t!("focus_hide_others")).size(12),
-                        tooltip::Position::Left,
-                    )
-                    .style(tooltip_style)
-                    .delay(Duration::from_millis(700));
-
-                    let expand_btn: Element<'_, Message> = if item.has_children {
-                        let trees = [
-                            icon::TREE_FA,
-                            icon::TREE_FAE,
-                            icon::TREE_MD,
-                            icon::PALM_TREE,
-                            icon::PINE_TREE,
-                        ];
-                        let hash = loc.bytes().fold(0u32, |acc, b| acc.wrapping_add(b as u32));
-                        let (r, g, b) = crate::color_utils::generate_tree_color(hash);
-
-                        let (icon_char, tree_color) = if item.is_expanded {
-                            (trees[(hash % 5) as usize], Color::from_rgb(r, g, b))
-                        } else {
-                            (icon::FAMILY_TREE, Color::from_rgb(0.5, 0.5, 0.8))
-                        };
-
-                        button(icon::icon(icon_char).size(14).color(tree_color))
-                            .style(button::text)
-                            .padding(2)
-                            .on_press(Message::ToggleLocationCollapse(loc.clone()))
-                            .into()
-                    } else {
-                        Space::new().width(Length::Fixed(0.0)).into()
-                    };
-
-                    let indent = Space::new().width(Length::Fixed(item.depth as f32 * 15.0));
-
-                    row![
-                        indent,
-                        icon_btn,
-                        label_btn,
-                        Space::new().width(Length::Fill),
-                        expand_btn,
-                        focus_tooltip
-                    ]
-                    .spacing(3)
-                    .align_y(iced::Alignment::Center)
-                    .padding(iced::Padding {
-                        right: 15.0,
-                        ..Default::default()
-                    })
-                    .into()
                 })
                 .collect::<Vec<_>>(),
         )

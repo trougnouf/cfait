@@ -1462,12 +1462,9 @@ pub async fn handle_key_event(
                 if trimmed.starts_with(':') && !trimmed.contains(' ') {
                     match trimmed.to_lowercase().as_str() {
                         ":undo" => {
-                            if let Some(record) = state.undo_stack.pop() {
+                            if let Some(record) = state.undo_history.pop_undo() {
                                 state.store.apply_actions(&record.reverse);
-                                state.redo_stack.push(record.clone());
-                                if state.redo_stack.len() > 50 {
-                                    state.redo_stack.remove(0);
-                                }
+                                state.undo_history.push_redo(record.clone());
                                 state.refresh_filtered_view();
 
                                 if let Some(uid) = &record.primary_uid
@@ -1486,9 +1483,9 @@ pub async fn handle_key_event(
                             }
                         }
                         ":redo" => {
-                            if let Some(record) = state.redo_stack.pop() {
+                            if let Some(record) = state.undo_history.pop_redo() {
                                 state.store.apply_actions(&record.forward);
-                                state.undo_stack.push(record.clone());
+                                state.undo_history.push_undo(record.clone());
                                 state.refresh_filtered_view();
 
                                 if let Some(uid) = &record.primary_uid
@@ -3045,12 +3042,9 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Char('z') | KeyCode::Char('Z') if is_undo(&key) => {
-                if let Some(record) = state.undo_stack.pop() {
+                if let Some(record) = state.undo_history.pop_undo() {
                     state.store.apply_actions(&record.reverse);
-                    state.redo_stack.push(record.clone());
-                    if state.redo_stack.len() > 50 {
-                        state.redo_stack.remove(0);
-                    }
+                    state.undo_history.push_redo(record.clone());
                     state.refresh_filtered_view();
 
                     if let Some(uid) = &record.primary_uid

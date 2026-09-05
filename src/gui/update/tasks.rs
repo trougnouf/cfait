@@ -117,12 +117,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 return Task::none();
             }
 
-            if let Some(record) = app.undo_stack.pop() {
+            if let Some(record) = app.undo_history.pop_undo() {
                 app.store.apply_actions(&record.reverse);
-                app.redo_stack.push(record.clone());
-                if app.redo_stack.len() > 50 {
-                    app.redo_stack.remove(0);
-                }
+                app.undo_history.push_redo(record.clone());
 
                 // Prevent jump: focus the task that was modified
                 app.selected_uid = record.primary_uid.clone();
@@ -159,9 +156,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 return Task::none();
             }
 
-            if let Some(record) = app.redo_stack.pop() {
+            if let Some(record) = app.undo_history.pop_redo() {
                 app.store.apply_actions(&record.forward);
-                app.undo_stack.push(record.clone());
+                app.undo_history.push_undo(record.clone());
 
                 // Prevent jump: focus the task that was modified
                 app.selected_uid = record.primary_uid.clone();

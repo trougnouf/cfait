@@ -194,8 +194,7 @@ pub struct AppState {
     pub cached_task_goals: Vec<(String, String, crate::config::Goal, u32, Vec<f32>)>,
     pub needs_redraw: bool,
 
-    pub undo_stack: Vec<crate::journal::UndoRecord>,
-    pub redo_stack: Vec<crate::journal::UndoRecord>,
+    pub undo_history: crate::journal::UndoHistory,
 
     pub text_history: crate::model::session::TextHistory,
     pub search_highlight_regex: Option<std::rc::Rc<regex::Regex>>,
@@ -331,8 +330,7 @@ impl AppState {
             cached_goals_progress: HashMap::new(),
             cached_task_goals: Vec::new(),
             needs_redraw: false,
-            undo_stack: Vec::new(),
-            redo_stack: Vec::new(),
+            undo_history: crate::journal::UndoHistory::new(),
             text_history: crate::model::session::TextHistory::default(),
             search_highlight_regex: None,
         }
@@ -569,16 +567,12 @@ impl AppState {
         }
         let (forward, reverse, desc, primary_uid) = self.store.apply_task_intent(intent, config);
         if !forward.is_empty() {
-            self.undo_stack.push(crate::journal::UndoRecord {
+            self.undo_history.push(crate::journal::UndoRecord {
                 description: desc,
                 primary_uid,
                 forward: forward.clone(),
                 reverse,
             });
-            self.redo_stack.clear();
-            if self.undo_stack.len() > 50 {
-                self.undo_stack.remove(0);
-            }
         }
         forward
     }

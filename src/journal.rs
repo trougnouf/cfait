@@ -36,6 +36,69 @@ pub struct UndoRecord {
     pub reverse: Vec<Action>,
 }
 
+/// Bounded undo/redo history with a shared cap. The bookkeeping (push, pop,
+/// clear-redo-on-new-action, cap at `MAX_HISTORY`) is identical across all
+/// frontends; only the *application* of actions differs, so callers handle
+/// that themselves and use this struct purely for stack management.
+#[derive(Clone, Debug, Default)]
+pub struct UndoHistory {
+    pub undo_stack: Vec<UndoRecord>,
+    pub redo_stack: Vec<UndoRecord>,
+}
+
+const MAX_HISTORY: usize = 50;
+
+impl UndoHistory {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Push a new record onto the undo stack, clear redo, and enforce the cap.
+    pub fn push(&mut self, record: UndoRecord) {
+        self.undo_stack.push(record);
+        self.redo_stack.clear();
+        if self.undo_stack.len() > MAX_HISTORY {
+            self.undo_stack.remove(0);
+        }
+    }
+
+    /// Pop a record from the undo stack for replay in reverse.
+    /// The caller is responsible for applying `record.reverse` and then
+    /// calling `push_redo(record)`.
+    pub fn pop_undo(&mut self) -> Option<UndoRecord> {
+        self.undo_stack.pop()
+    }
+
+    /// Pop a record from the redo stack for replay in forward.
+    pub fn pop_redo(&mut self) -> Option<UndoRecord> {
+        self.redo_stack.pop()
+    }
+
+    /// Push a record back onto the redo stack after an undo, enforcing the cap.
+    pub fn push_redo(&mut self, record: UndoRecord) {
+        self.redo_stack.push(record);
+        if self.redo_stack.len() > MAX_HISTORY {
+            self.redo_stack.remove(0);
+        }
+    }
+
+    /// Push a record back onto the undo stack after a redo.
+    pub fn push_undo(&mut self, record: UndoRecord) {
+        self.undo_stack.push(record);
+        if self.undo_stack.len() > MAX_HISTORY {
+            self.undo_stack.remove(0);
+        }
+    }
+
+    pub fn is_undo_empty(&self) -> bool {
+        self.undo_stack.is_empty()
+    }
+
+    pub fn is_redo_empty(&self) -> bool {
+        self.redo_stack.is_empty()
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Journal {
     pub queue: Vec<Action>,

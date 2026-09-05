@@ -21,8 +21,7 @@ pub struct TaskController {
     pub store: Arc<Mutex<TaskStore>>,
     pub client: Arc<Mutex<Option<RustyClient>>>,
     pub ctx: Arc<dyn AppContext>,
-    pub undo_stack: Arc<Mutex<Vec<crate::journal::UndoRecord>>>,
-    pub redo_stack: Arc<Mutex<Vec<crate::journal::UndoRecord>>>,
+    pub undo_history: Arc<Mutex<crate::journal::UndoHistory>>,
 }
 
 impl TaskController {
@@ -35,8 +34,7 @@ impl TaskController {
             store,
             client,
             ctx,
-            undo_stack: Arc::new(Mutex::new(Vec::new())),
-            redo_stack: Arc::new(Mutex::new(Vec::new())),
+            undo_history: Arc::new(Mutex::new(crate::journal::UndoHistory::new())),
         }
     }
 

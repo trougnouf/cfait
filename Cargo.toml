@@ -66,7 +66,6 @@ base64 = "0.23"
 tower = { version = "0.5", features = ["util"] }
 tower-service = "0.3" # Explicitly add tower-service for the trait
 tower-layer = "0.3"   # And tower-layer for the Layer trait
-notify-rust = "4"
 strum = { version = "0.28", features = ["derive"] }
 
 # --- ANDROID / INTEROP ---
@@ -102,6 +101,10 @@ winresource = "0.1" # (Keep existing)
 [target.'cfg(target_os = "windows")'.dependencies]
 os_info = "3"
 windows-native-keyring-store = "1.1"
+
+# Desktop notification support (excluded on Android — handled via JNI in the app layer)
+[target.'cfg(not(target_os = "android"))'.dependencies]
+notify-rust = "4"
 
 # --- ANDROID SPECIFIC ---
 [target.'cfg(target_os = "android")'.dependencies]

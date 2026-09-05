@@ -1368,16 +1368,13 @@ impl CfaitMobile {
     }
 
     pub fn undo(&self) -> Result<Option<String>, MobileError> {
-        let mut undo_lock = self.controller.undo_stack.blocking_lock();
-        if let Some(record) = undo_lock.pop() {
+        let mut history = self.controller.undo_history.blocking_lock();
+        if let Some(record) = history.pop_undo() {
             let mut store = self.controller.store.blocking_lock();
             store.apply_actions(&record.reverse);
             drop(store);
 
-            self.controller
-                .redo_stack
-                .blocking_lock()
-                .push(record.clone());
+            history.push_redo(record.clone());
 
             let c_clone = self.controller.clone();
             if let Some(runtime) = TOKIO_RUNTIME.get() {
@@ -1392,16 +1389,13 @@ impl CfaitMobile {
     }
 
     pub fn redo(&self) -> Result<Option<String>, MobileError> {
-        let mut redo_lock = self.controller.redo_stack.blocking_lock();
-        if let Some(record) = redo_lock.pop() {
+        let mut history = self.controller.undo_history.blocking_lock();
+        if let Some(record) = history.pop_redo() {
             let mut store = self.controller.store.blocking_lock();
             store.apply_actions(&record.forward);
             drop(store);
 
-            self.controller
-                .undo_stack
-                .blocking_lock()
-                .push(record.clone());
+            history.push_undo(record.clone());
 
             let c_clone = self.controller.clone();
             if let Some(runtime) = TOKIO_RUNTIME.get() {
@@ -2750,18 +2744,14 @@ impl CfaitMobile {
         drop(session);
 
         if !forward.is_empty() {
-            let mut undo_lock = self.controller.undo_stack.lock().await;
-            undo_lock.push(crate::journal::UndoRecord {
+            let mut history = self.controller.undo_history.lock().await;
+            history.push(crate::journal::UndoRecord {
                 description: desc.clone(),
                 primary_uid,
                 forward: forward.clone(),
                 reverse,
             });
-            self.controller.redo_stack.lock().await.clear();
-            if undo_lock.len() > 50 {
-                undo_lock.remove(0);
-            }
-            drop(undo_lock);
+            drop(history);
 
             // Await disk persistence synchronously so the app doesn't suspend
             // before the user's modifications are safely queued to disk.

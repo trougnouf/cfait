@@ -5,6 +5,7 @@ use crate::config::Config; // Import Config
 use crate::context::{AppContext, StandardContext}; // Import AppContext trait
 use crate::model::{Alarm, AlarmTrigger, DateType, Task}; // Import DateType
 use chrono::{NaiveTime, Utc}; // Import Time helpers
+#[cfg(not(target_os = "android"))]
 use notify_rust::Notification;
 use simplelog::*;
 use std::collections::{HashMap, HashSet};
@@ -611,6 +612,7 @@ pub fn spawn_alarm_actor(
                     #[cfg(all(unix, not(target_os = "macos"), not(target_os = "android")))]
                     let task_uid_clone = task.uid.clone();
 
+                    #[cfg(not(target_os = "android"))]
                     std::thread::spawn(move || {
                         let mut n = Notification::new();
                         n.summary(&summary)
@@ -634,11 +636,7 @@ pub fn spawn_alarm_actor(
                             Err(e) => log::error!("Failed to show system notification: {}", e),
                         }
 
-                        #[cfg(any(
-                            target_os = "windows",
-                            target_os = "macos",
-                            target_os = "android"
-                        ))]
+                        #[cfg(any(target_os = "windows", target_os = "macos"))]
                         {
                             if let Err(e) = n.show() {
                                 log::error!("Failed to show system notification: {}", e);
