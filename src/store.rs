@@ -423,18 +423,18 @@ pub fn organize_hierarchy(
         }
 
         if let Some(children) = context.children_map.get(&task.uid) {
-            let (active, done): (Vec<Task>, Vec<Task>) =
-                children.iter().cloned().partition(|t| !t.status.is_done());
+            let (active, done): (Vec<&Task>, Vec<&Task>) =
+                children.iter().partition(|t| !t.status.is_done());
 
             for child in active {
-                append_task_and_children(&child, context, depth + 1);
+                append_task_and_children(child, context, depth + 1);
             }
 
             if !done.is_empty() {
                 let is_expanded = context.expanded_groups.contains(&task.uid);
                 if is_expanded {
                     for child in done {
-                        append_task_and_children(&child, context, depth + 1);
+                        append_task_and_children(child, context, depth + 1);
                     }
                     context
                         .result
@@ -444,7 +444,7 @@ pub fn organize_hierarchy(
                     let mut iter = done.into_iter();
                     for _ in 0..show {
                         if let Some(c) = iter.next() {
-                            append_task_and_children(&c, context, depth + 1);
+                            append_task_and_children(c, context, depth + 1);
                         }
                     }
                     context
@@ -452,11 +452,11 @@ pub fn organize_hierarchy(
                         .push(TaskListItem::ExpandGroup(task.uid.clone(), depth + 1));
 
                     for c in iter {
-                        mark_tree_as_visited(&c, context);
+                        mark_tree_as_visited(c, context);
                     }
                 } else {
                     for child in done {
-                        append_task_and_children(&child, context, depth + 1);
+                        append_task_and_children(child, context, depth + 1);
                     }
                 }
             }
@@ -721,12 +721,12 @@ impl TaskStore {
     /// Replace or insert an entire calendar's tasks.
     /// This sets up the internal uid index and rebuilds relation indices for correctness.
     pub fn insert(&mut self, calendar_href: String, tasks: Vec<Task>) {
-        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
+        let tag_aliases = Config::tag_aliases(self.ctx.as_ref());
         let mut new_map = HashMap::new();
         let mut uids_to_add = Vec::new();
 
         for mut task in tasks {
-            task.extract_transient_metadata(&config.tag_aliases);
+            task.extract_transient_metadata(&tag_aliases);
             let uid = task.uid.clone();
 
             // Protect against stale reads wiping out recent local mutations
@@ -858,8 +858,8 @@ impl TaskStore {
     /// Add a single task into the store. If it already exists, it will be overwritten
     /// in the calendar map and indices are rebuilt to reflect the new relationships.
     pub fn add_task(&mut self, mut task: Task) {
-        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
-        task.extract_transient_metadata(&config.tag_aliases);
+        let tag_aliases = Config::tag_aliases(self.ctx.as_ref());
+        task.extract_transient_metadata(&tag_aliases);
         let href = task.calendar_href.clone();
         let uid = task.uid.clone();
         let related_to = task.related_to.clone();
@@ -1181,8 +1181,8 @@ impl TaskStore {
     /// Update an existing task or insert it if missing. This method attempts to handle
     /// moves between calendars by checking the uid index and adjusting maps accordingly.
     pub fn update_or_add_task(&mut self, mut task: Task) {
-        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
-        task.extract_transient_metadata(&config.tag_aliases);
+        let tag_aliases = Config::tag_aliases(self.ctx.as_ref());
+        task.extract_transient_metadata(&tag_aliases);
         let href = task.calendar_href.clone();
         let uid = task.uid.clone();
         let related_to = task.related_to.clone();
@@ -3944,11 +3944,9 @@ impl TaskStore {
             }
         }
 
-        let parent_uids = self.get_all_parent_uids();
-
         // Apply propagated sort values back to the tasks so parents sort according to their highest actionable child
         for (i, t) in final_tasks_processed.iter_mut().enumerate() {
-            t.has_subtasks = parent_uids.contains(&t.uid);
+            t.has_subtasks = self.children_index.contains_key(&t.uid);
             if let Some(best) = cache.get(&i) {
                 t.sort_rank = best.0.rank;
                 t.effective_priority = best.0.prio;

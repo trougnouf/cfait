@@ -9,6 +9,7 @@ and DateTime::<Utc>::from_utc(...) to construct timezone-aware values.
 */
 
 use crate::config::Config;
+use crate::model::display::random_session_example;
 use crate::model::parser::{extract_inline_aliases, validate_alias_integrity};
 use crate::model::{AppIntent, CalendarListEntry, Task, TaskStatus};
 use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_TRASH_HREF};
@@ -96,12 +97,6 @@ fn handle_text_redo(state: &mut AppState) {
         state.input_buffer = next;
         state.cursor_position = state.input_buffer.chars().count();
     }
-}
-
-/// Generate a random example for session logging syntax
-fn random_session_example() -> String {
-    const DURATIONS: &[&str] = &["30m", "1h", "2h", "6h", "14:00-15:30", "09:00-10:15"];
-    DURATIONS[fastrand::usize(..DURATIONS.len())].to_string()
 }
 
 fn get_available_actions(state: &AppState, task: &Task) -> Vec<crate::config::TaskAction> {

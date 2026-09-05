@@ -1071,6 +1071,22 @@ impl Config {
         *CONFIG_CACHE.write().unwrap() = None;
     }
 
+    /// Cheap accessor for `tag_aliases` that clones only the alias map from the cache
+    /// instead of the entire `Config`. Falls back to a full `load` (which populates the
+    /// cache) on a miss, and to an empty map when no config exists. Use this in per-task
+    /// hot paths that only need the alias map (e.g. `extract_transient_metadata`).
+    pub fn tag_aliases(ctx: &dyn AppContext) -> HashMap<String, Vec<String>> {
+        if let Ok(path) = ctx.get_config_file_path() {
+            let guard = CONFIG_CACHE.read().unwrap();
+            if let Some((cached_path, config)) = guard.as_ref()
+                && cached_path == &path
+            {
+                return config.tag_aliases.clone();
+            }
+        }
+        Self::load(ctx).map(|c| c.tag_aliases).unwrap_or_default()
+    }
+
     /// Load the configuration from disk using an explicit context.
     pub fn load(ctx: &dyn AppContext) -> Result<Self> {
         let path = ctx.get_config_file_path()?;

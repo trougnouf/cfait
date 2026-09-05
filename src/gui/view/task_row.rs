@@ -8,9 +8,8 @@ use crate::gui::state::GuiApp;
 use crate::gui::view::COLOR_LOCATION;
 use crate::gui::view::focusable::focusable;
 
-use crate::model::display::random_related_icon;
+use crate::model::display::{random_related_icon, random_session_example};
 use chrono::Utc;
-use fastrand;
 use rust_i18n::t;
 use std::time::Duration;
 
@@ -115,12 +114,6 @@ pub fn parse_inline_markdown(
 use iced::{Color, Element, Length, Theme};
 
 // Helper inside the file to provide generic action styles
-
-/// Generate a random example for session logging syntax
-fn random_session_example() -> String {
-    const DURATIONS: &[&str] = &["30m", "1h", "2h", "6h", "14:00-15:30", "09:00-10:15"];
-    DURATIONS[fastrand::usize(..DURATIONS.len())].to_string()
-}
 
 pub fn action_style(theme: &Theme, status: button::Status, style_mode: u8) -> button::Style {
     let palette = theme.extended_palette();

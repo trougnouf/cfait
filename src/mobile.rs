@@ -906,15 +906,10 @@ impl CfaitMobile {
     }
 }
 
-fn populate_transient(
-    t: &mut Task,
-    store: &TaskStore,
-    aliases: &HashMap<String, Vec<String>>,
-    parent_uids: &HashSet<String>,
-) {
+fn populate_transient(t: &mut Task, store: &TaskStore, aliases: &HashMap<String, Vec<String>>) {
     t.has_blocking_tasks = store.has_tasks_blocking(&t.uid);
     t.has_related_tasks = store.has_tasks_related_to(&t.uid);
-    t.has_subtasks = parent_uids.contains(&t.uid);
+    t.has_subtasks = store.children_index.contains_key(&t.uid);
     let now = Utc::now();
     t.is_future_start = t
         .dtstart
@@ -1828,7 +1823,6 @@ impl CfaitMobile {
     pub fn get_ongoing_tasks(&self) -> Vec<MobileTask> {
         let store = self.controller.store.blocking_lock();
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
-        let parent_uids = store.get_all_parent_uids();
         let mut results = Vec::new();
         for (href, map) in &store.calendars {
             if href == crate::storage::LOCAL_TRASH_HREF || href == "local://recovery" {
@@ -1837,7 +1831,7 @@ impl CfaitMobile {
             for t in map.values() {
                 if t.status == crate::model::TaskStatus::InProcess {
                     let mut cloned = t.clone();
-                    populate_transient(&mut cloned, &store, &config.tag_aliases, &parent_uids);
+                    populate_transient(&mut cloned, &store, &config.tag_aliases);
                     results.push(task_to_mobile(&cloned, &store));
                 }
             }
@@ -2318,11 +2312,10 @@ impl CfaitMobile {
     pub async fn get_task_by_uid(&self, uid: String) -> Option<MobileTask> {
         let store = self.controller.store.lock().await;
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
-        let parent_uids = store.get_all_parent_uids();
 
         if let Some(task) = store.get_task_ref(&uid) {
             let mut cloned = task.clone();
-            populate_transient(&mut cloned, &store, &config.tag_aliases, &parent_uids);
+            populate_transient(&mut cloned, &store, &config.tag_aliases);
             Some(task_to_mobile(&cloned, &store))
         } else {
             None

@@ -3,6 +3,13 @@
 use crate::model::item::{Task, TaskStatus};
 use chrono::Utc; // Import Utc for live calculation
 
+/// Generate a random example string for the session-logging syntax, used by the
+/// TUI and GUI input placeholders.
+pub fn random_session_example() -> String {
+    const DURATIONS: &[&str] = &["30m", "1h", "2h", "6h", "14:00-15:30", "09:00-10:15"];
+    DURATIONS[fastrand::usize(..DURATIONS.len())].to_string()
+}
+
 pub trait TaskDisplay {
     fn to_smart_string(&self) -> String;
     fn format_duration_short(&self, store: Option<&crate::store::TaskStore>) -> String;
