@@ -3,7 +3,10 @@
 package com.trougnouf.cfait.ui
 
 import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -146,6 +149,48 @@ fun AdvancedSettingsScreen(
         }
     }
 
+    // Copy a picked content:// URI into app-private storage so the Rust side can
+    // read it via std::fs without any storage permissions (scoped storage safe).
+    fun copyUriToFilesDir(uri: Uri, destName: String): String? {
+        return try {
+            val dest = File(context.filesDir, destName)
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                dest.outputStream().use { output -> input.copyTo(output) }
+            }
+            dest.absolutePath
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    val certPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            val path = copyUriToFilesDir(uri, "tls_client_cert.pem")
+            if (path != null) {
+                tlsClientCertPath = path
+                saveToDisk()
+            } else {
+                status = context.getString(R.string.tls_client_cert_none)
+            }
+        }
+    }
+
+    val keyPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            val path = copyUriToFilesDir(uri, "tls_client_key.pem")
+            if (path != null) {
+                tlsClientKeyPath = path
+                saveToDisk()
+            } else {
+                status = context.getString(R.string.tls_client_key_none)
+            }
+        }
+    }
+
     val handleBack = {
         saveToDisk()
         onBack()
@@ -247,19 +292,29 @@ fun AdvancedSettingsScreen(
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
-            OutlinedTextField(
-                value = tlsClientCertPath,
-                onValueChange = { tlsClientCertPath = it },
-                label = { Text(stringResource(R.string.tls_client_cert_path)) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+            OutlinedButton(
+                onClick = { certPicker.launch(arrayOf("*/*")) },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.tls_client_cert_pick))
+            }
+            Text(
+                text = tlsClientCertPath.ifEmpty { stringResource(R.string.tls_client_cert_none) },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp)
             )
-            OutlinedTextField(
-                value = tlsClientKeyPath,
-                onValueChange = { tlsClientKeyPath = it },
-                label = { Text(stringResource(R.string.tls_client_key_path)) },
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                singleLine = true
+            OutlinedButton(
+                onClick = { keyPicker.launch(arrayOf("*/*")) },
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+            ) {
+                Text(stringResource(R.string.tls_client_key_pick))
+            }
+            Text(
+                text = tlsClientKeyPath.ifEmpty { stringResource(R.string.tls_client_key_none) },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp)
             )
             HorizontalDivider(Modifier.padding(vertical = 16.dp))
 
