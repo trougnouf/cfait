@@ -9,7 +9,12 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
 use std::fs;
+use std::path::PathBuf;
+use std::sync::{LazyLock, RwLock};
 use strum::EnumIter;
+
+static CONFIG_CACHE: LazyLock<RwLock<Option<(PathBuf, Config)>>> =
+    LazyLock::new(|| RwLock::new(None));
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, EnumIter)]
 #[serde(rename_all = "lowercase")]
@@ -1061,9 +1066,20 @@ impl Config {
         }
     }
 
+    /// Clear the in-memory config cache, forcing the next `load` to read from disk.
+    pub fn invalidate_cache() {
+        *CONFIG_CACHE.write().unwrap() = None;
+    }
+
     /// Load the configuration from disk using an explicit context.
     pub fn load(ctx: &dyn AppContext) -> Result<Self> {
         let path = ctx.get_config_file_path()?;
+
+        if let Some(cache) = CONFIG_CACHE.read().unwrap().as_ref()
+            && cache.0 == path
+        {
+            return Ok(cache.1.clone());
+        }
 
         if !path.exists() {
             return Err(anyhow::anyhow!("Config file not found"));
@@ -1103,6 +1119,7 @@ impl Config {
             config.config_version = 2;
         }
 
+        *CONFIG_CACHE.write().unwrap() = Some((path, config.clone()));
         Ok(config)
     }
 
@@ -1188,6 +1205,10 @@ impl Config {
             LocalStorage::atomic_write(&path, documented_toml)?;
             Ok(())
         })?;
+
+        let mut cached = self.clone();
+        cached.password.clear();
+        *CONFIG_CACHE.write().unwrap() = Some((path, cached));
         Ok(())
     }
 

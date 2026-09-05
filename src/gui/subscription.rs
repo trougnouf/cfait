@@ -5,15 +5,15 @@ use crate::gui::state::{AppState, Focus, GuiApp, SidebarMode};
 use iced::{Subscription, event, keyboard, window};
 use std::sync::atomic::{AtomicBool, Ordering};
 
-pub static LAST_MOUSE_POS: once_cell::sync::Lazy<std::sync::RwLock<iced::Point>> =
-    once_cell::sync::Lazy::new(|| std::sync::RwLock::new(iced::Point::new(0.0, 0.0)));
+pub static LAST_MOUSE_POS: std::sync::LazyLock<std::sync::RwLock<iced::Point>> =
+    std::sync::LazyLock::new(|| std::sync::RwLock::new(iced::Point::new(0.0, 0.0)));
 
 // Tracks the Command/Ctrl modifier state statelessly so Mouse events can check it
 static CMD_HELD: AtomicBool = AtomicBool::new(false);
 
 // Tracks the current focus statelessly so keyboard event handlers can check it
-pub static ACTIVE_FOCUS: once_cell::sync::Lazy<std::sync::RwLock<Focus>> =
-    once_cell::sync::Lazy::new(|| std::sync::RwLock::new(Focus::default()));
+pub static ACTIVE_FOCUS: std::sync::LazyLock<std::sync::RwLock<Focus>> =
+    std::sync::LazyLock::new(|| std::sync::RwLock::new(Focus::default()));
 
 pub fn subscription(app: &GuiApp) -> Subscription<Message> {
     let mut subs = Vec::new();

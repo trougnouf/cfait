@@ -406,6 +406,8 @@ pub struct Task {
     pub transient_desc_tags: Vec<String>,
     #[serde(skip)]
     pub transient_desc_locs: Vec<String>,
+    #[serde(skip)]
+    pub cached_has_subtasks: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -596,6 +598,9 @@ impl Task {
     }
 
     pub fn has_extractable_subtasks(&self) -> bool {
+        if let Some(cached) = self.cached_has_subtasks {
+            return cached;
+        }
         crate::model::extractor::has_extractable_subtasks(&self.description, self.is_journal)
     }
 
@@ -773,6 +778,7 @@ impl Task {
             transient_recent_ts: 0,
             transient_desc_tags: Vec::new(),
             transient_desc_locs: Vec::new(),
+            cached_has_subtasks: None,
         };
         task.apply_smart_input(input, aliases, default_reminder_time);
         task
@@ -791,6 +797,10 @@ impl Task {
     pub fn extract_transient_metadata(&mut self, aliases: &HashMap<String, Vec<String>>) {
         self.transient_desc_tags.clear();
         self.transient_desc_locs.clear();
+        self.cached_has_subtasks = Some(crate::model::extractor::has_extractable_subtasks(
+            &self.description,
+            self.is_journal,
+        ));
         if !self.is_journal {
             return;
         }
@@ -1332,7 +1342,7 @@ impl Task {
 
         // If already in target done state, toggle to NeedsAction (undo).
         if base_task.status == target_status && target_status.is_done() {
-            let mut updated = base_task.clone();
+            let mut updated = base_task;
             updated.status = TaskStatus::NeedsAction;
             updated.percent_complete = None;
             updated.unmapped_properties.retain(|p| p.key != "COMPLETED");
@@ -1422,7 +1432,7 @@ impl Task {
         }
 
         // Non-recurring or failed-to-advance: update in place.
-        let mut updated = base_task.clone();
+        let mut updated = base_task;
         updated.status = target_status;
         if target_status.is_done() {
             let now_str = Utc::now().format("%Y%m%dT%H%M%SZ").to_string();

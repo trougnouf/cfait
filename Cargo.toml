@@ -39,7 +39,7 @@ name = "cfait"
 chrono = { version = "0.4", features = ["serde"] }
 icalendar = "0.17"
 uuid = { version = "1.24", features = ["v4"] }
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros", "fs", "io-util"] }
 camino = "1.2"
 libdav = { git = "https://git.sr.ht/~whynothugo/libdav", rev = "30debd36a52e06cf5e57f3d5a199b4e3f96d353d" }
 http = "1.5"
@@ -68,7 +68,6 @@ tower-service = "0.3" # Explicitly add tower-service for the trait
 tower-layer = "0.3"   # And tower-layer for the Layer trait
 notify-rust = "4"
 strum = { version = "0.28", features = ["derive"] }
-unicode-width = "0.2"
 
 # --- ANDROID / INTEROP ---
 uniffi = { version = "0.32", features = ["tokio", "build", "cli"], optional = true }
@@ -86,6 +85,7 @@ ratatui = { version = "0.30", optional = true }
 crossterm = { version = "0.29", optional = true }
 rpassword = { version = "7.5", optional = true }
 tui-markdown = { version = "0.3", optional = true }
+unicode-width = { version = "0.2", optional = true }
 
 
 # --- GUI ONLY (Future) ---
@@ -93,8 +93,7 @@ iced = { version = "0.14", features = ["tokio", "svg", "advanced", "image"], opt
 iced_aw = { version = "0.14", features = ["color_picker"], optional = true }
 rfd = { version = "0.17", optional = true, default-features = false, features = ["xdg-portal"] }
 fastrand = "2.5"
-once_cell = "1.21"
-regex = "1"
+regex = { version = "1", optional = true }
 
 
 [build-dependencies]
@@ -117,7 +116,7 @@ ndk-context = "0.1"
 
 [dev-dependencies]
 mockito = "1.7" # For mocking the HTTP server
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros", "fs", "io-util"] }
 uuid = { version = "1.24", features = ["v4"] }
 serial_test = "4.0"
 uniffi_meta = "0.32"
@@ -125,8 +124,8 @@ uniffi_meta = "0.32"
 
 [features]
 default = ["tui"]
-tui = ["dep:ratatui", "dep:crossterm", "dep:rpassword", "dep:tui-markdown"]
-gui = ["dep:iced", "dep:iced_aw", "dep:rfd"]
+tui = ["dep:ratatui", "dep:crossterm", "dep:rpassword", "dep:tui-markdown", "dep:unicode-width", "dep:regex"]
+gui = ["dep:iced", "dep:iced_aw", "dep:rfd", "dep:regex"]
 mobile = ["dep:uniffi", "dep:uniffi_bindgen"]
 test_hooks = []
 

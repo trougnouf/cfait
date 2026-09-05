@@ -48,7 +48,7 @@ impl Cache {
                     sync_token: sync_token.clone(),
                     tasks: tasks.to_vec(),
                 };
-                let json = serde_json::to_string_pretty(&data)?;
+                let json = serde_json::to_string(&data)?;
                 LocalStorage::atomic_write(&path, json)?;
                 Ok(())
             })?;
@@ -76,7 +76,7 @@ impl Cache {
     pub fn save_calendars(ctx: &dyn AppContext, cals: &[CalendarListEntry]) -> Result<()> {
         if let Some(path) = Self::get_calendars_path(ctx) {
             LocalStorage::with_lock(&path, || {
-                let json = serde_json::to_string_pretty(cals)?;
+                let json = serde_json::to_string(cals)?;
                 LocalStorage::atomic_write(&path, json)?;
                 Ok(())
             })?;

@@ -79,7 +79,7 @@ impl Journal {
             LocalStorage::with_lock(&path, || {
                 let mut journal = Self::load_internal(&path);
                 f(&mut journal.queue);
-                let json = serde_json::to_string_pretty(&journal)?;
+                let json = serde_json::to_string(&journal)?;
                 LocalStorage::atomic_write(&path, json)?;
                 Ok(())
             })?;

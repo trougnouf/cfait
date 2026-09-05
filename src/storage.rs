@@ -98,7 +98,7 @@ impl LocalCalendarRegistry {
     pub fn save(ctx: &dyn AppContext, calendars: &[CalendarListEntry]) -> Result<()> {
         if let Some(path) = Self::get_path(ctx) {
             LocalStorage::with_lock(&path, || {
-                let json = serde_json::to_string_pretty(calendars)?;
+                let json = serde_json::to_string(calendars)?;
                 LocalStorage::atomic_write(&path, json)?;
                 Ok(())
             })?;
@@ -346,7 +346,7 @@ impl LocalStorage {
             version: LOCAL_STORAGE_VERSION,
             tasks: tasks.to_vec(),
         };
-        let json = serde_json::to_string_pretty(&data)?;
+        let json = serde_json::to_string(&data)?;
         Self::atomic_write(path, json)
     }
 

@@ -95,6 +95,7 @@ pub fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task>
         transient_recent_ts: _,
         transient_desc_tags: _,
         transient_desc_locs: _,
+        cached_has_subtasks: _,
     } = local;
 
     let mut merged = server.clone();

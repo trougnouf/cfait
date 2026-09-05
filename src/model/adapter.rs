@@ -909,6 +909,7 @@ impl IcsAdapter {
                 transient_recent_ts: 0,
                 transient_desc_tags: Vec::new(),
                 transient_desc_locs: Vec::new(),
+                cached_has_subtasks: None,
             });
         }
 
@@ -1502,6 +1503,7 @@ impl IcsAdapter {
             transient_recent_ts: 0,
             transient_desc_tags: Vec::new(),
             transient_desc_locs: Vec::new(),
+            cached_has_subtasks: None,
         })
     }
 

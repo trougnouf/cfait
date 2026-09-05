@@ -1765,20 +1765,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     }
 
                     // Uncollapse ancestors
-                    let mut curr = task.parent_uid.clone();
                     let mut to_uncollapse = Vec::new();
-                    let mut visited = std::collections::HashSet::new();
-                    while let Some(p_uid) = curr {
-                        if !visited.insert(p_uid.clone()) {
-                            break;
-                        }
-                        if let Some(p_task) = app.store.get_task_ref(&p_uid) {
-                            if p_task.collapsed {
-                                to_uncollapse.push(p_uid.clone());
-                            }
-                            curr = p_task.parent_uid.clone();
-                        } else {
-                            break;
+                    for p_uid in app.store.collect_ancestor_uids(&task.uid) {
+                        if let Some(p_task) = app.store.get_task_ref(&p_uid)
+                            && p_task.collapsed
+                        {
+                            to_uncollapse.push(p_uid);
                         }
                     }
                     for p_uid in to_uncollapse {

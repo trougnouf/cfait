@@ -3095,15 +3095,6 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
         });
 
     let day_ctx = app.store.get_day_context(date, &visible_cals_set);
-    let owned_day_ctx = crate::store::DayContext {
-        date: day_ctx.date,
-        due_tasks: day_ctx.due_tasks.clone(),
-        started_tasks: day_ctx.started_tasks.clone(),
-        ongoing_tasks: day_ctx.ongoing_tasks.clone(),
-        completed_tasks: day_ctx.completed_tasks.clone(),
-        session_tasks: day_ctx.session_tasks.clone(),
-        total_tracked_mins: day_ctx.total_tracked_mins,
-    };
     let mut activity_col = column![].spacing(6);
 
     let act_title = row![
@@ -3123,7 +3114,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
 
     let mut has_any_activity = false;
 
-    if owned_day_ctx.total_tracked_mins > 0 {
+    if day_ctx.total_tracked_mins > 0 {
         has_any_activity = true;
         activity_col = activity_col.push(
             row![
@@ -3133,8 +3124,8 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
                 text(format!(
                     "{}: {} ({})",
                     rust_i18n::t!("journal_time_tracked"),
-                    crate::model::parser::format_duration_human(owned_day_ctx.total_tracked_mins),
-                    owned_day_ctx.session_tasks.len()
+                    crate::model::parser::format_duration_human(day_ctx.total_tracked_mins),
+                    day_ctx.session_tasks.len()
                 ))
                 .size(13)
                 .color(Color::from_rgb(0.4, 0.8, 0.4))
@@ -3145,21 +3136,21 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
 
     let mut worked_on_uids = std::collections::HashSet::new();
     let mut worked_on_tasks = Vec::new();
-    for t in &owned_day_ctx.ongoing_tasks {
+    for t in &day_ctx.ongoing_tasks {
         if worked_on_uids.insert(t.uid.clone()) {
             worked_on_tasks.push(t.clone());
         }
     }
-    for (t, _) in &owned_day_ctx.session_tasks {
+    for (t, _) in &day_ctx.session_tasks {
         if worked_on_uids.insert(t.uid.clone()) {
             worked_on_tasks.push(t.clone());
         }
     }
 
-    if !owned_day_ctx.started_tasks.is_empty() {
+    if !day_ctx.started_tasks.is_empty() {
         has_any_activity = true;
         let mut spans = Vec::new();
-        for (i, t) in owned_day_ctx.started_tasks.iter().enumerate() {
+        for (i, t) in day_ctx.started_tasks.iter().enumerate() {
             if i > 0 {
                 spans.push(span(", ").color(Color::from_rgb(0.6, 0.6, 0.6)));
             }
@@ -3222,10 +3213,10 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
         );
     }
 
-    if !owned_day_ctx.completed_tasks.is_empty() {
+    if !day_ctx.completed_tasks.is_empty() {
         has_any_activity = true;
         let mut spans = Vec::new();
-        for (i, t) in owned_day_ctx.completed_tasks.iter().enumerate() {
+        for (i, t) in day_ctx.completed_tasks.iter().enumerate() {
             if i > 0 {
                 spans.push(span(", ").color(Color::from_rgb(0.6, 0.6, 0.6)));
             }
@@ -3255,10 +3246,10 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
         );
     }
 
-    if !owned_day_ctx.due_tasks.is_empty() {
+    if !day_ctx.due_tasks.is_empty() {
         has_any_activity = true;
         let mut spans = Vec::new();
-        for (i, t) in owned_day_ctx.due_tasks.iter().enumerate() {
+        for (i, t) in day_ctx.due_tasks.iter().enumerate() {
             if i > 0 {
                 spans.push(span(", ").color(Color::from_rgb(0.6, 0.6, 0.6)));
             }

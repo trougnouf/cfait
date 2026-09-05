@@ -426,8 +426,8 @@ impl ParserLexicon {
     }
 }
 
-pub static LEXICON: once_cell::sync::Lazy<RwLock<ParserLexicon>> =
-    once_cell::sync::Lazy::new(|| RwLock::new(ParserLexicon::build()));
+pub static LEXICON: std::sync::LazyLock<RwLock<ParserLexicon>> =
+    std::sync::LazyLock::new(|| RwLock::new(ParserLexicon::build()));
 
 pub fn rebuild_lexicon() {
     if let Ok(mut lex) = LEXICON.write() {

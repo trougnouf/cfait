@@ -946,53 +946,35 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 }
             }
 
-            if !day_ctx.started_tasks.is_empty() {
-                activity_lines
-                    .push_str(&format!("- ▶ {}: ", rust_i18n::t!("journal_started_today")));
-                let links: Vec<String> = day_ctx
-                    .started_tasks
-                    .iter()
-                    .map(|t| t.summary.clone())
-                    .collect();
+            let mut push_activity = |icon: &str, label: &str, tasks: &[crate::model::Task]| {
+                if tasks.is_empty() {
+                    return;
+                }
+                activity_lines.push_str(&format!("- {} {}: ", icon, label));
+                let links: Vec<&str> = tasks.iter().map(|t| t.summary.as_str()).collect();
                 activity_lines.push_str(&links.join(", "));
                 activity_lines.push('\n');
-            }
-
-            if !worked_on_tasks.is_empty() {
-                activity_lines.push_str(&format!(
-                    "- ⏱ {}: ",
-                    rust_i18n::t!("journal_worked_on_today")
-                ));
-                let links: Vec<String> =
-                    worked_on_tasks.iter().map(|t| t.summary.clone()).collect();
-                activity_lines.push_str(&links.join(", "));
-                activity_lines.push('\n');
-            }
-
-            if !day_ctx.completed_tasks.is_empty() {
-                activity_lines.push_str(&format!(
-                    "- ✓ {}: ",
-                    rust_i18n::t!("journal_completed_today")
-                ));
-                let links: Vec<String> = day_ctx
-                    .completed_tasks
-                    .iter()
-                    .map(|t| t.summary.clone())
-                    .collect();
-                activity_lines.push_str(&links.join(", "));
-                activity_lines.push('\n');
-            }
-
-            if !day_ctx.due_tasks.is_empty() {
-                activity_lines.push_str(&format!("- 📅 {}: ", rust_i18n::t!("journal_due_today")));
-                let links: Vec<String> = day_ctx
-                    .due_tasks
-                    .iter()
-                    .map(|t| t.summary.clone())
-                    .collect();
-                activity_lines.push_str(&links.join(", "));
-                activity_lines.push('\n');
-            }
+            };
+            push_activity(
+                "▶",
+                &rust_i18n::t!("journal_started_today"),
+                &day_ctx.started_tasks,
+            );
+            push_activity(
+                "⏱",
+                &rust_i18n::t!("journal_worked_on_today"),
+                &worked_on_tasks,
+            );
+            push_activity(
+                "✓",
+                &rust_i18n::t!("journal_completed_today"),
+                &day_ctx.completed_tasks,
+            );
+            push_activity(
+                "📅",
+                &rust_i18n::t!("journal_due_today"),
+                &day_ctx.due_tasks,
+            );
 
             if !activity_lines.is_empty() {
                 desc.push_str("\n\n---\n**");

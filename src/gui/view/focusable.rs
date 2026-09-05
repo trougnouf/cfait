@@ -8,13 +8,13 @@ use iced::advanced::{Clipboard, Layout, Shell, Widget};
 use iced::event::Event;
 use iced::mouse;
 use iced::{Element, Length, Rectangle, Size, Vector};
-use once_cell::sync::Lazy;
 use std::collections::HashMap;
+use std::sync::LazyLock;
 use std::sync::RwLock;
 
 /// Global registry mapping a widget `Id` -> its last-known bounds.
-static FOCUS_BOUNDS: Lazy<RwLock<HashMap<widget::Id, Rectangle>>> =
-    Lazy::new(|| RwLock::new(HashMap::new()));
+static FOCUS_BOUNDS: LazyLock<RwLock<HashMap<widget::Id, Rectangle>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
 
 /// Clears the entire focus bounds registry.
 /// This should be called whenever the view is about to be rebuilt with a new set of items.

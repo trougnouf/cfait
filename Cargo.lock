@@ -1036,7 +1036,6 @@ dependencies = [
  "mockito",
  "ndk-context",
  "notify-rust",
- "once_cell",
  "oo7",
  "os_info",
  "percent-encoding",

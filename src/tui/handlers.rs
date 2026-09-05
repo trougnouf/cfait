@@ -42,6 +42,40 @@ fn dispatch_intent_tui(state: &mut AppState, intent: AppIntent, action_tx: &Send
     }
 }
 
+/// Common alarm action handler: applies the alarm mutation, clears the alarm UI,
+/// refreshes the view, and spawns a persist task. `extra` runs between clearing
+/// the alarm and refreshing (e.g. mode reset for custom snooze).
+fn handle_alarm_action(
+    state: &mut AppState,
+    task_uid: &str,
+    alarm_uid: &str,
+    action_tx: &Sender<Action>,
+    f: impl FnOnce(&mut Task, &str) -> bool,
+    extra: impl FnOnce(&mut AppState),
+) -> bool {
+    if let Some((t, _)) = state.store.get_task_mut(task_uid)
+        && f(t, alarm_uid)
+    {
+        t.sequence += 1;
+        let cloned = t.clone();
+        state.active_alarm = None;
+        extra(state);
+        state.refresh_filtered_view();
+        update_alarms(state);
+        let tx = action_tx.clone();
+        tokio::spawn(async move {
+            let _ = tx
+                .send(Action::PersistBatch(vec![crate::journal::Action::Update(
+                    cloned,
+                )]))
+                .await;
+        });
+        true
+    } else {
+        false
+    }
+}
+
 fn is_redo(key: &KeyEvent) -> bool {
     (matches!(key.code, KeyCode::Char('y') | KeyCode::Char('Y'))
         && key.modifiers.contains(KeyModifiers::CONTROL))
@@ -1030,69 +1064,40 @@ pub async fn handle_key_event(
         } else {
             match key.code {
                 KeyCode::Delete | KeyCode::Char('D') | KeyCode::Char('d') => {
-                    if let Some((t, _)) = state.store.get_task_mut(&task.uid)
-                        && t.handle_dismiss(&alarm_uid)
-                    {
-                        t.sequence += 1;
-                        let cloned = t.clone();
-                        // Update UI
-                        state.active_alarm = None;
-                        state.refresh_filtered_view();
-                        update_alarms(state);
-
-                        let tx = action_tx.clone();
-                        tokio::spawn(async move {
-                            let _ = tx
-                                .send(Action::PersistBatch(vec![crate::journal::Action::Update(
-                                    cloned,
-                                )]))
-                                .await;
-                        });
-                    }
+                    handle_alarm_action(
+                        state,
+                        &task.uid,
+                        &alarm_uid,
+                        action_tx,
+                        |t, a| t.handle_dismiss(a),
+                        |_| {},
+                    );
                     return None;
                 }
                 KeyCode::Char('1') => {
                     // Snooze short preset
-                    if let Some((t, _)) = state.store.get_task_mut(&task.uid)
-                        && t.handle_snooze(&alarm_uid, state.snooze_short_mins)
-                    {
-                        t.sequence += 1;
-                        let cloned = t.clone();
-                        state.active_alarm = None;
-                        state.refresh_filtered_view();
-                        update_alarms(state);
-
-                        let tx = action_tx.clone();
-                        tokio::spawn(async move {
-                            let _ = tx
-                                .send(Action::PersistBatch(vec![crate::journal::Action::Update(
-                                    cloned,
-                                )]))
-                                .await;
-                        });
-                    }
+                    let mins = state.snooze_short_mins;
+                    handle_alarm_action(
+                        state,
+                        &task.uid,
+                        &alarm_uid,
+                        action_tx,
+                        |t, a| t.handle_snooze(a, mins),
+                        |_| {},
+                    );
                     return None;
                 }
                 KeyCode::Char('2') => {
                     // Snooze long preset
-                    if let Some((t, _)) = state.store.get_task_mut(&task.uid)
-                        && t.handle_snooze(&alarm_uid, state.snooze_long_mins)
-                    {
-                        t.sequence += 1;
-                        let cloned = t.clone();
-                        state.active_alarm = None;
-                        state.refresh_filtered_view();
-                        update_alarms(state);
-
-                        let tx = action_tx.clone();
-                        tokio::spawn(async move {
-                            let _ = tx
-                                .send(Action::PersistBatch(vec![crate::journal::Action::Update(
-                                    cloned,
-                                )]))
-                                .await;
-                        });
-                    }
+                    let mins = state.snooze_long_mins;
+                    handle_alarm_action(
+                        state,
+                        &task.uid,
+                        &alarm_uid,
+                        action_tx,
+                        |t, a| t.handle_snooze(a, mins),
+                        |_| {},
+                    );
                     return None;
                 }
                 KeyCode::Char('c') => {
@@ -1295,20 +1300,12 @@ pub async fn handle_key_event(
                                     let group_key = task.parent_uid.clone().unwrap_or_default();
                                     state.expanded_done_groups.insert(group_key);
                                 }
-                                let mut curr = task.parent_uid.clone();
                                 let mut to_uncollapse = Vec::new();
-                                let mut visited = std::collections::HashSet::new();
-                                while let Some(p_uid) = curr {
-                                    if !visited.insert(p_uid.clone()) {
-                                        break;
-                                    }
-                                    if let Some(p_task) = state.store.get_task_ref(&p_uid) {
-                                        if p_task.collapsed {
-                                            to_uncollapse.push(p_uid.clone());
-                                        }
-                                        curr = p_task.parent_uid.clone();
-                                    } else {
-                                        break;
+                                for p_uid in state.store.collect_ancestor_uids(&task.uid) {
+                                    if let Some(p_task) = state.store.get_task_ref(&p_uid)
+                                        && p_task.collapsed
+                                    {
+                                        to_uncollapse.push(p_uid);
                                     }
                                 }
                                 if !to_uncollapse.is_empty() {
@@ -1901,26 +1898,18 @@ pub async fn handle_key_event(
             KeyCode::Enter if !state.input_buffer.is_empty() => {
                 // Parse custom snooze duration
                 if let Some(mins) = crate::model::parser::parse_duration(&state.input_buffer) {
-                    if let Some((task, alarm_uid)) = state.active_alarm.clone()
-                        && let Some((t, _)) = state.store.get_task_mut(&task.uid)
-                        && t.snooze_alarm(&alarm_uid, mins)
-                    {
-                        t.sequence += 1;
-                        let cloned = t.clone();
-                        state.active_alarm = None;
-                        state.mode = InputMode::Normal;
-                        state.reset_input();
-                        state.refresh_filtered_view();
-                        update_alarms(state);
-
-                        let tx = action_tx.clone();
-                        tokio::spawn(async move {
-                            let _ = tx
-                                .send(Action::PersistBatch(vec![crate::journal::Action::Update(
-                                    cloned,
-                                )]))
-                                .await;
-                        });
+                    if let Some((task, alarm_uid)) = state.active_alarm.clone() {
+                        handle_alarm_action(
+                            state,
+                            &task.uid,
+                            &alarm_uid,
+                            action_tx,
+                            |t, a| t.snooze_alarm(a, mins),
+                            |s| {
+                                s.mode = InputMode::Normal;
+                                s.reset_input();
+                            },
+                        );
                     }
                 } else {
                     state.message =
@@ -4458,20 +4447,12 @@ pub async fn handle_key_event(
                             }
 
                             // Uncollapse ancestors
-                            let mut curr = task.parent_uid.clone();
                             let mut to_uncollapse = Vec::new();
-                            let mut visited = std::collections::HashSet::new();
-                            while let Some(p_uid) = curr {
-                                if !visited.insert(p_uid.clone()) {
-                                    break;
-                                }
-                                if let Some(p_task) = state.store.get_task_ref(&p_uid) {
-                                    if p_task.collapsed {
-                                        to_uncollapse.push(p_uid.clone());
-                                    }
-                                    curr = p_task.parent_uid.clone();
-                                } else {
-                                    break;
+                            for p_uid in state.store.collect_ancestor_uids(&task.uid) {
+                                if let Some(p_task) = state.store.get_task_ref(&p_uid)
+                                    && p_task.collapsed
+                                {
+                                    to_uncollapse.push(p_uid);
                                 }
                             }
 

@@ -118,7 +118,7 @@ impl AlarmIndex {
         };
 
         LocalStorage::with_lock(&path, || {
-            let json = serde_json::to_string_pretty(&self)?;
+            let json = serde_json::to_string(&self)?;
             LocalStorage::atomic_write(&path, json)?;
             Ok(())
         })
@@ -525,6 +525,7 @@ mod tests {
             transient_recent_ts: 0,
             transient_desc_tags: Vec::new(),
             transient_desc_locs: Vec::new(),
+            cached_has_subtasks: None,
         };
 
         // Simulate dismissing the implicit alarm by adding an explicit acknowledged alarm

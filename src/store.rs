@@ -690,24 +690,30 @@ impl TaskStore {
         }
     }
 
-    fn add_task_to_indices(&mut self, task: &Task) {
-        for r in &task.related_to {
+    fn add_task_to_indices(
+        &mut self,
+        uid: &str,
+        related_to: &[String],
+        dependencies: &[String],
+        parent_uid: Option<&str>,
+    ) {
+        for r in related_to {
             self.related_from_index
                 .entry(r.clone())
                 .or_default()
-                .push(task.uid.clone());
+                .push(uid.to_string());
         }
-        for dep in &task.dependencies {
+        for dep in dependencies {
             self.blocking_index
                 .entry(dep.clone())
                 .or_default()
-                .push(task.uid.clone());
+                .push(uid.to_string());
         }
-        if let Some(p) = &task.parent_uid {
+        if let Some(p) = parent_uid {
             self.children_index
-                .entry(p.clone())
+                .entry(p.to_string())
                 .or_default()
-                .push(task.uid.clone());
+                .push(uid.to_string());
         }
     }
     // --------------------------------
@@ -855,28 +861,56 @@ impl TaskStore {
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         task.extract_transient_metadata(&config.tag_aliases);
         let href = task.calendar_href.clone();
-        self.index.insert(task.uid.clone(), href.clone());
+        let uid = task.uid.clone();
+        let related_to = task.related_to.clone();
+        let dependencies = task.dependencies.clone();
+        let parent_uid = task.parent_uid.clone();
+        self.index.insert(uid.clone(), href.clone());
 
         if let Some(old) = self
             .calendars
             .entry(href)
             .or_default()
-            .insert(task.uid.clone(), task.clone())
+            .insert(uid.clone(), task)
         {
             self.remove_task_from_indices(&old);
         }
 
-        self.add_task_to_indices(&task);
+        self.add_task_to_indices(&uid, &related_to, &dependencies, parent_uid.as_deref());
+    }
+
+    /// Walk from `uid` up through parents, collecting ancestor UIDs (excluding `uid` itself).
+    /// Stops on cycle or missing parent. Returns owned strings for callers that need to
+    /// retain them beyond the borrow (e.g. pushing into a queue). For hot-path ancestor
+    /// checks (filter loops), prefer an inline `&str` walk instead to avoid allocations.
+    pub fn collect_ancestor_uids(&self, uid: &str) -> Vec<String> {
+        let mut result = Vec::new();
+        let mut curr = uid;
+        let mut visited = HashSet::new();
+        while let Some(p_uid) = self
+            .get_task_ref(curr)
+            .and_then(|t| t.parent_uid.as_deref())
+        {
+            if !visited.insert(p_uid) {
+                break;
+            }
+            result.push(p_uid.to_string());
+            curr = p_uid;
+        }
+        result
     }
 
     fn is_descendant_of(&self, descendant_uid: &str, ancestor_uid: &str) -> bool {
-        let mut curr = descendant_uid.to_string();
+        let mut curr = descendant_uid;
         let mut visited = HashSet::new();
-        while let Some(p_uid) = self.get_task_ref(&curr).and_then(|t| t.parent_uid.clone()) {
+        while let Some(p_uid) = self
+            .get_task_ref(curr)
+            .and_then(|t| t.parent_uid.as_deref())
+        {
             if p_uid == ancestor_uid {
                 return true;
             }
-            if !visited.insert(p_uid.clone()) {
+            if !visited.insert(p_uid) {
                 break;
             }
             curr = p_uid;
@@ -1164,17 +1198,20 @@ impl TaskStore {
         task.extract_transient_metadata(&config.tag_aliases);
         let href = task.calendar_href.clone();
         let uid = task.uid.clone();
+        let related_to = task.related_to.clone();
+        let dependencies = task.dependencies.clone();
+        let parent_uid = task.parent_uid.clone();
         if let Some(existing_href) = self.index.get(&uid) {
             if existing_href == &href {
                 if let Some(map) = self.calendars.get_mut(&href) {
-                    if let Some(old) = map.insert(uid.clone(), task.clone()) {
+                    if let Some(old) = map.insert(uid.clone(), task) {
                         self.remove_task_from_indices(&old);
                     }
                 } else {
                     self.calendars
                         .entry(href.clone())
                         .or_default()
-                        .insert(uid.clone(), task.clone());
+                        .insert(uid.clone(), task);
                 }
             } else {
                 // Task was moved between calendars: remove from old map and insert in new
@@ -1188,7 +1225,7 @@ impl TaskStore {
                 self.calendars
                     .entry(href.clone())
                     .or_default()
-                    .insert(uid.clone(), task.clone());
+                    .insert(uid.clone(), task);
             }
         } else {
             // New task
@@ -1196,9 +1233,9 @@ impl TaskStore {
             self.calendars
                 .entry(href.clone())
                 .or_default()
-                .insert(uid.clone(), task.clone());
+                .insert(uid.clone(), task);
         }
-        self.add_task_to_indices(&task);
+        self.add_task_to_indices(&uid, &related_to, &dependencies, parent_uid.as_deref());
     }
 
     /// Remove all tasks and indices from the store.
@@ -1443,14 +1480,12 @@ impl TaskStore {
     /// context is preserved. Returns the set of tasks that were updated.
     pub fn set_status_in_process(&mut self, uid: &str) -> Vec<Task> {
         let mut updated = Vec::new();
-        let mut current_uid = uid.to_string();
         let now = Utc::now().timestamp();
-        let mut visited = HashSet::new();
+        let chain = std::iter::once(uid.to_string())
+            .chain(self.collect_ancestor_uids(uid))
+            .collect::<Vec<_>>();
 
-        loop {
-            if !visited.insert(current_uid.clone()) {
-                break;
-            }
+        for current_uid in chain {
             if let Some((task, _)) = self.get_task_mut(&current_uid) {
                 let mut changed = false;
                 if task.status != TaskStatus::InProcess {
@@ -1465,12 +1500,7 @@ impl TaskStore {
                     task.sequence += 1;
                     updated.push(task.clone());
                 }
-                if let Some(p) = task.parent_uid.clone() {
-                    current_uid = p;
-                    continue;
-                }
             }
-            break;
         }
         updated
     }
@@ -1479,16 +1509,10 @@ impl TaskStore {
     pub fn pause_task(&mut self, uid: &str) -> Vec<Task> {
         let mut updated = Vec::new();
         let now = Utc::now().timestamp();
-        let mut queue = vec![uid.to_string()];
-        let mut visited = HashSet::new();
+        let mut all_uids = self.get_descendant_uids(uid);
+        all_uids.insert(0, uid.to_string());
 
-        while let Some(current_uid) = queue.pop() {
-            if !visited.insert(current_uid.clone()) {
-                continue;
-            }
-
-            let children = self.children_index.get(&current_uid).cloned();
-
+        for current_uid in all_uids {
             if let Some((task, _)) = self.get_task_mut(&current_uid) {
                 let mut changed = false;
                 if task.status == TaskStatus::InProcess {
@@ -1514,10 +1538,6 @@ impl TaskStore {
                     updated.push(task.clone());
                 }
             }
-
-            if let Some(c) = children {
-                queue.extend(c);
-            }
         }
         updated
     }
@@ -1525,16 +1545,10 @@ impl TaskStore {
     /// Stop a running or paused task and its subtree; reset all time tracking data.
     pub fn stop_task(&mut self, uid: &str) -> Vec<Task> {
         let mut updated = Vec::new();
-        let mut queue = vec![uid.to_string()];
-        let mut visited = HashSet::new();
+        let mut all_uids = self.get_descendant_uids(uid);
+        all_uids.insert(0, uid.to_string());
 
-        while let Some(current_uid) = queue.pop() {
-            if !visited.insert(current_uid.clone()) {
-                continue;
-            }
-
-            let children = self.children_index.get(&current_uid).cloned();
-
+        for current_uid in all_uids {
             if let Some((task, _)) = self.get_task_mut(&current_uid) {
                 let mut changed = false;
                 if task.status != TaskStatus::NeedsAction {
@@ -1558,10 +1572,6 @@ impl TaskStore {
                     task.sequence += 1;
                     updated.push(task.clone());
                 }
-            }
-
-            if let Some(c) = children {
-                queue.extend(c);
             }
         }
         updated
@@ -1978,19 +1988,8 @@ impl TaskStore {
     pub fn duplicate_task_tree(&mut self, root_uid: &str) -> Vec<Task> {
         let mut new_tasks = Vec::new();
         let mut uid_map = HashMap::new(); // old -> new
-        let mut queue = vec![root_uid.to_string()];
-        let mut descendants = Vec::new();
-
-        let mut visited = HashSet::new();
-        while let Some(curr) = queue.pop() {
-            if !visited.insert(curr.clone()) {
-                continue;
-            }
-            descendants.push(curr.clone());
-            if let Some(children) = self.children_index.get(&curr) {
-                queue.extend(children.clone());
-            }
-        }
+        let mut descendants = self.get_descendant_uids(root_uid);
+        descendants.insert(0, root_uid.to_string());
 
         for old_uid in &descendants {
             if let Some(t) = self.get_task_ref(old_uid) {
@@ -2068,7 +2067,7 @@ impl TaskStore {
                         .into_boxed_str(),
                 ));
             }
-            if self.get_descendant_uids(child_uid).contains(p_uid) {
+            if self.is_descendant_of(p_uid, child_uid) {
                 return Err("Cycle detected: Cannot set a task as a child of its own descendant");
             }
         }
@@ -2451,11 +2450,12 @@ impl TaskStore {
             if href == crate::storage::LOCAL_TRASH_HREF || href == "local://recovery" {
                 continue;
             }
+            let prefix = format!("{}:", clean_key);
             for t in map.values() {
                 let matches = if is_tag {
                     t.categories
                         .iter()
-                        .any(|c| c == clean_key || c.starts_with(&format!("{}:", clean_key)))
+                        .any(|c| c == clean_key || c.starts_with(&prefix))
                 } else if is_task {
                     t.uid == clean_key
                         || t.unmapped_properties
@@ -2464,7 +2464,7 @@ impl TaskStore {
                 } else {
                     t.locations
                         .iter()
-                        .any(|l| l == clean_key || l.starts_with(&format!("{}:", clean_key)))
+                        .any(|l| l == clean_key || l.starts_with(&prefix))
                 };
 
                 if !matches {
@@ -2727,23 +2727,18 @@ impl TaskStore {
                 }
 
                 if t.geo.is_some() {
-                    let mut curr = t.uid.clone();
+                    *tree_loc_counts.entry(t.uid.clone()).or_insert(0) += 1;
+                    let mut curr = t.uid.as_str();
                     let mut visited = HashSet::new();
-                    loop {
-                        *tree_loc_counts.entry(curr.clone()).or_insert(0) += 1;
-                        visited.insert(curr.clone());
-
-                        if let Some(parent) = self
-                            .get_task_ref(&curr)
-                            .and_then(|task| task.parent_uid.clone())
-                        {
-                            if visited.contains(&parent) {
-                                break;
-                            }
-                            curr = parent;
-                        } else {
+                    while let Some(p_uid) = self
+                        .get_task_ref(curr)
+                        .and_then(|tsk| tsk.parent_uid.as_deref())
+                    {
+                        if !visited.insert(p_uid) {
                             break;
                         }
+                        *tree_loc_counts.entry(p_uid.to_string()).or_insert(0) += 1;
+                        curr = p_uid;
                     }
                 }
             }
@@ -2767,21 +2762,18 @@ impl TaskStore {
 
         // Helper: determine whether a task is effectively blocked by checking ancestors
         let check_is_effectively_blocked = |t: &Task, done_set: &HashSet<String>| -> bool {
-            let mut current = t;
+            let mut curr = t;
             let mut visited = HashSet::new();
-
             loop {
-                if check_is_blocked_explicit(current, done_set) {
+                if check_is_blocked_explicit(curr, done_set) {
                     return true;
                 }
-
-                if let Some(p_uid) = &current.parent_uid {
-                    if !visited.insert(p_uid.clone()) {
-                        // cycle / already visited: stop
+                if let Some(p_uid) = curr.parent_uid.as_deref() {
+                    if !visited.insert(p_uid) {
                         break;
                     }
                     if let Some(p_task) = self.get_task_ref(p_uid) {
-                        current = p_task;
+                        curr = p_task;
                         continue;
                     }
                 }
@@ -2829,8 +2821,8 @@ impl TaskStore {
                     return true;
                 }
 
-                if let Some(p_uid) = &current.parent_uid {
-                    if !visited.insert(p_uid.clone()) {
+                if let Some(p_uid) = current.parent_uid.as_deref() {
+                    if !visited.insert(p_uid) {
                         break;
                     }
                     if let Some(p_task) = self.get_task_ref(p_uid) {
@@ -4603,6 +4595,7 @@ mod tests {
             transient_recent_ts: 0,
             transient_desc_tags: Vec::new(),
             transient_desc_locs: Vec::new(),
+            cached_has_subtasks: None,
         }
     }
 
