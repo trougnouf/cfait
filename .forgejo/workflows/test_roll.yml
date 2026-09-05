@@ -299,7 +299,9 @@ jobs:
         if: always()
         run: |
           if [ -d target/criterion ]; then
-            tar -czf criterion-reports.tar.gz -C target criterion
+            # zstd -19: ~64% smaller than gzip with fast decode.
+            # The HTML summary is at criterion/report/index.html inside the archive.
+            ZSTD_CLEVEL=19 tar --zstd -cf criterion-reports.tar.zst -C target criterion
           fi
 
       - name: Upload benchmark results
@@ -309,5 +311,5 @@ jobs:
           name: bench-results-${{ github.sha }}
           path: |
             bench-output.txt
-            criterion-reports.tar.gz
+            criterion-reports.tar.zst
           retention-days: 14
