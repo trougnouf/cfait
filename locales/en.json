@@ -728,6 +728,8 @@
     "tui_export_select_source": "Select source local calendar to export from.",
     "tui_fallback_offline": "Falling back to offline mode (saving provided details anyway).",
     "tui_help_actions": "Tab: switch | Up/Dn: scroll | Esc/?: close",
+    "tui_yes_key": "y",
+    "tui_no_key": "n",
     "tui_insecure_ssl_prompt": "Allow insecure SSL certificates? (y/N): ",
     "tui_main_help": "?:Help q:Quit Tab:Side a:Add e:Edit E:Details Spc:Done Del:Del y:Yank /:Find z:Fold",
     "tui_log_time_prompt": "Log time for %{name}",

@@ -780,6 +780,7 @@
     "tui_export_select_source": "Selecciona el calendario local de origen desde el que deseas exportar.",
     "tui_fallback_offline": "Cambiando a modo local (almacenando los detalles provistos).",
     "tui_help_actions": "Tab: cambiar | Arriba/Abajo: desplazar | Esc/?: cerrar",
+    "tui_yes_key": "s",
     "tui_insecure_ssl_prompt": "¿Permitir certificados SSL no seguros? (S/N): ",
     "tui_log_time_prompt": "Registro temporal para %{name}",
     "tui_main_help": "?:Ayuda q:Salir Tab:Página a:Añadir e:Editar E:Detalles Esp:Listo Supr:Suprimir y:Copiar /:Buscar z:Plegar",

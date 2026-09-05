@@ -117,7 +117,11 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
                     io::stdout().flush()?;
                     let mut insecure = String::new();
                     io::stdin().read_line(&mut insecure)?;
-                    new_config.allow_insecure_certs = insecure.trim().eq_ignore_ascii_case("y");
+                    let insecure_ans = insecure.trim();
+                    let yes_key = rust_i18n::t!("tui_yes_key");
+                    new_config.allow_insecure_certs = insecure_ans
+                        .eq_ignore_ascii_case(yes_key.as_ref())
+                        || insecure_ans.eq_ignore_ascii_case("y");
 
                     println!("\n{}", rust_i18n::t!("tui_testing_connection").trim_start());
 
@@ -163,7 +167,11 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
                             println!("{}", rust_i18n::t!("tui_retry_config_prompt"));
                             let mut retry = String::new();
                             io::stdin().read_line(&mut retry)?;
-                            if retry.trim().eq_ignore_ascii_case("n") {
+                            let retry_ans = retry.trim();
+                            let no_key = rust_i18n::t!("tui_no_key");
+                            if retry_ans.eq_ignore_ascii_case(no_key.as_ref())
+                                || retry_ans.eq_ignore_ascii_case("n")
+                            {
                                 println!("{}", rust_i18n::t!("tui_fallback_offline"));
                                 break;
                             }

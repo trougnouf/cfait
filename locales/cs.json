@@ -509,6 +509,7 @@
     "tui_export_select_source": "Vyberte zdrojový lokální kalendář pro export.",
     "tui_fallback_offline": "Přecházím na offline režim (přijaté údaje jsou přesto uloženy).",
     "tui_help_actions": "Tab: přepnout | Nahoru/Dolů: rolovat | Esc/?: zavřít",
+    "tui_yes_key": "a",
     "tui_insecure_ssl_prompt": "Povolit nezabezpečené certifikáty SSL? (a/N): ",
     "tui_main_help": "?:Nápověda q:Konec Tab:Panel a:Přidat e:Upravit E:Detaily Spc:Hotovo Del:Smazat y:Yank /:Najít z:Sbalit",
     "tui_mode_caldav": "[1] Připojit k serveru CalDAV (Radicale, Nextcloud atd.)",

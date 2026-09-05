@@ -735,6 +735,7 @@
     "tui_export_select_source": "Sélectionnez le calendrier local source à exporter.",
     "tui_fallback_offline": "Repli vers le mode hors ligne (les détails fournis sont tout de même enregistrés).",
     "tui_help_actions": "Tab : changer | Haut/Bas : défiler | Esc/? : fermer",
+    "tui_yes_key": "o",
     "tui_insecure_ssl_prompt": "Autoriser les certificats SSL non sécurisés ? (o/N) : ",
     "tui_log_time_prompt": "Saisir le temps pour %{name}",
     "tui_main_help": "? :Aide q :Quitter Tab :Côté a :Ajout e :Modif E :Détails Espace :Fait Suppr :Suppr y :Mémoris. / :Rech. z :Plier",
