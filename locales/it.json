@@ -1,5 +1,7 @@
 {
     "active_alarm": "Sveglia attiva",
+    "action_bar_position": "Posizione dei pulsanti di azione",
+    "action_bar_position_explain": "Sposta in basso i pulsanti usati di frequente (ricerca, sincronizzazione, impostazioni) per raggiungerli più facilmente con una mano.",
     "add": "Aggiungi",
     "add_task_to_target": "Aggiungi attività a %{target}",
     "advanced_settings_button": "Impostazioni avanzate",

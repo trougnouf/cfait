@@ -12,6 +12,8 @@
     "action_unpin": "Bỏ ghim việc làm",
     "actions": "Các hành động",
     "active_alarm": "Chuông đang bật",
+    "action_bar_position": "Vị trí nút thao tác",
+    "action_bar_position_explain": "Đưa các nút dùng thường xuyên (tìm kiếm, đồng bộ, cài đặt) xuống dưới cùng để dễ chạm bằng một tay.",
     "add": "Thêm",
     "add_description_tooltip": "Thêm phần mô tả & việc làm nhỏ (Ctrl+N)",
     "add_task_to_target": "Thêm việc làm vào %{target}",

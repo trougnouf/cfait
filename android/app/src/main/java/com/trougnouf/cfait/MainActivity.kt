@@ -87,6 +87,7 @@ class MainActivity : ComponentActivity() {
         val sharedPrefs = getSharedPreferences("cfait_ui_prefs", Context.MODE_PRIVATE)
         val savedTheme = sharedPrefs.getString("app_theme", "auto") ?: "auto"
         val savedTabPos = sharedPrefs.getString("tab_position", "bottom") ?: "bottom"
+        val savedActionBarPos = sharedPrefs.getString("action_bar_position", "top") ?: "top"
         val savedTabAutoHide = sharedPrefs.getBoolean("tab_auto_hide", true)
         val savedFontScale = sharedPrefs.getFloat("font_scale", 1.0f)
 
@@ -94,6 +95,7 @@ class MainActivity : ComponentActivity() {
             // Lift theme state to root so SettingsScreen can update it
             var currentTheme by remember { mutableStateOf(savedTheme) }
             var tabPosition by remember { mutableStateOf(savedTabPos) }
+            var actionBarPosition by remember { mutableStateOf(savedActionBarPos) }
             var tabAutoHide by remember { mutableStateOf(savedTabAutoHide) }
             var fontScale by remember { mutableFloatStateOf(savedFontScale) }
 
@@ -148,6 +150,11 @@ class MainActivity : ComponentActivity() {
                             tabPosition = newPos
                             sharedPrefs.edit().putString("tab_position", newPos).apply()
                         },
+                        actionBarPosition = actionBarPosition,
+                        onActionBarPositionChange = { newPos ->
+                            actionBarPosition = newPos
+                            sharedPrefs.edit().putString("action_bar_position", newPos).apply()
+                        },
                         tabAutoHide = tabAutoHide,
                         onTabAutoHideChange = { newHide ->
                             tabAutoHide = newHide
@@ -179,6 +186,8 @@ fun CfaitNavHost(
     onThemeChange: (String) -> Unit,
     tabPosition: String,
     onTabPositionChange: (String) -> Unit,
+    actionBarPosition: String,
+    onActionBarPositionChange: (String) -> Unit,
     tabAutoHide: Boolean,
     onTabAutoHideChange: (Boolean) -> Unit,
     fontScale: Float,
@@ -541,6 +550,7 @@ fun CfaitNavHost(
                 quickFilterIcon = quickFilterIcon,
                 refreshTick = refreshTick,
                 tabPosition = tabPosition,
+                actionBarPosition = actionBarPosition,
                 tabAutoHide = tabAutoHide,
                 strikethroughCompleted = strikethroughCompleted,
                 showInlineDescriptions = showInlineDescriptions,
@@ -633,8 +643,10 @@ fun CfaitNavHost(
             AdvancedSettingsScreen(
                 api = api,
                 tabPosition = tabPosition,
+                actionBarPosition = actionBarPosition,
                 tabAutoHide = tabAutoHide,
                 onTabPositionChange = onTabPositionChange,
+                onActionBarPositionChange = onActionBarPositionChange,
                 onTabAutoHideChange = onTabAutoHideChange,
                 onBack = {
                     navController.popBackStack()

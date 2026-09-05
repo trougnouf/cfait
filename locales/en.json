@@ -19,6 +19,8 @@
     "action_unpin": "Unpin task",
     "actions": "Actions",
     "active_alarm": "Active alarm",
+    "action_bar_position": "Action buttons position",
+    "action_bar_position_explain": "Move high-use buttons (search, sync, settings) to the bottom of the screen for easier one-handed reach.",
     "add": "Add",
     "add_description_tooltip": "Add Description & Subtasks (Ctrl+N)",
     "add_task_to_target": "Add task to %{target}",

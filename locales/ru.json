@@ -7,6 +7,8 @@
     "action_open_locations": "Открытые локации (GPX)",
     "actions": "Действия",
     "active_alarm": "Активное напоминание",
+    "action_bar_position": "Расположение кнопок действий",
+    "action_bar_position_explain": "Переместить часто используемые кнопки (поиск, синхронизация, настройки) вниз экрана для удобства работы одной рукой.",
     "add": "Добавить",
     "add_description_tooltip": "Добавить описание и подзадачи (Ctrl+N)",
     "add_task_to_target": "Добавить задачу в %{target}",

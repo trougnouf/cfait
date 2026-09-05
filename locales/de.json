@@ -12,6 +12,8 @@
     "action_unpin": "Aufgabe lösen",
     "actions": "Aktionen",
     "active_alarm": "Aktiver Alarm",
+    "action_bar_position": "Position der Aktions-Schaltflächen",
+    "action_bar_position_explain": "Häufig verwendete Schaltflächen (Suche, Sync, Einstellungen) für bessere Einhand-Bedienung nach unten verschieben.",
     "add": "Hinzufügen",
     "add_description_tooltip": "Beschreibung & Teilaufgaben hinzufügen (Ctrl+N)",
     "add_task_to_target": "Aufgabe zu %{target} hinzufügen",

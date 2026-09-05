@@ -12,6 +12,8 @@
     "action_unpin": "取消固定任务",
     "actions": "操作",
     "active_alarm": "活动闹钟",
+    "action_bar_position": "操作按钮位置",
+    "action_bar_position_explain": "将常用按钮（搜索、同步、设置）移至屏幕底部，方便单手操作。",
     "add": "添加",
     "add_description_tooltip": "添加描述和子任务 (Ctrl+N)",
     "add_task_to_target": "将任务添加到 %{target}",

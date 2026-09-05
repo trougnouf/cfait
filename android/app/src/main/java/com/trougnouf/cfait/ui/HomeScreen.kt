@@ -124,6 +124,7 @@ fun HomeScreen(
     quickFilterTerm: String,
     quickFilterIcon: String,
     tabPosition: String,
+    actionBarPosition: String = "top",
     tabAutoHide: Boolean = true,
     listStates: SnapshotStateMap<String, LazyListState>,
     goals: Map<String, com.trougnouf.cfait.core.MobileGoal>,
@@ -2169,6 +2170,82 @@ fun HomeScreen(
                 }
             }
 
+            val actionBarContent: @Composable () -> Unit = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy((-12).dp)
+                ) {
+                    IconButton(onClick = { jumpToRandomTask() }) { NfIcon(currentRandomIcon, 20.sp) }
+                    if (showQuickFilter) {
+                        val isActive = searchQuery.contains(quickFilterTerm)
+                        val qfColor =
+                            if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        IconButton(onClick = {
+                            if (isActive) {
+                                searchQuery = searchQuery.replace(quickFilterTerm, "").trim()
+                            } else {
+                                searchQuery =
+                                    if (searchQuery.isEmpty()) quickFilterTerm else "$quickFilterTerm $searchQuery"
+                            }
+                            isSearchActive = true
+                            keyboardController?.hide()
+                            updateTaskList()
+                        }) {
+                            NfIcon(parseIcon(quickFilterIcon), 18.sp, color = qfColor)
+                        }
+                    }
+                    IconButton(onClick = {
+                        isSearchActive = !isSearchActive
+                        if (!isSearchActive) {
+                            searchQuery = ""
+                            keyboardController?.hide()
+                            updateTaskList()
+                        }
+                    }) {
+                        val searchIconColor = when {
+                            isSearchActive -> MaterialTheme.colorScheme.onSurface
+                            searchQuery.isNotBlank() && tasks.isEmpty() -> Color(0xFFE53935) // Red
+                            searchQuery.isNotBlank() -> Color(0xFF43A047) // Green
+                            else -> MaterialTheme.colorScheme.onSurface
+                        }
+                        NfIcon(
+                            if (isSearchActive) NfIcons.SEARCH_STOP else NfIcons.SEARCH,
+                            18.sp,
+                            color = searchIconColor
+                        )
+                    }
+
+                    if (isLoading || isManualSyncing || activeOpCount > 0 || isPullRefreshing) {
+                        Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp
+                            )
+                        }
+                    } else {
+                        val (icon, iconColor) = when {
+                            localHasUnsynced -> Pair(NfIcons.SYNC_ALERT, Color(0xFFEB0000))
+                            lastSyncFailed -> Pair(NfIcons.SYNC_OFF, Color(0xFFFFB300))
+                            else -> Pair(NfIcons.REFRESH, MaterialTheme.colorScheme.onSurface)
+                        }
+                        IconButton(onClick = { handleRefresh() }) {
+                            NfIcon(
+                                icon,
+                                18.sp,
+                                color = iconColor
+                            )
+                        }
+                    }
+                    IconButton(onClick = onSettings) {
+                        Image(
+                            painter = painterResource(id = R.drawable.gnome_settings_help_icons),
+                            contentDescription = stringResource(R.string.settings),
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+            }
+
             Scaffold(
                 topBar = {
                     Column {
@@ -2201,79 +2278,7 @@ fun HomeScreen(
                                 }
                             },
                             actions = {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy((-12).dp)
-                                ) {
-                                    IconButton(onClick = { jumpToRandomTask() }) { NfIcon(currentRandomIcon, 20.sp) }
-                                    if (showQuickFilter) {
-                                        val isActive = searchQuery.contains(quickFilterTerm)
-                                        val qfColor =
-                                            if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                        IconButton(onClick = {
-                                            if (isActive) {
-                                                searchQuery = searchQuery.replace(quickFilterTerm, "").trim()
-                                            } else {
-                                                searchQuery =
-                                                    if (searchQuery.isEmpty()) quickFilterTerm else "$quickFilterTerm $searchQuery"
-                                            }
-                                            isSearchActive = true
-                                            keyboardController?.hide()
-                                            updateTaskList()
-                                        }) {
-                                            NfIcon(parseIcon(quickFilterIcon), 18.sp, color = qfColor)
-                                        }
-                                    }
-                                    IconButton(onClick = {
-                                        isSearchActive = !isSearchActive
-                                        if (!isSearchActive) {
-                                            searchQuery = ""
-                                            keyboardController?.hide()
-                                            updateTaskList()
-                                        }
-                                    }) {
-                                        val searchIconColor = when {
-                                            isSearchActive -> MaterialTheme.colorScheme.onSurface
-                                            searchQuery.isNotBlank() && tasks.isEmpty() -> Color(0xFFE53935) // Red
-                                            searchQuery.isNotBlank() -> Color(0xFF43A047) // Green
-                                            else -> MaterialTheme.colorScheme.onSurface
-                                        }
-                                        NfIcon(
-                                            if (isSearchActive) NfIcons.SEARCH_STOP else NfIcons.SEARCH,
-                                            18.sp,
-                                            color = searchIconColor
-                                        )
-                                    }
-
-                                    if (isLoading || isManualSyncing || activeOpCount > 0 || isPullRefreshing) {
-                                        Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(24.dp),
-                                                strokeWidth = 2.dp
-                                            )
-                                        }
-                                    } else {
-                                        val (icon, iconColor) = when {
-                                            localHasUnsynced -> Pair(NfIcons.SYNC_ALERT, Color(0xFFEB0000))
-                                            lastSyncFailed -> Pair(NfIcons.SYNC_OFF, Color(0xFFFFB300))
-                                            else -> Pair(NfIcons.REFRESH, MaterialTheme.colorScheme.onSurface)
-                                        }
-                                        IconButton(onClick = { handleRefresh() }) {
-                                            NfIcon(
-                                                icon,
-                                                18.sp,
-                                                color = iconColor
-                                            )
-                                        }
-                                    }
-                                    IconButton(onClick = onSettings) {
-                                        Image(
-                                            painter = painterResource(id = R.drawable.gnome_settings_help_icons),
-                                            contentDescription = stringResource(R.string.settings),
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                    }
-                                }
+                                if (actionBarPosition == "top") actionBarContent()
                             },
                         )
                         if (isSearchActive) {
@@ -2329,6 +2334,17 @@ fun HomeScreen(
                                 )
                             }
                         )
+                        if (actionBarPosition == "bottom") {
+                            Surface(tonalElevation = 3.dp, modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceEvenly
+                                ) {
+                                    actionBarContent()
+                                }
+                            }
+                        }
                         if (tabPosition == "bottom") {
                             tabsContent()
                         }

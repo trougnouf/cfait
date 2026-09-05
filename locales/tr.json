@@ -11,6 +11,8 @@
     "action_unpin": "Görevi başa sabitlemeyi bırak",
     "actions": "Eylemler",
     "active_alarm": "Aktif alarm",
+    "action_bar_position": "Eylem düğmeleri konumu",
+    "action_bar_position_explain": "Sık kullanılan düğmeleri (arama, senkronizasyon, ayarlar) tek elle daha kolay erişim için ekranın altına taşıyın.",
     "add": "Ekle",
     "add_description_tooltip": "Açıklama ve Alt Görevler Ekle (Ctrl+N)",
     "add_task_to_target": "%{target} içine görev ekle",

@@ -7,6 +7,8 @@
     "action_open_locations": "Otevřít pozice (GPX)",
     "actions": "Akce",
     "active_alarm": "Aktivní upozornění",
+    "action_bar_position": "Umístění akčních tlačítek",
+    "action_bar_position_explain": "Přesune často používaná tlačítka (hledání, synchronizace, nastavení) dolů pro snazší dosah jednou rukou.",
     "add": "Přidat",
     "add_description_tooltip": "Přidat popis a podúkoly (Ctrl+N)",
     "add_task_to_target": "Přidat úkol do %{target}",

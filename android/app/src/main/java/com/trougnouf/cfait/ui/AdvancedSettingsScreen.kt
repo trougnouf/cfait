@@ -30,8 +30,10 @@ import java.io.File
 fun AdvancedSettingsScreen(
     api: CfaitMobile,
     tabPosition: String,
+    actionBarPosition: String,
     tabAutoHide: Boolean,
     onTabPositionChange: (String) -> Unit,
+    onActionBarPositionChange: (String) -> Unit,
     onTabAutoHideChange: (Boolean) -> Unit,
     onBack: () -> Unit
 ) {
@@ -196,6 +198,36 @@ fun AdvancedSettingsScreen(
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.tab_auto_hide), style = MaterialTheme.typography.bodyMedium)
             }
+            HorizontalDivider(Modifier.padding(vertical = 16.dp))
+
+            // Action Buttons Section
+            Text(
+                stringResource(R.string.action_bar_position),
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                FilterChip(
+                    selected = actionBarPosition == "top",
+                    onClick = { onActionBarPositionChange("top") },
+                    label = { Text(stringResource(R.string.tab_pos_top)) },
+                    modifier = Modifier.weight(1f)
+                )
+                FilterChip(
+                    selected = actionBarPosition == "bottom",
+                    onClick = { onActionBarPositionChange("bottom") },
+                    label = { Text(stringResource(R.string.tab_pos_bottom)) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            Text(
+                stringResource(R.string.action_bar_position_explain),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+            )
             HorizontalDivider(Modifier.padding(vertical = 16.dp))
 
             // Server Connection Additions (mTLS)

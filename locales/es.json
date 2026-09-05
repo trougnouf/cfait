@@ -12,6 +12,8 @@
     "action_unpin": "Desfijar tarea",
     "actions": "Acciones",
     "active_alarm": "Alarma activa",
+    "action_bar_position": "Posición de los botones de acción",
+    "action_bar_position_explain": "Mueve los botones de uso frecuente (buscar, sincronizar, ajustes) a la parte inferior para alcanzarlos más fácilmente con una mano.",
     "add": "Añadir",
     "add_description_tooltip": "Añadir descripción y subtareas (Ctrl+N)",
     "add_task_to_target": "Añadir tarea a %{target}",

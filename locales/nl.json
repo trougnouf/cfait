@@ -8,6 +8,8 @@
     "action_open_locations": "Locaties openen (GPX)",
     "actions": "Acties",
     "active_alarm": "Actieve herinnering",
+    "action_bar_position": "Positie van actieknoppen",
+    "action_bar_position_explain": "Verplaats veelgebruikte knoppen (zoeken, synchronisatie, instellingen) naar onderen voor gemakkelijker bereik met één hand.",
     "add": "Toevoegen",
     "add_description_tooltip": "Beschrijving & subtaken toevoegen (Ctrl+N)",
     "add_task_to_target": "Taak toevoegen aan %{target}",
