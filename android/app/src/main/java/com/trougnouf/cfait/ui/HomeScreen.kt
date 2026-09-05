@@ -2246,76 +2246,82 @@ fun HomeScreen(
                 }
             }
 
+            val topBarContent: @Composable () -> Unit = {
+                Column {
+                    TopAppBar(
+                        title = {
+                            if (focusedTaskUid != null) {
+                                val focusedTask = tasks.find { it.task.uid == focusedTaskUid }
+                                val titleText = focusedTask?.task?.summary ?: stringResource(R.string.focus_hide_others)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    NfIcon(NfIcons.FOCUS_FIELD, 20.sp, MaterialTheme.colorScheme.primary)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(titleText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                            } else {
+                                headerTitle()
+                            }
+                        },
+                        navigationIcon = {
+                            if (focusedTaskUid != null) {
+                                IconButton(onClick = { scope.launch { api.dispatch(AppIntent.FocusTaskTree(null)); updateTaskList() } }) {
+                                    NfIcon(NfIcons.BACK, 20.sp)
+                                }
+                            } else {
+                                IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                                    NfIcon(
+                                        NfIcons.MENU,
+                                        20.sp
+                                    )
+                                }
+                            }
+                        },
+                        actions = {
+                            actionBarContent()
+                        },
+                    )
+                    if (isSearchActive) {
+                        LaunchedEffect(isSearchActive) {
+                            // A tiny delay ensures the TextField is fully laid out in the Compose tree
+                            kotlinx.coroutines.delay(50)
+                            try {
+                                searchFocusRequester.requestFocus()
+                                keyboardController?.show()
+                            } catch (e: Exception) {
+                            }
+                        }
+                        TextField(
+                            value = searchQuery, onValueChange = {
+                                searchQuery = it
+                                updateTaskList()
+                            },
+                            placeholder = { Text(stringResource(R.string.search_placeholder), fontSize = 14.sp) },
+                            singleLine = true, textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
+                            visualTransformation = remember(isDark) {
+                                SmartSyntaxTransformation(
+                                    api,
+                                    isDark,
+                                    true
+                                )
+                            },
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent
+                            ),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+                                .focusRequester(searchFocusRequester),
+                        )
+                    }
+                }
+            }
+
             Scaffold(
                 topBar = {
                     Column {
-                        TopAppBar(
-                            title = {
-                                if (focusedTaskUid != null) {
-                                    val focusedTask = tasks.find { it.task.uid == focusedTaskUid }
-                                    val titleText = focusedTask?.task?.summary ?: stringResource(R.string.focus_hide_others)
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        NfIcon(NfIcons.FOCUS_FIELD, 20.sp, MaterialTheme.colorScheme.primary)
-                                        Spacer(Modifier.width(8.dp))
-                                        Text(titleText, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    }
-                                } else {
-                                    headerTitle()
-                                }
-                            },
-                            navigationIcon = {
-                                if (focusedTaskUid != null) {
-                                    IconButton(onClick = { scope.launch { api.dispatch(AppIntent.FocusTaskTree(null)); updateTaskList() } }) {
-                                        NfIcon(NfIcons.BACK, 20.sp)
-                                    }
-                                } else {
-                                    IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                                        NfIcon(
-                                            NfIcons.MENU,
-                                            20.sp
-                                        )
-                                    }
-                                }
-                            },
-                            actions = {
-                                if (actionBarPosition == "top") actionBarContent()
-                            },
-                        )
-                        if (isSearchActive) {
-                            LaunchedEffect(isSearchActive) {
-                                // A tiny delay ensures the TextField is fully laid out in the Compose tree
-                                kotlinx.coroutines.delay(50)
-                                try {
-                                    searchFocusRequester.requestFocus()
-                                    keyboardController?.show()
-                                } catch (e: Exception) {
-                                }
-                            }
-                            TextField(
-                                value = searchQuery, onValueChange = { 
-                                    searchQuery = it
-                                    updateTaskList()
-                                },
-                                placeholder = { Text(stringResource(R.string.search_placeholder), fontSize = 14.sp) },
-                                singleLine = true, textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
-                                visualTransformation = remember(isDark) {
-                                    SmartSyntaxTransformation(
-                                        api,
-                                        isDark,
-                                        true
-                                    )
-                                },
-                                colors = TextFieldDefaults.colors(
-                                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                    focusedIndicatorColor = Color.Transparent,
-                                    unfocusedIndicatorColor = Color.Transparent
-                                ),
-                                shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
-                                    .focusRequester(searchFocusRequester),
-                            )
-                        }
+                        if (actionBarPosition != "bottom") topBarContent()
                         if (tabPosition == "top") tabsContent()
                     }
                 },
@@ -2335,15 +2341,7 @@ fun HomeScreen(
                             }
                         )
                         if (actionBarPosition == "bottom") {
-                            Surface(tonalElevation = 3.dp, modifier = Modifier.fillMaxWidth()) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceEvenly
-                                ) {
-                                    actionBarContent()
-                                }
-                            }
+                            topBarContent()
                         }
                         if (tabPosition == "bottom") {
                             tabsContent()

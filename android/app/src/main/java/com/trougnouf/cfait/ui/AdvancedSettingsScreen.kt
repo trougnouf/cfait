@@ -66,6 +66,9 @@ fun AdvancedSettingsScreen(
     var defaultPriority by remember { mutableStateOf("5") }
     var startGracePeriodDays by remember { mutableStateOf("1") }
     var firstDayOfWeek by remember { mutableStateOf(com.trougnouf.cfait.core.MobileFirstDayOfWeek.MONDAY) }
+    var showTaskGoalsInSidebar by remember { mutableStateOf(true) }
+    var defaultDurationGoalMins by remember { mutableStateOf("60") }
+    var sessionsCountAsCompletions by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
 
     fun reload() {
@@ -95,6 +98,9 @@ fun AdvancedSettingsScreen(
             defaultPriority = cfg.defaultPriority.toString()
             startGracePeriodDays = cfg.startGracePeriodDays.toString()
             firstDayOfWeek = cfg.firstDayOfWeek
+            showTaskGoalsInSidebar = cfg.showTaskGoalsInSidebar
+            defaultDurationGoalMins = cfg.defaultDurationGoalMins.toString()
+            sessionsCountAsCompletions = cfg.sessionsCountAsCompletions
         } catch (e: Exception) {
             // Ignore on load
         }
@@ -129,7 +135,10 @@ fun AdvancedSettingsScreen(
                 urgentPrio = urgentPrio.toUByteOrNull() ?: 1u,
                 defaultPriority = defaultPriority.toUByteOrNull() ?: 5u,
                 startGracePeriodDays = startGracePeriodDays.toUIntOrNull() ?: 1u,
-                firstDayOfWeek = firstDayOfWeek
+                firstDayOfWeek = firstDayOfWeek,
+                showTaskGoalsInSidebar = showTaskGoalsInSidebar,
+                defaultDurationGoalMins = defaultDurationGoalMins.toUIntOrNull() ?: 60u,
+                sessionsCountAsCompletions = sessionsCountAsCompletions
             )
             api.saveConfig(newCfg)
         } catch (e: Exception) {
@@ -587,6 +596,47 @@ fun AdvancedSettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp, bottom = 24.dp)
             )
+
+            HorizontalDivider(Modifier.padding(vertical = 16.dp))
+
+            // Goals Section (Moved from SettingsScreen)
+            Text(
+                stringResource(R.string.goals),
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 16.dp)) {
+                Switch(
+                    checked = showTaskGoalsInSidebar,
+                    onCheckedChange = { showTaskGoalsInSidebar = it; saveToDisk() }
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.show_task_goals_in_sidebar))
+            }
+            OutlinedTextField(
+                value = defaultDurationGoalMins,
+                onValueChange = { defaultDurationGoalMins = it },
+                label = { Text(stringResource(R.string.implicit_goal_duration)) },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true
+            )
+            Text(
+                stringResource(R.string.implicit_goal_duration_explain),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(
+                    checked = sessionsCountAsCompletions,
+                    onCheckedChange = { sessionsCountAsCompletions = it; saveToDisk() }
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.sessions_count_as_completions))
+            }
 
             HorizontalDivider(Modifier.padding(vertical = 16.dp))
 

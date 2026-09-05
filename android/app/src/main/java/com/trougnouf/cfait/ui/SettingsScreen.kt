@@ -93,14 +93,11 @@ fun SettingsScreen(
     var goalInputAmount by remember { mutableStateOf("1") }
     var goalInputUnit by remember { mutableStateOf(MobileIntervalUnit.WEEKS) }
     var editingGoalKey by remember { mutableStateOf<String?>(null) }
-    var defaultDurationGoalMins by remember { mutableStateOf("60") }
-    var sessionsCountAsCompletions by remember { mutableStateOf(false) }
     var showCalendarsTab by remember { mutableStateOf(true) }
     var showTagsTab by remember { mutableStateOf(true) }
     var showLocationsTab by remember { mutableStateOf(true) }
     var showGoalsTab by remember { mutableStateOf(true) }
     var showJournalTab by remember { mutableStateOf(true) }
-    var showTaskGoalsInSidebar by remember { mutableStateOf(true) }
     var sortCollectionsBySize by remember { mutableStateOf(true) }
 
     // State maintained purely for saving without overwriting backend values
@@ -224,14 +221,11 @@ fun SettingsScreen(
         deleteEventsOnCompletion = cfg.deleteEventsOnCompletion
         aliases = cfg.tagAliases
         goals = cfg.goals
-        defaultDurationGoalMins = cfg.defaultDurationGoalMins.toString()
-        sessionsCountAsCompletions = cfg.sessionsCountAsCompletions
         showCalendarsTab = cfg.showCalendarsTab
         showTagsTab = cfg.showTagsTab
         showLocationsTab = cfg.showLocationsTab
         showGoalsTab = cfg.showGoalsTab
         showJournalTab = cfg.showJournalTab
-        showTaskGoalsInSidebar = cfg.showTaskGoalsInSidebar
         sortCollectionsBySize = cfg.sortCollectionsBySize
         firstDayOfWeek = cfg.firstDayOfWeek
 
@@ -299,14 +293,11 @@ fun SettingsScreen(
             autoRefreshInterval = aRefresh,
             tagAliases = aliases,
             goals = goals,
-            defaultDurationGoalMins = defaultDurationGoalMins.toUIntOrNull() ?: 60u,
-            sessionsCountAsCompletions = sessionsCountAsCompletions,
             showCalendarsTab = finalShowCalendarsTab,
             showTagsTab = finalShowTagsTab,
             showLocationsTab = finalShowLocationsTab,
             showGoalsTab = finalShowGoalsTab,
             showJournalTab = finalShowJournalTab,
-            showTaskGoalsInSidebar = showTaskGoalsInSidebar,
             sortCollectionsBySize = sortCollectionsBySize,
             firstDayOfWeek = firstDayOfWeek
         )
@@ -1088,36 +1079,6 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 16.dp)) {
-                    Switch(
-                        checked = showTaskGoalsInSidebar,
-                        onCheckedChange = { showTaskGoalsInSidebar = it; saveToDisk() }
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.show_task_goals_in_sidebar))
-                }
-                OutlinedTextField(
-                    value = defaultDurationGoalMins,
-                    onValueChange = { defaultDurationGoalMins = it },
-                    label = { Text(stringResource(R.string.implicit_goal_duration)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true
-                )
-                Text(
-                    stringResource(R.string.implicit_goal_duration_explain),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Switch(
-                        checked = sessionsCountAsCompletions,
-                        onCheckedChange = { sessionsCountAsCompletions = it; saveToDisk() }
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.sessions_count_as_completions))
-                }
 
                 goals.keys.toList().sorted().forEach { key ->
                     val goal = goals[key]!!
