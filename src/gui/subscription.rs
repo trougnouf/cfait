@@ -242,9 +242,7 @@ fn handle_hotkey(
 
             // Ctrl/Cmd + digit: switch sidebar tab by logical character
             // (matches the typed digit on any layout; works even from a text field)
-            if is_cmd
-                && let Some(msg) = digit_sidebar_message(modified_key)
-            {
+            if is_cmd && let Some(msg) = digit_sidebar_message(modified_key) {
                 return Some(msg);
             }
 
