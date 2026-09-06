@@ -729,9 +729,40 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         }
     };
 
+    // Build a tab strip showing all visible sidebar tabs with their 1-5
+    // shortcuts, highlighting the active one, followed by the active tab's
+    // label. This keeps the shortcuts discoverable without opening help.
+    let accent = if is_dark_theme {
+        Color::Yellow
+    } else {
+        Color::Rgb(200, 100, 0)
+    };
+    let tabs: [(bool, SidebarMode, &str); 5] = [
+        (state.show_calendars_tab, SidebarMode::Calendars, "1"),
+        (state.show_tags_tab, SidebarMode::Categories, "2"),
+        (state.show_locations_tab, SidebarMode::Locations, "3"),
+        (state.show_goals_tab, SidebarMode::Goals, "4"),
+        (state.show_journal_tab, SidebarMode::Journal, "5"),
+    ];
+    let mut title_spans: Vec<Span<'static>> = Vec::new();
+    for (visible, mode, num) in tabs {
+        if !visible {
+            continue;
+        }
+        let style = if state.sidebar_mode == mode {
+            Style::default().fg(accent).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+        title_spans.push(Span::styled(format!(" {}", num), style));
+    }
+    title_spans.push(Span::raw("  "));
+    title_spans.push(Span::raw(sidebar_title));
+    let sidebar_title_line = Line::from(title_spans);
+
     let sidebar_block = Block::default()
         .borders(Borders::ALL)
-        .title(sidebar_title)
+        .title(sidebar_title_line)
         .border_style(sidebar_border_style);
 
     let sidebar_area = h_chunks[0];
