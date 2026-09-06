@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=Cfait (TUI)
+Comment=Take control of your TODO list (Terminal Interface)
+# Launch the TUI in ghostty with a dedicated WM_CLASS so the window gets its
+# own panel entry and the Cfait icon, separate from other ghostty windows.
+# ghostty, kitty, and alacritty all accept this exact flag form; wezterm uses
+# `wezterm start --class=... --title=... -- cfait`, foot uses `foot --app-id=...
+# --title=... cfait`. konsole cannot set WM_CLASS from the CLI; use
+# `konsole --desktopfile cfait.desktop -e cfait` with a matching .desktop file.
+Exec=ghostty --class=com.trougnouf.Cfait --title=Cfait -e cfait
+Terminal=false
+Icon=cfait
+StartupWMClass=com.trougnouf.Cfait
+Categories=Office;Utility;
+Keywords=todo;task;caldav;
