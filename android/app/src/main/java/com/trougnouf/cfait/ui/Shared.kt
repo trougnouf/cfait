@@ -1085,6 +1085,9 @@ fun CursorContextBanner(
     val text = textFieldValue.text
 
     var suggestions by remember { mutableStateOf<List<com.trougnouf.cfait.core.MobileSuggestion>>(emptyList()) }
+    var activeToken by remember { mutableStateOf<com.trougnouf.cfait.core.MobileSyntaxToken?>(null) }
+    var resolvedDep by remember { mutableStateOf<com.trougnouf.cfait.core.MobileResolvedDependency?>(null) }
+    var rawWord by remember { mutableStateOf("") }
 
     LaunchedEffect(text, cursor) {
         val lineStart = text.lastIndexOf('\n', cursor - 1).let { if (it == -1) 0 else it + 1 }
@@ -1105,7 +1108,92 @@ fun CursorContextBanner(
         }
     }
 
-    if (suggestions.isNotEmpty()) {
+    LaunchedEffect(cursor, text) {
+        try {
+            val lineStart = text.lastIndexOf('\n', cursor - 1).let { if (it == -1) 0 else it + 1 }
+            val lineEnd = text.indexOf('\n', cursor).let { if (it == -1) text.length else it }
+            val currentLine = text.substring(lineStart, lineEnd)
+            val localCursor = cursor - lineStart
+
+            val tokens = api.parseSmartString(currentLine, false)
+            val token = tokens.find { localCursor >= it.start && localCursor <= it.end &&
+                (it.kind == com.trougnouf.cfait.core.MobileSyntaxType.DEPENDENCY ||
+                 it.kind == com.trougnouf.cfait.core.MobileSyntaxType.RELATION ||
+                 it.kind == com.trougnouf.cfait.core.MobileSyntaxType.WIKI_LINK)
+            }
+
+            if (token != null) {
+                val word = currentLine.substring(token.start, token.end)
+                if (token != activeToken || word != rawWord) {
+                    activeToken = token
+                    rawWord = word
+                    resolvedDep = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        api.getTokenContext(word, token.kind, contextUid)
+                    }
+                }
+            } else {
+                activeToken = null
+                resolvedDep = null
+            }
+        } catch (e: Exception) {
+            activeToken = null
+            resolvedDep = null
+        }
+    }
+
+    // A [[wiki link]] that resolves to an existing task opens it (mirroring the
+    // desktop ctrl+o); partial links fall through to autocomplete instead.
+    val isFoundWiki = activeToken != null && resolvedDep != null &&
+        activeToken!!.kind == com.trougnouf.cfait.core.MobileSyntaxType.WIKI_LINK &&
+        resolvedDep!!.isFound
+
+    if (isFoundWiki || (suggestions.isEmpty() && activeToken != null && resolvedDep != null)) {
+        val isDep = activeToken!!.kind == com.trougnouf.cfait.core.MobileSyntaxType.DEPENDENCY
+        val isWiki = activeToken!!.kind == com.trougnouf.cfait.core.MobileSyntaxType.WIKI_LINK
+        val iconChar = if (!resolvedDep!!.isFound) NfIcons.SYNC_ALERT else if (isDep) NfIcons.BLOCKED else NfIcons.LINK
+        val color = if (!resolvedDep!!.isFound) Color(0xFFE53935) else if (isDep) Color(0xFFFF9800) else Color(0xFF42A5F5)
+        val scope = rememberCoroutineScope()
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(color.copy(alpha = 0.1f), RoundedCornerShape(6.dp))
+                    .border(1.dp, color.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                    .then(if (onNavigate != null && (resolvedDep!!.isFound || isWiki)) Modifier.clickable {
+                        if (resolvedDep!!.isFound) {
+                            onNavigate(resolvedDep!!.uid)
+                        } else {
+                            scope.launch {
+                                try {
+                                    val targetUid = api.openWikiLink(rawWord, contextUid, null)
+                                    onNavigate(targetUid)
+                                } catch (e: Exception) {
+                                    // Ignore
+                                }
+                            }
+                        }
+                    } else Modifier)
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                NfIcon(iconChar, 14.sp, color)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = if (resolvedDep!!.isFound) "$rawWord ➔ ${resolvedDep!!.summary}" else "$rawWord (tap to create)",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = color,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    } else if (suggestions.isNotEmpty()) {
         androidx.compose.foundation.lazy.LazyRow(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1147,91 +1235,6 @@ fun CursorContextBanner(
             }
         }
         Spacer(Modifier.height(8.dp))
-    } else {
-        var activeToken by remember { mutableStateOf<com.trougnouf.cfait.core.MobileSyntaxToken?>(null) }
-        var resolvedDep by remember { mutableStateOf<com.trougnouf.cfait.core.MobileResolvedDependency?>(null) }
-        var rawWord by remember { mutableStateOf("") }
-
-        LaunchedEffect(cursor, text) {
-            try {
-                val lineStart = text.lastIndexOf('\n', cursor - 1).let { if (it == -1) 0 else it + 1 }
-                val lineEnd = text.indexOf('\n', cursor).let { if (it == -1) text.length else it }
-                val currentLine = text.substring(lineStart, lineEnd)
-                val localCursor = cursor - lineStart
-
-                val tokens = api.parseSmartString(currentLine, false)
-                val token = tokens.find { localCursor >= it.start && localCursor <= it.end &&
-                    (it.kind == com.trougnouf.cfait.core.MobileSyntaxType.DEPENDENCY ||
-                     it.kind == com.trougnouf.cfait.core.MobileSyntaxType.RELATION ||
-                     it.kind == com.trougnouf.cfait.core.MobileSyntaxType.WIKI_LINK)
-                }
-
-                if (token != null) {
-                    val word = currentLine.substring(token.start, token.end)
-                    if (token != activeToken || word != rawWord) {
-                        activeToken = token
-                        rawWord = word
-                        resolvedDep = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                            api.getTokenContext(word, token.kind, contextUid)
-                        }
-                    }
-                } else {
-                    activeToken = null
-                    resolvedDep = null
-                }
-            } catch (e: Exception) {
-                activeToken = null
-                resolvedDep = null
-            }
-        }
-
-        if (activeToken != null && resolvedDep != null) {
-            val isDep = activeToken!!.kind == com.trougnouf.cfait.core.MobileSyntaxType.DEPENDENCY
-            val isWiki = activeToken!!.kind == com.trougnouf.cfait.core.MobileSyntaxType.WIKI_LINK
-            val iconChar = if (!resolvedDep!!.isFound) NfIcons.SYNC_ALERT else if (isDep) NfIcons.BLOCKED else NfIcons.LINK
-            val color = if (!resolvedDep!!.isFound) Color(0xFFE53935) else if (isDep) Color(0xFFFF9800) else Color(0xFF42A5F5)
-            val scope = rememberCoroutineScope()
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(color.copy(alpha = 0.1f), RoundedCornerShape(6.dp))
-                        .border(1.dp, color.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
-                        .then(if (onNavigate != null && (resolvedDep!!.isFound || isWiki)) Modifier.clickable {
-                            if (resolvedDep!!.isFound) {
-                                onNavigate(resolvedDep!!.uid)
-                            } else {
-                                scope.launch {
-                                    try {
-                                        val targetUid = api.openWikiLink(rawWord, contextUid, null)
-                                        onNavigate(targetUid)
-                                    } catch (e: Exception) {
-                                        // Ignore
-                                    }
-                                }
-                            }
-                        } else Modifier)
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    NfIcon(iconChar, 14.sp, color)
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = if (resolvedDep!!.isFound) "$rawWord ➔ ${resolvedDep!!.summary}" else "$rawWord (tap to create)",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = color,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-        }
     }
 }
 
