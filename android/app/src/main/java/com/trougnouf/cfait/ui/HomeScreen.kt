@@ -2279,6 +2279,7 @@ fun HomeScreen(
                         actions = {
                             actionBarContent()
                         },
+                        windowInsets = if (actionBarPosition == "bottom") WindowInsets(0, 0, 0, 0) else TopAppBarDefaults.windowInsets,
                     )
                     if (isSearchActive) {
                         LaunchedEffect(isSearchActive) {
