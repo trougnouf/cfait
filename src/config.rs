@@ -457,7 +457,7 @@ impl TaskAction {
             TaskAction::AddSession => Some("t"),
             TaskAction::IncreasePriority => Some("+"),
             TaskAction::DecreasePriority => Some("-"),
-            TaskAction::Edit => Some("Ctrl+E"),
+            TaskAction::Edit => Some("e"),
             TaskAction::EditTree => Some("Ctrl+E"),
             TaskAction::Yank => Some("y"),
             TaskAction::CreateSubtask => Some("C"),
@@ -472,8 +472,8 @@ impl TaskAction {
             TaskAction::CompleteAndShift => Some("Shift+Space"),
             TaskAction::CompleteTree => Some("Shift+Space"),
             TaskAction::OpenUrl => Some("o"),
-            TaskAction::ToggleDetails => Some("L"),
-            TaskAction::BrowseRelations => None,
+            TaskAction::ToggleDetails => None,
+            TaskAction::BrowseRelations => Some("L"),
             TaskAction::OpenCoordinates | TaskAction::OpenLocations => None,
         }
     }

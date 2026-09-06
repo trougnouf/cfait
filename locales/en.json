@@ -782,7 +782,7 @@
     "waiting_for_keyring": "Waiting for tasks (check for OS keyring/wallet unlock prompt if this persists)...",
     "welcome_title": "Welcome",
     "yank_cleared": "Yank cleared.",
-    "yank_copy_id": "Yank (copy details)",
+    "yank_copy_id": "Yank (copy details/link)",
     "yank_tooltip_block": "Make '%{target}' depend on '%{yanked}' (b)",
     "yank_tooltip_child": "Make '%{target}' a child of '%{yanked}' (c)",
     "yanked_and_copied": "Yanked & copied: %{summary}",
