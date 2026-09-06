@@ -1016,6 +1016,10 @@ pub fn view_task_row<'a>(
                     TaskAction::EditTree => {
                         (icon::EDIT_TREE, Message::EditTaskTree(task.uid.clone()), 0)
                     }
+                    TaskAction::BrowseRelations => {
+                        // TUI-only; filtered out by is_action_available above
+                        unreachable!()
+                    }
                 };
 
                 let icon_element: Element<'a, Message> = if *action == TaskAction::ToggleDetails {

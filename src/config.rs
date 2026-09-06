@@ -362,6 +362,7 @@ pub enum TaskAction {
     Focus,
     EditTree,
     CompleteTree,
+    BrowseRelations,
 }
 
 impl TaskAction {
@@ -389,6 +390,7 @@ impl TaskAction {
         TaskAction::DeleteTree,
         TaskAction::Focus,
         TaskAction::CompleteTree,
+        TaskAction::BrowseRelations,
     ];
 
     pub fn label(&self) -> String {
@@ -416,6 +418,7 @@ impl TaskAction {
             TaskAction::Focus => rust_i18n::t!("focus_hide_others").to_string(),
             TaskAction::EditTree => rust_i18n::t!("edit_tree_title").to_string(),
             TaskAction::CompleteTree => rust_i18n::t!("action_complete_tree").to_string(),
+            TaskAction::BrowseRelations => rust_i18n::t!("jump_to_related_task").to_string(),
         }
     }
 
@@ -442,6 +445,36 @@ impl TaskAction {
             TaskAction::OpenUrl => &["o", "url", "link"],
             TaskAction::OpenCoordinates | TaskAction::OpenLocations => &["g", "map"],
             TaskAction::Focus => &["f", "focus"],
+            TaskAction::BrowseRelations => &["l", "link", "relation", "wiki"],
+        }
+    }
+
+    /// Returns the direct keyboard shortcut for this action in Normal mode, if any.
+    pub fn shortcut(&self) -> Option<&'static str> {
+        match self {
+            TaskAction::ToggleTimer => Some("s"),
+            TaskAction::StopTimer => Some("S"),
+            TaskAction::AddSession => Some("t"),
+            TaskAction::IncreasePriority => Some("+"),
+            TaskAction::DecreasePriority => Some("-"),
+            TaskAction::Edit => Some("Ctrl+E"),
+            TaskAction::EditTree => Some("Ctrl+E"),
+            TaskAction::Yank => Some("y"),
+            TaskAction::CreateSubtask => Some("C"),
+            TaskAction::TogglePin => Some("p"),
+            TaskAction::DuplicateTree => Some("D"),
+            TaskAction::Promote => Some("<"),
+            TaskAction::Move => Some("m"),
+            TaskAction::Cancel => Some("x"),
+            TaskAction::Delete => Some("Del"),
+            TaskAction::DeleteTree => Some("Ctrl+Del"),
+            TaskAction::Focus => Some("f"),
+            TaskAction::CompleteAndShift => Some("Shift+Space"),
+            TaskAction::CompleteTree => Some("Shift+Space"),
+            TaskAction::OpenUrl => Some("o"),
+            TaskAction::ToggleDetails => Some("L"),
+            TaskAction::BrowseRelations => None,
+            TaskAction::OpenCoordinates | TaskAction::OpenLocations => None,
         }
     }
 }

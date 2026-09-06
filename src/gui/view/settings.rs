@@ -662,6 +662,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                             crate::config::TaskAction::OpenCoordinates => icon::MAP_LOCATION_DOT,
                             crate::config::TaskAction::OpenLocations => icon::MAP_MARKER_MULTIPLE,
                             crate::config::TaskAction::OpenUrl => icon::URL_CHECK,
+                            crate::config::TaskAction::BrowseRelations => icon::LINK,
                         };
 
                         let check_icon = if is_pinned {

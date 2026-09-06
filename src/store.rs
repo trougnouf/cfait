@@ -1064,6 +1064,92 @@ impl TaskStore {
         Err(rust_i18n::t!("error_task_not_found_for_dep", reference = clean_ref).to_string())
     }
 
+    /// Walk a wiki-link path, creating missing pages along the way.
+    /// Caller should have already tried `resolve_dependency_ref` for the fast
+    /// path (existing resolution) and ambiguous-error handling.
+    /// Returns (final_uid, create_actions). If the path is empty, final_uid is empty.
+    pub fn walk_or_create_wiki_path(
+        &mut self,
+        clean_title: &str,
+        context_uid: Option<&str>,
+        context_is_journal: bool,
+        tag_aliases: &HashMap<String, Vec<String>>,
+        def_time: Option<chrono::NaiveTime>,
+        fallback_href: Option<String>,
+    ) -> (String, Vec<crate::journal::Action>) {
+        let is_relative = clean_title.starts_with('+');
+        let path_str = if is_relative {
+            clean_title[1..].trim()
+        } else {
+            clean_title
+        };
+        let path_segments = crate::model::parser::split_path_respecting_quotes(path_str);
+        if path_segments.is_empty() {
+            return (String::new(), Vec::new());
+        }
+
+        let mut current_parent_uid: Option<String> = if is_relative {
+            context_uid.map(|s| s.to_string())
+        } else {
+            None
+        };
+        let mut final_uid = String::new();
+        let mut actions = Vec::new();
+
+        for (i, segment) in path_segments.iter().enumerate() {
+            let seg_clean = crate::model::parser::strip_quotes(segment);
+
+            let mut found_uid: Option<String> = None;
+            'search: for (href, map) in &self.calendars {
+                if href == crate::storage::LOCAL_TRASH_HREF || href == "local://recovery" {
+                    continue;
+                }
+                for (uid, t) in map {
+                    if t.parent_uid == current_parent_uid
+                        && t.summary.eq_ignore_ascii_case(&seg_clean)
+                    {
+                        found_uid = Some(uid.clone());
+                        break 'search;
+                    }
+                }
+            }
+
+            if let Some(uid) = found_uid {
+                current_parent_uid = Some(uid.clone());
+                if i == path_segments.len() - 1 {
+                    final_uid = uid;
+                }
+            } else {
+                let mut new_task = crate::model::Task::new(&seg_clean, tag_aliases, def_time);
+                if context_is_journal {
+                    new_task.is_journal = true;
+                    new_task.is_note = true;
+                }
+                new_task.parent_uid = current_parent_uid.clone();
+
+                let target_href = if let Some(p_uid) = &current_parent_uid {
+                    self.get_task_ref(p_uid).map(|t| t.calendar_href.clone())
+                } else {
+                    None
+                }
+                .or_else(|| fallback_href.clone())
+                .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
+                new_task.calendar_href = target_href;
+
+                let uid = new_task.uid.clone();
+                self.add_task(new_task.clone());
+                actions.push(crate::journal::Action::Create(new_task));
+
+                current_parent_uid = Some(uid.clone());
+                if i == path_segments.len() - 1 {
+                    final_uid = uid;
+                }
+            }
+        }
+
+        (final_uid, actions)
+    }
+
     pub fn get_dependency_candidates(
         &self,
         reference: &str,

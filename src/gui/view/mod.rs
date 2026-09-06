@@ -90,6 +90,7 @@ pub fn is_action_available(
         crate::config::TaskAction::ToggleTimer
         | crate::config::TaskAction::AddSession
         | crate::config::TaskAction::Cancel => !is_done_or_cancelled,
+        crate::config::TaskAction::BrowseRelations => false, // TUI-only
         _ => true,
     }
 }
@@ -618,6 +619,10 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                     Message::TogglePin(uid.clone()),
                     false,
                 ),
+                TaskAction::BrowseRelations => {
+                    // TUI-only; filtered out by is_action_available above
+                    unreachable!()
+                }
             };
 
             let btn = button(
