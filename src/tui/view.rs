@@ -2348,7 +2348,12 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 {
                     label = rust_i18n::t!("duplicate_single_task").to_string();
                 }
-                ListItem::new(label)
+                let shortcut = a.shortcut();
+                ListItem::new(if let Some(sc) = shortcut {
+                    format!("{} [{}]", label, sc)
+                } else {
+                    label
+                })
             })
             .collect();
 

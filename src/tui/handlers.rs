@@ -200,6 +200,133 @@ fn open_action_menu(state: &mut AppState) {
     }
 }
 
+/// Collect all relationship/wiki-link/URL items for the selected task.
+/// Returns true if the relationship browser was opened, false if there was
+/// nothing to browse (or no task selected).
+fn open_relationship_browser(state: &mut AppState) -> bool {
+    let task = match state.get_selected_task() {
+        Some(t) => t.clone(),
+        None => return false,
+    };
+
+    let mut items = Vec::new();
+
+    if let Some(p_uid) = &task.parent_uid {
+        let name = state
+            .store
+            .get_summary(p_uid)
+            .unwrap_or_else(|| "Unknown task".to_string());
+        items.push((
+            p_uid.clone(),
+            format!("[Parent] {}", name),
+            "parent".to_string(),
+        ));
+    }
+
+    for dep_uid in &task.dependencies {
+        let name = state
+            .store
+            .get_summary(dep_uid)
+            .unwrap_or_else(|| "Unknown task".to_string());
+        let is_done = state.store.is_task_done(dep_uid).unwrap_or(false);
+        let check = if is_done { "[x]" } else { "[ ]" };
+        items.push((
+            dep_uid.clone(),
+            format!("[Blocked by] {} {}", check, name),
+            "dependency".to_string(),
+        ));
+    }
+
+    for related_uid in &task.related_to {
+        let name = state
+            .store
+            .get_summary(related_uid)
+            .unwrap_or_else(|| "Unknown task".to_string());
+        items.push((
+            related_uid.clone(),
+            format!("[Related to] {}", name),
+            "related_to".to_string(),
+        ));
+    }
+
+    let incoming_related = state.store.get_tasks_related_to(&task.uid);
+    for (related_uid, related_name) in incoming_related {
+        items.push((
+            related_uid.clone(),
+            format!("[Related from] {}", related_name),
+            "related_from".to_string(),
+        ));
+    }
+
+    let blocking_tasks = state.store.get_tasks_blocking(&task.uid);
+    for (blocking_uid, blocking_name) in blocking_tasks {
+        items.push((
+            blocking_uid.clone(),
+            format!("[Blocking] {}", blocking_name),
+            "blocking".to_string(),
+        ));
+    }
+
+    let mut text = task.summary.clone();
+    text.push(' ');
+    text.push_str(&task.description);
+
+    let mut seen = std::collections::HashSet::new();
+    let mut start = 0;
+    while let Some(idx) = text[start..].find("[[") {
+        let abs_start = start + idx;
+        if let Some(end_idx) = text[abs_start..].find("]]") {
+            let link = &text[abs_start + 2..abs_start + end_idx];
+            if seen.insert(link.to_string()) {
+                items.push((
+                    format!("[[{link}]]"),
+                    format!("[Link] {}", link),
+                    "wiki_link".to_string(),
+                ));
+            }
+            start = abs_start + end_idx + 2;
+        } else {
+            break;
+        }
+    }
+
+    let mut start = 0;
+    while let Some(idx) = text[start..].find("http") {
+        let abs_start = start + idx;
+        let mut end_idx = abs_start;
+        for c in text[abs_start..].chars() {
+            if c.is_whitespace() || c == ']' || c == ')' {
+                break;
+            }
+            end_idx += c.len_utf8();
+        }
+        if end_idx > abs_start {
+            let link = &text[abs_start..end_idx];
+            if seen.insert(link.to_string()) {
+                items.push((
+                    link.to_string(),
+                    format!("[URL] {}", link),
+                    "url".to_string(),
+                ));
+            }
+            start = end_idx;
+        } else {
+            break;
+        }
+    }
+
+    if items.is_empty() {
+        state.message = rust_i18n::t!("error_no_related_tasks").to_string();
+        false
+    } else {
+        state.relationship_items = items;
+        state.relationship_selection_state.select(Some(0));
+        state.mode = InputMode::RelationshipBrowsing;
+        state.message = format!("{} (Del/x: Remove)", rust_i18n::t!("tui_select_task_jump"));
+        true
+    }
+}
+
 async fn execute_task_action(
     state: &mut AppState,
     action: crate::config::TaskAction,
@@ -438,6 +565,9 @@ async fn execute_task_action(
         }
         CompleteTree => {
             intent = Some(AppIntent::CompleteTree { uid });
+        }
+        BrowseRelations => {
+            open_relationship_browser(state);
         }
     }
 
@@ -3184,130 +3314,7 @@ pub async fn handle_key_event(
                 };
             }
             KeyCode::Char('L') => {
-                // Enter relationship browsing mode to navigate to linked tasks
-                if let Some(task) = state.get_selected_task() {
-                    let mut items = Vec::new();
-
-                    // Add parent
-                    if let Some(p_uid) = &task.parent_uid {
-                        let name = state
-                            .store
-                            .get_summary(p_uid)
-                            .unwrap_or_else(|| "Unknown task".to_string());
-                        items.push((
-                            p_uid.clone(),
-                            format!("↑ [Parent] {}", name),
-                            "parent".to_string(),
-                        ));
-                    }
-
-                    // Add blocked-by dependencies
-                    for dep_uid in &task.dependencies {
-                        let name = state
-                            .store
-                            .get_summary(dep_uid)
-                            .unwrap_or_else(|| "Unknown task".to_string());
-                        let is_done = state.store.is_task_done(dep_uid).unwrap_or(false);
-                        let check = if is_done { "[x]" } else { "[ ]" };
-                        items.push((
-                            dep_uid.clone(),
-                            format!("⬆ [Blocked by] {} {}", check, name),
-                            "dependency".to_string(),
-                        ));
-                    }
-
-                    // Add outgoing relations
-                    for related_uid in &task.related_to {
-                        let name = state
-                            .store
-                            .get_summary(related_uid)
-                            .unwrap_or_else(|| "Unknown task".to_string());
-                        items.push((
-                            related_uid.clone(),
-                            format!("→ [Related to] {}", name),
-                            "related_to".to_string(),
-                        ));
-                    }
-
-                    // Add incoming relations
-                    let incoming_related = state.store.get_tasks_related_to(&task.uid);
-                    for (related_uid, related_name) in incoming_related {
-                        items.push((
-                            related_uid.clone(),
-                            format!("← [Related from] {}", related_name),
-                            "related_from".to_string(),
-                        ));
-                    }
-
-                    // Add blocking (successors)
-                    let blocking_tasks = state.store.get_tasks_blocking(&task.uid);
-                    for (blocking_uid, blocking_name) in blocking_tasks {
-                        items.push((
-                            blocking_uid.clone(),
-                            format!("⬇ [Blocking] {}", blocking_name),
-                            "blocking".to_string(),
-                        ));
-                    }
-
-                    // Extract Wiki Links and URLs
-                    let mut text = task.summary.clone();
-                    text.push(' ');
-                    text.push_str(&task.description);
-
-                    let mut seen = std::collections::HashSet::new();
-                    let mut start = 0;
-                    while let Some(idx) = text[start..].find("[[") {
-                        let abs_start = start + idx;
-                        if let Some(end_idx) = text[abs_start..].find("]]") {
-                            let link = &text[abs_start + 2..abs_start + end_idx];
-                            if seen.insert(link.to_string()) {
-                                items.push((
-                                    format!("[[{link}]]"),
-                                    format!("🔗 [Link] {}", link),
-                                    "wiki_link".to_string(),
-                                ));
-                            }
-                            start = abs_start + end_idx + 2;
-                        } else {
-                            break;
-                        }
-                    }
-
-                    let mut start = 0;
-                    while let Some(idx) = text[start..].find("http") {
-                        let abs_start = start + idx;
-                        let mut end_idx = abs_start;
-                        for c in text[abs_start..].chars() {
-                            if c.is_whitespace() || c == ']' || c == ')' {
-                                break;
-                            }
-                            end_idx += c.len_utf8();
-                        }
-                        if end_idx > abs_start {
-                            let link = &text[abs_start..end_idx];
-                            if seen.insert(link.to_string()) {
-                                items.push((
-                                    link.to_string(),
-                                    format!("🌐 [URL] {}", link),
-                                    "url".to_string(),
-                                ));
-                            }
-                            start = end_idx;
-                        } else {
-                            break;
-                        }
-                    }
-
-                    if !items.is_empty() {
-                        state.relationship_items = items;
-                        state.relationship_selection_state.select(Some(0));
-                        state.mode = InputMode::RelationshipBrowsing;
-                        state.message =
-                            format!("{} (Del/x: Remove)", rust_i18n::t!("tui_select_task_jump"));
-                    } else {
-                        state.message = rust_i18n::t!("error_no_related_tasks").to_string();
-                    }
-                }
+                open_relationship_browser(state);
             }
             KeyCode::Char('*') => {
                 let mut needs_refresh = false;
@@ -4398,10 +4405,49 @@ pub async fn handle_key_event(
 
                     let curr_uid = state.get_selected_task().map(|t| t.uid.clone());
                     let actual_target = if rel_type == "wiki_link" {
-                        state
+                        match state
                             .store
                             .resolve_dependency_ref(&target_uid, curr_uid.as_deref())
-                            .unwrap_or_else(|_| target_uid.clone())
+                        {
+                            Ok(uid) => uid,
+                            Err(msg) if msg.starts_with("Ambiguous") => {
+                                state.mode = InputMode::Normal;
+                                state.message = msg;
+                                return None;
+                            }
+                            Err(_) => {
+                                // Not found: create the missing page(s) along the path.
+                                let config = crate::config::Config::load(state.ctx.as_ref())
+                                    .unwrap_or_default();
+                                let def_time = chrono::NaiveTime::parse_from_str(
+                                    &config.default_reminder_time,
+                                    "%H:%M",
+                                )
+                                .ok();
+                                let context_is_journal = curr_uid
+                                    .as_deref()
+                                    .and_then(|uid| state.store.get_task_ref(uid))
+                                    .map(|t| t.is_journal)
+                                    .unwrap_or(false);
+                                let (final_uid, actions) = state.store.walk_or_create_wiki_path(
+                                    &target_uid,
+                                    curr_uid.as_deref(),
+                                    context_is_journal,
+                                    &state.tag_aliases,
+                                    def_time,
+                                    state.active_cal_href.clone(),
+                                );
+                                if !actions.is_empty() {
+                                    let tx = action_tx.clone();
+                                    tokio::spawn(async move {
+                                        let _ = tx
+                                            .send(crate::tui::action::Action::PersistBatch(actions))
+                                            .await;
+                                    });
+                                }
+                                final_uid
+                            }
+                        }
                     } else {
                         target_uid.clone()
                     };

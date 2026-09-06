@@ -444,7 +444,7 @@
     "help_shortcut_toggle_yank_lock": "Toggle Yank Lock (keep yanked task)",
     "help_shortcut_indent_outdent": "Indent / Outdent Task",
     "help_shortcut_browse_relations_details": "Browse relationships / Toggle details",
-    "help_shortcut_action_context_menu": "Action Menu / Context Menu",
+    "help_shortcut_action_context_menu": "Follow links / Action Menu",
     "help_shortcut_toggle_quick_filter": "Toggle Quick Filter (is:ready)",
     "help_search_matches": "Matches summary or description",
     "help_search_operators": "Compare operators for filters",
