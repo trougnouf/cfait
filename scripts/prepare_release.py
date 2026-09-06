@@ -125,13 +125,25 @@ def main():
     print("🔒 Updating Cargo.lock...")
     subprocess.run(["cargo", "generate-lockfile"], check=True)
 
-    # 9. STAGE ALL FILES FOR GIT
+    # 9. REGENERATE RUST DEPENDENCY LICENSES
+    # cargo-about reads Cargo.lock, so this must run after the lockfile update.
+    licenses_path = "LICENSES/RUST_DEPENDENCIES.html"
+    print(f"📜 Regenerating {licenses_path}...")
+    with open(licenses_path, "w") as f:
+        subprocess.run(
+            ["cargo", "about", "generate", "about.hbs"],
+            stdout=f,
+            check=True,
+        )
+
+    # 10. STAGE ALL FILES FOR GIT
     files_to_add = [
         fastlane_file,
         metainfo_path,
         "Cargo.toml",
         "Cargo.lock",
         "CHANGELOG.md",
+        licenses_path,
         # We add the manifest if it exists, so the version bump is committed
         flatpak_manifest if os.path.exists(flatpak_manifest) else None,
     ]
