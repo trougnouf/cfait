@@ -732,6 +732,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
     // Build a tab strip showing all visible sidebar tabs with their 1-5
     // shortcuts, highlighting the active one, followed by the active tab's
     // label. This keeps the shortcuts discoverable without opening help.
+    // When the combined strip + label is too wide for the sidebar, the digit
+    // strip drops to the bottom-right of the frame so both remain visible.
     let accent = if is_dark_theme {
         Color::Yellow
     } else {
@@ -744,7 +746,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         (state.show_goals_tab, SidebarMode::Goals, "4"),
         (state.show_journal_tab, SidebarMode::Journal, "5"),
     ];
-    let mut title_spans: Vec<Span<'static>> = Vec::new();
+    let mut digit_spans: Vec<Span<'static>> = Vec::new();
     for (visible, mode, num) in tabs {
         if !visible {
             continue;
@@ -754,16 +756,27 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         } else {
             Style::default().fg(Color::DarkGray)
         };
-        title_spans.push(Span::styled(format!(" {}", num), style));
+        digit_spans.push(Span::styled(format!(" {}", num), style));
     }
-    title_spans.push(Span::raw(" "));
-    title_spans.push(Span::raw(sidebar_title));
-    let sidebar_title_line = Line::from(title_spans);
+    let digit_line = Line::from(digit_spans.clone());
+    let combined_width = digit_line.width() + 1 + sidebar_title.width();
+    let avail = h_chunks[0].width.saturating_sub(2) as usize;
 
-    let sidebar_block = Block::default()
-        .borders(Borders::ALL)
-        .title(sidebar_title_line)
-        .border_style(sidebar_border_style);
+    let sidebar_block = if combined_width <= avail {
+        let mut title_spans = digit_spans;
+        title_spans.push(Span::raw(" "));
+        title_spans.push(Span::raw(sidebar_title));
+        Block::default()
+            .borders(Borders::ALL)
+            .title(Line::from(title_spans))
+            .border_style(sidebar_border_style)
+    } else {
+        Block::default()
+            .borders(Borders::ALL)
+            .title(Line::from(Span::raw(sidebar_title)))
+            .title_bottom(digit_line.alignment(Alignment::Right))
+            .border_style(sidebar_border_style)
+    };
 
     let sidebar_area = h_chunks[0];
 
