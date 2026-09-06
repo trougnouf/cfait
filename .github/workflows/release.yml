@@ -79,15 +79,16 @@ jobs:
           # Run
           ./git-cliff --config cliff.toml --verbose --latest --strip header --output CHANGELOG_RELEASE.md
 
-      # 8. Publish to GitHub Releases
-      - name: Upload Release
-        uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
+      # 8. Upload build assets as workflow artifacts
+      - name: Upload Linux Assets
+        uses: actions/upload-artifact@v4
         with:
-          body_path: CHANGELOG_RELEASE.md
-          files: |
+          name: linux-assets
+          path: |
             cfait-linux-${{ github.ref_name }}.tar.gz
             target/debian/*.deb
+            CHANGELOG_RELEASE.md
+          retention-days: 1
 
   build-windows:
     runs-on: windows-latest
@@ -112,14 +113,14 @@ jobs:
           # Create Zip
           Compress-Archive -Path "staging\*" -DestinationPath "cfait-windows-${{ github.ref_name }}.zip"
 
-      - name: Upload Release
-        uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
         with:
-          files: cfait-windows-${{ github.ref_name }}.zip
+          name: cfait-windows-${{ github.ref_name }}
+          path: cfait-windows-${{ github.ref_name }}.zip
+          retention-days: 1
 
   package-arch:
-    needs: build-linux
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -149,8 +150,39 @@ jobs:
           # 4. Save artifact
           cp packaging/arch/PKGBUILD-cfait PKGBUILD-github-release
 
-      - name: Upload PKGBUILD to Release
+      - name: Upload Arch Asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: arch-asset
+          path: PKGBUILD-github-release
+          retention-days: 1
+
+  publish:
+    needs: [build-linux, build-windows, package-arch]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Linux Assets
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-assets
+
+      - name: Download Windows Asset
+        uses: actions/download-artifact@v4
+        with:
+          name: cfait-windows-${{ github.ref_name }}
+
+      - name: Download Arch Asset
+        uses: actions/download-artifact@v4
+        with:
+          name: arch-asset
+
+      - name: Upload Release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: PKGBUILD-github-release
+          body_path: CHANGELOG_RELEASE.md
+          files: |
+            cfait-linux-${{ github.ref_name }}.tar.gz
+            *.deb
+            cfait-windows-${{ github.ref_name }}.zip
+            PKGBUILD-github-release
