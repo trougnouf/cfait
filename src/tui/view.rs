@@ -1577,7 +1577,6 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             }
 
             if !meta.is_empty() {
-                details_md.push_str("---\n");
                 details_md.push_str(&meta.join("\n"));
                 details_md.push_str("\n\n");
             }
