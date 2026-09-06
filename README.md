@@ -26,6 +26,7 @@ If you *do* want to sync your tasks across devices, Cfait connects seamlessly to
 * 🧠 **Deep organization:** Go beyond flat lists with hierarchical tags (`#gardening:kiwai`), blocking dependencies, and parent/child task trees.
 * ⏱️ **Time & goals:** Start/pause tasks to track time spent. Set estimated durations (`~2h`) or recurring habit goals (`#read:book:=goal:5/y`).
 * 🪄 **Dynamic aliases:** Define shortcuts on the fly. Typing `#hiking:=#exercise,@@outside` applies the alias instantly and saves it for future use.
+* 📝 **Daily notes & wiki pages:** Keep a date-anchored journal and link to wiki pages with `[[My Page]]` — create a hierarchical knowledge base alongside your tasks, synced via the same CalDAV `VJOURNAL` components.
 
 ### 📸 Glimpse
 

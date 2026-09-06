@@ -131,6 +131,8 @@ The search bar supports a boolean recursive-descent parser.
     *   *Actionable:* `is:ready` (Excludes completed tasks, explicitly/implicitly blocked tasks, tasks starting in the future, and Notes whose children are all unready. `InProcess` bypasses this).
     *   *Comparison:* `~<30m` (duration < 30m), `!<4` (priority < 4).
     *   *Dates:* `@<today` (Overdue), `^>1w` (Starts in > 1 week).
+*   **Match Highlighting:** Search terms are highlighted inline in task titles and descriptions across all clients.
+*   **Parent Inclusion:** Search matches include parents of matching tasks in the results, so searching for a subtask surfaces its full ancestry.
 
 ### 3.2. Multi-Stage Sorting Algorithm
 Tasks sort deterministically by rank (0 to 9), then by Overdue -> Priority -> Due Date -> Start Date -> Summary.
@@ -145,6 +147,7 @@ Tasks sort deterministically by rank (0 to 9), then by Overdue -> Priority -> Du
 
 *Rule:* If `sort_standard_by_priority` is enabled, Ranks 4 and 5 merge and sort by numeric Priority first, then Date.
 *Rule:* Notes (`is:note`) and Journals (`is:journal`) always sort below actionable tasks within the same rank, and automatically drop to Rank 8 if their dates are in the past.
+*Rule:* Note and journal sorting is symmetric — overdue notes are ranked as completed to drop them to the bottom of the list, mirroring the behavior for actionable tasks.
 
 ---
 
@@ -233,6 +236,7 @@ Tasks tagged with `is:permanent` act as endless trackers. When checked off (Comp
     *   *Right Click:* Opens **Full Context Menu** at cursor coordinates.
     *   *Ellipsis (`...`) Click:* Opens **Partial Context Menu** anchored to the button (shows unpinned actions).
 *   **Modals:** Hovering overlays with dimmed backdrops (Move Task, ICS Import, Alarm Notification).
+*   **Privacy Mode:** When `blur_when_unfocused` is enabled, the window content is blurred when the app loses focus, preventing shoulder-surfing.
 *   **Tooltips:** Any GUI button that has an associated keyboard shortcut must include that shortcut in its tooltip (when applicable).
 
 ### 5.2. Terminal Interface (TUI)
@@ -260,12 +264,22 @@ Tasks tagged with `is:permanent` act as endless trackers. When checked off (Comp
     *   *Alarms:* High-priority. Includes inline "Snooze Custom" via `RemoteInput` text reply.
 *   **Intents:** Intercepts `ACTION_VIEW` for `.ics` files to launch the Import Screen.
 *   **Debug Export:** UI includes an advanced option to generate a zip of `cache/`, `data/`, `config/`, and `android_crash.txt`, sharing it via `ACTION_SEND`.
+*   **AMOLED Black Theme:** A pure-black color variant for OLED screens, selectable from the theme picker.
+*   **Top Bar Position:** Configurable to top or bottom via settings (issue #31).
+
+### 5.4. Journal & Wiki Pages (all clients)
+Daily notes and wiki pages are `VJOURNAL` components (see 1.2). They share a unified UI across all three clients:
+*   **Journal Tab:** A sidebar tab (toggled by `show_journal_tab`) that anchors notes to dates. Selecting a date opens its daily note alongside an activity panel showing tasks due, started, completed, or worked on that day.
+*   **Wiki Index:** Wiki pages (notes without `DTSTART`) appear in a tree view under the Journal tab. Pages can be nested hierarchically via `[[Parent:Child]]` links and collapsed/expanded with `z` (TUI/GUI).
+*   **Page Creation:** Typing `[[My Page]]` in any text editor creates the page if it doesn't exist. The component type is inherited from the context (actionable `VTODO` from a task, `VJOURNAL` from a page). Use `is:page` or `is:journal` to force the type explicitly.
+*   **TUI Journal Navigation:** When the Journal tab is active, `j`/`k` (or arrow keys) navigate the page list, `Enter` opens the selected page for editing, and `z` collapses/expands the wiki tree.
+*   **Android Journal:** A month-grid calendar view with daily-note indicators; tapping a day opens its note. Pages can be moved between dates via the context menu.
 
 ---
 
 ## 6. Keyboard Shortcuts (GUI & TUI)
 
-*   **Navigation:** `j`/`k` or `Up`/`Down` (Select), `Tab` (Cycle focus between Sidebar, List, Input). `1..5` (Switch Sidebar tabs: 1:Calendars, 2:Tags, 3:Locations, 4:Goals, 5:Journal).
+*   **Navigation:** `j`/`k` or `Up`/`Down` (Select), `Tab` (Cycle focus between Sidebar, List, Input). `1..5` (Switch Sidebar tabs: 1:Calendars, 2:Tags, 3:Locations, 4:Goals, 5:Journal). From text fields, use `Ctrl+1..5` instead.
 *   **Main Actions:** 
     *   `Space`: Toggle Done/NeedsAction.
     *   `Shift+Space`: Complete & Shift recurrence (Relative advance).
@@ -283,6 +297,8 @@ Tasks tagged with `is:permanent` act as endless trackers. When checked off (Comp
     *   `>` / `.` : Demote (Indent / Make child of previous).
     *   `<` / `,` : Promote (Outdent / Move one level up).
     *   `L` : Open relationship browser.
+    *   `o`: Open URL attached to the selected task.
+    *   `Ctrl+O` (TUI): Open the wiki link or URL under the text cursor.
 *   **App Actions:** 
     *   `/`: Focus search.
     *   `a`: Focus add task.
@@ -300,21 +316,26 @@ Used for headless automation, scripting, and piping. Operates directly on the `T
 
 *Note on `<uid>` arguments:* Any CLI command accepting a `<uid>` also accepts partial UIDs, exact titles, partial summaries, or wiki-links (e.g. `[[My Task]]`). If a match is ambiguous, the CLI will output the matching options and exit.
 
-*   `cfait add <task...>`: Smart input task creation. Flags: `-c <href>`, `--desc <text>`, `-p <uid>` (set parent), `-n` (queue to journal, don't wait for network sync).
-*   `cfait append <uid> <task...>`: Appends smart syntax tokens (tags, dates, deps, etc.) or text to an existing task. Flags: `--desc <text>` (appends to existing description), `-n` (no wait).
+*Global flags:* Most mutation commands accept `-n` / `--no-wait` (queue to journal and exit without syncing) and `-w` / `--wait` (block until network sync completes).
+
+*   `cfait add` (alias: `create`) `<task...>`: Smart input task creation. Flags: `-c <href>`, `--desc <text>`, `-p <uid>` (set parent), `-n`, `-w`.
+*   `cfait append <uid> <task...>`: Appends smart syntax tokens (tags, dates, deps, etc.) or text to an existing task. Flags: `--desc <text>` (appends to existing description), `-n`, `-w`.
 *   `cfait edit <uid> [--tree]`: Opens an external editor (`$VISUAL`/`$EDITOR`) to edit the task's properties. Pass `--tree` to edit the entire task tree as a single Markdown document.
-*   `cfait replace <uid> <task...>`: Replaces the entire task summary and metadata. To safely add tags or dates without losing the title, use `append`. Flags: `--clear-due`, `--clear-start`, `--clear-tags`, `--clear-loc`, `--clear-deps`, `-p <uid>`, `--clear-parent`, `--desc <text>`, `--file <path>` (replaces from markdown file), `--tree` (when used with `--file`, replaces entire tree).
+*   `cfait replace <uid> <task...>`: Replaces the entire task summary and metadata. To safely add tags or dates without losing the title, use `append`. Flags: `--clear-due`, `--clear-start`, `--clear-tags`, `--clear-loc`, `--clear-deps`, `-p <uid>`, `--clear-parent`, `--desc <text>`, `--file <path>` (replaces from markdown file), `--tree` (when used with `--file`, replaces entire tree), `-n`, `-w`.
 *   `cfait list [--all] [--json] [-c <id>] [-p <uid>]`: Outputs task tree (use `-p` to focus on a specific sub-tree).
 *   `cfait search <query> [--all] [--json] [-c <id>] [-p <uid>]`: Searches and outputs tasks within a specific sub-tree.
-*   `cfait view <uid> [--json]`: Outputs detailed task info.
+*   `cfait view` (alias: `show`) `<uid> [--json]`: Outputs detailed task info.
 *   `cfait tree <uid>`: Views the task tree starting at `<uid>` serialized into markdown format (same format used by the `Ctrl+E` editor).
-*   `cfait start|pause|toggle|done|complete|delete <uid>`: State mutation commands.
-*   `cfait move <uid> <collection> [--tree]`: Moves a task to a different collection.
+*   `cfait start|pause|toggle|done|complete <uid>`: State mutation commands.
+*   `cfait move` (alias: `mv`) `<uid> <collection> [--tree]`: Moves a task to a different collection.
+*   `cfait delete` (alias: `rm`) `<uid>`: Moves task to trash.
 *   `cfait export [--collection <id>]`: Dumps collection as standard ICS to stdout.
 *   `cfait import <file.ics> [--collection <id>]`: Parses and imports ICS to store.
 *   `cfait sync`: Foreground network sync.
 *   `cfait daemon`: Runs a continuous background sync loop based on `auto_refresh_interval_mins`. Acquires a cross-process lock to prevent overlapping syncs with UIs.
-*   `cfait collection list|create|edit`: Manages CalDAV collections.
+*   `cfait collection list [--json]`: Lists CalDAV collections.
+*   `cfait collection create <name> [--color #hex]`: Creates a new collection.
+*   `cfait collection edit <href> --name <name> [--color #hex]`: Edits a collection's display name or color.
 
 ---
 
@@ -332,15 +353,20 @@ All persistent state and settings live here. Unrecognized TOML keys must not be 
 **UI & Behavior:**
 *   `default_calendar`: String HREF.
 *   `enable_local_mode`: Boolean. Allow offline `local://` collections.
-*   `hide_completed`, `hide_fully_completed_tags`, `hide_aliases_in_sidebar`, `blur_when_unfocused`: Booleans.
+*   `hide_completed`, `hide_fully_completed_tags`, `hide_aliases_in_sidebar`: Booleans.
+*   `blur_when_unfocused`: Boolean. Privacy mode — hides task content when the window loses focus.
 *   `strikethrough_completed`: Boolean. Line-through styling for done tasks.
 *   `show_inline_descriptions`: Boolean. Previews up to 3 lines of the description in the list.
 *   `ui_scale`: Float (0.5-3.0). Global zoom.
 *   `theme`: Enum (RustyDark, Light, Dracula, Nord, Catppuccin variants, etc.).
 *   `language`: String (`en`, `fr`). None = system locale.
+*   `first_day_of_week`: Enum (`Monday`, `Sunday`). Controls the first day in calendar/journal week views.
 *   `description_editor`: String. CLI command for TUI description editing. `builtin` forces internal UI editor.
-*   `show_ongoing_notifications`, `show_priority_numbers`, `sidebar_is_hidden`, `show_goals_tab`, `show_journal_tab`, `show_task_goals_in_sidebar`: Booleans.
+*   `show_ongoing_notifications`, `show_priority_numbers`, `sidebar_is_hidden`, `show_task_goals_in_sidebar`: Booleans.
+*   `show_calendars_tab`, `show_tags_tab`, `show_locations_tab`, `show_goals_tab`, `show_journal_tab`: Booleans. Toggle individual sidebar tab visibility.
+*   `show_undo_snackbar`: Boolean. Show the transient undo notification after task mutations (Android).
 *   `pinned_actions`: Array of `TaskAction` enums. Dictates buttons pinned directly to GUI task rows.
+*   `log_level`: Enum (`Error`, `Warn`, `Info`, `Debug`, `Trace`). Logging verbosity for both log file and terminal.
 
 **Sorting & Limits:**
 *   `sort_preset`: Enum (`UrgentStartedDue`, `UrgentDueStarted`, `StartedUrgentDue`).

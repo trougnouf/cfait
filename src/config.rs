@@ -1517,6 +1517,20 @@ impl Config {
             } else if trimmed.starts_with("show_priority_numbers =") {
                 out.push_str(line);
                 out.push_str(" # Boolean: Render priority numbers (!X) visually next to tags.");
+            } else if trimmed.starts_with("show_undo_snackbar =") {
+                out.push_str(line);
+                out.push_str(" # Boolean: Show the transient undo notification after task mutations (Android).");
+            } else if trimmed.starts_with("first_day_of_week =") {
+                out.push_str(line);
+                out.push_str(
+                    " # Enum: First day of the week for calendar/journal views (Monday or Sunday).",
+                );
+            } else if trimmed.starts_with("pinned_actions =") {
+                out.push_str(line);
+                out.push_str(" # Array: Action buttons pinned directly to GUI task rows (e.g. Start, Done, Move).");
+            } else if trimmed.starts_with("collection_order =") {
+                out.push_str(line);
+                out.push_str(" # Array of HREFs defining the custom display order of collections in the sidebar.");
             } else if trimmed.starts_with("hidden_calendars =") {
                 out.push_str("# List of calendar HREFs currently toggled 'off' in the sidebar.\n");
                 out.push_str(line);

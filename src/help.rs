@@ -645,6 +645,11 @@ pub fn get_shortcuts_help(is_gui: bool) -> Vec<HelpSection> {
                     example: "".to_string(),
                 },
                 HelpItem {
+                    keys: "Ctrl + o".to_string(),
+                    desc: rust_i18n::t!("help_shortcut_open_link_cursor").to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
                     keys: "Ctrl + z / Ctrl + y (Ctrl + Shift + z)".to_string(),
                     desc: format!("{}/{}", rust_i18n::t!("undo"), rust_i18n::t!("redo")),
                     example: "".to_string(),
@@ -727,6 +732,26 @@ pub fn get_shortcuts_help(is_gui: bool) -> Vec<HelpSection> {
                 HelpItem {
                     keys: "w".to_string(),
                     desc: rust_i18n::t!("help_shortcut_toggle_quick_filter").to_string(),
+                    example: "".to_string(),
+                },
+            ],
+        },
+        HelpSection {
+            title: rust_i18n::t!("help_journal_title").to_string(),
+            items: vec![
+                HelpItem {
+                    keys: "j / k".to_string(),
+                    desc: rust_i18n::t!("help_journal_nav").to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "Enter".to_string(),
+                    desc: rust_i18n::t!("help_journal_open").to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "z".to_string(),
+                    desc: rust_i18n::t!("help_journal_collapse").to_string(),
                     example: "".to_string(),
                 },
             ],
