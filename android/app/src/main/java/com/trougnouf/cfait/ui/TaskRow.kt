@@ -111,7 +111,10 @@ fun TaskRow(
     // Determine dark mode from the current MaterialTheme background
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
 
+    // ClickableText (unlike Text) won't resolve Unspecified span colors against LocalContentColor,
+    // so resolve to a concrete color or bold/italic spans render black in dark themes.
     val textColor = getTaskTextColor(task.task.priority.toInt(), task.task.isDone, isDark)
+        .let { if (it == Color.Unspecified) MaterialTheme.colorScheme.onSurface else it }
     val rowHighlightColor = Color(0xFFffe600).copy(alpha = 0.1f)
     val containerColor = if (isHighlighted || expanded) rowHighlightColor else MaterialTheme.colorScheme.surface
     val uriHandler = LocalUriHandler.current
