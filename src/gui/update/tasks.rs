@@ -13,6 +13,43 @@ use chrono::NaiveTime;
 use iced::Task;
 use iced::widget::text_editor;
 
+/// Build the message to open a [[wiki link]] or URL under the caret in the
+/// description editor, mirroring the cursor-context "open" action (ctrl+o).
+/// Returns `OpenWikiLink` for wiki links (resolves, creating the page if
+/// missing), `OpenUrl` for URLs, or `None` when the caret is not on a link.
+fn description_caret_link_message(app: &GuiApp, line: &str, column: usize) -> Option<Message> {
+    use crate::model::parser::{SyntaxType, strip_quotes, tokenize_smart_input};
+    let col = column.min(line.len());
+    let tokens = tokenize_smart_input(line, false);
+    let token = tokens.iter().find(|t| col >= t.start && col <= t.end)?;
+    let raw = &line[token.start..token.end];
+    match token.kind {
+        SyntaxType::WikiLink => {
+            let clean = strip_quotes(raw.trim_start_matches("[[").trim_end_matches("]]"));
+            // [[target|alias]] -> open the target segment
+            let target = clean.split('|').next()?.trim();
+            if target.is_empty() {
+                return None;
+            }
+            let ctx = app
+                .editing_tree_uid
+                .clone()
+                .or(app.editing_uid.clone())
+                .or(app.journal_editing_uid.clone());
+            Some(Message::OpenWikiLink(target.to_string(), ctx))
+        }
+        SyntaxType::Url => {
+            let stripped = raw.trim_start_matches("[[").trim_end_matches("]]");
+            let clean = strip_quotes(stripped.trim_start_matches("url:"));
+            if clean.is_empty() {
+                return None;
+            }
+            Some(Message::OpenUrl(clean.to_string()))
+        }
+        _ => None,
+    }
+}
+
 fn dispatch_and_maintain_selection(app: &mut GuiApp, intent: AppIntent, focus_uid: &str) {
     let was_selected = app.selected_uid.as_deref() == Some(focus_uid);
     let old_idx = app.find_task_index_by_uid(focus_uid);
@@ -279,6 +316,22 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::DescriptionChanged(action) => {
             if let text_editor::Action::Edit(text_editor::Edit::Insert('\t')) = action {
                 return Task::done(Message::TabPressed(true));
+            }
+
+            // Ctrl+click a [[wiki link]] or URL in the description to open it,
+            // mirroring the cursor-context open action (ctrl+o).
+            if let text_editor::Action::Click(_) = action
+                && crate::gui::subscription::cmd_held()
+            {
+                app.description_value.perform(action);
+                let cursor_pos = app.description_value.cursor().position;
+                if let Some(line) = app.description_value.line(cursor_pos.line)
+                    && let Some(msg) =
+                        description_caret_link_message(app, &line.text, cursor_pos.column)
+                {
+                    return Task::done(msg);
+                }
+                return Task::none();
             }
 
             let is_enter = matches!(action, text_editor::Action::Edit(text_editor::Edit::Enter));

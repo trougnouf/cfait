@@ -11,6 +11,11 @@ pub static LAST_MOUSE_POS: std::sync::LazyLock<std::sync::RwLock<iced::Point>> =
 // Tracks the Command/Ctrl modifier state statelessly so Mouse events can check it
 static CMD_HELD: AtomicBool = AtomicBool::new(false);
 
+/// Whether Ctrl (or Cmd on macOS) is currently held, for mouse-click shortcuts.
+pub fn cmd_held() -> bool {
+    CMD_HELD.load(Ordering::Relaxed)
+}
+
 // Tracks the current focus statelessly so keyboard event handlers can check it
 pub static ACTIVE_FOCUS: std::sync::LazyLock<std::sync::RwLock<Focus>> =
     std::sync::LazyLock::new(|| std::sync::RwLock::new(Focus::default()));
