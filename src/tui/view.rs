@@ -756,7 +756,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         };
         title_spans.push(Span::styled(format!(" {}", num), style));
     }
-    title_spans.push(Span::raw("  "));
+    title_spans.push(Span::raw(" "));
     title_spans.push(Span::raw(sidebar_title));
     let sidebar_title_line = Line::from(title_spans);
 
