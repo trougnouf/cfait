@@ -1118,7 +1118,16 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
                         let is_note_visually = t.is_note || t.is_journal;
 
-                        let bracket_style = Style::default();
+                        // Color the checkbox brackets with the task's collection color,
+                        // mirroring the collections sidebar tab.
+                        let bracket_style = state
+                            .calendars
+                            .iter()
+                            .find(|c| c.href == t.calendar_href)
+                            .and_then(|c| c.color.as_ref())
+                            .and_then(|hex| color_utils::parse_hex_to_u8(hex))
+                            .map(|(r, g, b)| Style::default().fg(Color::Rgb(r, g, b)))
+                            .unwrap_or_default();
                         let full_symbol = t.checkbox_symbol();
                         let inner_char = full_symbol.trim_start_matches('[').trim_end_matches(']');
 
