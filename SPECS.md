@@ -224,6 +224,7 @@ Tasks tagged with `is:permanent` act as endless trackers. When checked off (Comp
 *Powered by `iced`. Optimized for mouse & keyboard.*
 *   **Layout:** 3-pane layout (Sidebar, Main List, Markdown Details Pane).
 *   **Cursor Context Banner:** Raw text editors feature a dynamic banner that instantly resolves UIDs (`dep:`, `rel:`, `[[...]]`) into task summaries when the text cursor is placed on them.
+    *   *Open via Ctrl+Click:* Ctrl+click (Cmd+click on macOS) a `[[wiki link]]` or URL in a text editor to open it, mirroring the TUI's `Ctrl+O`. Wiki links resolve to the target task or create the missing page in context; URLs open externally.
 *   **Window:** Client-Side Decorations (Custom frameless window, resize grips) unless `--force-ssd` is passed.
 *   **Zooming:** Global scale via `Ctrl++`, `Ctrl+-`, and `Ctrl+ScrollWheel`. Middle-click resets.
 *   **Mouse Interactions:**
@@ -247,6 +248,7 @@ Tasks tagged with `is:permanent` act as endless trackers. When checked off (Comp
 *   **Layout:** 
     *   *Top Bar:* Random Jump, Quick Filter, Search toggle, Refresh/Sync, Settings.
 *   **Cursor Context Banner:** Raw text editors feature a dynamic banner that instantly resolves UIDs (`dep:`, `rel:`, `[[...]]`) into task summaries when the text cursor is placed on them.
+    *   *Open resolved links:* When the caret is on a `[[wiki link]]` that resolves to an existing task, the banner becomes tappable to navigate to it (partial links still show autocomplete to finish the link). Wiki links and URLs in task titles and inline descriptions are also tappable.
     *   *Tabs:* Desktop "Sidebar" is translated into horizontal `HorizontalPager` tabs. Pull-to-refresh triggers manual sync.
     *   *Navigation Drawer:* Swipe from the left edge to switch between Calendars, Tags, Locations, Goals view modes. (Swipe logic uses custom pointer interception to avoid conflicting with tab paging).
 *   **Task List Rendering:** `LazyColumn`. Real-time relative duration formatting via coroutines (`liveDurationMins`). Real-time syntax highlighting in input via `VisualTransformation`.
