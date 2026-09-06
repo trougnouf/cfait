@@ -1,5 +1,170 @@
 # Changelog
 
+## [1.1.6] - 2026-09-06
+
+### 🚀 Features
+
+- VJOURNAL (TUI and GUI)
+- *(journal)* Add worked on today section, clickable context banners, arrow navigation, and date highlights
+- Improve VJOURNAL handling, markdown subtask extraction, and TUI journal mode
+- Allow hiding any tab ( https://github.com/trougnouf/cfait/issues/68 )
+- *(journal)* Implement move
+- *(android)* VJOURNAL
+- *(android)* VJOURNAL month grid, tab visibility settings
+- Improve Android VJOURNAL UI
+- Autocomplete [[
+- *(android)* Move VJOURNALs
+- *(android)* Minimize clutter in VJOURNAL daily editor
+- *(journal)* Create sub-page action
+- *(journal)* Create sub-page action (Android)
+- *(tui)* Jkhl vim-like journal navigation (per wunter8)
+- *(journal)* Make current opened page bold (and make GUI window draggable while in the journal tab)
+- *(search)* Highlight matches
+- Journal page tree collapse
+- *(tui)* Ctrl+o to open link under the cursor
+- Add transient description tags/locations parsing in VJOURNALs
+- Privacy mode ( https://git.disroot.org/trougnouf/cfait/issues/6 )
+- Include parents in the search terms
+- *(gui)* Improve markdown formatter in editor
+- Symmetric sorting for notes and journals
+- *(android)* ShowInlineDescriptions (setting)
+- *(android)* Add markdown highlighting for blockquotes, tables, and code fences
+- *(gui)* Ctrl+click wiki links/URLs in the description editor
+- *(tui)* Color task checkbox brackets with their collection color
+
+### 🐛 Bug Fixes
+
+- Ignore non-200 propstat elements in WebDAV response
+- *(tui)* Enable journal scrolling, fix wiki page editing, refine activity logs
+- *(gui)* Prevent focus loss when auto-completing in the journal
+- Alias token duplication, wiki index navigation, filter clearing. Add journal page deletion. (Reported by wunter8)
+- Show deleted pages in the trash
+- Prioritize exact dependency match over partial matches
+- Journal pages label, timeline month format, and C shortcut handling (reported by wunter8)
+- *(gui)* Journal pages label, timeline month format, and C shortcut handling
+- Prevent notes and journal pages from being completed by CompleteTree
+- *(android)* Strikethrough setting, sort preset mapping, and search highlight visibility
+- *(tui)* Prevent alarm popup from toggling task completion ( https://git.disroot.org/trougnouf/cfait/issues/4 )
+- Add cycle detection to parent_uid traversals
+- Add RUST_MIN_STACK=16777216 to Arch PKGBUILDs ( https://git.disroot.org/trougnouf/cfait/issues/7 )
+- *(gui)* Do not intercept digits in text fields; add ctrl+1..5 tab shortucts as an alternative ( https://github.com/trougnouf/cfait/issues/71 )
+- *(gui)* Match digit tab shortcuts on logical character for layout support
+- *(gui)* Journal tab defaults to today's daily note on first open, restores state after
+- *(gui)* Reserve right padding in journal page list so scrollbar doesn't overlap buttons
+- Journal tab now obeys tags and locations filters
+- Accept localized yes/no keys in TUI setup prompts
+- *(android)* Use SAF picker for TLS client cert/key files
+- Auto-correct URL to Nextcloud /remote.php/dav on connect failure ( https://github.com/trougnouf/cfait/issues/11 )
+- Use a saturated default color for new collection color picker
+- *(sync)* Avoid spurious conflict copies on transient fetch failures (#56)
+- *(android)* Make wiki links tappable and fix cursor-context banner
+- *(tui)* Add browse-relationships action and show shortcuts in action menu
+- *(android)* Resolve task title color for ClickableText bold spans
+- *(android)* Show open banner for resolved wiki links in editor
+- Correct TUI action menu keyboard shortcuts
+- *(android)* Remove empty gap above bottom action bar
+
+### 🚜 Refactor
+
+- *(journal)* Remove virtual note hacks, fix Markdown indentation, add journal title input, fix layouts
+- *(autocomplete)* Start #tag autocomplete after first character (allows # header without loss of focus)
+- *(autocomplete)* Ignore all hash prefixes (#/##/###/...)
+- Improve tui journal navigation
+- *(journal)* Hide journal entries from hidden collections
+- *(extractor)* Restore # header level parsing for VTODO / non-VJOURNAL
+- Decouple is:page from is:note, show VJOURNAL entries in task list iff they contain tasks, is:note or is:pinned
+- Add VJOURNALs to search and is:page/is:journal search term
+- VJOURNALs which are child of a task are visible in the tasks list
+- Use DTSTART to differentiate between date and wiki-based journal pages (compatibility with jtx Board)
+- Rm starting tasks from worked on tasks in journal, add is:canceled to search terms, rm #cfait-internal from autocomplete, fix Android col: handling
+- Rm starting tasks from worked on tasks in journal, add is:canceled to search terms, rm #cfait-internal from autocomplete, fix Android col: handling
+- *(store)* Show parent tasks which are not in a visible collection
+- *(store)* Inherit best child props for search context items
+- Improve VJOURNAL sub-page management for date-based journals, display collection color
+- Improve VJOURNAL sub-page management for date-based journals, display collection color (Android)
+- *(vjournal)* Add context-aware hierarchical wiki-links and refine VJOURNAL tree workflows
+- *(DRY)* Centralize sidebar validation, task status updates, and tree colors
+- Extract inline markdown parsing and consolidate config assignment logic
+- Extract shared helpers for URL opening, tab visibility, date conversion, and task metadata
+- *(DRY)* Consolidate codebase with abstractions for SortKey, syntax, intent dispatcher, headers, and date handling
+- Unify text undo/redo logic, simplify DateType/Config/parser/alarm logic
+- Consolidate Markdown highlighter, settings handlers, and task_row match blocks
+- Unify undo/redo stacks
+- *(android)* Deduplicate calendar/alarm/task-creation helpers in mobile.rs
+- Extract walk_or_create_wiki_path into TaskStore
+
+### 📚 Documentation
+
+- Spec cursor-context open actions for gui and android
+- Add example .desktop for launching the TUI with a dedicated panel icon
+- Improve specs, readme, and built-in help coverage
+- *(tui)* Show 1..5 keyboard shortcuts in the main interface
+- *(i18n)* Rename calendars to collections
+- Update TUI screenshot
+
+### ⚡ Performance
+
+- *(android)* Cache markdown parsing with remember to fix recomposition lag
+- *(android)* Reduce JNI payload
+- Optimize search with zero-allocation ASCII case-insensitive matching
+- Replace string-keyed maps with index-based and &str-borrowde graphs in topo sort and filter pipeline
+- Switch topo sorts to heap-based Kahn's,, slim resolve() to a sort-key tuple, single-pass lowercase categories
+- Optimize store traversals, cache subtask checks, and prune dependencies
+- Cut clones, fix O(n^2) has_children, dedup deps/rels in filter pipeline
+- Avoid full Config clones, use children_index for subtask checks
+- *(ci)* Add benchmarks
+
+### 🎨 Styling
+
+- Improve markdown preview (GUI, TUI)
+- *(android)* Move "delete" left of "move" in journal editor
+- *(tui)* Color journals based on collection
+- *(android)* Improve journal header flexibility
+- *(android)* AMOLED black theme ( https://git.disroot.org/trougnouf/cfait/issues/4 )
+- *(gui)* Use primary accent color with more opacity for task selection visibility ( https://git.disroot.org/trougnouf/cfait/issues/4 )
+- *(gui)* Dim formatting markdown characters in editor
+- *(android)* Add option to change top bar position ( https://codeberg.org/trougnouf/cfait/issues/31 )
+- *(android)* Add option to change top bar position ( https://codeberg.org/trougnouf/cfait/issues/31 )
+- *(tui)* Drop horizontal rule separator in details metadata
+- *(tui)* Separate tab name from 1..5 (bottom-right) when space is limited
+
+### ⚙️ Miscellaneous Tasks
+
+- *(vjournal)* Preserve parent relationships and metadata in ICS serialization and improve wiki-link page creation
+- Update rust to 1.98 and dependencies
+- Fix Android build
+- Fix Flatpak (update to rust 1.98)
+- Fix accidental task deletion in journal mode, restore wiki index visibility (reported by wunter8)
+- Omit childless VJOURNALs from task lists and refine TUI tree and journal editing state management (per wunter8's reports)
+- Decouple is:note from Wiki index, identify daily notes by YYYY-MM-DD format
+- Journal 'a' opens editor for current date, avoid creating empty is:page (reported by wunter8)
+- *(android)* Remove task input bar from journal tab
+- *(gui)* Fix journal visibility
+- Fix Android edit journal title lag, add delete journal button
+- Unfold VJOURNAL properties, decouple journal collection selector, prevent date header wrap
+- *(android)* Show collections which have a daily journal first
+- *(android)* Fix journal collection header, auto-scale iso dates
+- *(journal)* Improve markdown parsing
+- Fix wiki index collapse button
+- Fix Android deadlock
+- Remove unused strings
+- *(journal)* Make current opened day bold
+- *(android)* Fix toggle expansion
+- Fix TUI calendar navigation, editor sidebar focus, and restore timeline month with capitalization
+- *(journal)* Add z-key hint, fix journal navigation, link support
+- Fix android build
+- Fix Android strikethroughCompleted
+- Clippy
+- Rm accidental backup file
+- Fix fuzzy dates regression introduced in refactors
+- *(ci)* Fix hostname
+- *(parser)* Restore wiki-link and mailto: inline link parsing
+- *(android)* Move ongoing task notifications toggle to main settings
+- *(ci)* Better compress the benchmarks
+- Update dependencies
+- *(tui)* Reduce space between 1..5 and the tab's name
+- Update rust dependency licenses
+- Regenerate rust licenses in prepare_release
 ## [1.1.5] - 2026-08-18
 
 ### 🚀 Features
