@@ -2689,6 +2689,16 @@ fun HomeScreen(
                                                 onToggle = { toggleTask(stableTask.task) },
                                                 onAction = { act -> onTaskAction(act, stableTask.task) },
                                                 onClick = onTaskClick,
+                                                onWikiLink = { target, contextUid ->
+                                                    scope.launch {
+                                                        try {
+                                                            val targetUid = api.openWikiLink(target, contextUid, null)
+                                                            onTaskClick(targetUid)
+                                                        } catch (e: Exception) {
+                                                            // Ignore
+                                                        }
+                                                    }
+                                                },
                                                 yankedUid = yankedUid,
                                                 enabledCalendarCount = enabledCalendarCount,
                                                 isHighlighted = stableTask.task.uid == highlightedUid,

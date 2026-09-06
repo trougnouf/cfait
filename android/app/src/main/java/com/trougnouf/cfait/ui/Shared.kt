@@ -27,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -281,20 +282,28 @@ fun parseInlineMarkdown(
                 "[]()" -> {
                     val mid = chunk.indexOf("](")
                     val display = chunk.substring(1, mid)
+                    val url = chunk.substring(mid + 2, chunk.length - 1)
+                    builder.pushStringAnnotation("url_link", url)
                     builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = androidx.compose.ui.graphics.Color(0xFF33B5E5), textDecoration = baseDecoration))
                     appendHighlighted(builder, display, highlightRegex, highlightColor)
+                    builder.pop()
                     builder.pop()
                 }
                 "[[" -> {
                     val split = innerChunk.indexOf('|')
                     val display = if (split != -1) innerChunk.substring(split + 1) else innerChunk
+                    val target = if (split != -1) innerChunk.substring(0, split) else innerChunk
+                    builder.pushStringAnnotation("wiki_link", target)
                     builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = androidx.compose.ui.graphics.Color(0xFF33B5E5), textDecoration = baseDecoration))
                     appendHighlighted(builder, display, highlightRegex, highlightColor)
                     builder.pop()
+                    builder.pop()
                 }
                 "http" -> {
+                    builder.pushStringAnnotation("url_link", chunk)
                     builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = androidx.compose.ui.graphics.Color(0xFF33B5E5), textDecoration = baseDecoration))
                     appendHighlighted(builder, chunk, highlightRegex, highlightColor)
+                    builder.pop()
                     builder.pop()
                 }
             }
@@ -1178,8 +1187,10 @@ fun CursorContextBanner(
 
         if (activeToken != null && resolvedDep != null) {
             val isDep = activeToken!!.kind == com.trougnouf.cfait.core.MobileSyntaxType.DEPENDENCY
+            val isWiki = activeToken!!.kind == com.trougnouf.cfait.core.MobileSyntaxType.WIKI_LINK
             val iconChar = if (!resolvedDep!!.isFound) NfIcons.SYNC_ALERT else if (isDep) NfIcons.BLOCKED else NfIcons.LINK
             val color = if (!resolvedDep!!.isFound) Color(0xFFE53935) else if (isDep) Color(0xFFFF9800) else Color(0xFF42A5F5)
+            val scope = rememberCoroutineScope()
 
             Box(
                 modifier = Modifier
@@ -1191,14 +1202,27 @@ fun CursorContextBanner(
                         .fillMaxWidth()
                         .background(color.copy(alpha = 0.1f), RoundedCornerShape(6.dp))
                         .border(1.dp, color.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
-                        .then(if (onNavigate != null && resolvedDep!!.isFound) Modifier.clickable { onNavigate(resolvedDep!!.uid) } else Modifier)
+                        .then(if (onNavigate != null && (resolvedDep!!.isFound || isWiki)) Modifier.clickable {
+                            if (resolvedDep!!.isFound) {
+                                onNavigate(resolvedDep!!.uid)
+                            } else {
+                                scope.launch {
+                                    try {
+                                        val targetUid = api.openWikiLink(rawWord, contextUid, null)
+                                        onNavigate(targetUid)
+                                    } catch (e: Exception) {
+                                        // Ignore
+                                    }
+                                }
+                            }
+                        } else Modifier)
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     NfIcon(iconChar, 14.sp, color)
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = "$rawWord ➔ ${resolvedDep!!.summary}",
+                        text = if (resolvedDep!!.isFound) "$rawWord ➔ ${resolvedDep!!.summary}" else "$rawWord (tap to create)",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = color,

@@ -360,6 +360,7 @@ fun TaskDetailScreen(
             val isDateBasedJournal = isJournal && task!!.summary.matches(Regex("""^\\d{4}-\\d{2}-\\d{2}$"""))
 
             if (!isDateBasedJournal) {
+                com.trougnouf.cfait.ui.CursorContextBanner(api, smartInput, uid, onNavigate = onNavigate) { smartInput = it }
                 OutlinedTextField(
                     value = smartInput,
                     onValueChange = { 
@@ -381,7 +382,6 @@ fun TaskDetailScreen(
                         handleSaveWithGeo(smartInput.text, description.text)
                     }),
                 )
-                com.trougnouf.cfait.ui.CursorContextBanner(api, smartInput, uid, onNavigate = onNavigate) { smartInput = it }
                 Text(
                     stringResource(R.string.help_syntax_short),
                     style = MaterialTheme.typography.bodySmall,
@@ -939,6 +939,8 @@ fun TaskDetailScreen(
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
             }
 
+            com.trougnouf.cfait.ui.CursorContextBanner(api, description, uid, onNavigate = onNavigate) { description = it }
+
             OutlinedTextField(
                 value = description,
                 onValueChange = { newValue ->
@@ -983,7 +985,6 @@ fun TaskDetailScreen(
                 textStyle = TextStyle(textAlign = androidx.compose.ui.text.style.TextAlign.Start),
                 visualTransformation = remember(isDark) { MarkdownTransformation(isDark, api) },
             )
-            com.trougnouf.cfait.ui.CursorContextBanner(api, description, uid, onNavigate = onNavigate) { description = it }
 
             if (task!!.createdDateIso != null || task!!.lastModifiedDateIso != null) {
                 val dateStrs = mutableListOf<String>()

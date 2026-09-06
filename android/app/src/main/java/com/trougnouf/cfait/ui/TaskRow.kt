@@ -13,6 +13,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -93,6 +94,7 @@ fun TaskRow(
     onToggle: () -> Unit,
     onAction: (String) -> Unit,
     onClick: (String) -> Unit,
+    onWikiLink: (String, String) -> Unit,
     yankedUid: String?,
     enabledCalendarCount: Int,
     isHighlighted: Boolean = false,
@@ -147,10 +149,21 @@ fun TaskRow(
                 val annotatedSummary = remember(task.task.summary, textColor, isStrikethrough, highlightRegex) {
                     com.trougnouf.cfait.ui.parseInlineMarkdown(task.task.summary, textColor, isStrikethrough, highlightRegex, highlightColor)
                 }
-                
-                Text(
+
+                ClickableText(
                     text = annotatedSummary,
                     style = baseStyle,
+                    onClick = { offset ->
+                        annotatedSummary.getStringAnnotations("url_link", offset, offset).firstOrNull()?.let {
+                            uriHandler.openUri(it.item)
+                            return@ClickableText
+                        }
+                        annotatedSummary.getStringAnnotations("wiki_link", offset, offset).firstOrNull()?.let {
+                            onWikiLink(it.item, task.task.uid)
+                            return@ClickableText
+                        }
+                        onClick(task.task.uid)
+                    }
                 )
 
                 if (showInlineDescriptions && task.task.descriptionInline.isNotEmpty() && !expanded && !task.task.isCollapsed) {
@@ -161,13 +174,27 @@ fun TaskRow(
                         highlightRegex,
                         highlightColor
                     )
-                    Text(
+                    ClickableText(
                         text = descSpans,
-                        fontSize = 12.sp,
-                        lineHeight = 14.sp,
+                        modifier = Modifier.padding(top = 2.dp, bottom = 2.dp),
+                        style = androidx.compose.ui.text.TextStyle(
+                            fontSize = 12.sp,
+                            lineHeight = 14.sp,
+                            color = if (isDark) Color(0xFFAAAAAA) else Color(0xFF666666)
+                        ),
                         maxLines = 3,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 2.dp, bottom = 2.dp)
+                        onClick = { offset ->
+                            descSpans.getStringAnnotations("url_link", offset, offset).firstOrNull()?.let {
+                                uriHandler.openUri(it.item)
+                                return@ClickableText
+                            }
+                            descSpans.getStringAnnotations("wiki_link", offset, offset).firstOrNull()?.let {
+                                onWikiLink(it.item, task.task.uid)
+                                return@ClickableText
+                            }
+                            onClick(task.task.uid)
+                        }
                     )
                 }
 

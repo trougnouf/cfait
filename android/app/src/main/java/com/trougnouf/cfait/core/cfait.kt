@@ -919,6 +919,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_move_task_tree(): Int
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_open_wiki_link(): Int
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_parse_duration_string(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_parse_smart_string(): Int
@@ -1327,6 +1329,13 @@ internal object UniffiLib {
         `ptr`: Long,
         `uid`: RustBuffer.ByValue,
         `newCalHref`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_open_wiki_link(
+        `ptr`: Long,
+        `title`: RustBuffer.ByValue,
+        `contextUid`: RustBuffer.ByValue,
+        `calendarHref`: RustBuffer.ByValue,
     ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_parse_duration_string(
@@ -1928,6 +1937,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_move_task_tree() != 45149) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_open_wiki_link() != 61662) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_parse_duration_string() != 50754) {
@@ -2763,6 +2775,17 @@ public interface CfaitMobileInterface {
     suspend fun `moveTaskTree`(
         `uid`: kotlin.String,
         `newCalHref`: kotlin.String,
+    ): kotlin.String
+
+    /**
+     * Resolve a `[[wiki link]]` to an existing task, or create the missing
+     * page(s) along the path. Returns the final target UID.
+     * Mirrors the desktop `OpenWikiLink` handler.
+     */
+    suspend fun `openWikiLink`(
+        `title`: kotlin.String,
+        `contextUid`: kotlin.String?,
+        `calendarHref`: kotlin.String?,
     ): kotlin.String
 
     fun `parseDurationString`(`val`: kotlin.String): kotlin.UInt?
@@ -3994,6 +4017,36 @@ open class CfaitMobile :
                     uniffiHandle,
                     FfiConverterString.lower(`uid`),
                     FfiConverterString.lower(`newCalHref`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
+
+    /**
+     * Resolve a `[[wiki link]]` to an existing task, or create the missing
+     * page(s) along the path. Returns the final target UID.
+     * Mirrors the desktop `OpenWikiLink` handler.
+     */
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `openWikiLink`(
+        `title`: kotlin.String,
+        `contextUid`: kotlin.String?,
+        `calendarHref`: kotlin.String?,
+    ): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_open_wiki_link(
+                    uniffiHandle,
+                    FfiConverterString.lower(`title`),
+                    FfiConverterOptionalString.lower(`contextUid`),
+                    FfiConverterOptionalString.lower(`calendarHref`),
                 )
             },
             { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },

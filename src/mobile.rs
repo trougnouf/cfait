@@ -2809,6 +2809,63 @@ impl CfaitMobile {
         Ok(uid)
     }
 
+    /// Resolve a `[[wiki link]]` to an existing task, or create the missing
+    /// page(s) along the path. Returns the final target UID.
+    /// Mirrors the desktop `OpenWikiLink` handler.
+    pub async fn open_wiki_link(
+        &self,
+        title: String,
+        context_uid: Option<String>,
+        calendar_href: Option<String>,
+    ) -> Result<String, MobileError> {
+        let clean_title = title.trim_start_matches("[[").trim_end_matches("]]").trim();
+
+        // Try a direct resolution first (single-segment shortcut + full path match).
+        {
+            let store = self.controller.store.lock().await;
+            match store.resolve_dependency_ref(clean_title, context_uid.as_deref()) {
+                Ok(uid) => return Ok(uid),
+                Err(msg) if msg.starts_with("Ambiguous") => {
+                    return Err(MobileError::from(msg));
+                }
+                Err(_) => {}
+            }
+        }
+
+        let config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
+        let def_time =
+            chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
+
+        let (final_uid, actions) = {
+            let mut store = self.controller.store.lock().await;
+            let context_is_journal = context_uid
+                .as_deref()
+                .and_then(|uid| store.get_task_ref(uid))
+                .map(|t| t.is_journal)
+                .unwrap_or(false);
+            store.walk_or_create_wiki_path(
+                clean_title,
+                context_uid.as_deref(),
+                context_is_journal,
+                &config.tag_aliases,
+                def_time,
+                calendar_href,
+            )
+        };
+
+        if !actions.is_empty() {
+            self.controller.persist_changes(actions).await?;
+        }
+
+        if final_uid.is_empty() {
+            Err(MobileError::from(
+                rust_i18n::t!("error_task_not_found_for_dep", reference = clean_title).to_string(),
+            ))
+        } else {
+            Ok(final_uid)
+        }
+    }
+
     pub async fn get_random_task_uid(
         &self,
         filter_tags: Vec<String>,
