@@ -574,19 +574,28 @@ impl RustyClient {
 
         let mut recovery_cal_created_this_cycle = false;
 
-        // 2. Transactional processing loop
+        // 2. Compact the journal once up front. New actions pushed during the
+        //    sync loop are already compacted by their callers (persist_changes
+        //    compacts the full queue on every push), so recompacting inside the
+        //    loop is redundant and turns an O(n) sync into O(n^2) for large
+        //    batches (e.g. deleting a big task tree).
+        Journal::modify(self.ctx.as_ref(), |queue| {
+            let mut tmp_j = Journal {
+                queue: std::mem::take(queue),
+            };
+            tmp_j.compact();
+            *queue = tmp_j.queue;
+        })
+        .map_err(|e| e.to_string())?;
+
+        // 3. Transactional processing loop
         loop {
             let mut next_action_opt = None;
 
             // Peek the front of the queue
             Journal::modify(self.ctx.as_ref(), |queue| {
-                let mut tmp_j = Journal {
-                    queue: std::mem::take(queue),
-                };
-                tmp_j.compact();
-                *queue = tmp_j.queue.clone();
-                if !queue.is_empty() {
-                    next_action_opt = Some(queue[0].clone());
+                if let Some(first) = queue.first() {
+                    next_action_opt = Some(first.clone());
                 }
             })
             .map_err(|e| e.to_string())?;

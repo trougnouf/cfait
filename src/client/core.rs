@@ -909,11 +909,17 @@ impl RustyClient {
             || (!has_calendar_data && !keep_completed)
             || !should_create_events;
 
-        if !should_create_events
-            && !is_delete_intent
-            && !delete_on_completion
-            && task.create_event.is_none()
-        {
+        // If no companion events were ever created for this task (events
+        // disabled in config, no per-task +cal opt-in, and no
+        // delete-on-completion), there is nothing to PUT or DELETE. Skipping
+        // the blind cleanup probes avoids up to 5 extra HTTP DELETEs per task
+        // — the dominant cost when deleting large task trees. The create and
+        // update paths already skipped here; extending the same skip to the
+        // delete path keeps the behavior consistent. When events *could*
+        // exist (config on, per-task +cal, or delete-on-completion) we still
+        // run the full cleanup, so orphaned events are never left behind in
+        // any configuration that could have created them.
+        if !should_create_events && !delete_on_completion && task.create_event.is_none() {
             return true;
         }
 
