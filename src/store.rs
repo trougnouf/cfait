@@ -629,6 +629,19 @@ pub struct SyncTreeOptions<'a> {
     pub calendars: &'a [crate::model::CalendarListEntry],
 }
 
+/// Check if [s, e) is fully covered by the union of merged intervals.
+fn session_fully_covered(s: i64, e: i64, intervals: &[(i64, i64)]) -> bool {
+    let mut covered = 0i64;
+    for (is, ie) in intervals {
+        let ov_start = (*is).max(s);
+        let ov_end = (*ie).min(e);
+        if ov_end > ov_start {
+            covered += ov_end - ov_start;
+        }
+    }
+    covered >= (e - s).max(0)
+}
+
 impl TaskStore {
     /// Construct a new TaskStore with an AppContext reference for persistence.
     pub fn new(ctx: Arc<dyn AppContext>) -> Self {
@@ -2494,6 +2507,67 @@ impl TaskStore {
         (count, days, key)
     }
 
+    /// Check if `t` is "claimed" by a goal key. A task is claimed if it or any
+    /// ancestor carries the matching tag/location. For `task:`-specific keys, a
+    /// task is claimed if it IS the target task, is a history snapshot of it,
+    /// or is a descendant of it. This is the aggregation model: untagged
+    /// subtasks' time flows up to the nearest tagged ancestor.
+    fn task_is_claimed_by_goal(
+        &self,
+        t: &crate::model::Task,
+        is_tag: bool,
+        is_task: bool,
+        clean_key: &str,
+    ) -> bool {
+        let prefix = format!("{}:", clean_key);
+        let explicit_match = |task: &crate::model::Task| {
+            if is_tag {
+                task.categories
+                    .iter()
+                    .any(|c| c == clean_key || c.starts_with(&prefix))
+            } else if is_task {
+                task.uid == clean_key
+                    || task
+                        .unmapped_properties
+                        .iter()
+                        .any(|p| p.key == "X-CFAIT-HISTORY-OF" && p.value == clean_key)
+            } else {
+                task.locations
+                    .iter()
+                    .any(|l| l == clean_key || l.starts_with(&prefix))
+            }
+        };
+
+        if explicit_match(t) {
+            return true;
+        }
+
+        // Walk up the parent chain. For tag/location goals, any ancestor
+        // carrying the tag claims this task. For task-specific goals, the
+        // target task's UID claims all its descendants.
+        let mut curr = t.parent_uid.as_deref();
+        let mut visited = std::collections::HashSet::new();
+        while let Some(p_uid) = curr {
+            if !visited.insert(p_uid) {
+                break;
+            }
+            if let Some(p) = self.get_task_ref(p_uid) {
+                if is_task {
+                    if p_uid == clean_key {
+                        return true;
+                    }
+                } else if explicit_match(p) {
+                    return true;
+                }
+                curr = p.parent_uid.as_deref();
+            } else {
+                break;
+            }
+        }
+
+        false
+    }
+
     /// Helper to evaluate goal bounds universally
     pub fn calculate_goal_progress_for_bounds(
         &self,
@@ -2506,7 +2580,7 @@ impl TaskStore {
         let default_dur = config.default_duration_goal_mins;
         let count_sessions = config.sessions_count_as_completions;
         let now = chrono::Utc::now();
-        let mut progress = 0;
+        let now_ts = now.timestamp();
         let is_tag = key.starts_with('#');
         let is_task = key.starts_with("task:");
         let clean_key = if is_tag {
@@ -2519,144 +2593,165 @@ impl TaskStore {
             key
         };
 
+        // Collect per-task data for claimed tasks. Duration goals union-merge
+        // all sessions globally (total time worked). Count goals count per
+        // task with cascade dedup (a parent's session fully covered by a
+        // descendant's overlapping session is skipped).
+        struct ClaimedTask<'a> {
+            task: &'a crate::model::Task,
+            sessions: Vec<(i64, i64)>,
+            has_sessions_in_period: bool,
+        }
+        let mut claimed_tasks: Vec<ClaimedTask> = Vec::new();
+        let mut est_credits: Vec<u32> = Vec::new();
+
         for (href, map) in &self.calendars {
             if href == crate::storage::LOCAL_TRASH_HREF || href == "local://recovery" {
                 continue;
             }
-            let prefix = format!("{}:", clean_key);
             for t in map.values() {
-                let matches = if is_tag {
-                    t.categories
-                        .iter()
-                        .any(|c| c == clean_key || c.starts_with(&prefix))
-                } else if is_task {
-                    t.uid == clean_key
-                        || t.unmapped_properties
-                            .iter()
-                            .any(|p| p.key == "X-CFAIT-HISTORY-OF" && p.value == clean_key)
-                } else {
-                    t.locations
-                        .iter()
-                        .any(|l| l == clean_key || l.starts_with(&prefix))
-                };
-
-                if !matches {
+                if !self.task_is_claimed_by_goal(t, is_tag, is_task, clean_key) {
                     continue;
                 }
 
-                // Precompute descendant time intervals once per task (not per
-                // session). Leaf tasks short-circuit: no descendants means no
-                // cascade overlap is possible. Intervals are sorted and merged
-                // so that interval subtraction doesn't double-subtract
-                // overlapping descendant sessions.
-                let desc_intervals: Vec<(i64, i64)> = if self.children_index.contains_key(&t.uid) {
-                    let now_ts = now.timestamp();
-                    let mut intervals: Vec<(i64, i64)> = self
-                        .get_descendant_uids(&t.uid)
-                        .iter()
-                        .filter_map(|d_uid| self.get_task_ref(d_uid))
-                        .flat_map(|d| {
-                            d.sessions
-                                .iter()
-                                .map(|s| (s.start, s.end))
-                                .chain(d.last_started_at.map(|s| (s, now_ts)))
-                        })
-                        .collect();
-                    intervals.sort_unstable_by_key(|(s, _)| *s);
-                    let mut merged: Vec<(i64, i64)> = Vec::with_capacity(intervals.len());
-                    for (s, e) in intervals {
-                        if let Some(last) = merged.last_mut()
-                            && s <= last.1
-                        {
-                            last.1 = last.1.max(e);
-                            continue;
-                        }
-                        merged.push((s, e));
-                    }
-                    merged
-                } else {
-                    Vec::new()
-                };
-                // Returns seconds in [q_start, q_end) not covered by any
-                // descendant interval. This implements interval subtraction so
-                // that a parent's session counts its independent work time
-                // (e.g. after a subtask is paused but the root keeps running).
-                let remaining_secs = |q_start: i64, q_end: i64| -> i64 {
-                    let mut remaining = (q_end - q_start).max(0);
-                    for (s, e) in &desc_intervals {
-                        let ov_start = (*s).max(q_start);
-                        let ov_end = (*e).min(q_end);
-                        if ov_end > ov_start {
-                            remaining -= ov_end - ov_start;
-                        }
-                    }
-                    remaining.max(0)
-                };
+                let mut sessions: Vec<(i64, i64)> = Vec::new();
+                let mut has_sessions_in_period = false;
 
-                if goal.goal_type == crate::config::GoalType::Count {
-                    let mut task_progress = 0;
+                for session in &t.sessions {
+                    if session.end >= start_ts && session.start < end_ts {
+                        let clip_start = session.start.max(start_ts);
+                        let clip_end = session.end.min(end_ts);
+                        if clip_end > clip_start {
+                            sessions.push((clip_start, clip_end));
+                            has_sessions_in_period = true;
+                        }
+                    }
+                }
+
+                if let Some(start) = t.last_started_at {
+                    let current = now_ts.min(end_ts);
+                    if current > start_ts {
+                        let clip_start = start.max(start_ts);
+                        if current > clip_start {
+                            sessions.push((clip_start, current));
+                            has_sessions_in_period = true;
+                        }
+                    }
+                }
+
+                if t.status == crate::model::TaskStatus::Completed
+                    && let Some(comp) = t.completion_date()
+                    && comp.timestamp() >= start_ts
+                    && comp.timestamp() < end_ts
+                {
+                    let total_tracked = (t.time_spent_seconds / 60) as u32;
+                    let est = t.estimated_duration.unwrap_or(default_dur);
+                    if est > total_tracked {
+                        est_credits.push(est - total_tracked);
+                    }
+                }
+
+                claimed_tasks.push(ClaimedTask {
+                    task: t,
+                    sessions,
+                    has_sessions_in_period,
+                });
+            }
+        }
+
+        match goal.goal_type {
+            crate::config::GoalType::Duration => {
+                // Union-merge all sessions from all claimed tasks. Overlapping
+                // cascade sessions collapse — each second counts once.
+                let mut all_intervals: Vec<(i64, i64)> = claimed_tasks
+                    .iter()
+                    .flat_map(|ct| ct.sessions.iter().copied())
+                    .collect();
+                all_intervals.sort_unstable_by_key(|(s, _)| *s);
+                let mut merged: Vec<(i64, i64)> = Vec::with_capacity(all_intervals.len());
+                for (s, e) in all_intervals {
+                    if let Some(last) = merged.last_mut()
+                        && s <= last.1
+                    {
+                        last.1 = last.1.max(e);
+                        continue;
+                    }
+                    merged.push((s, e));
+                }
+                let mut progress = 0u32;
+                for (s, e) in &merged {
+                    if e > s {
+                        progress += ((e - s) as u32) / 60;
+                    }
+                }
+                for credit in &est_credits {
+                    progress += credit;
+                }
+                progress
+            }
+            crate::config::GoalType::Count => {
+                let mut progress = 0u32;
+                for ct in &claimed_tasks {
+                    let mut task_progress = 0u32;
+
                     if count_sessions {
-                        for session in &t.sessions {
-                            if session.end >= start_ts && session.start < end_ts {
-                                let clip_start = session.start.max(start_ts);
-                                let clip_end = session.end.min(end_ts);
-                                if clip_end > clip_start && remaining_secs(clip_start, clip_end) > 0
-                                {
-                                    task_progress += 1;
-                                }
+                        // Collect descendant intervals for cascade dedup.
+                        let desc_intervals =
+                            self.collect_descendant_intervals(&ct.task.uid, now_ts);
+                        for (s, e) in &ct.sessions {
+                            // Skip a session fully covered by a descendant's
+                            // overlapping session (cascade artifact).
+                            if !session_fully_covered(*s, *e, &desc_intervals) {
+                                task_progress += 1;
                             }
                         }
                     }
-                    if t.status == crate::model::TaskStatus::Completed
-                        && let Some(comp) = t.completion_date()
+
+                    if ct.task.status == crate::model::TaskStatus::Completed
+                        && let Some(comp) = ct.task.completion_date()
                         && comp.timestamp() >= start_ts
                         && comp.timestamp() < end_ts
                         && task_progress == 0
+                        && !ct.has_sessions_in_period
                     {
                         task_progress += 1;
                     }
+
                     progress += task_progress;
-                } else if goal.goal_type == crate::config::GoalType::Duration {
-                    let mut task_time_in_period = 0;
-                    for session in &t.sessions {
-                        if session.end >= start_ts && session.start < end_ts {
-                            let clip_start = session.start.max(start_ts);
-                            let clip_end = session.end.min(end_ts);
-                            if clip_end > clip_start {
-                                task_time_in_period +=
-                                    (remaining_secs(clip_start, clip_end) as u32) / 60;
-                            }
-                        }
-                    }
-                    if let Some(start) = t.last_started_at {
-                        let current_time = now.timestamp().min(end_ts);
-                        if current_time > start_ts {
-                            let clip_start = start.max(start_ts);
-                            if current_time > clip_start {
-                                task_time_in_period +=
-                                    (remaining_secs(clip_start, current_time) as u32) / 60;
-                            }
-                        }
-                    }
-
-                    if t.status == crate::model::TaskStatus::Completed
-                        && let Some(comp) = t.completion_date()
-                        && comp.timestamp() >= start_ts
-                        && comp.timestamp() < end_ts
-                    {
-                        let total_tracked = (t.time_spent_seconds / 60) as u32;
-                        let est = t.estimated_duration.unwrap_or(default_dur);
-
-                        if est > total_tracked {
-                            task_time_in_period += est - total_tracked;
-                        }
-                    }
-
-                    progress += task_time_in_period;
                 }
+                progress
             }
         }
-        progress
+    }
+
+    /// Collect and union-merge all time intervals from a task's descendants.
+    fn collect_descendant_intervals(&self, uid: &str, now_ts: i64) -> Vec<(i64, i64)> {
+        if !self.children_index.contains_key(uid) {
+            return Vec::new();
+        }
+        let mut intervals: Vec<(i64, i64)> = self
+            .get_descendant_uids(uid)
+            .iter()
+            .filter_map(|d_uid| self.get_task_ref(d_uid))
+            .flat_map(|d| {
+                d.sessions
+                    .iter()
+                    .map(|s| (s.start, s.end))
+                    .chain(d.last_started_at.map(|s| (s, now_ts)))
+            })
+            .collect();
+        intervals.sort_unstable_by_key(|(s, _)| *s);
+        let mut merged: Vec<(i64, i64)> = Vec::with_capacity(intervals.len());
+        for (s, e) in intervals {
+            if let Some(last) = merged.last_mut()
+                && s <= last.1
+            {
+                last.1 = last.1.max(e);
+                continue;
+            }
+            merged.push((s, e));
+        }
+        merged
     }
 
     /// Calculates the current progress for a given goal definition.

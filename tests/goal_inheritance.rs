@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Tests for goal progress with cascade interval dedup.
+//! Tests for goal progress with subtree aggregation and cascade dedup.
 //!
-//! Tags are explicitly copied onto subtasks at creation time (via
-//! `inherit_properties` or the GUI pre-populating the input). The user can
-//! remove them. Goal matching is therefore explicit-only — no parent-chain
-//! walk. These tests verify that when both parent and child carry the same
-//! tag, overlapping cascade sessions don't double-count, but independent
-//! parent time (e.g. after pausing a subtask) still counts.
+//! A task's time counts toward a goal if the task or any ancestor carries the
+//! matching tag/location. Sessions from all claimed tasks are union-merged so
+//! overlapping cascade sessions (from auto-starting ancestors) collapse —
+//! each second of work counts exactly once.
 use cfait::config::{Goal, GoalType, Interval, IntervalUnit};
 use cfait::context::AppContext;
 use cfait::context::TestContext;
@@ -43,10 +41,10 @@ fn make_goal(goal_type: GoalType, target: u32) -> Goal {
     }
 }
 
-/// A subtask that does NOT carry the parent's tag explicitly must not count
-/// toward the goal. Removing the inherited tag is a deliberate opt-out.
+/// A subtask without the tag still counts toward the parent's goal via
+/// subtree aggregation. The parent's tag "claims" all untagged descendants.
 #[test]
-fn subtask_without_explicit_tag_does_not_count() {
+fn untagged_subtask_counts_via_parent_tag() {
     let mut store = make_store();
 
     let mut parent = Task::new("Parent #work", &HashMap::new(), None);
@@ -66,40 +64,16 @@ fn subtask_without_explicit_tag_does_not_count() {
 
     let goal = make_goal(GoalType::Duration, 120);
     let progress = store.calculate_goal_progress_for_bounds("#work", &goal, 0, 2_000_000);
-    assert_eq!(progress, 0, "subtask without explicit tag must not count");
+    assert_eq!(
+        progress, 60,
+        "untagged subtask should count via parent's tag (aggregation)"
+    );
 }
 
-/// A subtask that explicitly carries the parent's tag counts toward the goal.
+/// Cascade: parent and child both have overlapping sessions (from
+/// auto-start). Union-merge collapses the overlap — total is 60 min, not 120.
 #[test]
-fn subtask_with_explicit_tag_counts() {
-    let mut store = make_store();
-
-    let mut parent = Task::new("Parent #work", &HashMap::new(), None);
-    parent.uid = "parent".to_string();
-    parent.calendar_href = "cal".to_string();
-    store.add_task(parent);
-
-    let mut child = Task::new("Subtask #work", &HashMap::new(), None);
-    child.uid = "child".to_string();
-    child.calendar_href = "cal".to_string();
-    child.parent_uid = Some("parent".to_string());
-    child.sessions.push(WorkSession {
-        start: 1_000_000,
-        end: 1_000_000 + 3600,
-    });
-    store.add_task(child);
-
-    let goal = make_goal(GoalType::Duration, 120);
-    let progress = store.calculate_goal_progress_for_bounds("#work", &goal, 0, 2_000_000);
-    assert_eq!(progress, 60, "subtask with explicit tag should count");
-}
-
-/// When a subtask's session overlaps with the parent's session (cascade from
-/// `set_status_in_process` starting ancestors), the parent's overlapping
-/// session is interval-subtracted. Only the subtask's time counts for the
-/// overlap; the parent's independent remainder still counts.
-#[test]
-fn cascaded_parent_session_does_not_double_count() {
+fn cascade_overlap_collapsed_by_union_merge() {
     let mut store = make_store();
 
     let mut parent = Task::new("Parent #work", &HashMap::new(), None);
@@ -111,7 +85,7 @@ fn cascaded_parent_session_does_not_double_count() {
     });
     store.add_task(parent);
 
-    let mut child = Task::new("Subtask #work", &HashMap::new(), None);
+    let mut child = Task::new("Subtask", &HashMap::new(), None);
     child.uid = "child".to_string();
     child.calendar_href = "cal".to_string();
     child.parent_uid = Some("parent".to_string());
@@ -123,17 +97,50 @@ fn cascaded_parent_session_does_not_double_count() {
 
     let goal = make_goal(GoalType::Duration, 120);
     let progress = store.calculate_goal_progress_for_bounds("#work", &goal, 0, 2_000_000);
-    // Both carry the tag. Child: 60 min (full, no descendants).
-    // Parent: 60 min - 60 min (child overlap) = 0 min. Total = 60.
     assert_eq!(
         progress, 60,
-        "overlapping parent session subtracted, no double-count"
+        "overlapping cascade sessions must collapse to one"
     );
 }
 
-/// A parent session that does NOT overlap any descendant session still counts.
+/// Staggered pause: child paused at T1, parent paused at T2. Union-merge
+/// produces [start, T2] = 90 min. The gap [T1, T2] counts as independent
+/// parent work.
 #[test]
-fn non_overlapping_parent_session_still_counts() {
+fn staggered_pause_counts_full_span() {
+    let mut store = make_store();
+
+    let mut parent = Task::new("Parent #work", &HashMap::new(), None);
+    parent.uid = "parent".to_string();
+    parent.calendar_href = "cal".to_string();
+    parent.sessions.push(WorkSession {
+        start: 1_000_000,
+        end: 1_000_000 + 5400,
+    });
+    store.add_task(parent);
+
+    let mut child = Task::new("Subtask", &HashMap::new(), None);
+    child.uid = "child".to_string();
+    child.calendar_href = "cal".to_string();
+    child.parent_uid = Some("parent".to_string());
+    child.sessions.push(WorkSession {
+        start: 1_000_000,
+        end: 1_000_000 + 3600,
+    });
+    store.add_task(child);
+
+    let goal = make_goal(GoalType::Duration, 120);
+    let progress = store.calculate_goal_progress_for_bounds("#work", &goal, 0, 2_000_000);
+    // Union of [start, T2] and [start, T1] = [start, T2] = 90 min.
+    assert_eq!(
+        progress, 90,
+        "staggered pause: union spans full parent session"
+    );
+}
+
+/// Non-overlapping sessions from parent and child both count.
+#[test]
+fn non_overlapping_sessions_both_count() {
     let mut store = make_store();
 
     let mut parent = Task::new("Parent #work", &HashMap::new(), None);
@@ -145,7 +152,7 @@ fn non_overlapping_parent_session_still_counts() {
     });
     store.add_task(parent);
 
-    let mut child = Task::new("Subtask #work", &HashMap::new(), None);
+    let mut child = Task::new("Subtask", &HashMap::new(), None);
     child.uid = "child".to_string();
     child.calendar_href = "cal".to_string();
     child.parent_uid = Some("parent".to_string());
@@ -157,17 +164,140 @@ fn non_overlapping_parent_session_still_counts() {
 
     let goal = make_goal(GoalType::Duration, 120);
     let progress = store.calculate_goal_progress_for_bounds("#work", &goal, 0, 2_000_000);
-    // Parent: 30 min (non-overlapping) + child: 60 min = 90 min.
+    // Parent: 30 min + child: 60 min = 90 min.
     assert_eq!(
         progress, 90,
-        "non-overlapping parent session should still count"
+        "non-overlapping sessions from parent and child both count"
     );
 }
 
-/// Count goals: a subtask session counts, but an overlapping parent session
-/// is fully subtracted (0 remaining) and skipped.
+/// Three-level tree: root -> mid -> leaf. Tag on root only. All three have
+/// staggered sessions. Union-merge gives the full span [start, T_root] = 150 min.
 #[test]
-fn count_goal_dedup() {
+fn three_level_tree_union() {
+    let mut store = make_store();
+
+    let mut root = Task::new("Root #work", &HashMap::new(), None);
+    root.uid = "root".to_string();
+    root.calendar_href = "cal".to_string();
+    root.sessions.push(WorkSession {
+        start: 1_000_000,
+        end: 1_000_000 + 9000,
+    });
+    store.add_task(root);
+
+    let mut mid = Task::new("Mid", &HashMap::new(), None);
+    mid.uid = "mid".to_string();
+    mid.calendar_href = "cal".to_string();
+    mid.parent_uid = Some("root".to_string());
+    mid.sessions.push(WorkSession {
+        start: 1_000_000,
+        end: 1_000_000 + 6000,
+    });
+    store.add_task(mid);
+
+    let mut leaf = Task::new("Leaf", &HashMap::new(), None);
+    leaf.uid = "leaf".to_string();
+    leaf.calendar_href = "cal".to_string();
+    leaf.parent_uid = Some("mid".to_string());
+    leaf.sessions.push(WorkSession {
+        start: 1_000_000,
+        end: 1_000_000 + 3600,
+    });
+    store.add_task(leaf);
+
+    let goal = make_goal(GoalType::Duration, 300);
+    let progress = store.calculate_goal_progress_for_bounds("#work", &goal, 0, 2_000_000);
+
+    // All nested inside each other. Union = [start, T_root] = 150 min.
+    assert_eq!(progress, 150, "three-level tree: union gives full span");
+}
+
+/// Three-level tree with non-overlapping sessions across levels.
+/// Root: [0, 50], mid: [50, 100], leaf: [100, 150]. Total = 150 min.
+#[test]
+fn three_level_tree_non_overlapping() {
+    let mut store = make_store();
+
+    let mut root = Task::new("Root #work", &HashMap::new(), None);
+    root.uid = "root".to_string();
+    root.calendar_href = "cal".to_string();
+    root.sessions.push(WorkSession {
+        start: 1_000_000,
+        end: 1_000_000 + 3000,
+    });
+    store.add_task(root);
+
+    let mut mid = Task::new("Mid", &HashMap::new(), None);
+    mid.uid = "mid".to_string();
+    mid.calendar_href = "cal".to_string();
+    mid.parent_uid = Some("root".to_string());
+    mid.sessions.push(WorkSession {
+        start: 1_000_000 + 3000,
+        end: 1_000_000 + 6000,
+    });
+    store.add_task(mid);
+
+    let mut leaf = Task::new("Leaf", &HashMap::new(), None);
+    leaf.uid = "leaf".to_string();
+    leaf.calendar_href = "cal".to_string();
+    leaf.parent_uid = Some("mid".to_string());
+    leaf.sessions.push(WorkSession {
+        start: 1_000_000 + 6000,
+        end: 1_000_000 + 9000,
+    });
+    store.add_task(leaf);
+
+    let goal = make_goal(GoalType::Duration, 300);
+    let progress = store.calculate_goal_progress_for_bounds("#work", &goal, 0, 2_000_000);
+
+    // Three non-overlapping sessions: 50 + 50 + 50 = 150 min.
+    assert_eq!(
+        progress, 150,
+        "three-level tree: non-overlapping sessions sum up"
+    );
+}
+
+/// A task outside the tagged subtree does NOT count.
+#[test]
+fn unrelated_task_does_not_count() {
+    let mut store = make_store();
+
+    let mut parent = Task::new("Parent #work", &HashMap::new(), None);
+    parent.uid = "parent".to_string();
+    parent.calendar_href = "cal".to_string();
+    store.add_task(parent);
+
+    let mut child = Task::new("Subtask", &HashMap::new(), None);
+    child.uid = "child".to_string();
+    child.calendar_href = "cal".to_string();
+    child.parent_uid = Some("parent".to_string());
+    child.sessions.push(WorkSession {
+        start: 1_000_000,
+        end: 1_000_000 + 3600,
+    });
+    store.add_task(child);
+
+    // Unrelated task with no tag and no tagged ancestor.
+    let mut other = Task::new("Other", &HashMap::new(), None);
+    other.uid = "other".to_string();
+    other.calendar_href = "cal".to_string();
+    other.sessions.push(WorkSession {
+        start: 1_000_000,
+        end: 1_000_000 + 3600,
+    });
+    store.add_task(other);
+
+    let goal = make_goal(GoalType::Duration, 120);
+    let progress = store.calculate_goal_progress_for_bounds("#work", &goal, 0, 2_000_000);
+    assert_eq!(progress, 60, "unrelated task without tag must not count");
+}
+
+/// Count goals: per-task session counting with cascade dedup. A parent's
+/// session fully covered by a descendant's overlapping session is skipped.
+/// Non-overlapping child sessions still count.
+#[test]
+fn count_goal_cascade_and_completion() {
     let mut store = make_store_with_session_counting();
 
     let mut parent = Task::new("Parent #work", &HashMap::new(), None);
@@ -179,7 +309,7 @@ fn count_goal_dedup() {
     });
     store.add_task(parent);
 
-    let mut child = Task::new("Subtask #work", &HashMap::new(), None);
+    let mut child = Task::new("Subtask", &HashMap::new(), None);
     child.uid = "child".to_string();
     child.calendar_href = "cal".to_string();
     child.parent_uid = Some("parent".to_string());
@@ -196,35 +326,28 @@ fn count_goal_dedup() {
 
     let goal = make_goal(GoalType::Count, 5);
     let progress = store.calculate_goal_progress_for_bounds("#work", &goal, 0, 3_000_000);
-    // Child has 2 sessions (both count). Parent's 1 session overlaps child's
-    // first fully (0 remaining) and is skipped. Total = 2.
+    // Parent: 1 session, fully covered by child's overlap → skipped (0).
+    // Child: 2 sessions, no descendants → counts 2.
     assert_eq!(
         progress, 2,
-        "overlapping parent session skipped, child sessions count"
+        "count: parent cascade skipped, child sessions count"
     );
 }
 
-/// Staggered pause: leaf paused at T1, root paused later at T2. Both carry
-/// the tag. The leaf's session counts in full; the root's session is
-/// interval-subtracted by the leaf's overlap, so the [T1, T2] gap counts as
-/// independent root work.
+/// Task-specific goal: a goal on a task claims its descendants' time too.
 #[test]
-fn staggered_pause_counts_root_gap() {
+fn task_specific_goal_aggregates_descendants() {
     let mut store = make_store();
 
-    let mut parent = Task::new("Parent #work", &HashMap::new(), None);
-    parent.uid = "parent".to_string();
+    let mut parent = Task::new("Parent", &HashMap::new(), None);
+    parent.uid = "target".to_string();
     parent.calendar_href = "cal".to_string();
-    parent.sessions.push(WorkSession {
-        start: 1_000_000,
-        end: 1_000_000 + 5400,
-    });
     store.add_task(parent);
 
-    let mut child = Task::new("Subtask #work", &HashMap::new(), None);
+    let mut child = Task::new("Subtask", &HashMap::new(), None);
     child.uid = "child".to_string();
     child.calendar_href = "cal".to_string();
-    child.parent_uid = Some("parent".to_string());
+    child.parent_uid = Some("target".to_string());
     child.sessions.push(WorkSession {
         start: 1_000_000,
         end: 1_000_000 + 3600,
@@ -232,104 +355,9 @@ fn staggered_pause_counts_root_gap() {
     store.add_task(child);
 
     let goal = make_goal(GoalType::Duration, 120);
-    let progress = store.calculate_goal_progress_for_bounds("#work", &goal, 0, 2_000_000);
-    // Child: 60 min (full). Parent: 90 min - 60 min overlap = 30 min. Total = 90.
+    let progress = store.calculate_goal_progress_for_bounds("task:target", &goal, 0, 2_000_000);
     assert_eq!(
-        progress, 90,
-        "staggered pause: leaf counts fully, root gap counts as independent work"
-    );
-}
-
-/// Three-level tree: root -> mid -> leaf. All three carry the tag explicitly.
-/// Each level has a staggered session. Interval subtraction counts every
-/// second exactly once.
-#[test]
-fn three_level_tree_staggered_sessions() {
-    let mut store = make_store();
-
-    let mut root = Task::new("Root #work", &HashMap::new(), None);
-    root.uid = "root".to_string();
-    root.calendar_href = "cal".to_string();
-    root.sessions.push(WorkSession {
-        start: 1_000_000,
-        end: 1_000_000 + 9000,
-    });
-    store.add_task(root);
-
-    let mut mid = Task::new("Mid #work", &HashMap::new(), None);
-    mid.uid = "mid".to_string();
-    mid.calendar_href = "cal".to_string();
-    mid.parent_uid = Some("root".to_string());
-    mid.sessions.push(WorkSession {
-        start: 1_000_000,
-        end: 1_000_000 + 6000,
-    });
-    store.add_task(mid);
-
-    let mut leaf = Task::new("Leaf #work", &HashMap::new(), None);
-    leaf.uid = "leaf".to_string();
-    leaf.calendar_href = "cal".to_string();
-    leaf.parent_uid = Some("mid".to_string());
-    leaf.sessions.push(WorkSession {
-        start: 1_000_000,
-        end: 1_000_000 + 3600,
-    });
-    store.add_task(leaf);
-
-    let goal = make_goal(GoalType::Duration, 300);
-    let progress = store.calculate_goal_progress_for_bounds("#work", &goal, 0, 2_000_000);
-
-    // Leaf: 60 min (no descendants).
-    // Mid: 100 min - 60 min (leaf overlap) = 40 min.
-    // Root: 150 min - 100 min (merged leaf+mid overlap) = 50 min.
-    // Total = 150 min.
-    assert_eq!(
-        progress, 150,
-        "three-level tree: each second counted exactly once"
-    );
-}
-
-/// Three-level tree where only mid and leaf carry the tag. Root does NOT
-/// carry it, so root is excluded despite being an ancestor.
-#[test]
-fn three_level_tree_tag_on_mid_only() {
-    let mut store = make_store();
-
-    let mut root = Task::new("Root", &HashMap::new(), None);
-    root.uid = "root".to_string();
-    root.calendar_href = "cal".to_string();
-    root.sessions.push(WorkSession {
-        start: 1_000_000,
-        end: 1_000_000 + 9000,
-    });
-    store.add_task(root);
-
-    let mut mid = Task::new("Mid #work", &HashMap::new(), None);
-    mid.uid = "mid".to_string();
-    mid.calendar_href = "cal".to_string();
-    mid.parent_uid = Some("root".to_string());
-    mid.sessions.push(WorkSession {
-        start: 1_000_000,
-        end: 1_000_000 + 6000,
-    });
-    store.add_task(mid);
-
-    let mut leaf = Task::new("Leaf #work", &HashMap::new(), None);
-    leaf.uid = "leaf".to_string();
-    leaf.calendar_href = "cal".to_string();
-    leaf.parent_uid = Some("mid".to_string());
-    leaf.sessions.push(WorkSession {
-        start: 1_000_000,
-        end: 1_000_000 + 3600,
-    });
-    store.add_task(leaf);
-
-    let goal = make_goal(GoalType::Duration, 300);
-    let progress = store.calculate_goal_progress_for_bounds("#work", &goal, 0, 2_000_000);
-
-    // Root excluded (no tag). Leaf: 60 min. Mid: 100 - 60 = 40 min. Total = 100.
-    assert_eq!(
-        progress, 100,
-        "tag on mid only: root excluded, mid+leaf counted once"
+        progress, 60,
+        "task-specific goal should aggregate descendant time"
     );
 }
