@@ -42,7 +42,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
-import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -206,10 +205,6 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
                                     appWidgetId
                                 )
                                 setResult(RESULT_OK, resultValue)
-
-                                CoroutineScope(Dispatchers.Default).launch {
-                                    TaskListWidget().updateAll(this@TaskListWidgetConfigActivity)
-                                }
 
                                 finish()
                             },

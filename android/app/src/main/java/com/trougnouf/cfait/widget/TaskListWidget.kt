@@ -85,7 +85,7 @@ class TaskListWidget : GlanceAppWidget() {
             null
         }
 
-        val textColor = if (bgColor and 0xFF000000.toInt() shr 24 > 0x80) {
+        val textColor = if ((bgColor ushr 24) > 0x80) {
             android.graphics.Color.BLACK
         } else {
             android.graphics.Color.WHITE
