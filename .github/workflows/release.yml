@@ -176,6 +176,21 @@ jobs:
         with:
           name: arch-asset
 
+      - name: Sign Release Artifacts
+        env:
+          GPG_SIGNING_SUBKEY: ${{ secrets.GPG_SIGNING_SUBKEY }}
+          GPG_KEY_FINGERPRINT: ${{ secrets.GPG_KEY_FINGERPRINT }}
+        run: |
+          echo "$GPG_SIGNING_SUBKEY" | base64 --decode | gpg --import --batch --pinentry-mode loopback
+          for file in cfait-linux-${{ github.ref_name }}.tar.gz *.deb cfait-windows-${{ github.ref_name }}.zip PKGBUILD-github-release; do
+            if [ -f "$file" ]; then
+              echo "Signing $file..."
+              gpg --batch --yes --pinentry-mode loopback \
+                --local-user "$GPG_KEY_FINGERPRINT" \
+                --detach-sign --armor "$file"
+            fi
+          done
+
       - name: Upload Release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
@@ -183,6 +198,10 @@ jobs:
           body_path: CHANGELOG_RELEASE.md
           files: |
             cfait-linux-${{ github.ref_name }}.tar.gz
+            cfait-linux-${{ github.ref_name }}.tar.gz.sig
             *.deb
+            *.deb.sig
             cfait-windows-${{ github.ref_name }}.zip
+            cfait-windows-${{ github.ref_name }}.zip.sig
             PKGBUILD-github-release
+            PKGBUILD-github-release.sig

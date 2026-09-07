@@ -55,6 +55,10 @@ We offer both **Stable** and **Rolling** releases. We highly encourage users to 
 * **🍎 MacOS:** Download pre-compiled binaries provided by Martin Stut on https://static.stut.de/cfait-macos/
 * **⚙️ Rust (Cargo):** `cargo install cfait` (TUI) or `cargo install cfait --features gui --bin cfait-gui` (GUI).
 
+### 🔐 Verifying release artifacts
+
+Releases are signed with OpenPGP key `7745 6F7B 3D26 A53C D5ED F0BC 8C37 73BC C31F 2452` (Benoit Brummer). Retrieve it and verify with `gpg --keyserver keys.openpgp.org --recv-keys 77456F7B3D26A53CD5EDF0BC8C3773BCC31F2452`, then `gpg --verify <file>.sig <file>`.
+
 ### ☁️ CalDAV providers
 
 You can use the default `Local` collection entirely offline. But if you want to sync, Cfait works with standard CalDAV servers. We recommend:
