@@ -51,6 +51,7 @@ pub trait AppContext: Send + Sync + std::fmt::Debug {
 #[derive(Clone, Debug)]
 pub struct StandardContext {
     override_root: Option<PathBuf>,
+    data_dir_override: Option<PathBuf>,
 }
 
 impl StandardContext {
@@ -58,8 +59,52 @@ impl StandardContext {
     ///
     /// When `override_root` is `Some(path)`, all directories will be created
     /// under that root using `data`, `config`, and `cache` subdirectories.
+    ///
+    /// When `override_root` is `None`, the config file at the default config
+    /// directory is pre-read for a `data_dir` key. If present, data files are
+    /// stored there instead of the XDG default. This lets users relocate only
+    /// the data directory (e.g. into a sync folder) without moving config or
+    /// cache.
     pub fn new(override_root: Option<PathBuf>) -> Self {
-        Self { override_root }
+        let data_dir_override = if override_root.is_some() {
+            None
+        } else {
+            Self::read_data_dir_from_config()
+        };
+        Self {
+            override_root,
+            data_dir_override,
+        }
+    }
+
+    fn read_data_dir_from_config() -> Option<PathBuf> {
+        let proj = Self::get_proj_dirs()?;
+        let config_path = proj.config_dir().join("config.toml");
+        if !config_path.exists() {
+            return None;
+        }
+        let contents = std::fs::read_to_string(&config_path).ok()?;
+        #[derive(serde::Deserialize)]
+        struct DataDirOnly {
+            #[serde(default)]
+            data_dir: Option<String>,
+        }
+        let parsed: DataDirOnly = toml::from_str(&contents).ok()?;
+        parsed.data_dir.map(|s| Self::expand_tilde(&s))
+    }
+
+    fn expand_tilde(path: &str) -> PathBuf {
+        if let Some(rest) = path.strip_prefix("~/")
+            && let Some(home) = std::env::var_os("HOME")
+        {
+            return PathBuf::from(home).join(rest);
+        }
+        if path == "~"
+            && let Some(home) = std::env::var_os("HOME")
+        {
+            return PathBuf::from(home);
+        }
+        PathBuf::from(path)
     }
 
     fn ensure_exists(path: PathBuf) -> Result<PathBuf> {
@@ -81,6 +126,9 @@ impl AppContext for StandardContext {
     fn get_data_dir(&self) -> Result<PathBuf> {
         if let Some(root) = &self.override_root {
             return Self::ensure_exists(root.join("data"));
+        }
+        if let Some(dir) = &self.data_dir_override {
+            return Self::ensure_exists(dir.clone());
         }
         let proj = Self::get_proj_dirs().ok_or_else(|| anyhow::anyhow!("No home directory"))?;
         Self::ensure_exists(proj.data_dir().to_path_buf())

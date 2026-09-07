@@ -710,6 +710,14 @@ pub struct Config {
     /// `CURRENT_CONFIG_VERSION` and add a migration step in `Config::load()`.
     /// Otherwise, existing users' saved configs will override your new defaults.
     pub config_version: u32,
+
+    /// Directory for local data files (journal, local calendars, locks).
+    /// When set, overrides the XDG default (`~/.local/share/cfait`). Useful for
+    /// placing data inside a sync folder (e.g. syncthing). Config and cache
+    /// directories are not affected.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data_dir: Option<String>,
+
     pub url: String,
     pub username: String,
 
@@ -906,6 +914,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             config_version: CURRENT_CONFIG_VERSION,
+            data_dir: None,
             url: String::new(),
             username: String::new(),
             password: String::new(),
@@ -1314,16 +1323,17 @@ impl Config {
         let mut out = String::with_capacity(raw_toml.len() + 2048);
 
         // Header Comment
-        out.push_str("# Cfait Configuration\n\n");
-
-        // Connection Header (Assumed to be at top based on struct order)
-        out.push_str("# --- Connection Settings ---\n");
+        out.push_str("# Cfait Configuration\n");
 
         for line in raw_toml.lines() {
             let trimmed = line.trim();
 
             // -- Section Headers --
-            if trimmed.starts_with("default_calendar =") {
+            if trimmed.starts_with("data_dir =") {
+                out.push_str("\n# --- Storage ---\n");
+            } else if trimmed.starts_with("url =") {
+                out.push_str("\n# --- Connection Settings ---\n");
+            } else if trimmed.starts_with("default_calendar =") {
                 out.push_str("\n# --- UI & Behavior ---\n");
             } else if trimmed.starts_with("sort_cutoff_days =") {
                 out.push_str("\n# --- Sorting & Ranking Logic ---\n");
@@ -1348,7 +1358,12 @@ impl Config {
 
             // -- Inline or Block Comments for specific keys --
 
-            if trimmed.starts_with("url =") {
+            if trimmed.starts_with("data_dir =") {
+                out.push_str(line);
+                out.push_str(
+                    " # String (Optional): Directory for local data files. Overrides the XDG default (~/.local/share/cfait). Tilde (~) is expanded.",
+                );
+            } else if trimmed.starts_with("url =") {
                 out.push_str("# URL: The full address to your CalDAV server endpoint.\n");
                 out.push_str(line);
             } else if trimmed.starts_with("tls_client_cert_path =") {
