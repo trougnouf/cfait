@@ -1,0 +1,23 @@
+<services>
+  <service name="obs_scm" mode="manual">
+    <param name="url">https://git.disroot.org/trougnouf/cfait.git</param>
+    <param name="scm">git</param>
+    <param name="revision">v1.1.6</param>
+    <param name="versionformat">@PARENT_TAG@~@TAG_OFFSET@</param>
+    <param name="versionrewrite-pattern">v(\d+\.\d+\.\d+)</param>
+    <param name="versionrewrite-replacement">\1</param>
+    <param name="changesgenerate">enable</param>
+    <param name="changesauthor">trougnouf@disroot.org</param>
+  </service>
+  <service name="tar" mode="manual" />
+  <service name="recompress" mode="manual">
+    <param name="file">*.tar</param>
+    <param name="compression">zst</param>
+  </service>
+  <service name="set_version" mode="manual" />
+  <service name="cargo_vendor" mode="manual">
+    <param name="src">cfait-*.tar.zst</param>
+    <param name="compression">zst</param>
+    <param name="update">true</param>
+  </service>
+</services>
