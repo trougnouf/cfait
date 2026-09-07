@@ -140,9 +140,7 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
                                 )
                                 setResult(RESULT_OK, resultValue)
 
-                                // Trigger an immediate snapshot + widget update
-                                val app = applicationContext as com.trougnouf.cfait.CfaitApplication
-                                WidgetSnapshotStore.refresh(this@TaskListWidgetConfigActivity, app.api)
+                                // Trigger an immediate widget update
                                 CoroutineScope(Dispatchers.Default).launch {
                                     TaskListWidget().updateAll(this@TaskListWidgetConfigActivity)
                                 }

@@ -11,7 +11,6 @@ import com.trougnouf.cfait.CfaitApplication
 import com.trougnouf.cfait.util.AlarmScheduler
 import com.trougnouf.cfait.util.NotificationHelper
 import com.trougnouf.cfait.widget.TaskListWidget
-import com.trougnouf.cfait.widget.WidgetSnapshotStore
 import kotlinx.coroutines.CancellationException
 
 /**
@@ -41,8 +40,7 @@ class PeriodicSyncWorker(
             AlarmScheduler.cleanupObsoleteNotifications(context, api)
             NotificationHelper.updateOngoingNotifications(context, api)
 
-            // Refresh widget snapshot and update widgets
-            WidgetSnapshotStore.refresh(context, api)
+            // Update widgets with fresh data after sync
             TaskListWidget().updateAll(context)
 
             // Notify UI to refresh if open

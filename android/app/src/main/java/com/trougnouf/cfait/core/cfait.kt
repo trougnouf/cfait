@@ -991,8 +991,6 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_update_task_smart(): Int
 
-    external fun uniffi_cfait_checksum_method_cfaitmobile_write_widget_snapshot(): Int
-
     external fun uniffi_cfait_checksum_method_cfaitmobile_yank_task(): Int
 
     external fun uniffi_cfait_checksum_constructor_cfaitmobile_new(): Int
@@ -1538,17 +1536,6 @@ internal object UniffiLib {
         `smartInput`: RustBuffer.ByValue,
     ): Long
 
-    external fun uniffi_cfait_fn_method_cfaitmobile_write_widget_snapshot(
-        `ptr`: Long,
-        `searchQuery`: RustBuffer.ByValue,
-        `filterTags`: RustBuffer.ByValue,
-        `filterLocations`: RustBuffer.ByValue,
-        `matchAllCategories`: Byte,
-        `maxTasks`: Int,
-        `path`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
-
     external fun uniffi_cfait_fn_method_cfaitmobile_yank_task(
         `ptr`: Long,
         `uid`: RustBuffer.ByValue,
@@ -2058,9 +2045,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_update_task_smart() != 43938) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_write_widget_snapshot() != 27438) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_yank_task() != 29486) {
@@ -2918,23 +2902,6 @@ public interface CfaitMobileInterface {
     suspend fun `updateTaskSmart`(
         `uid`: kotlin.String,
         `smartInput`: kotlin.String,
-    )
-
-    /**
-     * Write a compact JSON snapshot of the current task list to `path`.
-     *
-     * Reuses the same ranking/filter pipeline as `get_view_tasks` so widgets
-     * show tasks in the same order as the app. The file is written
-     * atomically (temp-then-rename) so widget providers never read a
-     * partial file during a cold render.
-     */
-    fun `writeWidgetSnapshot`(
-        `searchQuery`: kotlin.String,
-        `filterTags`: List<kotlin.String>,
-        `filterLocations`: List<kotlin.String>,
-        `matchAllCategories`: kotlin.Boolean,
-        `maxTasks`: kotlin.UInt,
-        `path`: kotlin.String,
     )
 
     suspend fun `yankTask`(`uid`: kotlin.String)
@@ -4721,37 +4688,6 @@ open class CfaitMobile :
         // Error FFI converter
         MobileException.ErrorHandler,
     )
-
-    /**
-     * Write a compact JSON snapshot of the current task list to `path`.
-     *
-     * Reuses the same ranking/filter pipeline as `get_view_tasks` so widgets
-     * show tasks in the same order as the app. The file is written
-     * atomically (temp-then-rename) so widget providers never read a
-     * partial file during a cold render.
-     */
-    @Throws(MobileException::class)
-    override fun `writeWidgetSnapshot`(
-        `searchQuery`: kotlin.String,
-        `filterTags`: List<kotlin.String>,
-        `filterLocations`: List<kotlin.String>,
-        `matchAllCategories`: kotlin.Boolean,
-        `maxTasks`: kotlin.UInt,
-        `path`: kotlin.String,
-    ) = callWithHandle {
-        uniffiRustCallWithError(MobileException) { _status ->
-            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_write_widget_snapshot(
-                it,
-                FfiConverterString.lower(`searchQuery`),
-                FfiConverterSequenceString.lower(`filterTags`),
-                FfiConverterSequenceString.lower(`filterLocations`),
-                FfiConverterBoolean.lower(`matchAllCategories`),
-                FfiConverterUInt.lower(`maxTasks`),
-                FfiConverterString.lower(`path`),
-                _status,
-            )
-        }
-    }
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")

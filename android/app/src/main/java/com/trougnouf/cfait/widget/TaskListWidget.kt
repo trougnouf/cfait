@@ -25,7 +25,9 @@ import androidx.glance.layout.width
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
+import com.trougnouf.cfait.CfaitApplication
 import com.trougnouf.cfait.MainActivity
+import com.trougnouf.cfait.core.MobileFilterOptions
 
 /** Intent extra key for deep-linking to a specific task from the widget. */
 private val FocusTaskUidKey = ActionParameters.Key<String>("focus_task_uid")
@@ -33,7 +35,37 @@ private val FocusTaskUidKey = ActionParameters.Key<String>("focus_task_uid")
 class TaskListWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val snapshot = WidgetSnapshotStore.read(context)
+        val app = context.applicationContext as CfaitApplication
+        val api = app.api
+
+        val prefs = context.getSharedPreferences("cfait_widget_prefs", Context.MODE_PRIVATE)
+        val searchQuery = prefs.getString("search_query", "is:ready") ?: "is:ready"
+        val maxTasks = prefs.getInt("max_tasks", 8)
+        val hideChecked = prefs.getBoolean("hide_checked", false)
+        val effectiveQuery = if (hideChecked && !searchQuery.contains("is:done")) {
+            "$searchQuery -is:done"
+        } else {
+            searchQuery
+        }
+
+        val viewData = try {
+            api.getViewTasks(
+                MobileFilterOptions(
+                    filterTags = emptyList(),
+                    filterLocations = emptyList(),
+                    searchQuery = effectiveQuery,
+                    expandedGroups = emptyList(),
+                    matchAllCategories = false,
+                    expandedTags = emptyList(),
+                    expandedLocations = emptyList(),
+                    offset = 0u,
+                    limit = maxTasks.toUInt(),
+                )
+            )
+        } catch (e: Exception) {
+            android.util.Log.w("CfaitWidget", "Failed to load widget data", e)
+            null
+        }
 
         provideContent {
             GlanceTheme(colors = WidgetColorScheme) {
@@ -55,32 +87,36 @@ class TaskListWidget : GlanceAppWidget() {
                             )
                         )
                         Spacer(modifier = GlanceModifier.width(8.dp))
-                        val counts = snapshot
-                        if (counts != null && counts.overdueCount > 0) {
-                            Text(
-                                text = "${counts.overdueCount} overdue",
-                                style = TextStyle(fontSize = 13.sp)
-                            )
-                            Spacer(modifier = GlanceModifier.width(8.dp))
-                        }
-                        if (counts != null && counts.ongoingCount > 0) {
-                            Text(
-                                text = "${counts.ongoingCount} active",
-                                style = TextStyle(fontSize = 13.sp)
-                            )
+                        if (viewData != null) {
+                            val tasks = viewData.tasks
+                            val overdue = tasks.count { it.isDueToday && !it.isDone }
+                            val ongoing = tasks.count { it.isPaused }
+                            if (overdue > 0) {
+                                Text(
+                                    text = "$overdue due today",
+                                    style = TextStyle(fontSize = 13.sp)
+                                )
+                                Spacer(modifier = GlanceModifier.width(8.dp))
+                            }
+                            if (ongoing > 0) {
+                                Text(
+                                    text = "$ongoing active",
+                                    style = TextStyle(fontSize = 13.sp)
+                                )
+                            }
                         }
                     }
 
                     Spacer(modifier = GlanceModifier.height(8.dp))
 
-                    if (snapshot == null || snapshot.tasks.isEmpty()) {
+                    if (viewData == null || viewData.tasks.isEmpty()) {
                         Text(
-                            text = "No tasks",
+                            text = if (viewData == null) "Loading…" else "No tasks",
                             modifier = GlanceModifier.padding(top = 4.dp),
                             style = TextStyle(fontSize = 14.sp)
                         )
                     } else {
-                        snapshot.tasks.take(8).forEach { task ->
+                        viewData.tasks.take(maxTasks).forEach { task ->
                             Row(
                                 modifier = GlanceModifier
                                     .fillMaxWidth()
@@ -91,7 +127,6 @@ class TaskListWidget : GlanceAppWidget() {
                                     .padding(vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // Checkbox indicator
                                 Text(
                                     text = if (task.isDone) "[x]" else "[ ]",
                                     style = TextStyle(fontSize = 14.sp)
