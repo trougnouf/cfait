@@ -72,6 +72,19 @@
             </intent-filter>
         </receiver>
 
+        <!-- Quick Settings tile: one-tap launcher accessible from the lock screen -->
+        <service
+            android:name=".tile.CfaitTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_launcher_foreground"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+        >
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
         <!-- FileProvider for secure file sharing -->
         <provider
             android:name="androidx.core.content.FileProvider"
