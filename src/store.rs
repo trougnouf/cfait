@@ -2544,12 +2544,66 @@ impl TaskStore {
                     continue;
                 }
 
+                // Precompute descendant time intervals once per task (not per
+                // session). Leaf tasks short-circuit: no descendants means no
+                // cascade overlap is possible. Intervals are sorted and merged
+                // so that interval subtraction doesn't double-subtract
+                // overlapping descendant sessions.
+                let desc_intervals: Vec<(i64, i64)> = if self.children_index.contains_key(&t.uid) {
+                    let now_ts = now.timestamp();
+                    let mut intervals: Vec<(i64, i64)> = self
+                        .get_descendant_uids(&t.uid)
+                        .iter()
+                        .filter_map(|d_uid| self.get_task_ref(d_uid))
+                        .flat_map(|d| {
+                            d.sessions
+                                .iter()
+                                .map(|s| (s.start, s.end))
+                                .chain(d.last_started_at.map(|s| (s, now_ts)))
+                        })
+                        .collect();
+                    intervals.sort_unstable_by_key(|(s, _)| *s);
+                    let mut merged: Vec<(i64, i64)> = Vec::with_capacity(intervals.len());
+                    for (s, e) in intervals {
+                        if let Some(last) = merged.last_mut()
+                            && s <= last.1
+                        {
+                            last.1 = last.1.max(e);
+                            continue;
+                        }
+                        merged.push((s, e));
+                    }
+                    merged
+                } else {
+                    Vec::new()
+                };
+                // Returns seconds in [q_start, q_end) not covered by any
+                // descendant interval. This implements interval subtraction so
+                // that a parent's session counts its independent work time
+                // (e.g. after a subtask is paused but the root keeps running).
+                let remaining_secs = |q_start: i64, q_end: i64| -> i64 {
+                    let mut remaining = (q_end - q_start).max(0);
+                    for (s, e) in &desc_intervals {
+                        let ov_start = (*s).max(q_start);
+                        let ov_end = (*e).min(q_end);
+                        if ov_end > ov_start {
+                            remaining -= ov_end - ov_start;
+                        }
+                    }
+                    remaining.max(0)
+                };
+
                 if goal.goal_type == crate::config::GoalType::Count {
                     let mut task_progress = 0;
                     if count_sessions {
                         for session in &t.sessions {
                             if session.end >= start_ts && session.start < end_ts {
-                                task_progress += 1;
+                                let clip_start = session.start.max(start_ts);
+                                let clip_end = session.end.min(end_ts);
+                                if clip_end > clip_start && remaining_secs(clip_start, clip_end) > 0
+                                {
+                                    task_progress += 1;
+                                }
                             }
                         }
                     }
@@ -2566,19 +2620,21 @@ impl TaskStore {
                     let mut task_time_in_period = 0;
                     for session in &t.sessions {
                         if session.end >= start_ts && session.start < end_ts {
-                            let overlap_start = session.start.max(start_ts);
-                            let overlap_end = session.end.min(end_ts);
-                            if overlap_end > overlap_start {
-                                task_time_in_period += (overlap_end - overlap_start) as u32 / 60;
+                            let clip_start = session.start.max(start_ts);
+                            let clip_end = session.end.min(end_ts);
+                            if clip_end > clip_start {
+                                task_time_in_period +=
+                                    (remaining_secs(clip_start, clip_end) as u32) / 60;
                             }
                         }
                     }
                     if let Some(start) = t.last_started_at {
                         let current_time = now.timestamp().min(end_ts);
                         if current_time > start_ts {
-                            let overlap_start = start.max(start_ts);
-                            if current_time > overlap_start {
-                                task_time_in_period += (current_time - overlap_start) as u32 / 60;
+                            let clip_start = start.max(start_ts);
+                            if current_time > clip_start {
+                                task_time_in_period +=
+                                    (remaining_secs(clip_start, current_time) as u32) / 60;
                             }
                         }
                     }
