@@ -7,6 +7,8 @@ import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
+import androidx.glance.action.ActionParameters
+import androidx.glance.action.actionParametersOf
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
@@ -24,6 +26,9 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import com.trougnouf.cfait.MainActivity
+
+/** Intent extra key for deep-linking to a specific task from the widget. */
+private val FocusTaskUidKey = ActionParameters.Key<String>("focus_task_uid")
 
 class TaskListWidget : GlanceAppWidget() {
 
@@ -80,7 +85,8 @@ class TaskListWidget : GlanceAppWidget() {
                                 modifier = GlanceModifier
                                     .fillMaxWidth()
                                     .clickable(actionStartActivity(
-                                        MainActivity::class.java
+                                        MainActivity::class.java,
+                                        actionParametersOf(FocusTaskUidKey to task.uid)
                                     ))
                                     .padding(vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
