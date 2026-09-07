@@ -39,7 +39,7 @@ Tasks map strictly to iCalendar `VTODO` components, while daily notes map to `VJ
     *   *Fuzzy:* Month/Year precision (stored as All-Day with `X-CFAIT-FUZZY-DUE`/`START` properties).
 *   **Hierarchy:** `RELATED-TO` establishes the `parent_uid`.
 *   **Dependencies:** `RELATED-TO;RELTYPE=DEPENDS-ON` establishes blocking relationships. `RELTYPE=SIBLING` establishes related tasks.
-*   **Time Tracking:** Logged via `X-TIME-SPENT` (total seconds), `X-LAST-START` (unix timestamp), and `X-CFAIT-SESSION` (WorkSessions holding Unix start/end timestamps).
+*   **Time Tracking:** Logged via `X-TIME-SPENT` (total seconds), `X-LAST-START` (unix timestamp), and `X-CFAIT-SESSION` (WorkSessions holding Unix start/end timestamps). The duration badge shown in task lists displays the aggregated time across the task's entire subtree (union-merged to avoid double-counting cascade overlaps), not just the task's own tracked time. Detail views and notifications show per-task time.
 *   **System Entities:** Local trash uses `local://trash`. Items here are soft-deleted and pruned based on `trash_retention_days`.
 
 ### 1.3. System Integrations

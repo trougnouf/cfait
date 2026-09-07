@@ -2754,6 +2754,61 @@ impl TaskStore {
         merged
     }
 
+    /// Returns the total tracked time (in seconds) for a task and all its
+    /// descendants, union-merged so overlapping cascade sessions collapse.
+    /// Includes a running timer on any task in the subtree. This is the
+    /// aggregated time shown in the duration badge — a parent displays the
+    /// total time worked across its entire subtree.
+    pub fn get_aggregated_time_seconds(&self, uid: &str) -> u64 {
+        let now_ts = chrono::Utc::now().timestamp();
+        let mut intervals: Vec<(i64, i64)> = Vec::new();
+
+        // This task's own sessions and running timer.
+        if let Some(t) = self.get_task_ref(uid) {
+            for s in &t.sessions {
+                intervals.push((s.start, s.end));
+            }
+            if let Some(start) = t.last_started_at {
+                intervals.push((start, now_ts));
+            }
+        }
+
+        // Descendants' sessions and running timers.
+        for d_uid in self.get_descendant_uids(uid) {
+            if let Some(d) = self.get_task_ref(&d_uid) {
+                for s in &d.sessions {
+                    intervals.push((s.start, s.end));
+                }
+                if let Some(start) = d.last_started_at {
+                    intervals.push((start, now_ts));
+                }
+            }
+        }
+
+        if intervals.is_empty() {
+            return 0;
+        }
+
+        intervals.sort_unstable_by_key(|(s, _)| *s);
+        let mut total: i64 = 0;
+        let mut merged: Vec<(i64, i64)> = Vec::with_capacity(intervals.len());
+        for (s, e) in intervals {
+            if let Some(last) = merged.last_mut()
+                && s <= last.1
+            {
+                last.1 = last.1.max(e);
+                continue;
+            }
+            merged.push((s, e));
+        }
+        for (s, e) in &merged {
+            if e > s {
+                total += e - s;
+            }
+        }
+        total.max(0) as u64
+    }
+
     /// Calculates the current progress for a given goal definition.
     pub fn calculate_goal_progress(&self, key: &str, goal: &crate::config::Goal) -> u32 {
         let now = chrono::Utc::now();

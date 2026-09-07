@@ -1070,7 +1070,7 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
         locations: t.locations.clone(),
         url: t.url.clone(),
         geo: t.geo.clone(),
-        time_spent_seconds: t.time_spent_seconds,
+        time_spent_seconds: store.get_aggregated_time_seconds(&t.uid),
         last_started_at: t.last_started_at,
         sessions: t
             .sessions
@@ -1160,7 +1160,7 @@ fn task_to_summary(t: &Task, store: &TaskStore) -> MobileTaskSummary {
         tree_location_count,
         url: t.url.clone(),
         geo: t.geo.clone(),
-        time_spent_seconds: t.time_spent_seconds,
+        time_spent_seconds: store.get_aggregated_time_seconds(&t.uid),
         last_started_at: t.last_started_at,
         is_recurring: t.rrule.is_some(),
         is_relative_recurrence: t.is_relative_recurrence(),

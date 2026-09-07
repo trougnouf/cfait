@@ -361,3 +361,120 @@ fn task_specific_goal_aggregates_descendants() {
         "task-specific goal should aggregate descendant time"
     );
 }
+
+/// get_aggregated_time_seconds: a parent's aggregated time includes its own
+/// sessions plus all descendants', with overlapping cascade sessions merged.
+#[test]
+fn aggregated_time_cascade_merge() {
+    let mut store = make_store();
+
+    let mut parent = Task::new("Parent #work", &HashMap::new(), None);
+    parent.uid = "parent".to_string();
+    parent.calendar_href = "cal".to_string();
+    parent.sessions.push(WorkSession {
+        start: 1_000_000,
+        end: 1_000_000 + 5400,
+    });
+    store.add_task(parent);
+
+    let mut child = Task::new("Subtask", &HashMap::new(), None);
+    child.uid = "child".to_string();
+    child.calendar_href = "cal".to_string();
+    child.parent_uid = Some("parent".to_string());
+    child.sessions.push(WorkSession {
+        start: 1_000_000,
+        end: 1_000_000 + 3600,
+    });
+    store.add_task(child);
+
+    // Parent: [0, 90min]. Child: [0, 60min]. Union = [0, 90min] = 5400s.
+    let agg = store.get_aggregated_time_seconds("parent");
+    assert_eq!(agg, 5400, "aggregated time should be union-merged");
+}
+
+/// get_aggregated_time_seconds: non-overlapping sessions from parent and
+/// child both count.
+#[test]
+fn aggregated_time_non_overlapping() {
+    let mut store = make_store();
+
+    let mut parent = Task::new("Parent #work", &HashMap::new(), None);
+    parent.uid = "parent".to_string();
+    parent.calendar_href = "cal".to_string();
+    parent.sessions.push(WorkSession {
+        start: 500_000,
+        end: 500_000 + 1800,
+    });
+    store.add_task(parent);
+
+    let mut child = Task::new("Subtask", &HashMap::new(), None);
+    child.uid = "child".to_string();
+    child.calendar_href = "cal".to_string();
+    child.parent_uid = Some("parent".to_string());
+    child.sessions.push(WorkSession {
+        start: 1_000_000,
+        end: 1_000_000 + 3600,
+    });
+    store.add_task(child);
+
+    // Parent: 1800s + child: 3600s = 5400s (non-overlapping).
+    let agg = store.get_aggregated_time_seconds("parent");
+    assert_eq!(agg, 5400, "non-overlapping sessions should sum up");
+}
+
+/// get_aggregated_time_seconds: a leaf task returns its own time only.
+#[test]
+fn aggregated_time_leaf_task() {
+    let mut store = make_store();
+
+    let mut task = Task::new("Leaf #work", &HashMap::new(), None);
+    task.uid = "leaf".to_string();
+    task.calendar_href = "cal".to_string();
+    task.sessions.push(WorkSession {
+        start: 1_000_000,
+        end: 1_000_000 + 3600,
+    });
+    store.add_task(task);
+
+    let agg = store.get_aggregated_time_seconds("leaf");
+    assert_eq!(agg, 3600, "leaf task should return its own time");
+}
+
+/// get_aggregated_time_seconds: three-level tree with nested sessions.
+#[test]
+fn aggregated_time_three_level_tree() {
+    let mut store = make_store();
+
+    let mut root = Task::new("Root", &HashMap::new(), None);
+    root.uid = "root".to_string();
+    root.calendar_href = "cal".to_string();
+    root.sessions.push(WorkSession {
+        start: 1_000_000,
+        end: 1_000_000 + 9000,
+    });
+    store.add_task(root);
+
+    let mut mid = Task::new("Mid", &HashMap::new(), None);
+    mid.uid = "mid".to_string();
+    mid.calendar_href = "cal".to_string();
+    mid.parent_uid = Some("root".to_string());
+    mid.sessions.push(WorkSession {
+        start: 1_000_000,
+        end: 1_000_000 + 6000,
+    });
+    store.add_task(mid);
+
+    let mut leaf = Task::new("Leaf", &HashMap::new(), None);
+    leaf.uid = "leaf".to_string();
+    leaf.calendar_href = "cal".to_string();
+    leaf.parent_uid = Some("mid".to_string());
+    leaf.sessions.push(WorkSession {
+        start: 1_000_000,
+        end: 1_000_000 + 3600,
+    });
+    store.add_task(leaf);
+
+    // All nested: union = [0, 9000s] = root's full session.
+    let agg = store.get_aggregated_time_seconds("root");
+    assert_eq!(agg, 9000, "three-level tree: union gives root's full span");
+}

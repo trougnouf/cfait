@@ -74,13 +74,19 @@ impl TaskDisplay for Task {
             return format!("[ {} / {}/{}]", c_str, t_str, goal.interval.format_short());
         }
 
-        // Calculate actual spent time (stored + current session)
+        // Calculate actual spent time — aggregated across the subtree when a
+        // store is available, so a parent's badge reflects all work in its
+        // tree. Falls back to this task's own time if no store.
         let now_ts = Utc::now().timestamp();
-        let current_session = self
-            .last_started_at
-            .map(|start| (now_ts - start).max(0) as u64)
-            .unwrap_or(0);
-        let total_seconds = self.time_spent_seconds + current_session;
+        let total_seconds = if let Some(s) = store {
+            s.get_aggregated_time_seconds(&self.uid)
+        } else {
+            let current_session = self
+                .last_started_at
+                .map(|start| (now_ts - start).max(0) as u64)
+                .unwrap_or(0);
+            self.time_spent_seconds + current_session
+        };
         let total_mins = (total_seconds / 60) as u32;
 
         let combined_time_str = if let Some(min) = self.estimated_duration {

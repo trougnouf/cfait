@@ -584,12 +584,7 @@ pub fn view_task_row<'a>(
                     tags_row = tags_row.push(loc_btn);
                 }
 
-                let now_ts = Utc::now().timestamp();
-                let current_session = task
-                    .last_started_at
-                    .map(|start| (now_ts - start).max(0) as u64)
-                    .unwrap_or(0);
-                let total_seconds = task.time_spent_seconds + current_session;
+                let total_seconds = app.store.get_aggregated_time_seconds(&task.uid);
                 let total_mins = (total_seconds / 60) as u32;
 
                 let show_pc = !task.status.is_done() && task.percent_complete.unwrap_or(0) > 0;
