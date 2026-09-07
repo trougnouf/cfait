@@ -104,6 +104,7 @@
             android:name=".widget.TaskListWidgetConfigActivity"
             android:exported="true"
             android:theme="@android:style/Theme.Material.NoActionBar"
+            android:windowSoftInputMode="adjustResize"
         >
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />

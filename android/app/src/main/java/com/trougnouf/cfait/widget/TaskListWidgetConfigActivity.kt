@@ -11,16 +11,18 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.getValue
@@ -82,32 +84,34 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
                 ) { padding ->
                     Column(
                         modifier = Modifier
-                            .fillMaxSize()
                             .padding(padding)
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                            .padding(16.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         Text("Search query", style = MaterialTheme.typography.labelLarge)
                         OutlinedTextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
-                            modifier = Modifier.fillMaxSize().height(56.dp),
-                            singleLine = false,
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
                             placeholder = { Text("is:ready") }
                         )
 
                         Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Checkbox(
+                            Text("Hide checked tasks")
+                            Switch(
                                 checked = hideChecked,
                                 onCheckedChange = { hideChecked = it }
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Hide checked tasks")
                         }
 
                         Row(
+                            modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text("Max tasks: ")
@@ -122,11 +126,8 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
 
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        Row(
-                            modifier = Modifier.fillMaxSize(),
-                            horizontalArrangement = Arrangement.End
-                        ) {
-                            Button(onClick = {
+                        Button(
+                            onClick = {
                                 val max = maxTasks.toIntOrNull()?.coerceIn(1, 20) ?: 8
                                 prefs.edit()
                                     .putString("search_query", searchQuery.ifBlank { "is:ready" })
@@ -140,15 +141,15 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
                                 )
                                 setResult(RESULT_OK, resultValue)
 
-                                // Trigger an immediate widget update
                                 CoroutineScope(Dispatchers.Default).launch {
                                     TaskListWidget().updateAll(this@TaskListWidgetConfigActivity)
                                 }
 
                                 finish()
-                            }) {
-                                Text("Add widget")
-                            }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Add widget")
                         }
                     }
                 }
