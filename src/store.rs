@@ -2698,12 +2698,27 @@ impl TaskStore {
                         // Collect descendant intervals for cascade dedup.
                         let desc_intervals =
                             self.collect_descendant_intervals(&ct.task.uid, now_ts);
-                        for (s, e) in &ct.sessions {
-                            // Skip a session fully covered by a descendant's
-                            // overlapping session (cascade artifact).
-                            if !session_fully_covered(*s, *e, &desc_intervals) {
+                        // Attribute each session to exactly one period (the
+                        // one containing its start) so a midnight-spanning
+                        // session is not double-counted across two periods.
+                        for session in &ct.task.sessions {
+                            if session.start >= start_ts
+                                && session.start < end_ts
+                                && !session_fully_covered(
+                                    session.start,
+                                    session.end,
+                                    &desc_intervals,
+                                )
+                            {
                                 task_progress += 1;
                             }
+                        }
+                        if let Some(start) = ct.task.last_started_at
+                            && start >= start_ts
+                            && start < end_ts
+                            && !session_fully_covered(start, now_ts, &desc_intervals)
+                        {
+                            task_progress += 1;
                         }
                     }
 

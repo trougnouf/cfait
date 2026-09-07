@@ -334,6 +334,41 @@ fn count_goal_cascade_and_completion() {
     );
 }
 
+/// A session spanning two adjacent periods must count once (in the period
+/// containing its start), not once per period.
+#[test]
+fn count_goal_midnight_spanning_session_not_double_counted() {
+    let mut store = make_store_with_session_counting();
+
+    let mut task = Task::new("Task #work", &HashMap::new(), None);
+    task.uid = "task".to_string();
+    task.calendar_href = "cal".to_string();
+    // Session starts in period A and ends in period B.
+    task.sessions.push(WorkSession {
+        start: 1_000_000,
+        end: 1_000_000 + 7200,
+    });
+    store.add_task(task);
+
+    let goal = make_goal(GoalType::Count, 5);
+    let boundary = 1_000_000 + 3600;
+    let progress_a = store.calculate_goal_progress_for_bounds("#work", &goal, 0, boundary);
+    let progress_b = store.calculate_goal_progress_for_bounds("#work", &goal, boundary, 3_000_000);
+    assert_eq!(
+        progress_a, 1,
+        "session should count in the period where it starts"
+    );
+    assert_eq!(
+        progress_b, 0,
+        "session should not also count in the next period"
+    );
+    assert_eq!(
+        progress_a + progress_b,
+        1,
+        "one session must total exactly one count across both periods"
+    );
+}
+
 /// Task-specific goal: a goal on a task claims its descendants' time too.
 #[test]
 fn task_specific_goal_aggregates_descendants() {
