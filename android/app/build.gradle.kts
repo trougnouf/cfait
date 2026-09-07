@@ -153,6 +153,10 @@ dependencies {
     // Required for UniFFI
     implementation("net.java.dev.jna:jna:5.19.1@aar")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
+
+    // Glance app widgets
+    implementation("androidx.glance:glance-appwidget:1.2.0")
+    implementation("androidx.glance:glance-material3:1.2.0")
 }
 
 tasks.register<Copy>("copyFonts") {

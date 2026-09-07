@@ -4,11 +4,14 @@ package com.trougnouf.cfait.workers
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import androidx.glance.appwidget.updateAll
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.trougnouf.cfait.CfaitApplication
 import com.trougnouf.cfait.util.AlarmScheduler
 import com.trougnouf.cfait.util.NotificationHelper
+import com.trougnouf.cfait.widget.TaskListWidget
+import com.trougnouf.cfait.widget.WidgetSnapshotStore
 import kotlinx.coroutines.CancellationException
 
 /**
@@ -37,6 +40,10 @@ class PeriodicSyncWorker(
             AlarmScheduler.scheduleNextAlarm(context, api)
             AlarmScheduler.cleanupObsoleteNotifications(context, api)
             NotificationHelper.updateOngoingNotifications(context, api)
+
+            // Refresh widget snapshot and update widgets
+            WidgetSnapshotStore.refresh(context, api)
+            TaskListWidget().updateAll(context)
 
             // Notify UI to refresh if open
             val intent = Intent("com.trougnouf.cfait.REFRESH_UI")

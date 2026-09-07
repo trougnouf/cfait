@@ -340,6 +340,9 @@ fun CfaitNavHost(
                 AlarmScheduler.cleanupObsoleteNotifications(context, api)
                 NotificationHelper.updateOngoingNotifications(context, api)
 
+                // Refresh widget snapshot so widgets stay in sync with mutations
+                com.trougnouf.cfait.widget.WidgetSnapshotStore.refresh(context, api)
+
                 // Dynamically update Background Sync Worker based on config
                 val interval = config.autoRefreshInterval
                 if (interval > 0u) {
