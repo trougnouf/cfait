@@ -7,30 +7,40 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.CoroutineScope
@@ -74,6 +84,20 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
             }
             var maxTasks by remember {
                 mutableStateOf(prefs.getInt("max_tasks", 8).toString())
+            }
+            val bgColors = listOf(
+                Color.Black to "Black",
+                Color(0xFF1C1B1F) to "Dark",
+                Color(0xFFE6E1E5) to "Light",
+                Color(0xFF4E3390) to "Purple",
+                Color(0xFF1B5E20) to "Green",
+                Color(0xFF8C1D18) to "Red",
+            )
+            var bgColorIndex by remember {
+                mutableStateOf(prefs.getInt("bg_color_index", 0))
+            }
+            var bgOpacity by remember {
+                mutableFloatStateOf(prefs.getFloat("bg_opacity", 0.5f))
             }
 
             MaterialTheme {
@@ -126,13 +150,55 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
 
                         Spacer(modifier = Modifier.height(8.dp))
 
+                        Text("Background", style = MaterialTheme.typography.labelLarge)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            bgColors.forEachIndexed { index, (color, label) ->
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .background(
+                                                color = color.copy(alpha = bgOpacity),
+                                                shape = CircleShape
+                                            )
+                                            .then(
+                                                if (index == bgColorIndex)
+                                                    Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                                                else Modifier
+                                            )
+                                            .clickable { bgColorIndex = index }
+                                    )
+                                    Text(label, style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+
+                        Text("Opacity: ${(bgOpacity * 100).toInt()}%")
+                        Slider(
+                            value = bgOpacity,
+                            onValueChange = { bgOpacity = it },
+                            valueRange = 0f..1f,
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
                         Button(
                             onClick = {
                                 val max = maxTasks.toIntOrNull()?.coerceIn(1, 20) ?: 8
+                                val bgColor = bgColors[bgColorIndex].first
+                                val bgColorArgb = (bgColor.copy(alpha = bgOpacity)).toArgb()
                                 prefs.edit()
                                     .putString("search_query", searchQuery.ifBlank { "is:ready" })
                                     .putBoolean("hide_checked", hideChecked)
                                     .putInt("max_tasks", max)
+                                    .putInt("bg_color", bgColorArgb)
+                                    .putInt("bg_color_index", bgColorIndex)
+                                    .putFloat("bg_opacity", bgOpacity)
                                     .apply()
 
                                 val resultValue = Intent().putExtra(

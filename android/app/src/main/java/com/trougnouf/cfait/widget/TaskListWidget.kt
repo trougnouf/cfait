@@ -13,7 +13,9 @@ import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.provideContent
+import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
@@ -22,15 +24,30 @@ import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.width
+import androidx.glance.text.FontStyle
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
+import androidx.glance.text.TextDecoration
 import androidx.glance.text.TextStyle
+import androidx.glance.unit.ColorProvider
 import com.trougnouf.cfait.CfaitApplication
 import com.trougnouf.cfait.MainActivity
 import com.trougnouf.cfait.core.MobileFilterOptions
+import com.trougnouf.cfait.core.MobileTaskSummary
 
 /** Intent extra key for deep-linking to a specific task from the widget. */
 private val FocusTaskUidKey = ActionParameters.Key<String>("focus_task_uid")
+
+/** Strip inline markdown markers (bold, italic, code, strikethrough) for plain display. */
+private fun stripMarkdown(text: String): String {
+    return text
+        .replace(Regex("""\*\*(.+?)\*\*"""), "$1")
+        .replace(Regex("""__(.+?)__"""), "$1")
+        .replace(Regex("""~~(.+?)~~"""), "$1")
+        .replace(Regex("""\*(.+?)\*"""), "$1")
+        .replace(Regex("""_(.+?)_"""), "$1")
+        .replace(Regex("""`(.+?)`"""), "$1")
+}
 
 class TaskListWidget : GlanceAppWidget() {
 
@@ -42,6 +59,7 @@ class TaskListWidget : GlanceAppWidget() {
         val searchQuery = prefs.getString("search_query", "is:ready") ?: "is:ready"
         val maxTasks = prefs.getInt("max_tasks", 8)
         val hideChecked = prefs.getBoolean("hide_checked", false)
+        val bgColor = prefs.getInt("bg_color", 0x80000000.toInt())
         val effectiveQuery = if (hideChecked && !searchQuery.contains("is:done")) {
             "$searchQuery -is:done"
         } else {
@@ -67,11 +85,18 @@ class TaskListWidget : GlanceAppWidget() {
             null
         }
 
+        val textColor = if (bgColor and 0xFF000000.toInt() shr 24 > 0x80) {
+            android.graphics.Color.BLACK
+        } else {
+            android.graphics.Color.WHITE
+        }
+
         provideContent {
             GlanceTheme(colors = WidgetColorScheme) {
                 Column(
                     modifier = GlanceModifier
                         .fillMaxWidth()
+                        .background(bgColor)
                         .padding(12.dp)
                 ) {
                     // Header: app name + counts
@@ -84,24 +109,31 @@ class TaskListWidget : GlanceAppWidget() {
                             style = TextStyle(
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
+                                color = ColorProvider(textColor),
                             )
                         )
                         Spacer(modifier = GlanceModifier.width(8.dp))
                         if (viewData != null) {
                             val tasks = viewData.tasks
-                            val overdue = tasks.count { it.isDueToday && !it.isDone }
+                            val dueToday = tasks.count { it.isDueToday && !it.isDone }
                             val ongoing = tasks.count { it.isPaused }
-                            if (overdue > 0) {
+                            if (dueToday > 0) {
                                 Text(
-                                    text = "$overdue due today",
-                                    style = TextStyle(fontSize = 13.sp)
+                                    text = "$dueToday due today",
+                                    style = TextStyle(
+                                        fontSize = 13.sp,
+                                        color = ColorProvider(textColor),
+                                    )
                                 )
                                 Spacer(modifier = GlanceModifier.width(8.dp))
                             }
                             if (ongoing > 0) {
                                 Text(
                                     text = "$ongoing active",
-                                    style = TextStyle(fontSize = 13.sp)
+                                    style = TextStyle(
+                                        fontSize = 13.sp,
+                                        color = ColorProvider(textColor),
+                                    )
                                 )
                             }
                         }
@@ -113,42 +145,92 @@ class TaskListWidget : GlanceAppWidget() {
                         Text(
                             text = if (viewData == null) "Loading…" else "No tasks",
                             modifier = GlanceModifier.padding(top = 4.dp),
-                            style = TextStyle(fontSize = 14.sp)
+                            style = TextStyle(
+                                fontSize = 14.sp,
+                                color = ColorProvider(textColor),
+                            )
                         )
                     } else {
                         viewData.tasks.take(maxTasks).forEach { task ->
-                            Row(
-                                modifier = GlanceModifier
-                                    .fillMaxWidth()
-                                    .clickable(actionStartActivity(
-                                        MainActivity::class.java,
-                                        actionParametersOf(FocusTaskUidKey to task.uid)
-                                    ))
-                                    .padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = if (task.isDone) "[x]" else "[ ]",
-                                    style = TextStyle(fontSize = 14.sp)
-                                )
-                                Spacer(modifier = GlanceModifier.width(6.dp))
-                                Column {
-                                    Text(
-                                        text = task.summary,
-                                        maxLines = 1,
-                                        style = TextStyle(fontSize = 14.sp)
-                                    )
-                                    if (task.dueDateIso != null && task.isDueToday) {
-                                        Text(
-                                            text = "due today",
-                                            style = TextStyle(fontSize = 12.sp)
-                                        )
-                                    }
-                                }
-                            }
+                            TaskRow(task, textColor)
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun TaskRow(task: MobileTaskSummary, textColor: Int) {
+    val indent = (task.depth.toInt() * 12).dp
+    val displaySummary = stripMarkdown(task.summary)
+    val isNote = task.isNote
+
+    Row(
+        modifier = GlanceModifier
+            .fillMaxWidth()
+            .padding(start = indent, top = 3.dp, bottom = 3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Collapse/expand indicator for tasks with subtasks
+        if (task.hasSubtasks) {
+            Text(
+                text = if (task.isCollapsed) "▶" else "▼",
+                style = TextStyle(
+                    fontSize = 10.sp,
+                    color = ColorProvider(textColor),
+                )
+            )
+            Spacer(modifier = GlanceModifier.width(4.dp))
+        } else {
+            Spacer(modifier = GlanceModifier.width(14.dp))
+        }
+
+        // Checkbox (skip for notes)
+        if (!isNote) {
+            Text(
+                text = if (task.isDone) "☑" else "☐",
+                modifier = GlanceModifier.clickable(
+                    actionRunCallback<ToggleTaskActionCallback>(
+                        actionParametersOf(ToggleTaskActionCallback.TaskUidKey to task.uid)
+                    )
+                ),
+                style = TextStyle(
+                    fontSize = 16.sp,
+                    color = ColorProvider(textColor),
+                )
+            )
+            Spacer(modifier = GlanceModifier.width(6.dp))
+        }
+
+        // Title (tappable to open the app at this task)
+        Column(
+            modifier = GlanceModifier.clickable(
+                actionStartActivity(
+                    MainActivity::class.java,
+                    actionParametersOf(FocusTaskUidKey to task.uid)
+                )
+            )
+        ) {
+            Text(
+                text = displaySummary,
+                maxLines = 1,
+                style = TextStyle(
+                    fontSize = 14.sp,
+                    color = ColorProvider(textColor),
+                    textDecoration = if (task.isDone) TextDecoration.LineThrough else TextDecoration.None,
+                    fontStyle = if (isNote) FontStyle.Italic else FontStyle.Normal,
+                )
+            )
+            if (task.dueDateIso != null && task.isDueToday) {
+                Text(
+                    text = "due today",
+                    style = TextStyle(
+                        fontSize = 12.sp,
+                        color = ColorProvider((textColor and 0x00FFFFFF) or 0xB3000000.toInt()),
+                    )
+                )
             }
         }
     }
