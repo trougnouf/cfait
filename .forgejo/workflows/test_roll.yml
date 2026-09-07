@@ -192,9 +192,58 @@ jobs:
           path: dist-windows/*
           retention-days: 1
 
+  # --- JOB: ROLLING LINUX BINARY ---
+  rolling-linux:
+    needs: test
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/master'
+    runs-on: self-hosted-ubuntu
+    container:
+      image: local/ubuntu-builder
+      volumes:
+        - cargo-registry:/usr/local/cargo/registry
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build Linux Binaries
+        run: |
+          export AWS_LC_SYS_NO_JITTER_ENTROPY=1
+          cargo build --release --features gui --locked
+
+      - name: Create Linux Tarball
+        run: |
+          mkdir -p cfait-linux-rolling
+          cp target/release/cfait "cfait-linux-rolling/"
+          cp target/release/cfait-gui "cfait-linux-rolling/cfait-gui"
+          cp README.md LICENSE "cfait-linux-rolling/"
+          cp assets/cfait.desktop "cfait-linux-rolling/"
+          cp assets/cfait.svg "cfait-linux-rolling/"
+          mkdir -p dist-linux
+          tar -cJvf "dist-linux/cfait-linux-rolling.tar.xz" "cfait-linux-rolling"
+
+      - name: Sign Release Artifacts
+        env:
+          GPG_SIGNING_SUBKEY: ${{ secrets.GPG_SIGNING_SUBKEY }}
+          GPG_KEY_FINGERPRINT: ${{ secrets.GPG_KEY_FINGERPRINT }}
+        run: |
+          echo "$GPG_SIGNING_SUBKEY" | base64 --decode | gpg --import --batch --pinentry-mode loopback
+          cd dist-linux
+          gpg --batch --yes --pinentry-mode loopback \
+            --local-user "$GPG_KEY_FINGERPRINT" \
+            --detach-sign --armor cfait-linux-rolling.tar.xz
+
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: rolling-linux
+          path: dist-linux/*
+          retention-days: 1
+
   # --- JOB 5: PUBLISH ROLLING RELEASE ---
   publish-rolling:
-    needs: [rolling-android, rolling-windows, rolling-flatpak]
+    needs: [rolling-android, rolling-windows, rolling-flatpak, rolling-linux]
     if: github.ref == 'refs/heads/master' && github.event_name == 'push'
     runs-on: self-hosted-ubuntu
     container:
@@ -262,7 +311,7 @@ jobs:
   # only requires `test` to have passed (don't bench broken code); a failed
   # rolling build does not block it.
   bench:
-    needs: [test, rolling-android, rolling-windows, rolling-flatpak]
+    needs: [test, rolling-android, rolling-windows, rolling-flatpak, rolling-linux]
     if: always() && needs.test.result == 'success'
     runs-on: self-hosted-arch
     container:
