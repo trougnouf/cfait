@@ -185,7 +185,7 @@ jobs:
           for file in cfait-linux-${{ github.ref_name }}.tar.gz *.deb cfait-windows-${{ github.ref_name }}.zip PKGBUILD-github-release; do
             if [ -f "$file" ]; then
               echo "Signing $file..."
-              gpg --batch --yes --pinentry-mode loopback \
+              gpg --batch --yes --pinentry-mode loopback --passphrase '' \
                 --local-user "$GPG_KEY_FINGERPRINT" \
                 --detach-sign --armor "$file"
             fi

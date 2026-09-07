@@ -215,7 +215,7 @@ jobs:
           for file in *; do
             if [ -f "$file" ] && [ "$file" != "CHANGELOG_RELEASE.md" ]; then
               echo "Signing $file..."
-              gpg --batch --yes --pinentry-mode loopback \
+              gpg --batch --yes --pinentry-mode loopback --passphrase '' \
                 --local-user "$GPG_KEY_FINGERPRINT" \
                 --detach-sign --armor "$file"
             fi

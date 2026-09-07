@@ -230,7 +230,7 @@ jobs:
         run: |
           echo "$GPG_SIGNING_SUBKEY" | base64 --decode | gpg --import --batch --pinentry-mode loopback
           cd dist-linux
-          gpg --batch --yes --pinentry-mode loopback \
+          gpg --batch --yes --pinentry-mode loopback --passphrase '' \
             --local-user "$GPG_KEY_FINGERPRINT" \
             --detach-sign --armor cfait-linux-rolling.tar.xz
 
