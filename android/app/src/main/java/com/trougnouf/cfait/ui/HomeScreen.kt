@@ -119,6 +119,7 @@ fun HomeScreen(
     isLoading: Boolean,
     hasUnsynced: Boolean,
     autoScrollUid: String? = null,
+    focusNewTask: Boolean = false,
     refreshTick: Long,
     showQuickFilter: Boolean,
     quickFilterTerm: String,
@@ -144,6 +145,7 @@ fun HomeScreen(
     onDataChanged: () -> Unit,
     onMigrateLocal: (String, String) -> Unit,
     onAutoScrollComplete: () -> Unit = {},
+    onNewTaskFocusComplete: () -> Unit = {},
 ) {
     val tasks = remember(viewData?.tasks) { 
         viewData?.tasks?.map { StableTaskSummary(it) } ?: emptyList() 
@@ -309,6 +311,19 @@ fun HomeScreen(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var isSearchActive by rememberSaveable { mutableStateOf(false) }
     val searchFocusRequester = remember { FocusRequester() }
+    val newTaskFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(focusNewTask) {
+        if (focusNewTask) {
+            try {
+                kotlinx.coroutines.delay(50)
+                newTaskFocusRequester.requestFocus()
+                keyboardController?.show()
+            } catch (_: Exception) {
+            }
+            onNewTaskFocusComplete()
+        }
+    }
 
     var taskToMove by remember { mutableStateOf<StableTaskSummary?>(null) }
     var childLockActive by rememberSaveable { mutableStateOf(false) }
@@ -2447,7 +2462,7 @@ fun HomeScreen(
                                         OutlinedTextField(
                                             value = newTaskText, onValueChange = { newTaskText = it },
                                             placeholder = { Text("${stringResource(R.string.example_buy_cat_food)} !1 @tomorrow") },
-                                            modifier = Modifier.fillMaxWidth(), singleLine = true,
+                                            modifier = Modifier.fillMaxWidth().focusRequester(newTaskFocusRequester), singleLine = true,
                                             visualTransformation = remember(isDark) {
                                                 SmartSyntaxTransformation(
                                                     api,

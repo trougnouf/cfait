@@ -219,6 +219,7 @@ fun CfaitNavHost(
     // Add state for default priority
     var defaultPriority by remember { mutableIntStateOf(5) }
     var autoScrollUid by remember { mutableStateOf<String?>(null) }
+    var focusNewTask by remember { mutableStateOf(false) }
     var refreshTick by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var isLoading by remember { mutableStateOf(false) }
     var showQuickFilter by remember { mutableStateOf(true) }
@@ -503,6 +504,11 @@ fun CfaitNavHost(
                 it.removeExtra("focus_task_uid")
             }
 
+            if (it.getStringExtra("quick_add") != null) {
+                focusNewTask = true
+                it.removeExtra("quick_add")
+            }
+
             if (it.action == Intent.ACTION_VIEW) {
                 val uri: Uri? = it.data
                 uri?.let { fileUri ->
@@ -550,6 +556,7 @@ fun CfaitNavHost(
                 isLoading = isLoading,
                 hasUnsynced = hasUnsynced,
                 autoScrollUid = autoScrollUid,
+                focusNewTask = focusNewTask,
                 showQuickFilter = showQuickFilter,
                 quickFilterTerm = quickFilterTerm,
                 quickFilterIcon = quickFilterIcon,
@@ -574,7 +581,8 @@ fun CfaitNavHost(
                 onTaskClick = { uid -> navController.navigate("detail/$uid") },
                 onDataChanged = { refreshLists() },
                 onMigrateLocal = { sourceHref, targetHref -> handleMigration(sourceHref, targetHref) },
-                onAutoScrollComplete = { autoScrollUid = null }
+                onAutoScrollComplete = { autoScrollUid = null },
+                onNewTaskFocusComplete = { focusNewTask = false }
             )
         }
         composable("detail/{uid}") { backStackEntry ->
