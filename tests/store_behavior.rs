@@ -583,6 +583,47 @@ fn test_apply_task_intent_comprehensive() {
 }
 
 #[test]
+fn test_delete_task_tree_removes_descendants() {
+    let mut store = make_store();
+    let config = cfait::config::Config {
+        trash_retention_days: 0,
+        ..Default::default()
+    };
+
+    let mut parent = Task::new("Parent", &HashMap::new(), None);
+    parent.uid = "parent".to_string();
+    parent.calendar_href = "cal1".to_string();
+
+    let mut child = Task::new("Child", &HashMap::new(), None);
+    child.uid = "child".to_string();
+    child.calendar_href = "cal1".to_string();
+    child.parent_uid = Some("parent".to_string());
+
+    let mut grandchild = Task::new("Grandchild", &HashMap::new(), None);
+    grandchild.uid = "grandchild".to_string();
+    grandchild.calendar_href = "cal1".to_string();
+    grandchild.parent_uid = Some("child".to_string());
+
+    store.add_task(parent);
+    store.add_task(child);
+    store.add_task(grandchild);
+
+    assert!(store.children_index.contains_key("parent"));
+    assert!(store.children_index.contains_key("child"));
+
+    store.apply_task_intent(
+        &cfait::model::AppIntent::DeleteTaskTree {
+            uid: "parent".to_string(),
+        },
+        &config,
+    );
+
+    assert!(store.get_task_ref("parent").is_none());
+    assert!(store.get_task_ref("child").is_none());
+    assert!(store.get_task_ref("grandchild").is_none());
+}
+
+#[test]
 fn test_extract_markdown_tasks_full() {
     let input = "Root description.\n\n- [ ] Subtask 1\n  Details for subtask 1\n* [x] Subtask 2\n1. [ ] Numbered 1\n2. [ ] Numbered 2\n";
     let (root_desc, tasks) = cfait::model::extract_markdown_tasks(input, false);

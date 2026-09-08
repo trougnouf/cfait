@@ -4570,16 +4570,16 @@ impl TaskStore {
                 let mut all_uids = uids;
                 all_uids.push(uid.clone());
 
-                for u in &all_uids {
-                    actions.extend(self.cleanup_references(u));
-                }
-
                 let pairs = self.soft_delete_task_tree(uid, config.trash_retention_days);
                 for (deleted, trashed_opt) in pairs {
                     actions.push(JournalAction::Delete(deleted));
                     if let Some(trashed) = trashed_opt {
                         actions.push(JournalAction::Create(trashed));
                     }
+                }
+
+                for u in &all_uids {
+                    actions.extend(self.cleanup_references(u));
                 }
             }
             AppIntent::CancelTask { uid } => {
