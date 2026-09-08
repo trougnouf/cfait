@@ -78,6 +78,61 @@
   </requires>
 
   <releases>
+    <release version="1.1.7" date="2026-09-09">
+      <description>
+        <p>Features:</p>
+        <ul>
+          <li>(android) Add quick settings tile for one-tap launch (requested by montherlant)</li>
+          <li>(android) Add task-list home screen widget</li>
+          <li>(android) Deep-link widget rows to the tapped task</li>
+          <li>Aggregate subtree time in duration badge</li>
+          <li>(android) Add checkbox toggles, tree indentation, and background customization to widget</li>
+          <li>Sign release artifacts with GPG</li>
+          <li>Add native Linux tarball to rolling release</li>
+          <li>Add openSUSE RPM spec and OBS service file</li>
+          <li>Allow config to specify data directory</li>
+          <li>(android) Color checkboxes by calendar and fix widget refresh after toggle</li>
+          <li>(android) Add task entry (quick-add) home-screen widget</li>
+          <li>(android) Add journal and search modes to entry widget with per-instance settings</li>
+        </ul>
+        <p>Bug Fixes:</p>
+        <ul>
+          <li>(android) Update widgets after in-app mutations</li>
+          <li>(goals) Dedup overlapping cascade sessions via interval subtraction</li>
+          <li>(goals) Aggregate subtree time and dedup cascade sessions</li>
+          <li>Add --passphrase '' to gpg signing in CI</li>
+          <li>Count goals double-counted midnight-spanning sessions</li>
+          <li>(android) Use Color instead of int for Glance color providers</li>
+          <li>(android) Use Glance state to force widget refresh after checkbox toggle</li>
+          <li>Use children_index for move tree checkbox visibility</li>
+          <li>Delete task tree before cleaning up references</li>
+        </ul>
+        <p>Refactor:</p>
+        <ul>
+          <li>(android) Switch widget from snapshot file to live API</li>
+        </ul>
+        <p>Documentation:</p>
+        <ul>
+          <li>Fix vertical bar inside Markdown table cell</li>
+          <li>Fix vertical bar inside Markdown table cell ( https://codeberg.org/trougnouf/cfait/pulls/98 )</li>
+        </ul>
+        <p>Performance:</p>
+        <ul>
+          <li>(sync) Skip companion-event cleanup on delete when events disabled; compact journal once per sync</li>
+        </ul>
+        <p>Testing:</p>
+        <ul>
+          <li>(sync) Pin no-conflict-copy on failed move with pending update</li>
+        </ul>
+        <p>Miscellaneous Tasks:</p>
+        <ul>
+          <li>(android) Fix widget config layout</li>
+          <li>(android) Fix widget config crash and text color logic</li>
+          <li>(android) Use Glance default loading layout for widget</li>
+          <li>(android) Disable widgets for release</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.1.6" date="2026-09-06">
       <description>
         <p>Features:</p>

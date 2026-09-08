@@ -1,5 +1,57 @@
 # Changelog
 
+## [1.1.7] - 2026-09-08
+
+### 🚀 Features
+
+- *(android)* Add quick settings tile for one-tap launch (requested by montherlant)
+- *(android)* Add task-list home screen widget
+- *(android)* Deep-link widget rows to the tapped task
+- Aggregate subtree time in duration badge
+- *(android)* Add checkbox toggles, tree indentation, and background customization to widget
+- Sign release artifacts with GPG
+- Add native Linux tarball to rolling release
+- Add openSUSE RPM spec and OBS service file
+- Allow config to specify data directory
+- *(android)* Color checkboxes by calendar and fix widget refresh after toggle
+- *(android)* Add task entry (quick-add) home-screen widget
+- *(android)* Add journal and search modes to entry widget with per-instance settings
+
+### 🐛 Bug Fixes
+
+- *(android)* Update widgets after in-app mutations
+- *(goals)* Dedup overlapping cascade sessions via interval subtraction
+- *(goals)* Aggregate subtree time and dedup cascade sessions
+- Add --passphrase '' to gpg signing in CI
+- Count goals double-counted midnight-spanning sessions
+- *(android)* Use Color instead of int for Glance color providers
+- *(android)* Use Glance state to force widget refresh after checkbox toggle
+- Use children_index for move tree checkbox visibility
+- Delete task tree before cleaning up references
+
+### 🚜 Refactor
+
+- *(android)* Switch widget from snapshot file to live API
+
+### 📚 Documentation
+
+- Fix vertical bar inside Markdown table cell
+- Fix vertical bar inside Markdown table cell ( https://codeberg.org/trougnouf/cfait/pulls/98 )
+
+### ⚡ Performance
+
+- *(sync)* Skip companion-event cleanup on delete when events disabled; compact journal once per sync
+
+### 🧪 Testing
+
+- *(sync)* Pin no-conflict-copy on failed move with pending update
+
+### ⚙️ Miscellaneous Tasks
+
+- *(android)* Fix widget config layout
+- *(android)* Fix widget config crash and text color logic
+- *(android)* Use Glance default loading layout for widget
+- *(android)* Disable widgets for release
 ## [1.1.6] - 2026-09-06
 
 ### 🚀 Features
