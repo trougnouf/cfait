@@ -2269,8 +2269,9 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         };
 
         let has_subtasks = state
-            .get_selected_task()
-            .map(|t| t.has_subtasks)
+            .moving_task_uid
+            .as_deref()
+            .map(|uid| state.store.children_index.contains_key(uid))
             .unwrap_or(false);
         let title_with_hint = if has_subtasks {
             format!("{} ({})", title_text, rust_i18n::t!("tui_move_toggle"))

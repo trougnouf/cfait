@@ -4197,7 +4197,7 @@ pub async fn handle_key_event(
             KeyCode::Char('t') | KeyCode::Char('T') => {
                 if let Some(uid) = &state.moving_task_uid
                     && let Some(task) = state.store.get_task_ref(uid)
-                    && task.has_subtasks
+                    && state.store.children_index.contains_key(uid)
                 {
                     let current_href = task.calendar_href.clone();
                     let new_moving_tree = !state.moving_tree;
