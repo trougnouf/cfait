@@ -2,6 +2,7 @@
 package com.trougnouf.cfait.widget
 
 import android.content.Context
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
@@ -59,7 +60,8 @@ class TaskListWidget : GlanceAppWidget() {
         val searchQuery = prefs.getString("search_query", "is:ready") ?: "is:ready"
         val maxTasks = prefs.getInt("max_tasks", 8)
         val hideChecked = prefs.getBoolean("hide_checked", false)
-        val bgColor = prefs.getInt("bg_color", 0x80000000.toInt())
+        val bgColorInt = prefs.getInt("bg_color", 0x80000000.toInt())
+        val bgColor = Color(bgColorInt)
         val effectiveQuery = if (hideChecked && !searchQuery.contains("is:done")) {
             "$searchQuery -is:done"
         } else {
@@ -85,10 +87,10 @@ class TaskListWidget : GlanceAppWidget() {
             null
         }
 
-        val textColor = if ((bgColor ushr 24) > 0x80) {
-            android.graphics.Color.BLACK
+        val textColor = if ((bgColorInt ushr 24) > 0x80) {
+            Color.Black
         } else {
-            android.graphics.Color.WHITE
+            Color.White
         }
 
         provideContent {
@@ -162,7 +164,7 @@ class TaskListWidget : GlanceAppWidget() {
 }
 
 @androidx.compose.runtime.Composable
-private fun TaskRow(task: MobileTaskSummary, textColor: Int) {
+private fun TaskRow(task: MobileTaskSummary, textColor: Color) {
     val indent = (task.depth.toInt() * 12).dp
     val displaySummary = stripMarkdown(task.summary)
     val isNote = task.isNote
@@ -228,7 +230,7 @@ private fun TaskRow(task: MobileTaskSummary, textColor: Int) {
                     text = "due today",
                     style = TextStyle(
                         fontSize = 12.sp,
-                        color = ColorProvider((textColor and 0x00FFFFFF) or 0xB3000000.toInt()),
+                        color = ColorProvider(textColor.copy(alpha = 0.7f)),
                     )
                 )
             }
