@@ -220,6 +220,8 @@ fun CfaitNavHost(
     var defaultPriority by remember { mutableIntStateOf(5) }
     var autoScrollUid by remember { mutableStateOf<String?>(null) }
     var focusNewTask by remember { mutableStateOf(false) }
+    var journalTodayHref by remember { mutableStateOf<String?>(null) }
+    var presetSearch by remember { mutableStateOf<Pair<String, String?>?>(null) }
     var refreshTick by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var isLoading by remember { mutableStateOf(false) }
     var showQuickFilter by remember { mutableStateOf(true) }
@@ -509,6 +511,21 @@ fun CfaitNavHost(
                 it.removeExtra("quick_add")
             }
 
+            val journalToday = it.getStringExtra("journal_today")
+            if (journalToday != null) {
+                journalTodayHref = it.getStringExtra("widget_calendar_href") ?: ""
+                it.removeExtra("journal_today")
+                it.removeExtra("widget_calendar_href")
+            }
+
+            val presetSearchQuery = it.getStringExtra("preset_search")
+            if (presetSearchQuery != null) {
+                val calHref = it.getStringExtra("widget_calendar_href")
+                presetSearch = presetSearchQuery to calHref
+                it.removeExtra("preset_search")
+                it.removeExtra("widget_calendar_href")
+            }
+
             if (it.action == Intent.ACTION_VIEW) {
                 val uri: Uri? = it.data
                 uri?.let { fileUri ->
@@ -557,6 +574,8 @@ fun CfaitNavHost(
                 hasUnsynced = hasUnsynced,
                 autoScrollUid = autoScrollUid,
                 focusNewTask = focusNewTask,
+                journalTodayHref = journalTodayHref,
+                presetSearch = presetSearch,
                 showQuickFilter = showQuickFilter,
                 quickFilterTerm = quickFilterTerm,
                 quickFilterIcon = quickFilterIcon,
@@ -582,7 +601,9 @@ fun CfaitNavHost(
                 onDataChanged = { refreshLists() },
                 onMigrateLocal = { sourceHref, targetHref -> handleMigration(sourceHref, targetHref) },
                 onAutoScrollComplete = { autoScrollUid = null },
-                onNewTaskFocusComplete = { focusNewTask = false }
+                onNewTaskFocusComplete = { focusNewTask = false },
+                onJournalTodayComplete = { journalTodayHref = null },
+                onPresetSearchComplete = { presetSearch = null }
             )
         }
         composable("detail/{uid}") { backStackEntry ->

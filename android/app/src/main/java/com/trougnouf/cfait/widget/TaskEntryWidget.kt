@@ -29,14 +29,37 @@ import com.trougnouf.cfait.MainActivity
 /** Intent extra that asks MainActivity to focus the new-task input. */
 const val EXTRA_QUICK_ADD = "quick_add"
 
+/** Intent extra asking MainActivity to open the journal tab for today. */
+const val EXTRA_JOURNAL_TODAY = "journal_today"
+
+/** Intent extra with the calendar href for journal/search modes. */
+const val EXTRA_CALENDAR_HREF = "widget_calendar_href"
+
+/** Intent extra asking MainActivity to open with a preset search query. */
+const val EXTRA_PRESET_SEARCH = "preset_search"
+
 private val QuickAddKey = ActionParameters.Key<String>(EXTRA_QUICK_ADD)
+private val JournalTodayKey = ActionParameters.Key<String>(EXTRA_JOURNAL_TODAY)
+private val CalendarHrefKey = ActionParameters.Key<String>(EXTRA_CALENDAR_HREF)
+private val PresetSearchKey = ActionParameters.Key<String>(EXTRA_PRESET_SEARCH)
+
+private val MODE_QUICK_ADD = 0
+private val MODE_JOURNAL = 1
+private val MODE_SEARCH = 2
+
+private val modeLabels = mapOf(
+    MODE_QUICK_ADD to "Add task",
+    MODE_JOURNAL to "Journal",
+    MODE_SEARCH to "Search",
+)
 
 /**
- * A compact home-screen "add task" button widget.
+ * A compact home-screen widget that launches the app in one of three modes:
+ * quick-add task (focus the new-task input), journal entry for today (with a
+ * pre-set collection), or open with a pre-set search query.
  *
  * Android widgets cannot host an editable text field, so this widget is a
- * single tappable button that launches MainActivity focused on the new-task
- * input (which does have the app's smart-string syntax highlighting).
+ * single tappable button. It shows the Cfait logo with a mode-specific label.
  */
 class TaskEntryWidget : GlanceAppWidget() {
 
@@ -45,8 +68,25 @@ class TaskEntryWidget : GlanceAppWidget() {
             TaskEntryWidgetConfigActivity.PREFS_NAME,
             Context.MODE_PRIVATE
         )
-        val textColorArgb = prefs.getInt(TaskEntryWidgetConfigActivity.KEY_TEXT_COLOR, 0xFFFFFFFF.toInt())
+        val suffix = if (id is androidx.glance.appwidget.AppWidgetId) "_${id.appWidgetId}" else ""
+        val mode = prefs.getInt(TaskEntryWidgetConfigActivity.KEY_MODE + suffix, 0)
+        val calHref = prefs.getString(TaskEntryWidgetConfigActivity.KEY_CALENDAR_HREF + suffix, "") ?: ""
+        val searchQuery = prefs.getString(TaskEntryWidgetConfigActivity.KEY_SEARCH_QUERY + suffix, "") ?: ""
+        val textColorArgb = prefs.getInt(TaskEntryWidgetConfigActivity.KEY_TEXT_COLOR + suffix, 0xFFFFFFFF.toInt())
         val textColor = Color(textColorArgb)
+        val label = modeLabels[mode] ?: "Add task"
+
+        val params = when (mode) {
+            MODE_JOURNAL -> actionParametersOf(
+                JournalTodayKey to "1",
+                CalendarHrefKey to calHref
+            )
+            MODE_SEARCH -> actionParametersOf(
+                PresetSearchKey to searchQuery,
+                CalendarHrefKey to calHref
+            )
+            else -> actionParametersOf(QuickAddKey to "1")
+        }
 
         provideContent {
             GlanceTheme(colors = WidgetColorScheme) {
@@ -54,20 +94,17 @@ class TaskEntryWidget : GlanceAppWidget() {
                     modifier = GlanceModifier
                         .fillMaxSize()
                         .clickable(
-                            actionStartActivity(
-                                MainActivity::class.java,
-                                actionParametersOf(QuickAddKey to "1")
-                            )
+                            actionStartActivity(MainActivity::class.java, params)
                         ),
                     contentAlignment = Alignment.BottomCenter
                 ) {
                     Image(
                         provider = ImageProvider(com.trougnouf.cfait.R.drawable.ic_launcher_foreground),
-                        contentDescription = "Add task",
+                        contentDescription = label,
                         modifier = GlanceModifier.fillMaxSize().padding(bottom = 10.dp),
                     )
                     Text(
-                        text = "Add task",
+                        text = label,
                         style = TextStyle(
                             fontSize = 10.sp,
                             color = ColorProvider(textColor),
@@ -75,6 +112,20 @@ class TaskEntryWidget : GlanceAppWidget() {
                     )
                 }
             }
+        }
+    }
+
+    override suspend fun onDelete(context: Context, id: GlanceId) {
+        if (id is androidx.glance.appwidget.AppWidgetId) {
+            val s = "_${id.appWidgetId}"
+            context.getSharedPreferences(TaskEntryWidgetConfigActivity.PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .remove(TaskEntryWidgetConfigActivity.KEY_MODE + s)
+                .remove(TaskEntryWidgetConfigActivity.KEY_CALENDAR_HREF + s)
+                .remove(TaskEntryWidgetConfigActivity.KEY_SEARCH_QUERY + s)
+                .remove(TaskEntryWidgetConfigActivity.KEY_TEXT_COLOR + s)
+                .remove(TaskEntryWidgetConfigActivity.KEY_TEXT_COLOR_INDEX + s)
+                .apply()
         }
     }
 }

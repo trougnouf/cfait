@@ -10,17 +10,28 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.getValue
@@ -32,10 +43,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
+import com.trougnouf.cfait.CfaitApplication
 
 /**
  * Configuration activity shown when the user places the task-entry widget.
- * Lets them pick a text color that stays readable against their wallpaper.
+ * Lets them pick a mode (quick-add task, journal entry today, or open with
+ * search), per-mode settings, and a text color that stays readable against
+ * their wallpaper.
  */
 class TaskEntryWidgetConfigActivity : ComponentActivity() {
 
@@ -60,6 +74,9 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
         }
 
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val api = (applicationContext as CfaitApplication).api
+        val calendars = api.getCalendars().filter { !it.isDisabled }
+        val s = "_$appWidgetId"
 
         val textColors = listOf(
             Color.White to "White",
@@ -71,22 +88,74 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
         )
 
         setContent {
-            var textColorIndex by remember {
-                mutableStateOf(prefs.getInt(KEY_TEXT_COLOR_INDEX, 0))
+            var mode by remember { mutableStateOf(prefs.getInt(KEY_MODE + s, 0)) }
+            var selectedCalHref by remember {
+                mutableStateOf(prefs.getString(KEY_CALENDAR_HREF + s, calendars.firstOrNull()?.href ?: ""))
             }
+            var searchQuery by remember {
+                mutableStateOf(prefs.getString(KEY_SEARCH_QUERY + s, "is:ready") ?: "is:ready")
+            }
+            var textColorIndex by remember {
+                mutableStateOf(prefs.getInt(KEY_TEXT_COLOR_INDEX + s, 0))
+            }
+
+            val modeLabels = listOf("Add task", "Journal", "Search")
 
             MaterialTheme {
                 Scaffold(
                     topBar = {
-                        TopAppBar(title = { Text("Cfait quick-add widget") })
+                        TopAppBar(title = { Text("Cfait widget") })
                     }
                 ) { padding ->
                     Column(
                         modifier = Modifier
                             .padding(padding)
-                            .padding(16.dp),
+                            .padding(16.dp)
+                            .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
+                        Text("Mode", style = MaterialTheme.typography.labelLarge)
+                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                            modeLabels.forEachIndexed { index, label ->
+                                SegmentedButton(
+                                    selected = mode == index,
+                                    onClick = { mode = index },
+                                    shape = SegmentedButtonDefaults.itemShape(index, modeLabels.size)
+                                ) {
+                                    Text(label)
+                                }
+                            }
+                        }
+
+                        if (mode == 1 || mode == 2) {
+                            Text("Collection", style = MaterialTheme.typography.labelLarge)
+                            Row(
+                                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                calendars.forEach { cal ->
+                                    FilterChip(
+                                        selected = cal.href == selectedCalHref,
+                                        onClick = { selectedCalHref = cal.href },
+                                        label = { Text(cal.name) }
+                                    )
+                                }
+                            }
+                        }
+
+                        if (mode == 2) {
+                            Text("Search query", style = MaterialTheme.typography.labelLarge)
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                placeholder = { Text("is:ready") }
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
                         Text("Text color", style = MaterialTheme.typography.labelLarge)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -96,7 +165,7 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
-                                    androidx.compose.foundation.layout.Box(
+                                    Box(
                                         modifier = Modifier
                                             .size(32.dp)
                                             .background(color = color, shape = CircleShape)
@@ -116,8 +185,11 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
                             onClick = {
                                 val colorArgb = textColors[textColorIndex].first.toArgb()
                                 prefs.edit()
-                                    .putInt(KEY_TEXT_COLOR, colorArgb)
-                                    .putInt(KEY_TEXT_COLOR_INDEX, textColorIndex)
+                                    .putInt(KEY_MODE + s, mode)
+                                    .putString(KEY_CALENDAR_HREF + s, selectedCalHref)
+                                    .putString(KEY_SEARCH_QUERY + s, searchQuery.ifBlank { "is:ready" })
+                                    .putInt(KEY_TEXT_COLOR + s, colorArgb)
+                                    .putInt(KEY_TEXT_COLOR_INDEX + s, textColorIndex)
                                     .apply()
 
                                 val resultValue = Intent().putExtra(
@@ -139,6 +211,9 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
 
     companion object {
         const val PREFS_NAME = "cfait_entry_widget_prefs"
+        const val KEY_MODE = "mode"
+        const val KEY_CALENDAR_HREF = "calendar_href"
+        const val KEY_SEARCH_QUERY = "search_query"
         const val KEY_TEXT_COLOR = "text_color"
         const val KEY_TEXT_COLOR_INDEX = "text_color_index"
     }

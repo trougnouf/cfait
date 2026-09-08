@@ -120,6 +120,8 @@ fun HomeScreen(
     hasUnsynced: Boolean,
     autoScrollUid: String? = null,
     focusNewTask: Boolean = false,
+    journalTodayHref: String? = null,
+    presetSearch: Pair<String, String?>? = null,
     refreshTick: Long,
     showQuickFilter: Boolean,
     quickFilterTerm: String,
@@ -146,6 +148,8 @@ fun HomeScreen(
     onMigrateLocal: (String, String) -> Unit,
     onAutoScrollComplete: () -> Unit = {},
     onNewTaskFocusComplete: () -> Unit = {},
+    onJournalTodayComplete: () -> Unit = {},
+    onPresetSearchComplete: () -> Unit = {},
 ) {
     val tasks = remember(viewData?.tasks) { 
         viewData?.tasks?.map { StableTaskSummary(it) } ?: emptyList() 
@@ -325,6 +329,8 @@ fun HomeScreen(
         }
     }
 
+    // journalTodayHref and presetSearch handlers are defined after updateTaskList()
+
     var taskToMove by remember { mutableStateOf<StableTaskSummary?>(null) }
     var childLockActive by rememberSaveable { mutableStateOf(false) }
     var yankLockActive by rememberSaveable { mutableStateOf(false) }
@@ -490,6 +496,38 @@ fun HomeScreen(
             }
             highlightedUid = targetTask.task.uid
             scrollTrigger++
+        }
+    }
+
+    LaunchedEffect(journalTodayHref) {
+        if (journalTodayHref != null) {
+            val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+            sidebarTab = 4
+            journalDateStr = today
+            journalWikiUid = null
+            journalWikiTitle = ""
+            if (journalTodayHref!!.isNotEmpty()) {
+                journalSelectedHref = journalTodayHref
+            }
+            scope.launch {
+                api.setJournalDate(today)
+                updateTaskList()
+            }
+            onJournalTodayComplete()
+        }
+    }
+
+    LaunchedEffect(presetSearch) {
+        if (presetSearch != null) {
+            val (query, calHref) = presetSearch!!
+            if (!calHref.isNullOrEmpty()) {
+                customWriteTarget = calHref
+                localDefaultCalHref = calHref
+            }
+            searchQuery = query
+            isSearchActive = true
+            updateTaskList()
+            onPresetSearchComplete()
         }
     }
 
