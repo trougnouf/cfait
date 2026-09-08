@@ -2,9 +2,16 @@
 package com.trougnouf.cfait.widget
 
 import android.content.Context
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
@@ -17,6 +24,7 @@ import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
+import androidx.glance.currentState
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
@@ -25,6 +33,7 @@ import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.width
+import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.text.FontStyle
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
@@ -39,6 +48,9 @@ import com.trougnouf.cfait.core.MobileTaskSummary
 /** Intent extra key for deep-linking to a specific task from the widget. */
 private val FocusTaskUidKey = ActionParameters.Key<String>("focus_task_uid")
 
+/** State key used to force widget recomposition after in-widget actions. */
+private val RefreshTickKey = longPreferencesKey("refresh_tick")
+
 /** Strip inline markdown markers (bold, italic, code, strikethrough) for plain display. */
 private fun stripMarkdown(text: String): String {
     return text
@@ -51,6 +63,8 @@ private fun stripMarkdown(text: String): String {
 }
 
 class TaskListWidget : GlanceAppWidget() {
+
+    override val stateDefinition = PreferencesGlanceStateDefinition
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val app = context.applicationContext as CfaitApplication
@@ -68,34 +82,6 @@ class TaskListWidget : GlanceAppWidget() {
             searchQuery
         }
 
-        val viewData = try {
-            api.getViewTasks(
-                MobileFilterOptions(
-                    filterTags = emptyList(),
-                    filterLocations = emptyList(),
-                    searchQuery = effectiveQuery,
-                    expandedGroups = emptyList(),
-                    matchAllCategories = false,
-                    expandedTags = emptyList(),
-                    expandedLocations = emptyList(),
-                    offset = 0u,
-                    limit = maxTasks.toUInt(),
-                )
-            )
-        } catch (e: Exception) {
-            android.util.Log.w("CfaitWidget", "Failed to load widget data", e)
-            null
-        }
-
-        // Build a calendar color lookup for the checkbox colors.
-        val calColorMap: Map<String, Color> = try {
-            api.getCalendars().associate { c ->
-                c.href to (c.color?.let { hex ->
-                    try { Color(android.graphics.Color.parseColor(hex)) } catch (_: Exception) { Color.Gray }
-                } ?: Color.Gray)
-            }
-        } catch (_: Exception) { emptyMap() }
-
         val textColor = if ((bgColorInt ushr 24) > 0x80) {
             Color.Black
         } else {
@@ -103,6 +89,44 @@ class TaskListWidget : GlanceAppWidget() {
         }
 
         provideContent {
+            // Read the refresh tick from Glance state. When the state
+            // changes (after a toggle), Glance recomposes and this value
+            // updates, triggering a fresh data load via LaunchedEffect.
+            val refreshTick = currentState<Preferences>()[RefreshTickKey] ?: 0L
+
+            // Hold the loaded data in state, keyed to refreshTick so it
+            // reloads whenever the state changes.
+            var viewData by remember { mutableStateOf<com.trougnouf.cfait.core.MobileViewData?>(null) }
+            var calColorMap by remember { mutableStateOf<Map<String, Color>>(emptyMap()) }
+
+            LaunchedEffect(refreshTick) {
+                viewData = try {
+                    api.getViewTasks(
+                        MobileFilterOptions(
+                            filterTags = emptyList(),
+                            filterLocations = emptyList(),
+                            searchQuery = effectiveQuery,
+                            expandedGroups = emptyList(),
+                            matchAllCategories = false,
+                            expandedTags = emptyList(),
+                            expandedLocations = emptyList(),
+                            offset = 0u,
+                            limit = maxTasks.toUInt(),
+                        )
+                    )
+                } catch (e: Exception) {
+                    android.util.Log.w("CfaitWidget", "Failed to load widget data", e)
+                    null
+                }
+                calColorMap = try {
+                    api.getCalendars().associate { c ->
+                        c.href to (c.color?.let { hex ->
+                            try { Color(android.graphics.Color.parseColor(hex)) } catch (_: Exception) { Color.Gray }
+                        } ?: Color.Gray)
+                    }
+                } catch (_: Exception) { emptyMap() }
+            }
+
             GlanceTheme(colors = WidgetColorScheme) {
                 Column(
                     modifier = GlanceModifier
@@ -124,8 +148,9 @@ class TaskListWidget : GlanceAppWidget() {
                             )
                         )
                         Spacer(modifier = GlanceModifier.width(8.dp))
-                        if (viewData != null) {
-                            val tasks = viewData.tasks
+                        val vd = viewData
+                        if (vd != null) {
+                            val tasks = vd.tasks
                             val dueToday = tasks.count { it.isDueToday && !it.isDone }
                             val ongoing = tasks.count { it.isPaused }
                             if (dueToday > 0) {
@@ -152,9 +177,10 @@ class TaskListWidget : GlanceAppWidget() {
 
                     Spacer(modifier = GlanceModifier.height(8.dp))
 
-                    if (viewData == null || viewData.tasks.isEmpty()) {
+                    val vd = viewData
+                    if (vd == null || vd.tasks.isEmpty()) {
                         Text(
-                            text = if (viewData == null) "Loading…" else "No tasks",
+                            text = if (vd == null) "Loading…" else "No tasks",
                             modifier = GlanceModifier.padding(top = 4.dp),
                             style = TextStyle(
                                 fontSize = 14.sp,
@@ -162,7 +188,7 @@ class TaskListWidget : GlanceAppWidget() {
                             )
                         )
                     } else {
-                        viewData.tasks.take(maxTasks).forEach { task ->
+                        vd.tasks.take(maxTasks).forEach { task ->
                             TaskRow(task, textColor, calColorMap[task.calendarHref] ?: Color.Gray)
                         }
                     }
