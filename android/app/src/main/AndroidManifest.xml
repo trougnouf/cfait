@@ -85,7 +85,7 @@
             </intent-filter>
         </service>
 
-        <!-- Task list widget -->
+        <!-- Widgets disabled for this release (not yet ready)
         <receiver
             android:name=".widget.TaskListWidgetReceiver"
             android:exported="true"
@@ -99,7 +99,6 @@
             />
         </receiver>
 
-        <!-- Task entry (quick-add) widget -->
         <receiver
             android:name=".widget.TaskEntryWidgetReceiver"
             android:exported="true"
@@ -113,7 +112,6 @@
             />
         </receiver>
 
-        <!-- Task entry widget configuration activity -->
         <activity
             android:name=".widget.TaskEntryWidgetConfigActivity"
             android:exported="true"
@@ -124,7 +122,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Widget configuration activity -->
         <activity
             android:name=".widget.TaskListWidgetConfigActivity"
             android:exported="true"
@@ -135,6 +132,7 @@
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
             </intent-filter>
         </activity>
+        -->
 
         <!-- FileProvider for secure file sharing -->
         <provider
