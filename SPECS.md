@@ -66,7 +66,7 @@ Evaluated instantly during text input. Supported across all clients.
 | `^@` | Sets *both* Start and Due dates. | `^@tomorrow 9am` |
 | `~` or `est:` | Estimated duration (supports ranges). | `~30m`, `~1h-2h` |
 | `#` | Tag/Category (Supports brace expansion). | `#work`, `#project{sub1,sub2}` |
-| `@@` or `loc:`| Location (Supports multiple via `|`). | `@@office`, `@@aldi|auchan` |
+| `@@` or `loc:`| Location (Supports multiple via <code>&#124;</code>). | `@@office`, `@@aldi|auchan` |
 | `url:` | Attach a URL. (Any `scheme://` or `mailto:` is supported. Bare URLs default to `https://`). | `url:perdu.com`, `url:https://example.com` |
 | `[[ ]]` | Wiki-link to jump to or create a task/page. Use `:` for absolute paths and `+` for relative sub-items. | `[[Master plan]]`, `[[+Child]]`, `[[Project:Phase 1]]` |
 | `dep:` or `depends:`| Set dependency (blocks the task). Supports short UIDs or fuzzy matching by summary. | `dep:"Install foundation"`, `dep:abc1234` |
