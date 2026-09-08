@@ -87,6 +87,15 @@ class TaskListWidget : GlanceAppWidget() {
             null
         }
 
+        // Build a calendar color lookup for the checkbox colors.
+        val calColorMap: Map<String, Color> = try {
+            api.getCalendars().associate { c ->
+                c.href to (c.color?.let { hex ->
+                    try { Color(android.graphics.Color.parseColor(hex)) } catch (_: Exception) { Color.Gray }
+                } ?: Color.Gray)
+            }
+        } catch (_: Exception) { emptyMap() }
+
         val textColor = if ((bgColorInt ushr 24) > 0x80) {
             Color.Black
         } else {
@@ -154,7 +163,7 @@ class TaskListWidget : GlanceAppWidget() {
                         )
                     } else {
                         viewData.tasks.take(maxTasks).forEach { task ->
-                            TaskRow(task, textColor)
+                            TaskRow(task, textColor, calColorMap[task.calendarHref] ?: Color.Gray)
                         }
                     }
                 }
@@ -164,7 +173,7 @@ class TaskListWidget : GlanceAppWidget() {
 }
 
 @androidx.compose.runtime.Composable
-private fun TaskRow(task: MobileTaskSummary, textColor: Color) {
+private fun TaskRow(task: MobileTaskSummary, textColor: Color, calColor: Color) {
     val indent = (task.depth.toInt() * 12).dp
     val displaySummary = stripMarkdown(task.summary)
     val isNote = task.isNote
@@ -200,7 +209,7 @@ private fun TaskRow(task: MobileTaskSummary, textColor: Color) {
                 ),
                 style = TextStyle(
                     fontSize = 16.sp,
-                    color = ColorProvider(textColor),
+                    color = ColorProvider(calColor),
                 )
             )
             Spacer(modifier = GlanceModifier.width(6.dp))

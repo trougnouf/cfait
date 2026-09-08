@@ -4,8 +4,8 @@ package com.trougnouf.cfait.widget
 import android.content.Context
 import androidx.glance.GlanceId
 import androidx.glance.action.ActionParameters
+import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.action.ActionCallback
-import androidx.glance.appwidget.updateAll
 import com.trougnouf.cfait.CfaitApplication
 
 /**
@@ -27,7 +27,8 @@ class ToggleTaskActionCallback : ActionCallback {
         try {
             val app = context.applicationContext as CfaitApplication
             app.api.toggleTask(uid)
-            TaskListWidget().updateAll(context)
+            // Update the specific widget that was tapped, not all of them.
+            TaskListWidget().update(context, glanceId)
         } catch (e: Exception) {
             android.util.Log.w("CfaitWidget", "Failed to toggle task $uid", e)
         }
