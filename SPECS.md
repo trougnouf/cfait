@@ -344,6 +344,9 @@ Used for headless automation, scripting, and piping. Operates directly on the `T
 ## 8. Configuration (`config.toml`)
 All persistent state and settings live here. Unrecognized TOML keys must not be dropped during serialization.
 
+**Data location:**
+*   `data_dir`: String (Optional). Absolute or `~/`-relative path overriding where cfait stores its data files (e.g. `local.json`, `journal.json`, `alarm_index.json`) instead of the XDG default (`~/.local/share/cfait`). Read before any other setting so the data directory can be relocated (e.g. into a syncthing-managed folder) without moving config or cache. Only the data directory is affected; config and cache stay at their XDG defaults.
+
 **Connection & Sync:**
 *   `url`, `username`: CalDAV credentials. *(Password vaulted in OS Keyring).*
 *   `tls_client_cert_path`, `tls_client_key_path`: Strings (Optional). Paths to PEM-encoded certificate and private key for mTLS.
