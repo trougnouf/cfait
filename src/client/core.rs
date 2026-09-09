@@ -1194,16 +1194,6 @@ impl RustyClient {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Offline"))?;
         let path = strip_host(calendar_href);
-        let body = r#"<?xml version="1.0" encoding="utf-8" ?>
-<C:calendar-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
-  <D:prop>
-    <D:getetag/>
-  </D:prop>
-  <C:filter>
-    <C:comp-filter name="VCALENDAR"/>
-  </C:filter>
-</C:calendar-query>"#
-            .to_string();
 
         let base = client.base_url();
         let scheme = base.scheme_str().unwrap_or("https");
@@ -1214,6 +1204,82 @@ impl RustyClient {
             format!("/{}", path)
         };
         let absolute_destination = format!("{}://{}{}", scheme, authority, clean_path);
+
+        // VTODO is the primary component cfait syncs. It must be queried with a
+        // nested comp-filter: a bare VCALENDAR comp-filter (no nested component)
+        // returns nothing on some servers such as SOGo.
+        //
+        // VJOURNALs share the same calendar, but CalDAV filters can't OR
+        // component types in a single query, so a separate VJOURNAL query is
+        // needed and its results merged. The two queries are independent and
+        // run concurrently to avoid an extra round-trip; servers that don't
+        // support VJOURNAL simply return an empty result set.
+        let vtodo_path = path.clone();
+        let vtodo_fut = async {
+            match self
+                .calendar_query_etags(&absolute_destination, "VTODO")
+                .await
+            {
+                Ok(map) => Ok::<HashMap<String, String>, anyhow::Error>(map),
+                Err(_) => {
+                    // Server didn't accept the calendar-query REPORT; fall back to
+                    // a plain PROPFIND that lists every .ics resource regardless of
+                    // component type (excluding companion events).
+                    let mut fallback = HashMap::new();
+                    let list_resp = client.request(ListResources::new(&vtodo_path)).await?;
+                    for res in list_resp.resources {
+                        if !res.href.ends_with(".ics") {
+                            continue;
+                        }
+                        let filename = res.href.split('/').next_back().unwrap_or("");
+                        if filename.starts_with("evt-") && filename.len() >= 40 {
+                            continue;
+                        }
+                        if let Some(etag) = res.etag {
+                            fallback.insert(res.href, etag);
+                        }
+                    }
+                    Ok(fallback)
+                }
+            }
+        };
+        let journal_fut = self.calendar_query_etags(&absolute_destination, "VJOURNAL");
+
+        let (vtodo_results, journal_results) = tokio::join!(vtodo_fut, journal_fut);
+
+        let mut results = vtodo_results?;
+        if let Ok(journal_etags) = journal_results {
+            results.extend(journal_etags);
+        }
+
+        Ok(results)
+    }
+
+    /// Send a calendar-query REPORT scoped to a single component (VTODO or
+    /// VJOURNAL) and return the href-to-etag map. Returns an error when the
+    /// server rejects the query, so callers can fall back as appropriate.
+    async fn calendar_query_etags(
+        &self,
+        absolute_destination: &str,
+        component: &str,
+    ) -> anyhow::Result<HashMap<String, String>> {
+        let client = self
+            .client
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Offline"))?;
+        let body = format!(
+            r#"<?xml version="1.0" encoding="utf-8" ?>
+<C:calendar-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:prop>
+    <D:getetag/>
+  </D:prop>
+  <C:filter>
+    <C:comp-filter name="VCALENDAR">
+      <C:comp-filter name="{component}"/>
+    </C:comp-filter>
+  </C:filter>
+</C:calendar-query>"#
+        );
 
         let req = Request::builder()
             .method("REPORT")
@@ -1228,25 +1294,16 @@ impl RustyClient {
             .request_raw(req)
             .await
             .map_err(|e| anyhow::anyhow!("REPORT failed: {:?}", e))?;
-        let mut results = HashMap::new();
 
         if !parts.status.is_success() && parts.status != StatusCode::MULTI_STATUS {
-            let list_resp = client.request(ListResources::new(&path)).await?;
-            for res in list_resp.resources {
-                if !res.href.ends_with(".ics") {
-                    continue;
-                }
-                let filename = res.href.split('/').next_back().unwrap_or("");
-                if filename.starts_with("evt-") && filename.len() >= 40 {
-                    continue;
-                }
-                if let Some(etag) = res.etag {
-                    results.insert(res.href, etag);
-                }
-            }
-            return Ok(results);
+            return Err(anyhow::anyhow!(
+                "calendar-query REPORT for {} returned {}",
+                component,
+                parts.status
+            ));
         }
 
+        let mut results = HashMap::new();
         let xml_str = std::str::from_utf8(&body_bytes).unwrap_or("");
         if let Ok(doc) = roxmltree::Document::parse(xml_str) {
             for response in doc

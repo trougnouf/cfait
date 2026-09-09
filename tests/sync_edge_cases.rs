@@ -4,7 +4,7 @@ use cfait::client::RustyClient;
 use cfait::context::TestContext;
 use cfait::journal::{Action, Journal};
 use cfait::model::Task;
-use mockito::Server;
+use mockito::{Matcher, Server};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -96,6 +96,7 @@ async fn test_sync_ignores_companion_events_to_prevent_multiget_spam() {
     let mock_list = server
         .mock("REPORT", cal_path)
         .match_header("depth", "1")
+        .match_body(Matcher::Regex("name=\"VTODO\"".to_string()))
         .with_status(207)
         .with_body(r#"
             <d:multistatus xmlns:d="DAV:">
@@ -105,6 +106,16 @@ async fn test_sync_ignores_companion_events_to_prevent_multiget_spam() {
                 </d:response>
             </d:multistatus>
         "#)
+        .create_async()
+        .await;
+
+    // 1b. Mock the separate VJOURNAL calendar-query (returns nothing here).
+    let mock_journal = server
+        .mock("REPORT", cal_path)
+        .match_header("depth", "1")
+        .match_body(Matcher::Regex("name=\"VJOURNAL\"".to_string()))
+        .with_status(207)
+        .with_body(r#"<d:multistatus xmlns:d="DAV:"></d:multistatus>"#)
         .create_async()
         .await;
 
@@ -142,6 +153,7 @@ async fn test_sync_ignores_companion_events_to_prevent_multiget_spam() {
 
     // 4. Assertions
     mock_list.assert();
+    mock_journal.assert();
     mock_get.assert(); // If the client tried to request evt-valid-task-start.ics, mockito would panic
 
     assert_eq!(
