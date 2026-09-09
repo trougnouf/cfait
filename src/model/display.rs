@@ -70,7 +70,11 @@ impl TaskDisplay for Task {
             } else {
                 0 // Fallback if store is not provided
             };
-            let (c_str, t_str) = crate::model::parser::format_goal_duration(current, goal.target);
+            let (c_str, t_str) = if goal.goal_type == crate::config::GoalType::Duration {
+                crate::model::parser::format_goal_duration(current, goal.target)
+            } else {
+                (current.to_string(), goal.target.to_string())
+            };
             return format!("[ {} / {}/{}]", c_str, t_str, goal.interval.format_short());
         }
 
