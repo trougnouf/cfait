@@ -466,6 +466,9 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                         crate::gui::message::BoolField::SortStandardByPriority,
                         v
                     )),
+                text(rust_i18n::t!("sort_standard_by_priority_explain"))
+                    .size(12)
+                    .color(Color::from_rgb(0.6, 0.6, 0.6)),
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.sort_tiebreak_recent)
                     .label(rust_i18n::t!("sort_tiebreak_recent"))
                     .on_toggle(|v| Message::ToggleField(
