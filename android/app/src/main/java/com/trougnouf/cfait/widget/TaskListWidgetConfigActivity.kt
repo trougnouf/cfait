@@ -42,8 +42,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import androidx.glance.appwidget.GlanceAppWidgetManager
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 
 /**
@@ -72,17 +72,18 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
             return
         }
 
-        val prefs = getSharedPreferences("cfait_widget_prefs", Context.MODE_PRIVATE)
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val s = "_$appWidgetId"
 
         setContent {
             var searchQuery by remember {
-                mutableStateOf(prefs.getString("search_query", "is:ready") ?: "is:ready")
+                mutableStateOf(prefs.getString(KEY_SEARCH_QUERY + s, "is:ready") ?: "is:ready")
             }
             var hideChecked by remember {
-                mutableStateOf(prefs.getBoolean("hide_checked", false))
+                mutableStateOf(prefs.getBoolean(KEY_HIDE_CHECKED + s, false))
             }
             var maxTasks by remember {
-                mutableStateOf(prefs.getInt("max_tasks", 8).toString())
+                mutableStateOf(prefs.getInt(KEY_MAX_TASKS + s, 8).toString())
             }
             val bgColors = listOf(
                 Color.Black to "Black",
@@ -93,10 +94,10 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
                 Color(0xFF8C1D18) to "Red",
             )
             var bgColorIndex by remember {
-                mutableStateOf(prefs.getInt("bg_color_index", 0))
+                mutableStateOf(prefs.getInt(KEY_BG_COLOR_INDEX + s, 0))
             }
             var bgOpacity by remember {
-                mutableFloatStateOf(prefs.getFloat("bg_opacity", 0.5f))
+                mutableFloatStateOf(prefs.getFloat(KEY_BG_OPACITY + s, 0.5f))
             }
 
             MaterialTheme {
@@ -192,12 +193,12 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
                                 val bgColor = bgColors[bgColorIndex].first
                                 val bgColorArgb = (bgColor.copy(alpha = bgOpacity)).toArgb()
                                 prefs.edit()
-                                    .putString("search_query", searchQuery.ifBlank { "is:ready" })
-                                    .putBoolean("hide_checked", hideChecked)
-                                    .putInt("max_tasks", max)
-                                    .putInt("bg_color", bgColorArgb)
-                                    .putInt("bg_color_index", bgColorIndex)
-                                    .putFloat("bg_opacity", bgOpacity)
+                                    .putString(KEY_SEARCH_QUERY + s, searchQuery.ifBlank { "is:ready" })
+                                    .putBoolean(KEY_HIDE_CHECKED + s, hideChecked)
+                                    .putInt(KEY_MAX_TASKS + s, max)
+                                    .putInt(KEY_BG_COLOR + s, bgColorArgb)
+                                    .putInt(KEY_BG_COLOR_INDEX + s, bgColorIndex)
+                                    .putFloat(KEY_BG_OPACITY + s, bgOpacity)
                                     .apply()
 
                                 val resultValue = Intent().putExtra(
@@ -206,7 +207,12 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
                                 )
                                 setResult(RESULT_OK, resultValue)
 
-                                finish()
+                                lifecycleScope.launch {
+                                    val manager = GlanceAppWidgetManager(this@TaskListWidgetConfigActivity)
+                                    val glanceId = manager.getGlanceIdBy(appWidgetId)
+                                    TaskListWidget().update(this@TaskListWidgetConfigActivity, glanceId)
+                                    finish()
+                                }
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -216,5 +222,15 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    companion object {
+        const val PREFS_NAME = "cfait_widget_prefs"
+        const val KEY_SEARCH_QUERY = "search_query"
+        const val KEY_HIDE_CHECKED = "hide_checked"
+        const val KEY_MAX_TASKS = "max_tasks"
+        const val KEY_BG_COLOR = "bg_color"
+        const val KEY_BG_COLOR_INDEX = "bg_color_index"
+        const val KEY_BG_OPACITY = "bg_opacity"
     }
 }

@@ -860,5 +860,7 @@
     "search_is_page": "is:page,is:journal",
     "search_is_permanent": "is:permanent",
     "blur_when_unfocused": "Hide content when window is unfocused (Privacy mode)",
-    "privacy_mode": "Privacy mode"
+    "privacy_mode": "Privacy mode",
+    "widget_label_add_task": "Add task",
+    "widget_label_task_list": "Task list"
 }

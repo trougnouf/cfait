@@ -70,11 +70,12 @@ class TaskListWidget : GlanceAppWidget() {
         val app = context.applicationContext as CfaitApplication
         val api = app.api
 
-        val prefs = context.getSharedPreferences("cfait_widget_prefs", Context.MODE_PRIVATE)
-        val searchQuery = prefs.getString("search_query", "is:ready") ?: "is:ready"
-        val maxTasks = prefs.getInt("max_tasks", 8)
-        val hideChecked = prefs.getBoolean("hide_checked", false)
-        val bgColorInt = prefs.getInt("bg_color", 0x80000000.toInt())
+        val prefs = context.getSharedPreferences(TaskListWidgetConfigActivity.PREFS_NAME, Context.MODE_PRIVATE)
+        val suffix = if (id is androidx.glance.appwidget.AppWidgetId) "_${id.appWidgetId}" else ""
+        val searchQuery = prefs.getString(TaskListWidgetConfigActivity.KEY_SEARCH_QUERY + suffix, "is:ready") ?: "is:ready"
+        val maxTasks = prefs.getInt(TaskListWidgetConfigActivity.KEY_MAX_TASKS + suffix, 8)
+        val hideChecked = prefs.getBoolean(TaskListWidgetConfigActivity.KEY_HIDE_CHECKED + suffix, false)
+        val bgColorInt = prefs.getInt(TaskListWidgetConfigActivity.KEY_BG_COLOR + suffix, 0x80000000.toInt())
         val bgColor = Color(bgColorInt)
         val effectiveQuery = if (hideChecked && !searchQuery.contains("is:done")) {
             "$searchQuery -is:done"
@@ -194,6 +195,21 @@ class TaskListWidget : GlanceAppWidget() {
                     }
                 }
             }
+        }
+    }
+
+    override suspend fun onDelete(context: Context, glanceId: GlanceId) {
+        if (glanceId is androidx.glance.appwidget.AppWidgetId) {
+            val s = "_${glanceId.appWidgetId}"
+            context.getSharedPreferences(TaskListWidgetConfigActivity.PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .remove(TaskListWidgetConfigActivity.KEY_SEARCH_QUERY + s)
+                .remove(TaskListWidgetConfigActivity.KEY_HIDE_CHECKED + s)
+                .remove(TaskListWidgetConfigActivity.KEY_MAX_TASKS + s)
+                .remove(TaskListWidgetConfigActivity.KEY_BG_COLOR + s)
+                .remove(TaskListWidgetConfigActivity.KEY_BG_COLOR_INDEX + s)
+                .remove(TaskListWidgetConfigActivity.KEY_BG_OPACITY + s)
+                .apply()
         }
     }
 }

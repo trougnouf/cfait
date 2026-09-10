@@ -43,7 +43,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
+import androidx.glance.appwidget.GlanceAppWidgetManager
+import androidx.lifecycle.lifecycleScope
 import com.trougnouf.cfait.CfaitApplication
+import kotlinx.coroutines.launch
 
 /**
  * Configuration activity shown when the user places the task-entry widget.
@@ -197,7 +200,13 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
                                     appWidgetId
                                 )
                                 setResult(RESULT_OK, resultValue)
-                                finish()
+
+                                lifecycleScope.launch {
+                                    val manager = GlanceAppWidgetManager(this@TaskEntryWidgetConfigActivity)
+                                    val glanceId = manager.getGlanceIdBy(appWidgetId)
+                                    TaskEntryWidget().update(this@TaskEntryWidgetConfigActivity, glanceId)
+                                    finish()
+                                }
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
