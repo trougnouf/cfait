@@ -842,6 +842,8 @@
     "warning_background_sync_failed": "Advertencia: Error al sincronizar en segundo plano: %{error}",
     "warning_calendar_not_found": "Advertencia: No se ha encontrado la colección «%{calendar}». La tarea se guardará en la copia de seguridad local.",
     "welcome_title": "¡Bienvenido!",
+    "widget_label_add_task": "Añadir tarea",
+    "widget_label_task_list": "Lista de tareas",
     "wiki_index": "Índice de Wikipedia",
     "window_12_months": "1 2 meses",
     "window_12_weeks": "12 semanas",
