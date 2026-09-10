@@ -202,10 +202,15 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
                                 setResult(RESULT_OK, resultValue)
 
                                 lifecycleScope.launch {
-                                    val manager = GlanceAppWidgetManager(this@TaskEntryWidgetConfigActivity)
-                                    val glanceId = manager.getGlanceIdBy(appWidgetId)
-                                    TaskEntryWidget().update(this@TaskEntryWidgetConfigActivity, glanceId)
-                                    finish()
+                                    try {
+                                        val manager = GlanceAppWidgetManager(this@TaskEntryWidgetConfigActivity)
+                                        val glanceId = manager.getGlanceIdBy(appWidgetId)
+                                        TaskEntryWidget().update(this@TaskEntryWidgetConfigActivity, glanceId)
+                                    } catch (e: Exception) {
+                                        android.util.Log.w("CfaitWidget", "Widget update after config failed", e)
+                                    } finally {
+                                        finish()
+                                    }
                                 }
                             },
                             modifier = Modifier.fillMaxWidth()
