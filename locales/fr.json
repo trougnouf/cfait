@@ -140,6 +140,7 @@
     "connecting": "Connexion en cours…",
     "connection_failed": "Échec de la connexion : %{error}",
     "copied_to_clipboard": "Copié dans le presse-papiers",
+    "click_to_copy": "Cliquez pour copier",
     "could_not_determine_location": "Impossible de déterminer la position",
     "create_calendar_events_for_tasks_with_dates": "Créer des événements pour les tâches avec dates",
     "create_calendar_events_note": "Les événements seront créés rétroactivement. Utilisez +cal/-cal par tâche pour outrepasser ce réglage.",

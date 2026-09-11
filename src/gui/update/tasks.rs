@@ -1023,7 +1023,22 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::batch(tasks)
         }
 
-        Message::CopyToClipboard(text) => Task::batch(vec![iced::clipboard::write(text)]),
+        Message::CopyToClipboard(text) => {
+            app.info_msg = Some(rust_i18n::t!("copied_to_clipboard").to_string());
+            app.info_msg_version = app.info_msg_version.wrapping_add(1);
+            app.error_msg = None;
+            let version = app.info_msg_version;
+            Task::batch(vec![
+                iced::clipboard::write(text),
+                Task::perform(
+                    async move {
+                        tokio::time::sleep(std::time::Duration::from_secs(4)).await;
+                        version
+                    },
+                    Message::DismissInfo,
+                ),
+            ])
+        }
 
         Message::TogglePin(uid) => {
             common::dispatch_intent(app, AppIntent::TogglePin { uid });

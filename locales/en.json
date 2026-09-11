@@ -153,6 +153,7 @@
     "create_new_remote_calendar": "Create new remote collection",
     "remote_collections": "Remote collections",
     "copied_to_clipboard": "Copied to clipboard",
+    "click_to_copy": "Click to copy",
     "could_not_determine_location": "Could not determine location",
     "create_calendar_events_for_tasks_with_dates": "Create calendar events for tasks with dates",
     "create_calendar_events_note": "Events will be retroactively created. Use +cal/-cal per task to override.",

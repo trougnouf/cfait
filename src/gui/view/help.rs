@@ -5,7 +5,9 @@
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp};
 use crate::help::HelpTab;
-use iced::widget::{MouseArea, Space, button, column, container, row, scrollable, svg, text};
+use iced::widget::{
+    MouseArea, Space, button, column, container, row, scrollable, svg, text, tooltip,
+};
 use iced::{Color, Element, Font, Length, Theme};
 
 const COL_ACCENT: Color = Color::from_rgb(0.4, 0.7, 1.0);
@@ -219,24 +221,52 @@ pub fn view_help<'a>(tab: HelpTab, app: &'a GuiApp) -> Element<'a, Message> {
             .spacing(12)
             .align_y(iced::Alignment::Center);
 
+            let version_info = format!(
+                "{} ({})",
+                env!("CARGO_PKG_VERSION"),
+                env!("GIT_COMMIT_HASH")
+            );
+
+            let version_btn = button(
+                row![
+                    text(
+                        rust_i18n::t!(
+                            "about_version",
+                            version = env!("CARGO_PKG_VERSION"),
+                            commit = env!("GIT_COMMIT_HASH")
+                        )
+                        .to_string()
+                    )
+                    .size(14)
+                    .style(|_: &Theme| text::Style {
+                        color: Some(COL_MUTED)
+                    }),
+                    Space::new().width(8),
+                    crate::gui::icon::icon(crate::gui::icon::COPY)
+                        .size(14)
+                        .style(|_: &Theme| text::Style {
+                            color: Some(COL_ACCENT)
+                        })
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding(0)
+            .style(iced::widget::button::text)
+            .on_press(Message::CopyToClipboard(version_info));
+
             let footer_links = column![
                 text(rust_i18n::t!("about_title").to_string())
                     .size(14)
                     .style(|_: &Theme| text::Style {
                         color: Some(COL_MUTED)
                     }),
-                text(
-                    rust_i18n::t!(
-                        "about_version",
-                        version = env!("CARGO_PKG_VERSION"),
-                        commit = env!("GIT_COMMIT_HASH")
-                    )
-                    .to_string()
+                tooltip(
+                    version_btn,
+                    text(rust_i18n::t!("click_to_copy").to_string()).size(12),
+                    tooltip::Position::Top,
                 )
-                .size(14)
-                .style(|_: &Theme| text::Style {
-                    color: Some(COL_MUTED)
-                }),
+                .style(crate::gui::view::tooltip_style),
                 text(rust_i18n::t!("about_license").to_string())
                     .size(14)
                     .style(|_: &Theme| text::Style {
