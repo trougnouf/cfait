@@ -5116,6 +5116,12 @@ data class MobileFilterOptions(
     var `expandedLocations`: List<kotlin.String>,
     var `offset`: kotlin.UInt,
     var `limit`: kotlin.UInt,
+    /**
+     * When true, collapsed task trees stay collapsed even when a search query
+     * is active (the default behaviour force-expands them). Used by the home
+     * screen widget so it mirrors the user's fold/unfold state.
+     */
+    var `respectTreeCollapse`: kotlin.Boolean,
 ) {
     companion object
 }
@@ -5135,6 +5141,7 @@ public object FfiConverterTypeMobileFilterOptions : FfiConverterRustBuffer<Mobil
             FfiConverterSequenceString.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
+            FfiConverterBoolean.read(buf),
         )
 
     override fun allocationSize(value: MobileFilterOptions) =
@@ -5147,7 +5154,8 @@ public object FfiConverterTypeMobileFilterOptions : FfiConverterRustBuffer<Mobil
                 FfiConverterSequenceString.allocationSize(value.`expandedTags`) +
                 FfiConverterSequenceString.allocationSize(value.`expandedLocations`) +
                 FfiConverterUInt.allocationSize(value.`offset`) +
-                FfiConverterUInt.allocationSize(value.`limit`)
+                FfiConverterUInt.allocationSize(value.`limit`) +
+                FfiConverterBoolean.allocationSize(value.`respectTreeCollapse`)
         )
 
     override fun write(
@@ -5163,6 +5171,7 @@ public object FfiConverterTypeMobileFilterOptions : FfiConverterRustBuffer<Mobil
         FfiConverterSequenceString.write(value.`expandedLocations`, buf)
         FfiConverterUInt.write(value.`offset`, buf)
         FfiConverterUInt.write(value.`limit`, buf)
+        FfiConverterBoolean.write(value.`respectTreeCollapse`, buf)
     }
 }
 

@@ -189,6 +189,7 @@ When completing a recurring task:
             *   *Ancestors (Context):* Parent tasks all the way to the root are included to provide structural context, but are visually dimmed (`is_search_context = true`).
             *   *Unrelated Siblings:* Branches without any matches are completely hidden.
         *   During active searches or filtering, all matching task trees are automatically expanded. Users can manually collapse them, but this state is overridden on new queries.
+    *   **Android Home-Screen Widget:** The task list widget can optionally respect the user's fold/unfold state via a "Respect fold/unfold state" toggle in the widget configuration screen (default on). When enabled, `respect_tree_collapse = true` is passed in `MobileFilterOptions` so collapsed task trees stay collapsed despite the widget's `is:ready` search query. The fold/unfold indicator is tappable and dispatches `ToggleTreeCollapse`, mirroring the main app's tree state.
 
 ### 4.4. Companion Events (Calendar Integration)
 If `create_events_for_tasks` is enabled or `+cal` is used:

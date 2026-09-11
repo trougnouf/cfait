@@ -450,7 +450,8 @@ fun HomeScreen(
                     expandedTags = expandedTags.toList(),
                     expandedLocations = expandedLocations.toList(),
                     offset = 0u,
-                    limit = 10000u
+                    limit = 10000u,
+                    respectTreeCollapse = false
                 )
                 val newViewData = api.getViewTasks(options)
                 onUpdateViewData(newViewData, api.getConfig().tagAliases)
@@ -707,7 +708,8 @@ fun HomeScreen(
                             expandedTags = expandedTags.toList(),
                             expandedLocations = expandedLocations.toList(),
                             offset = 0u,
-                            limit = 10000u
+                            limit = 10000u,
+                            respectTreeCollapse = false
                         )
                         val newViewData = api.getViewTasks(options)
                         onUpdateViewData(newViewData, api.getConfig().tagAliases)
@@ -964,7 +966,12 @@ fun HomeScreen(
     // --- Effects ---
 
     LaunchedEffect(autoScrollUid) {
-        if (autoScrollUid != null) highlightedUid = autoScrollUid
+        if (autoScrollUid != null) {
+            // Switch back to the tasks tab in case we were on the journal tab,
+            // otherwise the task list is not visible and the scroll has nowhere to land.
+            if (sidebarTab == 4) sidebarTab = 0
+            highlightedUid = autoScrollUid
+        }
     }
 
     LaunchedEffect(hasUnsynced) { localHasUnsynced = hasUnsynced }

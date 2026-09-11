@@ -100,6 +100,7 @@ class TaskListWidget : GlanceAppWidget() {
             val maxTasks = prefs.getInt(TaskListWidgetConfigActivity.KEY_MAX_TASKS + suffix, 8)
             val hideChecked = prefs.getBoolean(TaskListWidgetConfigActivity.KEY_HIDE_CHECKED + suffix, false)
             val bgColorInt = prefs.getInt(TaskListWidgetConfigActivity.KEY_BG_COLOR + suffix, 0x80000000.toInt())
+            val respectCollapse = prefs.getBoolean(TaskListWidgetConfigActivity.KEY_RESPECT_COLLAPSE + suffix, true)
             val bgColor = Color(bgColorInt)
             val effectiveQuery = if (hideChecked && !searchQuery.contains("is:done")) {
                 "$searchQuery -is:done"
@@ -130,6 +131,7 @@ class TaskListWidget : GlanceAppWidget() {
                             expandedLocations = emptyList(),
                             offset = 0u,
                             limit = maxTasks.toUInt(),
+                            respectTreeCollapse = respectCollapse
                         )
                     )
                 } catch (e: Exception) {
@@ -226,6 +228,7 @@ class TaskListWidget : GlanceAppWidget() {
                 .remove(TaskListWidgetConfigActivity.KEY_BG_COLOR + s)
                 .remove(TaskListWidgetConfigActivity.KEY_BG_COLOR_INDEX + s)
                 .remove(TaskListWidgetConfigActivity.KEY_BG_OPACITY + s)
+                .remove(TaskListWidgetConfigActivity.KEY_RESPECT_COLLAPSE + s)
                 .apply()
         }
     }
@@ -247,6 +250,11 @@ private fun TaskRow(task: MobileTaskSummary, textColor: Color, calColor: Color) 
         if (task.hasSubtasks) {
             Text(
                 text = if (task.isCollapsed) "▶" else "▼",
+                modifier = GlanceModifier.clickable(
+                    actionRunCallback<ToggleTreeCollapseActionCallback>(
+                        actionParametersOf(ToggleTreeCollapseActionCallback.TaskUidKey to task.uid)
+                    )
+                ),
                 style = TextStyle(
                     fontSize = 10.sp,
                     color = ColorProvider(textColor),

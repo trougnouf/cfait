@@ -100,6 +100,9 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
             var bgOpacity by remember {
                 mutableFloatStateOf(prefs.getFloat(KEY_BG_OPACITY + s, 0.5f))
             }
+            var respectCollapse by remember {
+                mutableStateOf(prefs.getBoolean(KEY_RESPECT_COLLAPSE + s, true))
+            }
 
             MaterialTheme {
                 Scaffold(
@@ -132,6 +135,18 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
                             Switch(
                                 checked = hideChecked,
                                 onCheckedChange = { hideChecked = it }
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Respect fold/unfold state")
+                            Switch(
+                                checked = respectCollapse,
+                                onCheckedChange = { respectCollapse = it }
                             )
                         }
 
@@ -196,6 +211,7 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
                                 prefs.edit()
                                     .putString(KEY_SEARCH_QUERY + s, searchQuery.ifBlank { "is:ready" })
                                     .putBoolean(KEY_HIDE_CHECKED + s, hideChecked)
+                                    .putBoolean(KEY_RESPECT_COLLAPSE + s, respectCollapse)
                                     .putInt(KEY_MAX_TASKS + s, max)
                                     .putInt(KEY_BG_COLOR + s, bgColorArgb)
                                     .putInt(KEY_BG_COLOR_INDEX + s, bgColorIndex)
@@ -243,5 +259,6 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
         const val KEY_BG_COLOR = "bg_color"
         const val KEY_BG_COLOR_INDEX = "bg_color_index"
         const val KEY_BG_OPACITY = "bg_opacity"
+        const val KEY_RESPECT_COLLAPSE = "respect_collapse"
     }
 }

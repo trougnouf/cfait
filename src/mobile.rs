@@ -209,6 +209,10 @@ pub struct MobileFilterOptions {
     pub expanded_locations: Vec<String>,
     pub offset: u32,
     pub limit: u32,
+    /// When true, collapsed task trees stay collapsed even when a search query
+    /// is active (the default behaviour force-expands them). Used by the home
+    /// screen widget so it mirrors the user's fold/unfold state.
+    pub respect_tree_collapse: bool,
 }
 
 #[derive(uniffi::Record)]
@@ -2422,10 +2426,11 @@ impl CfaitMobile {
         session.expanded_tags = options.expanded_tags.clone();
         session.expanded_locations = options.expanded_locations.clone();
 
-        let search_collapsed_set: HashSet<String> =
+        let mut search_collapsed_set: HashSet<String> =
             session.search_collapsed_tasks.iter().cloned().collect();
         let focused_task_uid = session.focused_task_uid.clone();
         let selected_journal_date_session = session.selected_journal_date.clone();
+        let respect_tree_collapse = options.respect_tree_collapse;
         drop(session);
 
         let all_cals = self.get_calendars();
@@ -2435,6 +2440,19 @@ impl CfaitMobile {
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let mut hidden: HashSet<String> = config.hidden_calendars.into_iter().collect();
         hidden.extend(config.disabled_calendars);
+
+        // When the caller asks us to respect the user's fold/unfold state, treat
+        // every task that is currently collapsed as "manually collapsed during
+        // search" so the filter does not force-expand it.
+        if respect_tree_collapse {
+            for tasks_map in store.calendars.values() {
+                for t in tasks_map.values() {
+                    if t.collapsed {
+                        search_collapsed_set.insert(t.uid.clone());
+                    }
+                }
+            }
+        }
 
         let expanded_set: HashSet<String> = options.expanded_groups.into_iter().collect();
         let expanded_tags_set: HashSet<String> = options.expanded_tags.into_iter().collect();
