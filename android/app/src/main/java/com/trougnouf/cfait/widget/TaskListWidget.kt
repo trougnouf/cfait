@@ -64,6 +64,20 @@ private fun stripMarkdown(text: String): String {
         .replace(Regex("""`(.+?)`"""), "$1")
 }
 
+suspend fun updateAllTaskListWidgets(context: Context) {
+    val manager = androidx.glance.appwidget.GlanceAppWidgetManager(context)
+    val appWidgetManager = android.appwidget.AppWidgetManager.getInstance(context)
+    val componentName = android.content.ComponentName(context, TaskListWidgetReceiver::class.java)
+    appWidgetManager.getAppWidgetIds(componentName).forEach { id ->
+        try {
+            val glanceId = manager.getGlanceIdBy(id)
+            TaskListWidget().update(context, glanceId)
+        } catch (e: Exception) {
+            android.util.Log.e("CfaitWidget", "Failed to update TaskList widget $id", e)
+        }
+    }
+}
+
 class TaskListWidget : GlanceAppWidget() {
 
     override val stateDefinition = PreferencesGlanceStateDefinition

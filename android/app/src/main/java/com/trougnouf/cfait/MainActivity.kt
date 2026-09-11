@@ -60,7 +60,7 @@ import com.trougnouf.cfait.widget.TaskListWidget
 import com.trougnouf.cfait.workers.AlarmWorker
 import com.trougnouf.cfait.workers.CalendarMigrationWorker
 import com.trougnouf.cfait.workers.CalendarSyncWorker
-import androidx.glance.appwidget.updateAll
+import com.trougnouf.cfait.widget.updateAllTaskListWidgets
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -347,7 +347,7 @@ fun CfaitNavHost(
                 NotificationHelper.updateOngoingNotifications(context, api)
 
                 // Update widgets so they reflect mutations immediately
-                TaskListWidget().updateAll(context)
+                updateAllTaskListWidgets(context)
 
                 // Dynamically update Background Sync Worker based on config
                 val interval = config.autoRefreshInterval

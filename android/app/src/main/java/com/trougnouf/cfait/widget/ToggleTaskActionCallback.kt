@@ -7,7 +7,7 @@ import androidx.glance.GlanceId
 import androidx.glance.action.ActionParameters
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.state.updateAppWidgetState
-import androidx.glance.appwidget.updateAll
+import com.trougnouf.cfait.widget.updateAllTaskListWidgets
 import com.trougnouf.cfait.CfaitApplication
 
 /**
@@ -45,6 +45,6 @@ class ToggleTaskActionCallback : ActionCallback {
         updateAppWidgetState(context, glanceId) { prefs ->
             prefs[RefreshTickKey] = System.currentTimeMillis()
         }
-        TaskListWidget().updateAll(context)
+        updateAllTaskListWidgets(context)
     }
 }

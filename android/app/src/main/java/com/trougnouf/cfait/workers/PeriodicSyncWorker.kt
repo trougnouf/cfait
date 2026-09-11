@@ -4,7 +4,7 @@ package com.trougnouf.cfait.workers
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import androidx.glance.appwidget.updateAll
+import com.trougnouf.cfait.widget.updateAllTaskListWidgets
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.trougnouf.cfait.CfaitApplication
@@ -41,7 +41,7 @@ class PeriodicSyncWorker(
             NotificationHelper.updateOngoingNotifications(context, api)
 
             // Update widgets with fresh data after sync
-            TaskListWidget().updateAll(context)
+            updateAllTaskListWidgets(context)
 
             // Notify UI to refresh if open
             val intent = Intent("com.trougnouf.cfait.REFRESH_UI")
