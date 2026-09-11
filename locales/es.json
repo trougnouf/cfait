@@ -677,7 +677,6 @@
     "show_journal_tab": "Mostrar la pestaña «Diario» en la barra lateral",
     "show_less": "Ver menos",
     "show_locations_tab": "Mostrar la pestaña Ubicaciones en el menú lateral",
-    "sidebar_tabs": "Pestañas del menú lateral",
     "show_older_sessions": {
         "one": "Ver 1 sesión más antigua…",
         "other": "Ver %{count} sesiones más antiguas…"
@@ -687,6 +686,7 @@
     "show_priority_numbers": "Mostrar prioridad numérica asignada (!X)",
     "show_tags_tab": "Mostrar la pestaña Etiquetas en el menú lateral",
     "show_task_goals_in_sidebar": "Objetivos de las tarea en barra lateral",
+    "sidebar_tabs": "Pestañas del menú lateral",
     "snooze": "Posponer…",
     "snooze_custom_title": "Personalizado",
     "snooze_hint": "Posponer (ej. 15m, 1h)",
@@ -843,7 +843,7 @@
     "warning_background_sync_failed": "Advertencia: Error al sincronizar en segundo plano: %{error}",
     "warning_calendar_not_found": "Advertencia: No se ha encontrado la colección «%{calendar}». La tarea se guardará en la copia de seguridad local.",
     "welcome_title": "¡Bienvenido!",
-    "widget_label_add_task": "Añadir tarea",
+    "widget_label_add_task": "Botón Cfait",
     "widget_label_task_list": "Lista de tareas",
     "wiki_index": "Índice de Wikipedia",
     "window_12_months": "1 2 meses",
