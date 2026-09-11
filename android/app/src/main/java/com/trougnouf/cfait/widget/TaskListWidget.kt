@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.trougnouf.cfait.widget
 
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Context
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -292,4 +294,29 @@ private fun TaskRow(task: MobileTaskSummary, textColor: Color, calColor: Color) 
 
 class TaskListWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget = TaskListWidget()
+
+    private fun isOwnId(context: Context, appWidgetId: Int): Boolean {
+        val info = AppWidgetManager.getInstance(context).getAppWidgetInfo(appWidgetId)
+        return info?.provider == ComponentName(context.packageName, javaClass.name)
+    }
+
+    override fun onUpdate(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetIds: IntArray
+    ) {
+        val ownIds = appWidgetIds.filter { isOwnId(context, it) }.toIntArray()
+        if (ownIds.isNotEmpty()) super.onUpdate(context, appWidgetManager, ownIds)
+    }
+
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: android.os.Bundle
+    ) {
+        if (isOwnId(context, appWidgetId)) {
+            super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
+        }
+    }
 }

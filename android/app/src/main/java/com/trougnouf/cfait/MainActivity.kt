@@ -220,6 +220,7 @@ fun CfaitNavHost(
     var defaultPriority by remember { mutableIntStateOf(5) }
     var autoScrollUid by remember { mutableStateOf<String?>(null) }
     var focusNewTask by remember { mutableStateOf(false) }
+    var quickAddCalHref by remember { mutableStateOf<String?>(null) }
     var journalTodayHref by remember { mutableStateOf<String?>(null) }
     var presetSearch by remember { mutableStateOf<Pair<String, String?>?>(null) }
     var refreshTick by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -508,9 +509,11 @@ fun CfaitNavHost(
 
             if (it.getStringExtra("quick_add") != null) {
                 focusNewTask = true
+                quickAddCalHref = it.getStringExtra("widget_calendar_href")
                 journalTodayHref = null
                 presetSearch = null
                 it.removeExtra("quick_add")
+                it.removeExtra("widget_calendar_href")
             }
 
             val journalToday = it.getStringExtra("journal_today")
@@ -576,6 +579,7 @@ fun CfaitNavHost(
                 hasUnsynced = hasUnsynced,
                 autoScrollUid = autoScrollUid,
                 focusNewTask = focusNewTask,
+                quickAddCalHref = quickAddCalHref,
                 journalTodayHref = journalTodayHref,
                 presetSearch = presetSearch,
                 showQuickFilter = showQuickFilter,
@@ -603,7 +607,7 @@ fun CfaitNavHost(
                 onDataChanged = { refreshLists() },
                 onMigrateLocal = { sourceHref, targetHref -> handleMigration(sourceHref, targetHref) },
                 onAutoScrollComplete = { autoScrollUid = null },
-                onNewTaskFocusComplete = { focusNewTask = false },
+                onNewTaskFocusComplete = { focusNewTask = false; quickAddCalHref = null },
                 onJournalTodayComplete = { journalTodayHref = null },
                 onPresetSearchComplete = { presetSearch = null }
             )

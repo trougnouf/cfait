@@ -131,7 +131,7 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
                             }
                         }
 
-                        if (mode == 1 || mode == 2) {
+                        if (mode != 2) {
                             Text("Collection", style = MaterialTheme.typography.labelLarge)
                             Row(
                                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),

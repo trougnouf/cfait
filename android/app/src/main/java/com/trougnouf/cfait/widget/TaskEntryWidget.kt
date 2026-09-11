@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.trougnouf.cfait.widget
 
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Context
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -100,7 +102,10 @@ class TaskEntryWidget : GlanceAppWidget() {
                     PresetSearchKey to searchQuery,
                     CalendarHrefKey to calHref
                 )
-                else -> actionParametersOf(QuickAddKey to "1")
+                else -> actionParametersOf(
+                    QuickAddKey to "1",
+                    CalendarHrefKey to calHref
+                )
             }
 
             GlanceTheme(colors = WidgetColorScheme) {
@@ -146,4 +151,29 @@ class TaskEntryWidget : GlanceAppWidget() {
 
 class TaskEntryWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget = TaskEntryWidget()
+
+    private fun isOwnId(context: Context, appWidgetId: Int): Boolean {
+        val info = AppWidgetManager.getInstance(context).getAppWidgetInfo(appWidgetId)
+        return info?.provider == ComponentName(context.packageName, javaClass.name)
+    }
+
+    override fun onUpdate(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetIds: IntArray
+    ) {
+        val ownIds = appWidgetIds.filter { isOwnId(context, it) }.toIntArray()
+        if (ownIds.isNotEmpty()) super.onUpdate(context, appWidgetManager, ownIds)
+    }
+
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: android.os.Bundle
+    ) {
+        if (isOwnId(context, appWidgetId)) {
+            super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
+        }
+    }
 }

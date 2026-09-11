@@ -120,6 +120,7 @@ fun HomeScreen(
     hasUnsynced: Boolean,
     autoScrollUid: String? = null,
     focusNewTask: Boolean = false,
+    quickAddCalHref: String? = null,
     journalTodayHref: String? = null,
     presetSearch: Pair<String, String?>? = null,
     refreshTick: Long,
@@ -323,6 +324,10 @@ fun HomeScreen(
             if (sidebarTab == 4) sidebarTab = 0
             isSearchActive = false
             searchQuery = ""
+            if (!quickAddCalHref.isNullOrEmpty()) {
+                customWriteTarget = quickAddCalHref
+                localDefaultCalHref = quickAddCalHref
+            }
             try {
                 kotlinx.coroutines.delay(50)
                 newTaskFocusRequester.requestFocus()
