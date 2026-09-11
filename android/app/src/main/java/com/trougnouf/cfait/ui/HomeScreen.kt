@@ -319,6 +319,10 @@ fun HomeScreen(
 
     LaunchedEffect(focusNewTask) {
         if (focusNewTask) {
+            // Switch back to the tasks tab in case we were on the journal tab.
+            if (sidebarTab == 4) sidebarTab = 0
+            isSearchActive = false
+            searchQuery = ""
             try {
                 kotlinx.coroutines.delay(50)
                 newTaskFocusRequester.requestFocus()
@@ -2228,12 +2232,16 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy((-12).dp)
                 ) {
-                    IconButton(onClick = { jumpToRandomTask() }) { NfIcon(currentRandomIcon, 20.sp) }
+                    IconButton(onClick = {
+                        if (sidebarTab == 4) sidebarTab = 0
+                        jumpToRandomTask()
+                    }) { NfIcon(currentRandomIcon, 20.sp) }
                     if (showQuickFilter) {
                         val isActive = searchQuery.contains(quickFilterTerm)
                         val qfColor =
                             if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                         IconButton(onClick = {
+                            if (sidebarTab == 4) sidebarTab = 0
                             if (isActive) {
                                 searchQuery = searchQuery.replace(quickFilterTerm, "").trim()
                             } else {
@@ -2248,6 +2256,7 @@ fun HomeScreen(
                         }
                     }
                     IconButton(onClick = {
+                        if (sidebarTab == 4) sidebarTab = 0
                         isSearchActive = !isSearchActive
                         if (!isSearchActive) {
                             searchQuery = ""

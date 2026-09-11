@@ -508,6 +508,8 @@ fun CfaitNavHost(
 
             if (it.getStringExtra("quick_add") != null) {
                 focusNewTask = true
+                journalTodayHref = null
+                presetSearch = null
                 it.removeExtra("quick_add")
             }
 
