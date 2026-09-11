@@ -48,8 +48,8 @@ import com.trougnouf.cfait.core.MobileTaskSummary
 /** Intent extra key for deep-linking to a specific task from the widget. */
 private val FocusTaskUidKey = ActionParameters.Key<String>("focus_task_uid")
 
-/** State key used to force widget recomposition after in-widget actions. */
-private val RefreshTickKey = longPreferencesKey("refresh_tick")
+/** State key used to force widget recomposition after in-widget actions or config changes. */
+internal val RefreshTickKey = longPreferencesKey("refresh_tick")
 
 /** Strip inline markdown markers (bold, italic, code, strikethrough) for plain display. */
 private fun stripMarkdown(text: String): String {
@@ -72,28 +72,29 @@ class TaskListWidget : GlanceAppWidget() {
 
         val prefs = context.getSharedPreferences(TaskListWidgetConfigActivity.PREFS_NAME, Context.MODE_PRIVATE)
         val suffix = if (id is androidx.glance.appwidget.AppWidgetId) "_${id.appWidgetId}" else ""
-        val searchQuery = prefs.getString(TaskListWidgetConfigActivity.KEY_SEARCH_QUERY + suffix, "is:ready") ?: "is:ready"
-        val maxTasks = prefs.getInt(TaskListWidgetConfigActivity.KEY_MAX_TASKS + suffix, 8)
-        val hideChecked = prefs.getBoolean(TaskListWidgetConfigActivity.KEY_HIDE_CHECKED + suffix, false)
-        val bgColorInt = prefs.getInt(TaskListWidgetConfigActivity.KEY_BG_COLOR + suffix, 0x80000000.toInt())
-        val bgColor = Color(bgColorInt)
-        val effectiveQuery = if (hideChecked && !searchQuery.contains("is:done")) {
-            "$searchQuery -is:done"
-        } else {
-            searchQuery
-        }
-
-        val textColor = if ((bgColorInt ushr 24) > 0x80) {
-            Color.Black
-        } else {
-            Color.White
-        }
 
         provideContent {
             // Read the refresh tick from Glance state. When the state
-            // changes (after a toggle), Glance recomposes and this value
-            // updates, triggering a fresh data load via LaunchedEffect.
+            // changes (after a toggle or config change), Glance recomposes
+            // and this value updates, triggering a fresh data load.
             val refreshTick = currentState<Preferences>()[RefreshTickKey] ?: 0L
+
+            // Re-read prefs on every recomposition so config changes take effect.
+            val searchQuery = prefs.getString(TaskListWidgetConfigActivity.KEY_SEARCH_QUERY + suffix, "is:ready") ?: "is:ready"
+            val maxTasks = prefs.getInt(TaskListWidgetConfigActivity.KEY_MAX_TASKS + suffix, 8)
+            val hideChecked = prefs.getBoolean(TaskListWidgetConfigActivity.KEY_HIDE_CHECKED + suffix, false)
+            val bgColorInt = prefs.getInt(TaskListWidgetConfigActivity.KEY_BG_COLOR + suffix, 0x80000000.toInt())
+            val bgColor = Color(bgColorInt)
+            val effectiveQuery = if (hideChecked && !searchQuery.contains("is:done")) {
+                "$searchQuery -is:done"
+            } else {
+                searchQuery
+            }
+            val textColor = if ((bgColorInt ushr 24) > 0x80) {
+                Color.Black
+            } else {
+                Color.White
+            }
 
             // Hold the loaded data in state, keyed to refreshTick so it
             // reloads whenever the state changes.

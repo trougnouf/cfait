@@ -5,6 +5,8 @@ import android.content.Context
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
@@ -17,10 +19,12 @@ import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.provideContent
+import androidx.glance.currentState
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.padding
+import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
@@ -53,6 +57,9 @@ private val modeLabels = mapOf(
     MODE_SEARCH to "Search",
 )
 
+/** State key used to force widget recomposition after config changes. */
+val EntryWidgetRefreshTickKey = longPreferencesKey("refresh_tick")
+
 /**
  * A compact home-screen widget that launches the app in one of three modes:
  * quick-add task (focus the new-task input), journal entry for today (with a
@@ -63,32 +70,39 @@ private val modeLabels = mapOf(
  */
 class TaskEntryWidget : GlanceAppWidget() {
 
+    override val stateDefinition = PreferencesGlanceStateDefinition
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val prefs = context.getSharedPreferences(
             TaskEntryWidgetConfigActivity.PREFS_NAME,
             Context.MODE_PRIVATE
         )
         val suffix = if (id is androidx.glance.appwidget.AppWidgetId) "_${id.appWidgetId}" else ""
-        val mode = prefs.getInt(TaskEntryWidgetConfigActivity.KEY_MODE + suffix, 0)
-        val calHref = prefs.getString(TaskEntryWidgetConfigActivity.KEY_CALENDAR_HREF + suffix, "") ?: ""
-        val searchQuery = prefs.getString(TaskEntryWidgetConfigActivity.KEY_SEARCH_QUERY + suffix, "") ?: ""
-        val textColorArgb = prefs.getInt(TaskEntryWidgetConfigActivity.KEY_TEXT_COLOR + suffix, 0xFFFFFFFF.toInt())
-        val textColor = Color(textColorArgb)
-        val label = modeLabels[mode] ?: "Add task"
-
-        val params = when (mode) {
-            MODE_JOURNAL -> actionParametersOf(
-                JournalTodayKey to "1",
-                CalendarHrefKey to calHref
-            )
-            MODE_SEARCH -> actionParametersOf(
-                PresetSearchKey to searchQuery,
-                CalendarHrefKey to calHref
-            )
-            else -> actionParametersOf(QuickAddKey to "1")
-        }
 
         provideContent {
+            // Reading the refresh tick from Glance state forces recomposition
+            // when the config activity bumps it via updateAppWidgetState.
+            currentState<Preferences>()[EntryWidgetRefreshTickKey]
+
+            val mode = prefs.getInt(TaskEntryWidgetConfigActivity.KEY_MODE + suffix, 0)
+            val calHref = prefs.getString(TaskEntryWidgetConfigActivity.KEY_CALENDAR_HREF + suffix, "") ?: ""
+            val searchQuery = prefs.getString(TaskEntryWidgetConfigActivity.KEY_SEARCH_QUERY + suffix, "") ?: ""
+            val textColorArgb = prefs.getInt(TaskEntryWidgetConfigActivity.KEY_TEXT_COLOR + suffix, 0xFFFFFFFF.toInt())
+            val textColor = Color(textColorArgb)
+            val label = modeLabels[mode] ?: "Add task"
+
+            val params = when (mode) {
+                MODE_JOURNAL -> actionParametersOf(
+                    JournalTodayKey to "1",
+                    CalendarHrefKey to calHref
+                )
+                MODE_SEARCH -> actionParametersOf(
+                    PresetSearchKey to searchQuery,
+                    CalendarHrefKey to calHref
+                )
+                else -> actionParametersOf(QuickAddKey to "1")
+            }
+
             GlanceTheme(colors = WidgetColorScheme) {
                 Box(
                     modifier = GlanceModifier
@@ -115,9 +129,9 @@ class TaskEntryWidget : GlanceAppWidget() {
         }
     }
 
-    override suspend fun onDelete(context: Context, id: GlanceId) {
-        if (id is androidx.glance.appwidget.AppWidgetId) {
-            val s = "_${id.appWidgetId}"
+    override suspend fun onDelete(context: Context, glanceId: GlanceId) {
+        if (glanceId is androidx.glance.appwidget.AppWidgetId) {
+            val s = "_${glanceId.appWidgetId}"
             context.getSharedPreferences(TaskEntryWidgetConfigActivity.PREFS_NAME, Context.MODE_PRIVATE)
                 .edit()
                 .remove(TaskEntryWidgetConfigActivity.KEY_MODE + s)

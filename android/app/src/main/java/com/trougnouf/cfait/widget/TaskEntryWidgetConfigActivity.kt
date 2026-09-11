@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.glance.appwidget.GlanceAppWidgetManager
+import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.lifecycle.lifecycleScope
 import com.trougnouf.cfait.CfaitApplication
 import kotlinx.coroutines.launch
@@ -205,6 +206,11 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
                                     try {
                                         val manager = GlanceAppWidgetManager(this@TaskEntryWidgetConfigActivity)
                                         val glanceId = manager.getGlanceIdBy(appWidgetId)
+                                        // Bump the refresh tick so the running Glance session
+                                        // recomposes and re-reads the updated SharedPreferences.
+                                        updateAppWidgetState(this@TaskEntryWidgetConfigActivity, glanceId) {
+                                            it[EntryWidgetRefreshTickKey] = System.currentTimeMillis()
+                                        }
                                         TaskEntryWidget().update(this@TaskEntryWidgetConfigActivity, glanceId)
                                     } catch (e: Exception) {
                                         android.util.Log.w("CfaitWidget", "Widget update after config failed", e)
