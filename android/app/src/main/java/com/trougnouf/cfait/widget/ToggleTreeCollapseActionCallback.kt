@@ -9,6 +9,7 @@ import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.state.updateAppWidgetState
 import com.trougnouf.cfait.CfaitApplication
 import com.trougnouf.cfait.core.AppIntent
+import com.trougnouf.cfait.ui.triggerBackgroundSync
 
 /**
  * ActionCallback triggered when the user taps the fold/unfold indicator of a
@@ -31,6 +32,7 @@ class ToggleTreeCollapseActionCallback : ActionCallback {
         try {
             val app = context.applicationContext as CfaitApplication
             app.api.dispatch(AppIntent.ToggleTreeCollapse(uid = uid))
+            triggerBackgroundSync(context, app.api)
         } catch (e: Exception) {
             android.util.Log.w("CfaitWidget", "Failed to toggle tree collapse for $uid", e)
             return

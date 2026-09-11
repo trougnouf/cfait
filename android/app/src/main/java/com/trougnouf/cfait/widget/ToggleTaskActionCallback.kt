@@ -9,6 +9,7 @@ import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.state.updateAppWidgetState
 import com.trougnouf.cfait.widget.updateAllTaskListWidgets
 import com.trougnouf.cfait.CfaitApplication
+import com.trougnouf.cfait.ui.triggerBackgroundSync
 
 /**
  * ActionCallback triggered when the user taps a checkbox in the widget.
@@ -36,6 +37,7 @@ class ToggleTaskActionCallback : ActionCallback {
         try {
             val app = context.applicationContext as CfaitApplication
             app.api.toggleTask(uid)
+            triggerBackgroundSync(context, app.api)
         } catch (e: Exception) {
             android.util.Log.w("CfaitWidget", "Failed to toggle task $uid", e)
             return

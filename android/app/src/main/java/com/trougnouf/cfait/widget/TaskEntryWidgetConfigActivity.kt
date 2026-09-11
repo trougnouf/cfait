@@ -108,8 +108,11 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
             var textColorIndex by remember {
                 mutableIntStateOf(prefs.getInt(KEY_TEXT_COLOR_INDEX + s, 0))
             }
+            var hasCustomColor by remember {
+                mutableStateOf(prefs.contains(KEY_CUSTOM_COLOR + s))
+            }
             var customColor by remember {
-                mutableIntStateOf(prefs.getInt(KEY_CUSTOM_COLOR + s, -1))
+                mutableIntStateOf(prefs.getInt(KEY_CUSTOM_COLOR + s, android.graphics.Color.RED))
             }
             var useCollectionColor by remember {
                 mutableStateOf(prefs.getBoolean(KEY_USE_COLLECTION_COLOR + s, false))
@@ -196,7 +199,7 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             textColors.forEachIndexed { index, (color, _label) ->
-                                val selected = !useCollectionColor && customColor < 0 && index == textColorIndex
+                                val selected = !useCollectionColor && !hasCustomColor && index == textColorIndex
                                 Box(
                                     modifier = Modifier
                                         .size(32.dp)
@@ -208,18 +211,18 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
                                         )
                                         .clickable {
                                             textColorIndex = index
-                                            customColor = -1
+                                            hasCustomColor = false
                                             useCollectionColor = false
                                         }
                                 )
                             }
                             // Custom color swatch — tap to cycle through hues
-                            val customSelected = !useCollectionColor && customColor >= 0
+                            val customSelected = !useCollectionColor && hasCustomColor
                             Box(
                                 modifier = Modifier
                                     .size(32.dp)
                                     .background(
-                                        color = if (customColor >= 0) Color(customColor) else MaterialTheme.colorScheme.surfaceVariant,
+                                        color = if (hasCustomColor) Color(customColor) else MaterialTheme.colorScheme.surfaceVariant,
                                         shape = CircleShape
                                     )
                                     .then(
@@ -228,10 +231,14 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
                                         else Modifier
                                     )
                                     .clickable {
-                                        val hue = ((customColor + 30) % 360).coerceAtLeast(0)
-                                        customColor = android.graphics.Color.HSVToColor(
-                                            floatArrayOf(hue.toFloat(), 0.8f, 1.0f)
-                                        )
+                                        if (!hasCustomColor) {
+                                            hasCustomColor = true
+                                        } else {
+                                            val hsv = FloatArray(3)
+                                            android.graphics.Color.colorToHSV(customColor, hsv)
+                                            hsv[0] = (hsv[0] + 30f) % 360f
+                                            customColor = android.graphics.Color.HSVToColor(hsv)
+                                        }
                                         useCollectionColor = false
                                     }
                             )
@@ -253,7 +260,7 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
                                             )
                                             .clickable {
                                                 useCollectionColor = true
-                                                customColor = -1
+                                                hasCustomColor = false
                                             }
                                     )
                                 }
@@ -269,19 +276,25 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
                                             try { android.graphics.Color.parseColor(hex) } catch (_: Exception) { 0xFFFFFFFF.toInt() }
                                         } ?: 0xFFFFFFFF.toInt()
                                     }
-                                    customColor >= 0 -> customColor
+                                    hasCustomColor -> customColor
                                     else -> textColors[textColorIndex].first.toArgb()
                                 }
-                                prefs.edit()
+
+                                val editor = prefs.edit()
                                     .putInt(KEY_MODE + s, mode)
                                     .putString(KEY_CALENDAR_HREF + s, selectedCalHref)
                                     .putString(KEY_SEARCH_QUERY + s, searchQuery.ifBlank { "is:ready" })
                                     .putInt(KEY_TEXT_COLOR + s, finalColor)
                                     .putInt(KEY_TEXT_COLOR_INDEX + s, textColorIndex)
-                                    .putInt(KEY_CUSTOM_COLOR + s, customColor)
                                     .putBoolean(KEY_USE_COLLECTION_COLOR + s, useCollectionColor)
                                     .putString(KEY_CUSTOM_LABEL + s, customLabel)
-                                    .apply()
+
+                                if (hasCustomColor) {
+                                    editor.putInt(KEY_CUSTOM_COLOR + s, customColor)
+                                } else {
+                                    editor.remove(KEY_CUSTOM_COLOR + s)
+                                }
+                                editor.apply()
 
                                 val resultValue = Intent().putExtra(
                                     AppWidgetManager.EXTRA_APPWIDGET_ID,

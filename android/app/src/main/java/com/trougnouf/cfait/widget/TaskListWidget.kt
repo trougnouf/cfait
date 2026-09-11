@@ -99,16 +99,30 @@ class TaskListWidget : GlanceAppWidget() {
 
             // Re-read prefs on every recomposition so config changes take effect.
             val searchQuery = prefs.getString(TaskListWidgetConfigActivity.KEY_SEARCH_QUERY + suffix, "is:ready") ?: "is:ready"
+            val calHref = prefs.getString(TaskListWidgetConfigActivity.KEY_CALENDAR_HREF + suffix, "") ?: ""
+            val customTitle = prefs.getString(TaskListWidgetConfigActivity.KEY_CUSTOM_TITLE + suffix, "") ?: ""
             val maxTasks = prefs.getInt(TaskListWidgetConfigActivity.KEY_MAX_TASKS + suffix, 8)
             val hideChecked = prefs.getBoolean(TaskListWidgetConfigActivity.KEY_HIDE_CHECKED + suffix, false)
             val bgColorInt = prefs.getInt(TaskListWidgetConfigActivity.KEY_BG_COLOR + suffix, 0x80000000.toInt())
             val respectCollapse = prefs.getBoolean(TaskListWidgetConfigActivity.KEY_RESPECT_COLLAPSE + suffix, true)
             val bgColor = Color(bgColorInt)
-            val effectiveQuery = if (hideChecked && !searchQuery.contains("is:done")) {
-                "$searchQuery -is:done"
-            } else {
-                searchQuery
+
+            var baseQuery = searchQuery
+            if (calHref.isNotEmpty()) {
+                val cal = try { api.getCalendars().firstOrNull { it.href == calHref } } catch (_: Exception) { null }
+                if (cal != null) {
+                    val quoted = if (cal.name.contains(" ")) "\"${cal.name}\"" else cal.name
+                    baseQuery = "$baseQuery col:$quoted"
+                }
             }
+
+            val effectiveQuery = if (hideChecked && !baseQuery.contains("is:done")) {
+                "$baseQuery -is:done"
+            } else {
+                baseQuery
+            }
+
+            val displayTitle = customTitle.ifBlank { context.getString(R.string.widget_label_task_list) }
 
             // Calculate perceived brightness to ensure text remains readable.
             // Luminance accounts for proper human eye perception of RGB components.
@@ -164,45 +178,77 @@ class TaskListWidget : GlanceAppWidget() {
                         .background(bgColor)
                         .padding(12.dp)
                 ) {
+                    val headerParams = actionParametersOf(
+                        ActionParameters.Key<String>(EXTRA_PRESET_SEARCH) to effectiveQuery,
+                        ActionParameters.Key<String>(EXTRA_CALENDAR_HREF) to calHref
+                    )
                     // Header: app name + counts
                     Row(
                         modifier = GlanceModifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "Cfait",
-                            style = TextStyle(
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = ColorProvider(textColor),
+                        Row(
+                            modifier = GlanceModifier.clickable(
+                                actionStartActivity(
+                                    MainActivity::class.java,
+                                    headerParams
+                                )
+                            ),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = displayTitle,
+                                style = TextStyle(
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = ColorProvider(textColor),
+                                )
                             )
-                        )
-                        Spacer(modifier = GlanceModifier.width(8.dp))
-                        val vd = viewData
-                        if (vd != null) {
-                            val tasks = vd.tasks
-                            val dueToday = tasks.count { it.isDueToday && !it.isDone }
-                            val ongoing = tasks.count { it.isPaused }
-                            if (dueToday > 0) {
-                                Text(
-                                    text = "$dueToday $strDueToday",
-                                    style = TextStyle(
-                                        fontSize = 13.sp,
-                                        color = ColorProvider(textColor),
+                            Spacer(modifier = GlanceModifier.width(8.dp))
+                            val vd = viewData
+                            if (vd != null) {
+                                val tasks = vd.tasks
+                                val dueToday = tasks.count { it.isDueToday && !it.isDone }
+                                val ongoing = tasks.count { it.isPaused }
+                                if (dueToday > 0) {
+                                    Text(
+                                        text = "$dueToday $strDueToday",
+                                        style = TextStyle(
+                                            fontSize = 13.sp,
+                                            color = ColorProvider(textColor),
+                                        )
                                     )
-                                )
-                                Spacer(modifier = GlanceModifier.width(8.dp))
-                            }
-                            if (ongoing > 0) {
-                                Text(
-                                    text = "$ongoing $strActive",
-                                    style = TextStyle(
-                                        fontSize = 13.sp,
-                                        color = ColorProvider(textColor),
+                                    Spacer(modifier = GlanceModifier.width(8.dp))
+                                }
+                                if (ongoing > 0) {
+                                    Text(
+                                        text = "$ongoing $strActive",
+                                        style = TextStyle(
+                                            fontSize = 13.sp,
+                                            color = ColorProvider(textColor),
+                                        )
                                     )
-                                )
+                                }
                             }
                         }
+                        Spacer(modifier = GlanceModifier.defaultWeight())
+                        Text(
+                            text = "＋",
+                            modifier = GlanceModifier.clickable(
+                                actionStartActivity(
+                                    MainActivity::class.java,
+                                    actionParametersOf(
+                                        ActionParameters.Key<String>(EXTRA_QUICK_ADD) to "1",
+                                        ActionParameters.Key<String>(EXTRA_CALENDAR_HREF) to calHref
+                                    )
+                                )
+                            ),
+                            style = TextStyle(
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = ColorProvider(textColor)
+                            )
+                        )
                     }
 
                     Spacer(modifier = GlanceModifier.height(8.dp))
@@ -233,6 +279,8 @@ class TaskListWidget : GlanceAppWidget() {
             context.getSharedPreferences(TaskListWidgetConfigActivity.PREFS_NAME, Context.MODE_PRIVATE)
                 .edit()
                 .remove(TaskListWidgetConfigActivity.KEY_SEARCH_QUERY + s)
+                .remove(TaskListWidgetConfigActivity.KEY_CALENDAR_HREF + s)
+                .remove(TaskListWidgetConfigActivity.KEY_CUSTOM_TITLE + s)
                 .remove(TaskListWidgetConfigActivity.KEY_HIDE_CHECKED + s)
                 .remove(TaskListWidgetConfigActivity.KEY_MAX_TASKS + s)
                 .remove(TaskListWidgetConfigActivity.KEY_BG_COLOR + s)

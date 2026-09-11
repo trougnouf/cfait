@@ -20,11 +20,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -78,11 +80,19 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
         }
 
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val api = (applicationContext as com.trougnouf.cfait.CfaitApplication).api
+        val calendars = try { api.getCalendars().filter { !it.isDisabled } } catch (_: Exception) { emptyList() }
         val s = "_$appWidgetId"
 
         setContent {
             var searchQuery by remember {
                 mutableStateOf(prefs.getString(KEY_SEARCH_QUERY + s, "is:ready") ?: "is:ready")
+            }
+            var selectedCalHref by remember {
+                mutableStateOf(prefs.getString(KEY_CALENDAR_HREF + s, "") ?: "")
+            }
+            var customTitle by remember {
+                mutableStateOf(prefs.getString(KEY_CUSTOM_TITLE + s, "") ?: "")
             }
             var hideChecked by remember {
                 mutableStateOf(prefs.getBoolean(KEY_HIDE_CHECKED + s, false))
@@ -129,6 +139,40 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
                             singleLine = true,
                             placeholder = { Text("is:ready") }
                         )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(stringResource(R.string.widget_collection), style = MaterialTheme.typography.labelLarge)
+                        Row(
+                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            FilterChip(
+                                selected = selectedCalHref.isEmpty(),
+                                onClick = { selectedCalHref = "" },
+                                label = { Text(stringResource(R.string.any)) }
+                            )
+                            calendars.forEach { cal ->
+                                FilterChip(
+                                    selected = cal.href == selectedCalHref,
+                                    onClick = { selectedCalHref = cal.href },
+                                    label = { Text(cal.name) }
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(stringResource(R.string.widget_label), style = MaterialTheme.typography.labelLarge)
+                        OutlinedTextField(
+                            value = customTitle,
+                            onValueChange = { customTitle = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            placeholder = { Text(stringResource(R.string.widget_label_task_list)) }
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -215,6 +259,8 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
                                 val bgColorArgb = (bgColor.copy(alpha = bgOpacity)).toArgb()
                                 prefs.edit()
                                     .putString(KEY_SEARCH_QUERY + s, searchQuery.ifBlank { "is:ready" })
+                                    .putString(KEY_CALENDAR_HREF + s, selectedCalHref)
+                                    .putString(KEY_CUSTOM_TITLE + s, customTitle)
                                     .putBoolean(KEY_HIDE_CHECKED + s, hideChecked)
                                     .putBoolean(KEY_RESPECT_COLLAPSE + s, respectCollapse)
                                     .putInt(KEY_MAX_TASKS + s, max)
@@ -259,6 +305,8 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
     companion object {
         const val PREFS_NAME = "cfait_widget_prefs"
         const val KEY_SEARCH_QUERY = "search_query"
+        const val KEY_CALENDAR_HREF = "calendar_href"
+        const val KEY_CUSTOM_TITLE = "custom_title"
         const val KEY_HIDE_CHECKED = "hide_checked"
         const val KEY_MAX_TASKS = "max_tasks"
         const val KEY_BG_COLOR = "bg_color"
