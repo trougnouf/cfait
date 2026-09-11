@@ -67,8 +67,10 @@ fun IcsImportScreen(
     // Parse ICS content to count tasks
     LaunchedEffect(icsContent) {
         try {
-            // Simple count of VTODO entries
-            taskCount = icsContent.split("BEGIN:VTODO").size - 1
+            // Count VTODO and VJOURNAL entries
+            val vtodoCount = icsContent.split("BEGIN:VTODO").size - 1
+            val vjournalCount = icsContent.split("BEGIN:VJOURNAL").size - 1
+            taskCount = vtodoCount + vjournalCount
         } catch (e: Exception) {
             errorMessage = context.getString(R.string.import_failed_to_parse, e.message ?: "")
         }

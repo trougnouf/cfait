@@ -30,7 +30,7 @@ Cfait is an offline-first task manager that seamlessly synchronizes with CalDAV 
 
 ### 1.2. The Task & Journal Entity (`VTODO` & `VJOURNAL` Mapping)
 Tasks map strictly to iCalendar `VTODO` components, while daily notes map to `VJOURNAL` components (RFC 5545). Non-standard metadata is stored via `X-CFAIT-` properties.
-*   **VJOURNAL Support:** Each chronological journal entry is a date-anchored note (`DTSTART;VALUE=DATE`). Wiki pages are independent notes and intentionally omit the `DTSTART` property. Stored in the active collection. VJOURNAL components are omitted from the main task lists unless they contain child tasks, are children of another task, are explicitly tagged with `is:note` or `is:pinned` to force visibility, or are returned as part of an active search query.
+*   **VJOURNAL Support:** Each chronological journal entry is a date-anchored note (`DTSTART;VALUE=DATE`). Wiki pages are independent notes and intentionally omit the `DTSTART` property. Stored in the active collection. VJOURNAL components are omitted from the main task lists unless they contain child tasks, are children of another task, are explicitly tagged with `is:note` or `is:pinned` to force visibility, or are returned as part of an active search query. Both VTODO and VJOURNAL components are included in ICS import/export across all clients (GUI, CLI, Android), enabling migration between CalDAV providers.
 *   **Status:** `NeedsAction` (Pending), `InProcess` (Timer running), `Completed`, `Cancelled`.
 *   **Manual Block:** Stored via `X-CFAIT-BLOCKED` (boolean) to explicitly mark a task as blocked without dependencies.
 *   **Dates (`DateType`):** Start (`DTSTART`) and Due (`DUE`). Supported variants:
@@ -331,8 +331,8 @@ Used for headless automation, scripting, and piping. Operates directly on the `T
 *   `cfait start|pause|toggle|done|complete <uid>`: State mutation commands.
 *   `cfait move` (alias: `mv`) `<uid> <collection> [--tree]`: Moves a task to a different collection.
 *   `cfait delete` (alias: `rm`) `<uid>`: Moves task to trash.
-*   `cfait export [--collection <id>]`: Dumps collection as standard ICS to stdout.
-*   `cfait import <file.ics> [--collection <id>]`: Parses and imports ICS to store.
+*   `cfait export [--collection <id>]`: Dumps collection (local or remote) as standard ICS to stdout, including VTODO and VJOURNAL components. The collection `id` can be a local collection name, a full HREF, or a remote collection name.
+*   `cfait import <file.ics> [--collection <id>]`: Parses and imports ICS to store. Supports both local and remote collections; for remote collections, tasks are journaled and synced. Handles both VTODO and VJOURNAL components.
 *   `cfait sync`: Foreground network sync.
 *   `cfait daemon`: Runs a continuous background sync loop based on `auto_refresh_interval_mins`. Acquires a cross-process lock to prevent overlapping syncs with UIs.
 *   `cfait collection list [--json]`: Lists CalDAV collections.
@@ -368,7 +368,7 @@ All persistent state and settings live here. Unrecognized TOML keys must not be 
 *   `first_day_of_week`: Enum (`Monday`, `Sunday`). Controls the first day in calendar/journal week views.
 *   `description_editor`: String. CLI command for TUI description editing. `builtin` forces internal UI editor.
 *   `show_ongoing_notifications`, `show_priority_numbers`, `sidebar_is_hidden`, `show_task_goals_in_sidebar`: Booleans.
-*   `show_calendars_tab`, `show_tags_tab`, `show_locations_tab`, `show_goals_tab`, `show_journal_tab`: Booleans. Toggle individual sidebar tab visibility.
+*   `show_calendars_tab`, `show_tags_tab`, `show_locations_tab`, `show_goals_tab`, `show_journal_tab`: Booleans. Toggle individual sidebar tab visibility. On Android, these live under "More settings" (advanced settings), not "Manage collections".
 *   `show_undo_snackbar`: Boolean. Show the transient undo notification after task mutations (Android).
 *   `pinned_actions`: Array of `TaskAction` enums. Dictates buttons pinned directly to GUI task rows.
 *   `log_level`: Enum (`Error`, `Warn`, `Info`, `Debug`, `Trace`). Logging verbosity for both log file and terminal.

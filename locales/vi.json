@@ -605,6 +605,7 @@
     "show_goals_tab": "Hiện phần mục tiêu ở thanh bên",
     "show_less": "Ẩn bớt",
     "show_locations_tab": "Hiện phần vị trí ở thanh bên",
+    "sidebar_tabs": "Tab thanh bên",
     "show_older_sessions": {
         "one": "Hiện 1 phiên làm việc trước…",
         "other": "Hiện %{count} phiên làm việc trước…"

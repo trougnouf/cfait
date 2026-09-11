@@ -636,6 +636,7 @@
     "show_goals_tab": "Afficher l'onglet Objectifs dans la barre latérale",
     "show_less": "Voir moins",
     "show_locations_tab": "Afficher l'onglet Lieux dans la barre latérale",
+    "sidebar_tabs": "Onglets de la barre latérale",
     "show_older_sessions": {
         "one": "Afficher 1 ancienne session…",
         "other": "Afficher %{count} anciennes sessions…"

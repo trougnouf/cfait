@@ -677,6 +677,7 @@
     "show_journal_tab": "Mostrar la pestaña «Diario» en la barra lateral",
     "show_less": "Ver menos",
     "show_locations_tab": "Mostrar la pestaña Ubicaciones en el menú lateral",
+    "sidebar_tabs": "Pestañas del menú lateral",
     "show_older_sessions": {
         "one": "Ver 1 sesión más antigua…",
         "other": "Ver %{count} sesiones más antiguas…"

@@ -1224,36 +1224,32 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                     .into()
             };
 
-            let (export_btn, import_btn): (Element<_>, Element<_>) = if is_local {
-                (
-                    button(
-                        row![
-                            icon::icon(icon::EXPORT).size(14),
-                            text(rust_i18n::t!("export")).size(10)
-                        ]
-                        .spacing(3)
-                        .align_y(iced::Alignment::Center),
-                    )
-                    .padding(5)
-                    .style(button::secondary)
-                    .on_press(Message::ExportLocalIcs(cal_href.clone()))
-                    .into(),
-                    button(
-                        row![
-                            icon::icon(icon::IMPORT).size(14),
-                            text(rust_i18n::t!("import_action")).size(10)
-                        ]
-                        .spacing(3)
-                        .align_y(iced::Alignment::Center),
-                    )
-                    .padding(5)
-                    .style(button::secondary)
-                    .on_press(Message::ImportLocalIcs(cal_href.clone()))
-                    .into(),
+            let (export_btn, import_btn): (Element<_>, Element<_>) = (
+                button(
+                    row![
+                        icon::icon(icon::EXPORT).size(14),
+                        text(rust_i18n::t!("export")).size(10)
+                    ]
+                    .spacing(3)
+                    .align_y(iced::Alignment::Center),
                 )
-            } else {
-                (Space::new().width(0).into(), Space::new().width(0).into())
-            };
+                .padding(5)
+                .style(button::secondary)
+                .on_press(Message::ExportLocalIcs(cal_href.clone()))
+                .into(),
+                button(
+                    row![
+                        icon::icon(icon::IMPORT).size(14),
+                        text(rust_i18n::t!("import_action")).size(10)
+                    ]
+                    .spacing(3)
+                    .align_y(iced::Alignment::Center),
+                )
+                .padding(5)
+                .style(button::secondary)
+                .on_press(Message::ImportLocalIcs(cal_href.clone()))
+                .into(),
+            );
 
             let delete_btn: Element<_> = if is_local && !is_default {
                 button(icon::icon(icon::TRASH).size(14))

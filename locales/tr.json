@@ -192,6 +192,7 @@
     "show_goals_tab": "Yan çubukta Hedefler sekmesini göster",
     "show_journal_tab": "Yan çubukta Günlük sekmesini göster",
     "show_locations_tab": "Yan çubukta Konumlar sekmesini göster",
+    "sidebar_tabs": "Yan çubuk sekmeleri",
     "show_tags_tab": "Yan çubukta Etiketler sekmesini göster",
     "warning_background_sync_failed": "Uyarı: Eşitleme başarısız oldu: %{error}",
     "warning_calendar_not_found": "Uyarı: \"%{calendar}\" listesi bulunamadı. Görev, yereldeki kurtarma listesine kaydedilecek.",

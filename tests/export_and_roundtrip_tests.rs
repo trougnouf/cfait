@@ -127,7 +127,114 @@ fn test_export_task_with_relative_recurrence() {
     assert!(smart.contains("@after 1w"));
 }
 
-// ==================== Full Roundtrip Tests ========================================
+// ==================== VJOURNAL Export/Import Tests ====================
+
+#[test]
+#[serial]
+fn test_export_journal_task() {
+    let mut task = Task::new("Garden journal", &HashMap::new(), None);
+    task.is_journal = true;
+    let tasks = vec![task];
+
+    let ics = LocalStorage::to_ics_string(&tasks);
+    assert!(ics.contains("BEGIN:VJOURNAL"));
+    assert!(ics.contains("SUMMARY:Garden journal"));
+    assert_eq!(ics.matches("BEGIN:VJOURNAL").count(), 1);
+    assert_eq!(ics.matches("BEGIN:VTODO").count(), 0);
+}
+
+#[test]
+#[serial]
+fn test_export_mixed_vtodo_and_vjournal() {
+    let mut todo = Task::new("Water plants", &HashMap::new(), None);
+    todo.is_journal = false;
+    let mut journal = Task::new("Garden notes", &HashMap::new(), None);
+    journal.is_journal = true;
+    let tasks = vec![todo, journal];
+
+    let ics = LocalStorage::to_ics_string(&tasks);
+    assert_eq!(ics.matches("BEGIN:VTODO").count(), 1);
+    assert_eq!(ics.matches("BEGIN:VJOURNAL").count(), 1);
+}
+
+#[test]
+#[serial]
+fn test_import_vjournal() {
+    let ctx = TestContext::new();
+    let href = "local://vjournal-import-test";
+
+    let ics = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Cfait//Export//EN\r\nBEGIN:VJOURNAL\r\nUID:journal-test-uid\r\nSUMMARY:Reading log\r\nDESCRIPTION:Finished chapter 3\r\nEND:VJOURNAL\r\nEND:VCALENDAR";
+
+    let result = LocalStorage::import_from_ics(&ctx, href, ics);
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), 1);
+
+    let imported = LocalStorage::load_for_href(&ctx, href).unwrap();
+    assert_eq!(imported.len(), 1);
+    assert!(imported[0].is_journal);
+    assert_eq!(imported[0].summary, "Reading log");
+}
+
+#[test]
+#[serial]
+fn test_roundtrip_vjournal() {
+    let ctx = TestContext::new();
+    let href = "local://vjournal-roundtrip-src";
+    let import_href = "local://vjournal-roundtrip-dst";
+
+    let mut original = Task::new("Cooking notes", &HashMap::new(), None);
+    original.is_journal = true;
+    original.description = "Tried a new risotto recipe".to_string();
+    original.due = Some(DateType::AllDay(
+        chrono::NaiveDate::from_ymd_opt(2026, 9, 11).unwrap(),
+    ));
+
+    LocalStorage::save_for_href(&ctx, href, &[original.clone()]).unwrap();
+
+    let tasks = LocalStorage::load_for_href(&ctx, href).unwrap();
+    let ics = LocalStorage::to_ics_string(&tasks);
+    assert!(ics.contains("BEGIN:VJOURNAL"));
+
+    let result = LocalStorage::import_from_ics(&ctx, import_href, &ics);
+    assert!(result.is_ok());
+
+    let imported = &LocalStorage::load_for_href(&ctx, import_href).unwrap()[0];
+    assert!(imported.is_journal);
+    assert_eq!(imported.summary, original.summary);
+    assert_eq!(imported.description, original.description);
+}
+
+#[test]
+#[serial]
+fn test_roundtrip_mixed_vtodo_vjournal() {
+    let ctx = TestContext::new();
+    let href = "local://mixed-roundtrip-src";
+    let import_href = "local://mixed-roundtrip-dst";
+
+    let todo = Task::new("Prune tomato plants", &HashMap::new(), None);
+    let mut journal = Task::new("Garden diary", &HashMap::new(), None);
+    journal.is_journal = true;
+    journal.description = "The tomatoes are ripening nicely".to_string();
+
+    LocalStorage::save_for_href(&ctx, href, &[todo, journal]).unwrap();
+
+    let tasks = LocalStorage::load_for_href(&ctx, href).unwrap();
+    assert_eq!(tasks.len(), 2);
+    let ics = LocalStorage::to_ics_string(&tasks);
+
+    let result = LocalStorage::import_from_ics(&ctx, import_href, &ics);
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), 2);
+
+    let imported = LocalStorage::load_for_href(&ctx, import_href).unwrap();
+    assert_eq!(imported.len(), 2);
+    let journals: Vec<_> = imported.iter().filter(|t| t.is_journal).collect();
+    let todos: Vec<_> = imported.iter().filter(|t| !t.is_journal).collect();
+    assert_eq!(journals.len(), 1);
+    assert_eq!(todos.len(), 1);
+    assert_eq!(journals[0].summary, "Garden diary");
+    assert_eq!(todos[0].summary, "Prune tomato plants");
+}
 
 #[test]
 #[serial]

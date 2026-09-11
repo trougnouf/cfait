@@ -949,7 +949,17 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::ExportLocalIcs(calendar_href) => {
-            let tasks_result = LocalStorage::load_for_href(app.ctx.as_ref(), &calendar_href);
+            // For local collections, read from disk; for remote, read from in-memory store
+            let tasks_result = if calendar_href.starts_with("local://") {
+                LocalStorage::load_for_href(app.ctx.as_ref(), &calendar_href)
+            } else {
+                Ok(app
+                    .store
+                    .calendars
+                    .get(&calendar_href)
+                    .map(|m| m.values().cloned().collect::<Vec<_>>())
+                    .unwrap_or_default())
+            };
             let cal_name = calendar_href.clone();
 
             Task::perform(
@@ -957,7 +967,17 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     let tasks = tasks_result.map_err(|e| e.to_string())?;
                     let ics_content = LocalStorage::to_ics_string(&tasks);
 
-                    let cal_id = cal_name.strip_prefix("local://").unwrap_or("backup");
+                    let cal_id = if let Some(local_id) = cal_name.strip_prefix("local://") {
+                        local_id.to_string()
+                    } else {
+                        // Use last path segment of remote HREF for a readable filename
+                        cal_name
+                            .trim_end_matches('/')
+                            .rsplit('/')
+                            .next()
+                            .unwrap_or("backup")
+                            .to_string()
+                    };
                     let filename = format!("cfait_{}.ics", cal_id);
 
                     let file_handle = rfd::AsyncFileDialog::new()
@@ -1004,6 +1024,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::ImportLocalIcs(calendar_href) => {
             let ctx = app.ctx.clone();
+            let controller = app.controller.clone();
+            let is_local = calendar_href.starts_with("local://");
             Task::perform(
                 async move {
                     if let Some(file) = rfd::AsyncFileDialog::new()
@@ -1014,11 +1036,39 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         let content = file.read().await;
                         match String::from_utf8(content) {
                             Ok(ics_content) => {
-                                match LocalStorage::import_from_ics(
-                                    ctx.as_ref(),
-                                    &calendar_href,
-                                    &ics_content,
-                                ) {
+                                let result: Result<usize, String> = if is_local {
+                                    LocalStorage::import_from_ics(
+                                        ctx.as_ref(),
+                                        &calendar_href,
+                                        &ics_content,
+                                    )
+                                    .map_err(|e| e.to_string())
+                                } else {
+                                    // Remote: parse and create via controller (journaled for sync)
+                                    let tasks =
+                                        match LocalStorage::parse_ics(&calendar_href, &ics_content)
+                                        {
+                                            Ok(t) => t,
+                                            Err(e) => {
+                                                return Err(rust_i18n::t!(
+                                                    "import_failed",
+                                                    error = e.to_string()
+                                                )
+                                                .to_string());
+                                            }
+                                        };
+                                    let mut count = 0;
+                                    for task in tasks {
+                                        if controller.create_task(task).await.is_ok() {
+                                            count += 1;
+                                        }
+                                    }
+                                    if count == 0 {
+                                        return Err("Failed to import any tasks".to_string());
+                                    }
+                                    Ok(count)
+                                };
+                                match result {
                                     Ok(count) => {
                                         let file_name = file.file_name();
                                         let msg = if count == 1 {
@@ -1038,8 +1088,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                                         Ok(msg)
                                     }
                                     Err(e) => {
-                                        Err(rust_i18n::t!("import_failed", error = e.to_string())
-                                            .to_string())
+                                        Err(rust_i18n::t!("import_failed", error = e).to_string())
                                     }
                                 }
                             }
@@ -1254,7 +1303,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::IcsFileLoaded(Ok((file_path, content))) => {
-            let task_count = content.split("BEGIN:VTODO").count().saturating_sub(1);
+            let vtodo_count = content.split("BEGIN:VTODO").count().saturating_sub(1);
+            let vjournal_count = content.split("BEGIN:VJOURNAL").count().saturating_sub(1);
+            let task_count = vtodo_count + vjournal_count;
 
             app.ics_import_dialog_open = true;
             app.ics_import_file_path = Some(file_path);
@@ -1305,9 +1356,36 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 let href = calendar_href.clone();
                 let content = ics_content.clone();
                 let ctx = app.ctx.clone();
+                let controller = app.controller.clone();
+                let is_local = href.starts_with("local://");
                 return Task::perform(
                     async move {
-                        match LocalStorage::import_from_ics(ctx.as_ref(), &href, &content) {
+                        let result: Result<usize, String> = if is_local {
+                            LocalStorage::import_from_ics(ctx.as_ref(), &href, &content)
+                                .map_err(|e| e.to_string())
+                        } else {
+                            let tasks = match LocalStorage::parse_ics(&href, &content) {
+                                Ok(t) => t,
+                                Err(e) => {
+                                    return Err(rust_i18n::t!(
+                                        "import_failed",
+                                        error = e.to_string()
+                                    )
+                                    .to_string());
+                                }
+                            };
+                            let mut count = 0;
+                            for task in tasks {
+                                if controller.create_task(task).await.is_ok() {
+                                    count += 1;
+                                }
+                            }
+                            if count == 0 {
+                                return Err("Failed to import any tasks".to_string());
+                            }
+                            Ok(count)
+                        };
+                        match result {
                             Ok(count) => {
                                 let file_name = file_path
                                     .as_ref()

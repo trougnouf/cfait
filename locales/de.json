@@ -677,6 +677,7 @@
     "show_journal_tab": "Journal-Tab in der Seitenleiste anzeigen",
     "show_less": "Weniger anzeigen",
     "show_locations_tab": "Zeige den Orte-Tab in der Seitenleiste",
+    "sidebar_tabs": "Seitenleisten-Tabs",
     "show_older_sessions": {
         "one": "Zeige 1 ältere Sitzung…",
         "other": "Zeige %{count} ältere Sitzungen…"

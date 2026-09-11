@@ -69,6 +69,11 @@ fun AdvancedSettingsScreen(
     var startGracePeriodDays by remember { mutableStateOf("1") }
     var firstDayOfWeek by remember { mutableStateOf(com.trougnouf.cfait.core.MobileFirstDayOfWeek.MONDAY) }
     var showTaskGoalsInSidebar by remember { mutableStateOf(true) }
+    var showCalendarsTab by remember { mutableStateOf(true) }
+    var showTagsTab by remember { mutableStateOf(true) }
+    var showLocationsTab by remember { mutableStateOf(true) }
+    var showGoalsTab by remember { mutableStateOf(true) }
+    var showJournalTab by remember { mutableStateOf(true) }
     var defaultDurationGoalMins by remember { mutableStateOf("60") }
     var sessionsCountAsCompletions by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
@@ -100,6 +105,11 @@ fun AdvancedSettingsScreen(
             startGracePeriodDays = cfg.startGracePeriodDays.toString()
             firstDayOfWeek = cfg.firstDayOfWeek
             showTaskGoalsInSidebar = cfg.showTaskGoalsInSidebar
+            showCalendarsTab = cfg.showCalendarsTab
+            showTagsTab = cfg.showTagsTab
+            showLocationsTab = cfg.showLocationsTab
+            showGoalsTab = cfg.showGoalsTab
+            showJournalTab = cfg.showJournalTab
             defaultDurationGoalMins = cfg.defaultDurationGoalMins.toString()
             sessionsCountAsCompletions = cfg.sessionsCountAsCompletions
         } catch (e: Exception) {
@@ -112,6 +122,13 @@ fun AdvancedSettingsScreen(
     fun saveToDisk() {
         try {
             val cfg = api.getConfig()
+            // Ensure at least one sidebar tab is visible
+            val atLeastOneTab = showCalendarsTab || showTagsTab || showLocationsTab || showGoalsTab || showJournalTab
+            val finalShowCalendarsTab = if (!showCalendarsTab && !atLeastOneTab) true else showCalendarsTab
+            val finalShowTagsTab = if (!showTagsTab && !atLeastOneTab) true else showTagsTab
+            val finalShowLocationsTab = if (!showLocationsTab && !atLeastOneTab) true else showLocationsTab
+            val finalShowGoalsTab = if (!showGoalsTab && !atLeastOneTab) true else showGoalsTab
+            val finalShowJournalTab = if (!showJournalTab && !atLeastOneTab) true else showJournalTab
             val newCfg = cfg.copy(
                 maxDoneRoots = maxDoneRoots.toUIntOrNull() ?: 20u,
                 maxDoneSubtasks = maxDoneSubtasks.toUIntOrNull() ?: 5u,
@@ -137,6 +154,11 @@ fun AdvancedSettingsScreen(
                 startGracePeriodDays = startGracePeriodDays.toUIntOrNull() ?: 1u,
                 firstDayOfWeek = firstDayOfWeek,
                 showTaskGoalsInSidebar = showTaskGoalsInSidebar,
+                showCalendarsTab = finalShowCalendarsTab,
+                showTagsTab = finalShowTagsTab,
+                showLocationsTab = finalShowLocationsTab,
+                showGoalsTab = finalShowGoalsTab,
+                showJournalTab = finalShowJournalTab,
                 defaultDurationGoalMins = defaultDurationGoalMins.toUIntOrNull() ?: 60u,
                 sessionsCountAsCompletions = sessionsCountAsCompletions
             )
@@ -502,6 +524,57 @@ fun AdvancedSettingsScreen(
                 color = androidx.compose.ui.graphics.Color.Gray,
                 modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
             )
+
+            HorizontalDivider(Modifier.padding(vertical = 16.dp))
+
+            // Sidebar Tabs Section
+            Text(
+                stringResource(R.string.sidebar_tabs),
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
+                Switch(
+                    checked = showCalendarsTab,
+                    onCheckedChange = { showCalendarsTab = it; saveToDisk() }
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.show_calendars_tab))
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
+                Switch(
+                    checked = showTagsTab,
+                    onCheckedChange = { showTagsTab = it; saveToDisk() }
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.show_tags_tab))
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
+                Switch(
+                    checked = showLocationsTab,
+                    onCheckedChange = { showLocationsTab = it; saveToDisk() }
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.show_locations_tab))
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
+                Switch(
+                    checked = showGoalsTab,
+                    onCheckedChange = { showGoalsTab = it; saveToDisk() }
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.show_goals_tab))
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
+                Switch(
+                    checked = showJournalTab,
+                    onCheckedChange = { showJournalTab = it; saveToDisk() }
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.show_journal_tab))
+            }
 
             HorizontalDivider(Modifier.padding(vertical = 16.dp))
 

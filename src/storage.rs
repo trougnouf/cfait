@@ -145,6 +145,58 @@ impl LocalStorage {
         None
     }
 
+    /// Parses tasks from an ICS string without writing to storage.
+    /// Returns the parsed tasks with their calendar_href set to the given value.
+    pub fn parse_ics(calendar_href: &str, ics_content: &str) -> Result<Vec<Task>> {
+        let mut imported_tasks = Vec::new();
+        // Normalize line endings to \r\n for consistent parsing
+        let normalized_content = ics_content.replace("\r\n", "\n").replace('\n', "\r\n");
+
+        // Split by VTODO and VJOURNAL blocks and parse each
+        for (begin_marker, end_marker) in [
+            ("BEGIN:VTODO", "END:VTODO"),
+            ("BEGIN:VJOURNAL", "END:VJOURNAL"),
+        ] {
+            let parts: Vec<&str> = normalized_content.split(begin_marker).collect();
+
+            for component in parts.iter().skip(1) {
+                if !component.contains(end_marker) {
+                    continue;
+                }
+
+                // Extract just the component content (everything up to and including the end marker)
+                let comp_end = match component.find(end_marker) {
+                    Some(pos) => pos + end_marker.len(),
+                    None => continue,
+                };
+                let comp_content = &component[..comp_end];
+
+                // Reconstruct a valid component block
+                let comp = format!("{begin_marker}{comp_content}");
+
+                // Always wrap in a proper VCALENDAR for parsing
+                let full_ics = format!(
+                    "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//cfait//cfait//EN\r\n{}\r\nEND:VCALENDAR",
+                    comp
+                );
+                if let Ok(task) = IcsAdapter::from_ics(
+                    &full_ics,
+                    String::new(),
+                    format!("{}.ics", uuid::Uuid::new_v4()),
+                    calendar_href.to_string(),
+                ) {
+                    imported_tasks.push(task);
+                }
+            }
+        }
+
+        if imported_tasks.is_empty() {
+            anyhow::bail!("No valid tasks found in ICS file");
+        }
+
+        Ok(imported_tasks)
+    }
+
     /// Imports tasks from an ICS string and merges them into the specified calendar.
     /// Returns the number of tasks successfully imported.
     pub fn import_from_ics(
@@ -160,47 +212,7 @@ impl LocalStorage {
                 calendar_href
             };
 
-        let mut imported_tasks = Vec::new();
-        // Normalize line endings to \r\n for consistent parsing
-        let normalized_content = ics_content.replace("\r\n", "\n").replace('\n', "\r\n");
-
-        // Split by VTODO blocks and parse each
-        let parts: Vec<&str> = normalized_content.split("BEGIN:VTODO").collect();
-
-        for component in parts.iter().skip(1) {
-            if !component.contains("END:VTODO") {
-                continue;
-            }
-
-            // Extract just the VTODO content (everything up to and including END:VTODO)
-            let vtodo_end = match component.find("END:VTODO") {
-                Some(pos) => pos + "END:VTODO".len(),
-                None => continue,
-            };
-            let vtodo_content = &component[..vtodo_end];
-
-            // Reconstruct a valid VTODO block
-            let vtodo = format!("BEGIN:VTODO{}", vtodo_content);
-
-            // Always wrap in a proper VCALENDAR for parsing
-            let full_ics = format!(
-                "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//cfait//cfait//EN\r\n{}\r\nEND:VCALENDAR",
-                vtodo
-            );
-            if let Ok(task) = IcsAdapter::from_ics(
-                &full_ics,
-                String::new(),
-                format!("{}.ics", uuid::Uuid::new_v4()),
-                calendar_href.to_string(),
-            ) {
-                imported_tasks.push(task);
-            }
-        }
-
-        if imported_tasks.is_empty() {
-            anyhow::bail!("No valid tasks found in ICS file");
-        }
-
+        let imported_tasks = Self::parse_ics(calendar_href, ics_content)?;
         let count = imported_tasks.len();
 
         // Safely upsert tasks using the unified lock
@@ -222,11 +234,18 @@ impl LocalStorage {
             String::from("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Cfait//Export//EN\r\n");
         for task in tasks {
             let full_ics = IcsAdapter::to_ics(task);
-            if let Some(start) = full_ics.find("BEGIN:VTODO")
-                && let Some(end_idx) = full_ics.rfind("END:VTODO")
+            // Extract VTODO or VJOURNAL component depending on task type
+            let (begin_marker, end_marker) = if task.is_journal {
+                ("BEGIN:VJOURNAL", "END:VJOURNAL")
+            } else {
+                ("BEGIN:VTODO", "END:VTODO")
+            };
+            if let Some(start) = full_ics.find(begin_marker)
+                && let Some(end_idx) = full_ics.rfind(end_marker)
+                && end_idx >= start
             {
-                let vtodo = &full_ics[start..end_idx + 9];
-                output.push_str(vtodo);
+                let component = &full_ics[start..end_idx + end_marker.len()];
+                output.push_str(component);
                 output.push_str("\r\n");
             }
         }

@@ -94,11 +94,6 @@ fun SettingsScreen(
     var goalInputAmount by remember { mutableStateOf("1") }
     var goalInputUnit by remember { mutableStateOf(MobileIntervalUnit.WEEKS) }
     var editingGoalKey by remember { mutableStateOf<String?>(null) }
-    var showCalendarsTab by remember { mutableStateOf(true) }
-    var showTagsTab by remember { mutableStateOf(true) }
-    var showLocationsTab by remember { mutableStateOf(true) }
-    var showGoalsTab by remember { mutableStateOf(true) }
-    var showJournalTab by remember { mutableStateOf(true) }
     var sortCollectionsBySize by remember { mutableStateOf(true) }
 
     // State maintained purely for saving without overwriting backend values
@@ -223,11 +218,6 @@ fun SettingsScreen(
         deleteEventsOnCompletion = cfg.deleteEventsOnCompletion
         aliases = cfg.tagAliases
         goals = cfg.goals
-        showCalendarsTab = cfg.showCalendarsTab
-        showTagsTab = cfg.showTagsTab
-        showLocationsTab = cfg.showLocationsTab
-        showGoalsTab = cfg.showGoalsTab
-        showJournalTab = cfg.showJournalTab
         sortCollectionsBySize = cfg.sortCollectionsBySize
         firstDayOfWeek = cfg.firstDayOfWeek
 
@@ -270,14 +260,6 @@ fun SettingsScreen(
         val cfg = api.getConfig()
         val sShort = cfg.snoozeShort
         val aRefresh = api.parseDurationString(autoRefresh) ?: 30u
-        
-        // Ensure at least one tab is visible
-        val atLeastOneTab = showCalendarsTab || showTagsTab || showLocationsTab || showGoalsTab || showJournalTab
-        val finalShowCalendarsTab = if (!showCalendarsTab && !atLeastOneTab) true else showCalendarsTab
-        val finalShowTagsTab = if (!showTagsTab && !atLeastOneTab) true else showTagsTab
-        val finalShowLocationsTab = if (!showLocationsTab && !atLeastOneTab) true else showLocationsTab
-        val finalShowGoalsTab = if (!showGoalsTab && !atLeastOneTab) true else showGoalsTab
-        val finalShowJournalTab = if (!showJournalTab && !atLeastOneTab) true else showJournalTab
 
         val newCfg = cfg.copy(
             url = url,
@@ -296,11 +278,6 @@ fun SettingsScreen(
             autoRefreshInterval = aRefresh,
             tagAliases = aliases,
             goals = goals,
-            showCalendarsTab = finalShowCalendarsTab,
-            showTagsTab = finalShowTagsTab,
-            showLocationsTab = finalShowLocationsTab,
-            showGoalsTab = finalShowGoalsTab,
-            showJournalTab = finalShowJournalTab,
             sortCollectionsBySize = sortCollectionsBySize,
             firstDayOfWeek = firstDayOfWeek
         )
@@ -818,46 +795,6 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.primary,
                 )
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
-                    Switch(
-                        checked = showCalendarsTab,
-                        onCheckedChange = { showCalendarsTab = it; saveToDisk() }
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.show_calendars_tab))
-                }
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
-                    Switch(
-                        checked = showTagsTab,
-                        onCheckedChange = { showTagsTab = it; saveToDisk() }
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.show_tags_tab))
-                }
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
-                    Switch(
-                        checked = showLocationsTab,
-                        onCheckedChange = { showLocationsTab = it; saveToDisk() }
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.show_locations_tab))
-                }
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
-                    Switch(
-                        checked = showGoalsTab,
-                        onCheckedChange = { showGoalsTab = it; saveToDisk() }
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.show_goals_tab))
-                }
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
-                    Switch(
-                        checked = showJournalTab,
-                        onCheckedChange = { showJournalTab = it; saveToDisk() }
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.show_journal_tab))
-                }
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
                     Checkbox(
                         checked = sortCollectionsBySize,
                         onCheckedChange = { sortCollectionsBySize = it; saveToDisk() }
@@ -915,34 +852,34 @@ fun SettingsScreen(
                                     }
                                 },
                                 onExport = {
-                                    if (cal.isLocal) {
-                                        try {
-                                            val icsContent = api.exportLocalIcs(cal.href)
-                                            val calId = cal.href.removePrefix("local://")
-                                            val file = File(context.cacheDir, "cfait_${calId}.ics")
-                                            file.writeText(icsContent)
-                                            val uri = FileProvider.getUriForFile(
-                                                context,
-                                                "${context.packageName}.fileprovider",
-                                                file
-                                            )
-                                            val intent = Intent(Intent.ACTION_SEND).apply {
-                                                type = "text/calendar"
-                                                putExtra(Intent.EXTRA_STREAM, uri)
-                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                            }
-                                            val shareIntent = Intent.createChooser(intent, "Export ${cal.name}")
-                                            context.startActivity(shareIntent)
-                                        } catch (e: Exception) {
-                                            status = context.getString(R.string.export_error, e.message ?: "")
+                                    try {
+                                        val icsContent = api.exportLocalIcs(cal.href)
+                                        val calId = if (cal.isLocal) {
+                                            cal.href.removePrefix("local://")
+                                        } else {
+                                            cal.href.trimEnd('/').substringAfterLast('/')
                                         }
+                                        val file = File(context.cacheDir, "cfait_${calId}.ics")
+                                        file.writeText(icsContent)
+                                        val uri = FileProvider.getUriForFile(
+                                            context,
+                                            "${context.packageName}.fileprovider",
+                                            file
+                                        )
+                                        val intent = Intent(Intent.ACTION_SEND).apply {
+                                            type = "text/calendar"
+                                            putExtra(Intent.EXTRA_STREAM, uri)
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                        val shareIntent = Intent.createChooser(intent, "Export ${cal.name}")
+                                        context.startActivity(shareIntent)
+                                    } catch (e: Exception) {
+                                        status = context.getString(R.string.export_error, e.message ?: "")
                                     }
                                 },
                                 onImport = {
-                                    if (cal.isLocal) {
-                                        importTargetHref = cal.href
-                                        importLauncher.launch("*/*")
-                                    }
+                                    importTargetHref = cal.href
+                                    importLauncher.launch("*/*")
                                 },
                                 onMoveUp = {
                                     scope.launch {
@@ -1359,30 +1296,28 @@ fun CollectionEditor(
                     }
                 }
 
-                if (isLocal) {
-                    Box {
-                        var showMenu by remember { mutableStateOf(false) }
-                        IconButton(onClick = { showMenu = true }, modifier = Modifier.size(32.dp)) {
-                            NfIcon(NfIcons.DOTS_CIRCLE, 20.sp, MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                Box {
+                    var showMenu by remember { mutableStateOf(false) }
+                    IconButton(onClick = { showMenu = true }, modifier = Modifier.size(32.dp)) {
+                        NfIcon(NfIcons.DOTS_CIRCLE, 20.sp, MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.export)) },
+                            onClick = { showMenu = false; onExport() },
+                            leadingIcon = { NfIcon(NfIcons.EXPORT, 16.sp) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.import_action)) },
+                            onClick = { showMenu = false; onImport() },
+                            leadingIcon = { NfIcon(NfIcons.IMPORT, 16.sp) }
+                        )
+                        if (isLocal && !isDefault) {
                             DropdownMenuItem(
-                                text = { Text(stringResource(R.string.export)) },
-                                onClick = { showMenu = false; onExport() },
-                                leadingIcon = { NfIcon(NfIcons.EXPORT, 16.sp) }
+                                text = { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) },
+                                onClick = { showMenu = false; onDelete() },
+                                leadingIcon = { NfIcon(NfIcons.DELETE, 16.sp, MaterialTheme.colorScheme.error) }
                             )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.import_action)) },
-                                onClick = { showMenu = false; onImport() },
-                                leadingIcon = { NfIcon(NfIcons.IMPORT, 16.sp) }
-                            )
-                            if (!isDefault) {
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) },
-                                    onClick = { showMenu = false; onDelete() },
-                                    leadingIcon = { NfIcon(NfIcons.DELETE, 16.sp, MaterialTheme.colorScheme.error) }
-                                )
-                            }
                         }
                     }
                 }

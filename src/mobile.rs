@@ -1328,9 +1328,20 @@ impl CfaitMobile {
     }
 
     pub fn export_local_ics(&self, calendar_href: String) -> Result<String, MobileError> {
-        let tasks = LocalStorage::load_for_href(self.ctx.as_ref(), &calendar_href)
-            .map_err(|e| MobileError::from(e.to_string()))?;
-        Ok(LocalStorage::to_ics_string(&tasks))
+        // For local collections, read from disk; for remote, read from in-memory store
+        if calendar_href.starts_with("local://") {
+            let tasks = LocalStorage::load_for_href(self.ctx.as_ref(), &calendar_href)
+                .map_err(|e| MobileError::from(e.to_string()))?;
+            Ok(LocalStorage::to_ics_string(&tasks))
+        } else {
+            let store = self.controller.store.blocking_lock();
+            let tasks: Vec<Task> = store
+                .calendars
+                .get(&calendar_href)
+                .map(|m| m.values().cloned().collect())
+                .unwrap_or_default();
+            Ok(LocalStorage::to_ics_string(&tasks))
+        }
     }
 
     pub fn import_local_ics(
@@ -1346,8 +1357,41 @@ impl CfaitMobile {
             ));
         }
 
-        let count = LocalStorage::import_from_ics(self.ctx.as_ref(), &calendar_href, &ics_content)
-            .map_err(|e| MobileError::from(e.to_string()))?;
+        let count = if calendar_href.starts_with("local://") {
+            LocalStorage::import_from_ics(self.ctx.as_ref(), &calendar_href, &ics_content)
+                .map_err(|e| MobileError::from(e.to_string()))?
+        } else {
+            // Remote collection: parse ICS, then push to journal and store synchronously
+            let tasks = LocalStorage::parse_ics(&calendar_href, &ics_content)
+                .map_err(|e| MobileError::from(e.to_string()))?;
+
+            let mut count = 0;
+            for mut task in tasks {
+                // Set the proper remote HREF (same logic as controller.create_task)
+                let cal_path = task.calendar_href.clone();
+                let filename = format!("{}.ics", task.uid);
+                let full_href = if cal_path.ends_with('/') {
+                    format!("{}{}", cal_path, filename)
+                } else {
+                    format!("{}/{}", cal_path, filename)
+                };
+                task.href = full_href;
+                task.etag = "pending_refresh".to_string();
+
+                crate::journal::Journal::push(
+                    self.ctx.as_ref(),
+                    crate::journal::Action::Create(task.clone()),
+                )
+                .map_err(|e| MobileError::from(e.to_string()))?;
+                self.controller.store.blocking_lock().add_task(task);
+                count += 1;
+            }
+            if count == 0 {
+                return Err(MobileError::from("Failed to import any tasks".to_string()));
+            }
+            count
+        };
+
         let msg = if count == 1 {
             rust_i18n::t!("import_success.one").to_string()
         } else {

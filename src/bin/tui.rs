@@ -443,11 +443,18 @@ async fn main() -> Result<()> {
                 );
                 std::process::exit(1);
             });
+
             let href = if let Some(col_id) = collection_id {
                 if col_id == "default" {
                     "local://default".to_string()
+                } else if col_id.starts_with("local://")
+                    || col_id.starts_with('/')
+                    || col_id.starts_with("http")
+                {
+                    col_id.clone()
                 } else {
-                    format!("local://{}", col_id)
+                    // Try to resolve as a collection name (may be remote)
+                    resolve_collection_href(&ctx, &col_id).await
                 }
             } else {
                 "local://default".to_string()
@@ -462,18 +469,48 @@ async fn main() -> Result<()> {
                 std::process::exit(1);
             }
 
-            match LocalStorage::import_from_ics(ctx.as_ref(), &href, &ics_content) {
-                Ok(count) => {
-                    if count == 1 {
-                        println!("{}", rust_i18n::t!("import_success", count = 1));
-                    } else {
-                        println!("{}", rust_i18n::t!("import_success", count = count));
+            if href.starts_with("local://") {
+                match LocalStorage::import_from_ics(ctx.as_ref(), &href, &ics_content) {
+                    Ok(count) => {
+                        if count == 1 {
+                            println!("{}", rust_i18n::t!("import_success", count = 1));
+                        } else {
+                            println!("{}", rust_i18n::t!("import_success", count = count));
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("{}", rust_i18n::t!("import_error", error = e.to_string()));
+                        std::process::exit(1);
                     }
                 }
-                Err(e) => {
-                    eprintln!("{}", rust_i18n::t!("import_error", error = e.to_string()));
+            } else {
+                // Remote collection: parse and create via controller (journaled for sync)
+                let tasks = match LocalStorage::parse_ics(&href, &ics_content) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        eprintln!("{}", rust_i18n::t!("import_error", error = e.to_string()));
+                        std::process::exit(1);
+                    }
+                };
+                let store = Arc::new(tokio::sync::Mutex::new(TaskStore::new(ctx.clone())));
+                let client = Arc::new(tokio::sync::Mutex::new(None));
+                let controller = cfait::controller::TaskController::new(store, client, ctx.clone());
+                let mut count = 0;
+                for task in tasks {
+                    if controller.create_task(task).await.is_ok() {
+                        count += 1;
+                    }
+                }
+                if count == 0 {
+                    eprintln!(
+                        "{}",
+                        rust_i18n::t!("import_error", error = "Failed to import any tasks")
+                    );
                     std::process::exit(1);
                 }
+                println!("{}", rust_i18n::t!("import_success", count = count));
+                // Best-effort background sync
+                let _ = maybe_sync(ctx.clone()).await;
             }
             return Ok(());
         }
@@ -483,15 +520,32 @@ async fn main() -> Result<()> {
             } else {
                 None
             };
-            let tasks = if let Some(col_id) = collection_id {
-                let href = if col_id == "default" {
+            let href = if let Some(col_id) = collection_id {
+                if col_id == "default" {
                     "local://default".to_string()
+                } else if col_id.starts_with("local://")
+                    || col_id.starts_with('/')
+                    || col_id.starts_with("http")
+                {
+                    col_id.clone()
                 } else {
-                    format!("local://{}", col_id)
-                };
+                    // Try to resolve as a collection name (may be remote)
+                    resolve_collection_href(&ctx, &col_id).await
+                }
+            } else {
+                "local://default".to_string()
+            };
+
+            let tasks = if href.starts_with("local://") {
                 LocalStorage::load_for_href(ctx.as_ref(), &href)?
             } else {
-                LocalStorage::load_for_href(ctx.as_ref(), cfait::storage::LOCAL_CALENDAR_HREF)?
+                // Remote collection: load from cache (offline-first)
+                let store = build_store_cli(&ctx).await;
+                store
+                    .calendars
+                    .get(&href)
+                    .map(|m| m.values().cloned().collect::<Vec<_>>())
+                    .unwrap_or_default()
             };
             println!("{}", LocalStorage::to_ics_string(&tasks));
             return Ok(());

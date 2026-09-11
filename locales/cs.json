@@ -418,6 +418,7 @@
     "show_journal_tab": "Zobrazit panel Denník v postranním panelu",
     "show_less": "Zobrazit méně",
     "show_locations_tab": "Zobrazit panel Umístění v postranním panelu",
+    "sidebar_tabs": "Panely postranního panelu",
     "show_older_sessions": {
         "one": "Zobrazit 1 starší relaci…",
         "other": "Zobrazit %{count} starších relací…"

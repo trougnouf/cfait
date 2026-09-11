@@ -642,6 +642,7 @@
     "show_journal_tab": "Show Journal tab in sidebar",
     "show_tags_tab": "Show Tags tab in sidebar",
     "show_locations_tab": "Show Locations tab in sidebar",
+    "sidebar_tabs": "Sidebar tabs",
     "show_task_goals_in_sidebar": "Show task-specific goals in sidebar",
     "snooze": "Snooze…",
     "snooze_custom_title": "Custom",
