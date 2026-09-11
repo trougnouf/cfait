@@ -1109,6 +1109,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.error_msg = Some(msg);
             if let Some(client) = &app.client {
                 app.loading = true;
+                app.pending_refresh_generation = app.edit_generation;
                 return Task::perform(
                     async_fetch_all_wrapper(client.clone(), app.calendars.clone()),
                     |res| Message::RefreshedAll(res.map_err(|e| e.to_string())),
@@ -1140,6 +1141,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             app.sort_calendars();
 
+            app.edit_generation = app.edit_generation.wrapping_add(1);
             app.store.insert(new_cal.href.clone(), vec![]);
 
             refresh_filtered_tasks(app);
@@ -1155,6 +1157,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 let _ = LocalCalendarRegistry::save(app.ctx.as_ref(), &app.local_cals_editing);
 
                 app.calendars.retain(|c| c.href != href);
+                app.edit_generation = app.edit_generation.wrapping_add(1);
                 app.store.remove(&href);
 
                 if let Some(path) = LocalStorage::get_path_for_href(app.ctx.as_ref(), &href) {

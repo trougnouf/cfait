@@ -155,6 +155,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
 
             if let Some(record) = app.undo_history.pop_undo() {
+                app.edit_generation = app.edit_generation.wrapping_add(1);
                 app.store.apply_actions(&record.reverse);
                 app.undo_history.push_redo(record.clone());
 
@@ -194,6 +195,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
 
             if let Some(record) = app.undo_history.pop_redo() {
+                app.edit_generation = app.edit_generation.wrapping_add(1);
                 app.store.apply_actions(&record.forward);
                 app.undo_history.push_undo(record.clone());
 
@@ -1351,6 +1353,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some((task, _)) = app.store.get_task_mut(&t_uid)
                 && task.handle_snooze(&a_uid, mins)
             {
+                app.edit_generation = app.edit_generation.wrapping_add(1);
                 task.sequence += 1;
                 let cloned = task.clone();
                 common::refresh_filtered_tasks(app);
@@ -1367,6 +1370,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some((task, _)) = app.store.get_task_mut(&t_uid)
                 && task.handle_dismiss(&a_uid)
             {
+                app.edit_generation = app.edit_generation.wrapping_add(1);
                 task.sequence += 1;
                 let cloned = task.clone();
                 common::refresh_filtered_tasks(app);
@@ -1457,6 +1461,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 if let Some(session) = crate::model::parser::parse_session_input(&input_text)
                     && let Some((t_mut, _)) = app.store.get_task_mut(&uid)
                 {
+                    app.edit_generation = app.edit_generation.wrapping_add(1);
                     if let Some(idx) = app.editing_session_idx {
                         t_mut.remove_session(idx);
                     }
@@ -1482,6 +1487,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
         Message::DeleteSession(uid, idx) => {
             if let Some((t_mut, _)) = app.store.get_task_mut(&uid) {
+                app.edit_generation = app.edit_generation.wrapping_add(1);
                 t_mut.remove_session(idx);
                 t_mut.sequence += 1;
                 let cloned = t_mut.clone();
@@ -1717,6 +1723,7 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
             trash_retention_days: app.core_config.trash_retention_days,
             calendars: &app.calendars,
         };
+        app.edit_generation = app.edit_generation.wrapping_add(1);
         let (mut actions, warnings) =
             match app
                 .store
@@ -1768,6 +1775,7 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
         return Task::none();
     } else if let Some(edit_uid) = app.editing_uid.clone() {
         if let Some(task_ref) = app.store.get_task_ref(&edit_uid) {
+            app.edit_generation = app.edit_generation.wrapping_add(1);
             let old_href = task_ref.calendar_href.clone();
             let mut task = task_ref.clone();
             task.description = cleaned_desc.clone();
@@ -1940,6 +1948,7 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
             .unwrap_or_default();
 
         if !target_href.is_empty() {
+            app.edit_generation = app.edit_generation.wrapping_add(1);
             new_task.calendar_href = target_href.clone();
 
             if let Some(target) = new_task.target_collection.take() {

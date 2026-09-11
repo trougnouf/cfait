@@ -6,7 +6,7 @@ use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp};
 use crate::gui::update::common::{refresh_filtered_tasks, scroll_to_selected};
 use crate::journal::Journal;
-use crate::model::CalendarListEntry;
+use crate::model::{CalendarListEntry, Task as TodoTask};
 use crate::storage::{
     LOCAL_CALENDAR_HREF, LOCAL_CALENDAR_NAME, LOCAL_TRASH_HREF, LocalCalendarRegistry,
 };
@@ -25,50 +25,87 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if app.client.is_some() {
                 let mut cfg = app.core_config.clone();
                 cfg.password = app.ob_pass.clone(); // Re-use the securely loaded password
-                return Task::perform(connect_and_fetch_wrapper(app.ctx.clone(), cfg), |res| {
+                app.pending_refresh_generation = app.edit_generation;
+                Task::perform(connect_and_fetch_wrapper(app.ctx.clone(), cfg), |res| {
                     Message::Loaded(res.map_err(|e| e.to_string()))
-                });
+                })
             } else {
-                app.calendars =
-                    crate::cache::Cache::load_calendars(app.ctx.as_ref()).unwrap_or_default();
-                if let Ok(locals) = crate::storage::LocalCalendarRegistry::load(app.ctx.as_ref()) {
-                    for loc in locals {
-                        if !app.calendars.iter().any(|c| c.href == loc.href) {
-                            app.calendars.push(loc);
-                        }
-                    }
-                }
-                app.sort_calendars();
-
-                app.store.clear();
-                for cal in &app.calendars {
-                    if cal.href.starts_with("local://") {
-                        if let Ok(mut tasks) =
-                            crate::storage::LocalStorage::load_for_href(app.ctx.as_ref(), &cal.href)
+                let ctx = app.ctx.clone();
+                app.pending_refresh_generation = app.edit_generation;
+                Task::perform(
+                    async move {
+                        let mut calendars =
+                            crate::cache::Cache::load_calendars(ctx.as_ref()).unwrap_or_default();
+                        if let Ok(locals) =
+                            crate::storage::LocalCalendarRegistry::load(ctx.as_ref())
                         {
-                            crate::journal::Journal::apply_to_tasks(
-                                app.ctx.as_ref(),
-                                &mut tasks,
-                                &cal.href,
-                            );
-                            app.store.insert(cal.href.clone(), tasks);
+                            for loc in locals {
+                                if !calendars.iter().any(|c| c.href == loc.href) {
+                                    calendars.push(loc);
+                                }
+                            }
                         }
-                    } else if let Ok((mut tasks, _)) =
-                        crate::cache::Cache::load(app.ctx.as_ref(), &cal.href)
-                    {
-                        crate::journal::Journal::apply_to_tasks(
-                            app.ctx.as_ref(),
-                            &mut tasks,
-                            &cal.href,
-                        );
-                        app.store.insert(cal.href.clone(), tasks);
-                    }
-                }
 
-                crate::gui::update::common::update_journal_state(app);
-                refresh_filtered_tasks(app);
-                app.loading = false;
+                        let mut store_data: Vec<(String, Vec<TodoTask>)> = Vec::new();
+                        for cal in &calendars {
+                            if cal.href.starts_with("local://") {
+                                if let Ok(mut tasks) = crate::storage::LocalStorage::load_for_href(
+                                    ctx.as_ref(),
+                                    &cal.href,
+                                ) {
+                                    crate::journal::Journal::apply_to_tasks(
+                                        ctx.as_ref(),
+                                        &mut tasks,
+                                        &cal.href,
+                                    );
+                                    store_data.push((cal.href.clone(), tasks));
+                                }
+                            } else if let Ok((mut tasks, _)) =
+                                crate::cache::Cache::load(ctx.as_ref(), &cal.href)
+                            {
+                                crate::journal::Journal::apply_to_tasks(
+                                    ctx.as_ref(),
+                                    &mut tasks,
+                                    &cal.href,
+                                );
+                                store_data.push((cal.href.clone(), tasks));
+                            }
+                        }
+
+                        Ok::<_, String>((calendars, store_data))
+                    },
+                    |res| Message::LocalLoaded(res.map_err(|e| e.to_string())),
+                )
             }
+        }
+        Message::LocalLoaded(Ok((calendars, store_data))) => {
+            app.calendars = calendars;
+            app.sort_calendars();
+
+            if app.edit_generation == app.pending_refresh_generation {
+                // No user edits during the async load: safe to replace the store
+                // with fresh disk data (picks up other instances' changes & deletions)
+                app.store.clear();
+                for (href, tasks) in store_data {
+                    app.store.insert(href, tasks);
+                }
+            } else {
+                // Edits happened during the load: skip the store update to avoid
+                // wiping in-memory changes. The next refresh will pick up disk changes.
+                log::debug!(
+                    "Skipping local refresh store update: edit generation changed during load"
+                );
+            }
+
+            crate::gui::update::common::update_journal_state(app);
+            refresh_filtered_tasks(app);
+            app.loading = false;
+            Task::none()
+        }
+        Message::LocalLoaded(Err(e)) => {
+            log::error!("Local load failed: {}", e);
+            app.error_msg = Some(e);
+            app.loading = false;
             Task::none()
         }
         Message::InitBackgroundWorker(tx) => {
@@ -152,26 +189,33 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.calendars = cals.clone();
             app.sort_calendars();
 
-            app.store.clear();
+            if app.edit_generation == app.pending_refresh_generation {
+                // No user edits during the network fetch: safe to replace the store
+                app.store.clear();
 
-            for cal in &app.calendars {
-                if cal.href.starts_with("local://")
-                    && let Ok(mut local_t) =
-                        crate::storage::LocalStorage::load_for_href(app.ctx.as_ref(), &cal.href)
-                {
-                    Journal::apply_to_tasks(app.ctx.as_ref(), &mut local_t, &cal.href);
-                    app.store.insert(cal.href.clone(), local_t);
+                for cal in &app.calendars {
+                    if cal.href.starts_with("local://")
+                        && let Ok(mut local_t) =
+                            crate::storage::LocalStorage::load_for_href(app.ctx.as_ref(), &cal.href)
+                    {
+                        Journal::apply_to_tasks(app.ctx.as_ref(), &mut local_t, &cal.href);
+                        app.store.insert(cal.href.clone(), local_t);
+                    }
                 }
-            }
 
-            for cal in &app.calendars {
-                if cal.href.starts_with("local://") {
-                    continue;
+                for cal in &app.calendars {
+                    if cal.href.starts_with("local://") {
+                        continue;
+                    }
+                    if let Ok((mut cached_tasks, _)) = Cache::load(app.ctx.as_ref(), &cal.href) {
+                        Journal::apply_to_tasks(app.ctx.as_ref(), &mut cached_tasks, &cal.href);
+                        app.store.insert(cal.href.clone(), cached_tasks);
+                    }
                 }
-                if let Ok((mut cached_tasks, _)) = Cache::load(app.ctx.as_ref(), &cal.href) {
-                    Journal::apply_to_tasks(app.ctx.as_ref(), &mut cached_tasks, &cal.href);
-                    app.store.insert(cal.href.clone(), cached_tasks);
-                }
+            } else {
+                // Edits happened during the fetch: skip store clear to preserve them.
+                // Remote tasks arriving via RefreshedAll will merge via sequence protection.
+                log::debug!("Skipping Loaded store clear: edit generation changed during fetch");
             }
 
             let net_active = active;
@@ -213,6 +257,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some(href) = net_active
                 && href != LOCAL_CALENDAR_HREF
                 && app.error_msg.is_none()
+                && app.edit_generation == app.pending_refresh_generation
             {
                 Journal::apply_to_tasks(app.ctx.as_ref(), &mut tasks, &href);
                 app.store.insert(href, tasks);
@@ -238,6 +283,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             if app.error_msg.is_none() {
                 app.loading = true;
+                app.pending_refresh_generation = app.edit_generation;
                 Task::batch(vec![
                     Task::perform(async_fetch_all_wrapper(client, cals), |res| {
                         Message::RefreshedAll(res.map_err(|e| e.to_string()))
@@ -262,34 +308,54 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 let cfg = &app.core_config;
                 if !cfg.url.is_empty() {
                     app.state = AppState::Active;
-                    let cals = Cache::load_calendars(app.ctx.as_ref()).unwrap_or_default();
-                    app.calendars = cals;
-                    app.sort_calendars();
-                    app.store.clear();
-                    for cal in &app.calendars {
-                        if cal.href.starts_with("local://") {
-                            if let Ok(mut tasks) = crate::storage::LocalStorage::load_for_href(
-                                app.ctx.as_ref(),
-                                &cal.href,
-                            ) {
-                                crate::journal::Journal::apply_to_tasks(
-                                    app.ctx.as_ref(),
-                                    &mut tasks,
-                                    &cal.href,
-                                );
-                                app.store.insert(cal.href.clone(), tasks);
+                    let ctx = app.ctx.clone();
+                    app.pending_refresh_generation = app.edit_generation;
+                    return Task::perform(
+                        async move {
+                            let mut calendars = crate::cache::Cache::load_calendars(ctx.as_ref())
+                                .unwrap_or_default();
+                            if let Ok(locals) =
+                                crate::storage::LocalCalendarRegistry::load(ctx.as_ref())
+                            {
+                                for loc in locals {
+                                    if !calendars.iter().any(|c| c.href == loc.href) {
+                                        calendars.push(loc);
+                                    }
+                                }
                             }
-                        } else if let Ok((mut tasks, _)) = Cache::load(app.ctx.as_ref(), &cal.href)
-                        {
-                            crate::journal::Journal::apply_to_tasks(
-                                app.ctx.as_ref(),
-                                &mut tasks,
-                                &cal.href,
-                            );
-                            app.store.insert(cal.href.clone(), tasks);
-                        }
-                    }
-                    refresh_filtered_tasks(app);
+
+                            let mut store_data: Vec<(String, Vec<TodoTask>)> = Vec::new();
+                            for cal in &calendars {
+                                if cal.href.starts_with("local://") {
+                                    if let Ok(mut tasks) =
+                                        crate::storage::LocalStorage::load_for_href(
+                                            ctx.as_ref(),
+                                            &cal.href,
+                                        )
+                                    {
+                                        crate::journal::Journal::apply_to_tasks(
+                                            ctx.as_ref(),
+                                            &mut tasks,
+                                            &cal.href,
+                                        );
+                                        store_data.push((cal.href.clone(), tasks));
+                                    }
+                                } else if let Ok((mut tasks, _)) =
+                                    crate::cache::Cache::load(ctx.as_ref(), &cal.href)
+                                {
+                                    crate::journal::Journal::apply_to_tasks(
+                                        ctx.as_ref(),
+                                        &mut tasks,
+                                        &cal.href,
+                                    );
+                                    store_data.push((cal.href.clone(), tasks));
+                                }
+                            }
+
+                            Ok::<_, String>((calendars, store_data))
+                        },
+                        |res| Message::LocalLoaded(res.map_err(|e| e.to_string())),
+                    );
                 } else {
                     app.state = AppState::Onboarding;
                 }
@@ -299,9 +365,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::RefreshedAll(Ok(results)) => {
-            for (href, mut tasks) in results {
-                Journal::apply_to_tasks(app.ctx.as_ref(), &mut tasks, &href);
-                app.store.insert(href.clone(), tasks);
+            if app.edit_generation == app.pending_refresh_generation {
+                for (href, mut tasks) in results {
+                    Journal::apply_to_tasks(app.ctx.as_ref(), &mut tasks, &href);
+                    app.store.insert(href.clone(), tasks);
+                }
             }
 
             app.last_sync_failed = false;
@@ -325,8 +393,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::TasksRefreshed(Ok((href, mut tasks))) => {
             app.error_msg = None;
             app.last_sync_failed = false;
-            Journal::apply_to_tasks(app.ctx.as_ref(), &mut tasks, &href);
-            app.store.insert(href.clone(), tasks);
+            if app.edit_generation == app.pending_refresh_generation {
+                Journal::apply_to_tasks(app.ctx.as_ref(), &mut tasks, &href);
+                app.store.insert(href.clone(), tasks);
+            }
 
             if let Some(tx) = &app.bg_tx {
                 let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::SyncNow);

@@ -37,6 +37,7 @@ fn flush_journal_save(app: &mut GuiApp) {
             new_journal.calendar_href = href.clone();
             new_journal.dtstart = Some(crate::model::DateType::AllDay(date));
             new_journal.summary = date.format("%Y-%m-%d").to_string();
+            app.edit_generation = app.edit_generation.wrapping_add(1);
             app.store.add_task(new_journal.clone());
             if let Some(tx) = &app.bg_tx {
                 let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(vec![
@@ -60,6 +61,7 @@ fn flush_journal_save(app: &mut GuiApp) {
             calendars: &app.calendars,
         };
 
+        app.edit_generation = app.edit_generation.wrapping_add(1);
         if let Ok((actions, _warnings)) = app.store.sync_tree_from_markdown(
             &uid,
             &new_text,
@@ -252,14 +254,17 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         app.sidebar_mode == SidebarMode::Journal
                     };
 
-                    let (final_uid, actions) = app.store.walk_or_create_wiki_path(
-                        clean_title,
-                        context_uid.as_deref(),
-                        context_is_journal,
-                        &app.tag_aliases,
-                        def_time,
-                        app.active_cal_href.clone(),
-                    );
+                    let (final_uid, actions) = {
+                        app.edit_generation = app.edit_generation.wrapping_add(1);
+                        app.store.walk_or_create_wiki_path(
+                            clean_title,
+                            context_uid.as_deref(),
+                            context_is_journal,
+                            &app.tag_aliases,
+                            def_time,
+                            app.active_cal_href.clone(),
+                        )
+                    };
 
                     if let Some(tx) = &app.bg_tx {
                         let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(actions));
@@ -867,6 +872,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 if !app.store.calendars.contains_key(&href) {
                     app.loading = true;
                 }
+                app.pending_refresh_generation = app.edit_generation;
                 return Task::perform(async_fetch_wrapper(client.clone(), href), |res| {
                     Message::TasksRefreshed(res.map_err(|e| e.to_string()))
                 });
@@ -1022,6 +1028,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             new_page.calendar_href = target_href.clone();
             let uid = new_page.uid.clone();
 
+            app.edit_generation = app.edit_generation.wrapping_add(1);
             app.store.add_task(new_page.clone());
             if let Some(tx) = &app.bg_tx {
                 let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(vec![
@@ -1054,6 +1061,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             new_page.parent_uid = Some(parent_uid);
             let uid = new_page.uid.clone();
 
+            app.edit_generation = app.edit_generation.wrapping_add(1);
             app.store.add_task(new_page.clone());
             if let Some(tx) = &app.bg_tx {
                 let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(vec![
@@ -1079,6 +1087,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 && let Some((t, _)) = app.store.get_task_mut(uid)
                 && t.summary != s
             {
+                app.edit_generation = app.edit_generation.wrapping_add(1);
                 t.summary = s.clone();
                 t.sequence += 1;
                 let clone = t.clone();
@@ -1282,6 +1291,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 if !app.store.calendars.contains_key(&href) {
                     app.loading = true;
                 }
+                app.pending_refresh_generation = app.edit_generation;
                 return Task::perform(async_fetch_wrapper(client.clone(), href), |res| {
                     Message::TasksRefreshed(res.map_err(|e| e.to_string()))
                 });

@@ -480,6 +480,7 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
 
         // C. Input Events
         if last_refresh.elapsed() >= refresh_interval {
+            app_state.pending_refresh_generation = app_state.edit_generation;
             let _ = action_tx.send(crate::tui::action::Action::Refresh).await;
             last_refresh = std::time::Instant::now();
         }

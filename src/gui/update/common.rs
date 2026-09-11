@@ -249,6 +249,7 @@ pub fn apply_alias_retroactively(
         return Vec::new();
     }
 
+    app.edit_generation = app.edit_generation.wrapping_add(1);
     refresh_filtered_tasks(app);
     modified_tasks
 }
@@ -483,6 +484,7 @@ pub fn dispatch_intent(app: &mut GuiApp, intent: AppIntent) {
     // 2. Mutate in-memory store synchronously & extract persistence actions
     let (actions, reverse, desc, primary_uid) = app.store.apply_task_intent(&intent, config);
     if !actions.is_empty() {
+        app.edit_generation = app.edit_generation.wrapping_add(1);
         app.undo_history.push(crate::journal::UndoRecord {
             description: desc,
             primary_uid,

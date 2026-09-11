@@ -88,6 +88,10 @@ pub struct AppState {
     pub mode: InputMode,
     pub message: String,
     pub loading: bool,
+    /// Monotonically incremented on every user-initiated store mutation.
+    pub edit_generation: u64,
+    /// Snapshot of edit_generation when an async refresh was started.
+    pub pending_refresh_generation: u64,
 
     // Filter State
     pub sidebar_mode: SidebarMode,
@@ -237,6 +241,8 @@ impl AppState {
             mode: InputMode::Normal,
             message: "Loading...".to_string(),
             loading: true,
+            edit_generation: 0,
+            pending_refresh_generation: 0,
 
             sidebar_mode: SidebarMode::Calendars,
             active_cal_href: None,
@@ -567,6 +573,7 @@ impl AppState {
         }
         let (forward, reverse, desc, primary_uid) = self.store.apply_task_intent(intent, config);
         if !forward.is_empty() {
+            self.edit_generation = self.edit_generation.wrapping_add(1);
             self.undo_history.push(crate::journal::UndoRecord {
                 description: desc,
                 primary_uid,

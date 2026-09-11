@@ -263,6 +263,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
 
         Message::Refresh
         | Message::Loaded(_)
+        | Message::LocalLoaded(_)
         | Message::RefreshedAll(_)
         | Message::TasksRefreshed(_)
         | Message::MigrationComplete(_) => network::handle(app, message),

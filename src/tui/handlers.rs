@@ -57,6 +57,7 @@ fn handle_alarm_action(
     if let Some((t, _)) = state.store.get_task_mut(task_uid)
         && f(t, alarm_uid)
     {
+        state.edit_generation = state.edit_generation.wrapping_add(1);
         t.sequence += 1;
         let cloned = t.clone();
         state.active_alarm = None;
@@ -685,11 +686,13 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
 
         if let Some(mut existing) = existing_opt {
             if new_text.trim().is_empty() {
+                state.edit_generation = state.edit_generation.wrapping_add(1);
                 let _ = state.store.delete_task(&existing.uid);
                 actions.push(crate::journal::Action::Delete(existing));
             } else {
                 existing.description = new_text;
                 existing.sequence += 1;
+                state.edit_generation = state.edit_generation.wrapping_add(1);
                 state.store.update_or_add_task(existing.clone());
                 actions.push(crate::journal::Action::Update(existing));
             }
@@ -700,6 +703,7 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
             new_journal.dtstart = Some(crate::model::DateType::AllDay(state.journal_date));
             new_journal.summary = state.journal_date.format("%Y-%m-%d").to_string();
             new_journal.description = new_text;
+            state.edit_generation = state.edit_generation.wrapping_add(1);
             state.store.add_task(new_journal.clone());
             actions.push(crate::journal::Action::Create(new_journal));
         }
@@ -732,6 +736,7 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
             trash_retention_days: config.trash_retention_days,
             calendars: &state.calendars,
         };
+        state.edit_generation = state.edit_generation.wrapping_add(1);
         match state.store.sync_tree_from_markdown(
             &uid,
             &state.input_buffer,
@@ -853,6 +858,7 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
             ),
         );
 
+        state.edit_generation = state.edit_generation.wrapping_add(1);
         state.store.add_task(parent.clone());
 
         tokio::spawn({
@@ -953,6 +959,7 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
             let mut resolved_props = std::collections::HashMap::new();
 
             if let Some((t_mut, _)) = state.store.get_task_mut(&uid) {
+                state.edit_generation = state.edit_generation.wrapping_add(1);
                 t_mut.description = clean_desc;
                 t_mut.sequence += 1;
                 parent_href = t_mut.calendar_href.clone();
@@ -1068,11 +1075,13 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
             state.refresh_filtered_view();
         }
         AppEvent::TasksLoaded(results) => {
-            for (href, tasks) in results {
-                if !state.local_mode_enabled && href.starts_with("local://") {
-                    continue;
+            if state.edit_generation == state.pending_refresh_generation {
+                for (href, tasks) in results {
+                    if !state.local_mode_enabled && href.starts_with("local://") {
+                        continue;
+                    }
+                    state.store.insert(href, tasks);
                 }
-                state.store.insert(href, tasks);
             }
             state.refresh_filtered_view();
             state.loading = false;
@@ -1348,64 +1357,66 @@ pub async fn handle_key_event(
                         crate::system::open_url(&clean_uid);
                         state.message = rust_i18n::t!("open_url").to_string();
                     } else {
-                        let target_uid =
-                            match state.store.resolve_dependency_ref(&clean_uid, context_uid) {
-                                Ok(resolved_uid) => resolved_uid,
-                                Err(_) => {
-                                    if kind == crate::model::parser::SyntaxType::WikiLink {
-                                        let config =
-                                            crate::config::Config::load(state.ctx.as_ref())
-                                                .unwrap_or_default();
-                                        let mut new_task = crate::model::Task::new(
-                                            &clean_uid,
-                                            &state.tag_aliases,
-                                            chrono::NaiveTime::parse_from_str(
-                                                &config.default_reminder_time,
-                                                "%H:%M",
-                                            )
-                                            .ok(),
-                                        );
-                                        let ctx_is_journal = context_uid
-                                            .and_then(|u| state.store.get_task_ref(u))
-                                            .map(|t| t.is_journal)
-                                            .unwrap_or(state.sidebar_mode == SidebarMode::Journal);
-                                        if ctx_is_journal {
-                                            new_task.is_journal = true;
-                                            new_task.is_note = true;
-                                        }
-                                        let target_href = context_uid
-                                            .and_then(|u| state.store.get_task_ref(u))
-                                            .map(|t| t.calendar_href.clone())
-                                            .or_else(|| state.active_cal_href.clone())
-                                            .unwrap_or_else(|| {
-                                                crate::storage::LOCAL_CALENDAR_HREF.to_string()
-                                            });
-                                        new_task.calendar_href = target_href;
-                                        let new_uid = new_task.uid.clone();
-                                        state.store.add_task(new_task.clone());
-
-                                        let tx = action_tx.clone();
-                                        tokio::spawn(async move {
-                                            let _ = tx
-                                                .send(crate::tui::action::Action::PersistBatch(
-                                                    vec![crate::journal::Action::Create(new_task)],
-                                                ))
-                                                .await;
-                                        });
-                                        new_uid
-                                    } else {
-                                        state.message = format!("Searching: '{}'", clean_uid);
-                                        state.input_buffer = clean_uid;
-                                        state.active_search_query = state.input_buffer.clone();
-                                        state.search_collapsed_tasks.clear();
-                                        state.selected_categories.clear();
-                                        state.selected_locations.clear();
-                                        state.refresh_filtered_view();
-                                        state.mode = InputMode::Normal;
-                                        return None;
+                        let target_uid = match state
+                            .store
+                            .resolve_dependency_ref(&clean_uid, context_uid)
+                        {
+                            Ok(resolved_uid) => resolved_uid,
+                            Err(_) => {
+                                if kind == crate::model::parser::SyntaxType::WikiLink {
+                                    let config = crate::config::Config::load(state.ctx.as_ref())
+                                        .unwrap_or_default();
+                                    let mut new_task = crate::model::Task::new(
+                                        &clean_uid,
+                                        &state.tag_aliases,
+                                        chrono::NaiveTime::parse_from_str(
+                                            &config.default_reminder_time,
+                                            "%H:%M",
+                                        )
+                                        .ok(),
+                                    );
+                                    let ctx_is_journal = context_uid
+                                        .and_then(|u| state.store.get_task_ref(u))
+                                        .map(|t| t.is_journal)
+                                        .unwrap_or(state.sidebar_mode == SidebarMode::Journal);
+                                    if ctx_is_journal {
+                                        new_task.is_journal = true;
+                                        new_task.is_note = true;
                                     }
+                                    let target_href = context_uid
+                                        .and_then(|u| state.store.get_task_ref(u))
+                                        .map(|t| t.calendar_href.clone())
+                                        .or_else(|| state.active_cal_href.clone())
+                                        .unwrap_or_else(|| {
+                                            crate::storage::LOCAL_CALENDAR_HREF.to_string()
+                                        });
+                                    new_task.calendar_href = target_href;
+                                    let new_uid = new_task.uid.clone();
+                                    state.edit_generation = state.edit_generation.wrapping_add(1);
+                                    state.store.add_task(new_task.clone());
+
+                                    let tx = action_tx.clone();
+                                    tokio::spawn(async move {
+                                        let _ = tx
+                                            .send(crate::tui::action::Action::PersistBatch(vec![
+                                                crate::journal::Action::Create(new_task),
+                                            ]))
+                                            .await;
+                                    });
+                                    new_uid
+                                } else {
+                                    state.message = format!("Searching: '{}'", clean_uid);
+                                    state.input_buffer = clean_uid;
+                                    state.active_search_query = state.input_buffer.clone();
+                                    state.search_collapsed_tasks.clear();
+                                    state.selected_categories.clear();
+                                    state.selected_locations.clear();
+                                    state.refresh_filtered_view();
+                                    state.mode = InputMode::Normal;
+                                    return None;
                                 }
-                            };
+                            }
+                        };
 
                         if let Some(href) = state.store.index.get(&target_uid).cloned() {
                             state.active_search_query.clear();
@@ -1588,6 +1599,7 @@ pub async fn handle_key_event(
                     match trimmed.to_lowercase().as_str() {
                         ":undo" => {
                             if let Some(record) = state.undo_history.pop_undo() {
+                                state.edit_generation = state.edit_generation.wrapping_add(1);
                                 state.store.apply_actions(&record.reverse);
                                 state.undo_history.push_redo(record.clone());
                                 state.refresh_filtered_view();
@@ -1609,6 +1621,7 @@ pub async fn handle_key_event(
                         }
                         ":redo" => {
                             if let Some(record) = state.undo_history.pop_redo() {
+                                state.edit_generation = state.edit_generation.wrapping_add(1);
                                 state.store.apply_actions(&record.forward);
                                 state.undo_history.push_undo(record.clone());
                                 state.refresh_filtered_view();
@@ -1705,6 +1718,7 @@ pub async fn handle_key_event(
                     }
 
                     let new_uid = task.uid.clone();
+                    state.edit_generation = state.edit_generation.wrapping_add(1);
                     state.store.add_task(task.clone());
                     state.refresh_filtered_view();
                     update_alarms(state);
@@ -1812,6 +1826,7 @@ pub async fn handle_key_event(
                     }
                     t.sequence += 1;
                     let clone = t.clone();
+                    state.edit_generation = state.edit_generation.wrapping_add(1);
                     state.store.update_or_add_task(t);
                     state.refresh_filtered_view();
                     update_alarms(state);
@@ -2339,6 +2354,7 @@ pub async fn handle_key_event(
                                     trash_retention_days: config.trash_retention_days,
                                     calendars: &state.calendars,
                                 };
+                                state.edit_generation = state.edit_generation.wrapping_add(1);
                                 match state.store.sync_tree_from_markdown(
                                     &uid,
                                     &new_desc,
@@ -2443,7 +2459,10 @@ pub async fn handle_key_event(
                 state.refresh_filtered_view();
             }
             KeyCode::Char('q') => return Some(Action::Quit),
-            KeyCode::Char('r') => return Some(Action::Refresh),
+            KeyCode::Char('r') => {
+                state.pending_refresh_generation = state.edit_generation;
+                return Some(Action::Refresh);
+            }
             KeyCode::Char('f') => {
                 let intent = AppIntent::FocusTaskTree {
                     uid: state.get_selected_task().map(|t| t.uid.clone()),
@@ -3168,6 +3187,7 @@ pub async fn handle_key_event(
             }
             KeyCode::Char('z') | KeyCode::Char('Z') if is_undo(&key) => {
                 if let Some(record) = state.undo_history.pop_undo() {
+                    state.edit_generation = state.edit_generation.wrapping_add(1);
                     state.store.apply_actions(&record.reverse);
                     state.undo_history.push_redo(record.clone());
                     state.refresh_filtered_view();
@@ -3367,6 +3387,7 @@ pub async fn handle_key_event(
                             if state.active_cal_href.as_deref() != Some("local://trash") {
                                 state.hidden_calendars.insert("local://trash".to_string());
                             }
+                            state.pending_refresh_generation = state.edit_generation;
                             let _ = action_tx.send(Action::Refresh).await;
                         }
                         state.refresh_filtered_view();
@@ -3409,6 +3430,7 @@ pub async fn handle_key_event(
                                 }
                                 state.refresh_filtered_view();
                                 if href != LOCAL_CALENDAR_HREF {
+                                    state.pending_refresh_generation = state.edit_generation;
                                     return Some(Action::IsolateCalendar(href));
                                 }
                             }
@@ -3632,6 +3654,7 @@ pub async fn handle_key_event(
                                 state.hidden_calendars.remove(&href);
                                 state.refresh_filtered_view();
                                 if href != LOCAL_CALENDAR_HREF {
+                                    state.pending_refresh_generation = state.edit_generation;
                                     return Some(Action::SwitchCalendar(href));
                                 }
                             }
@@ -3831,6 +3854,7 @@ pub async fn handle_key_event(
                                         trash_retention_days: config.trash_retention_days,
                                         calendars: &state.calendars,
                                     };
+                                    state.edit_generation = state.edit_generation.wrapping_add(1);
                                     if let Ok((actions, _warnings)) =
                                         state.store.sync_tree_from_markdown(
                                             &uid,
@@ -4059,6 +4083,7 @@ pub async fn handle_key_event(
                     if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone())
                         && let Some((t_mut, _)) = state.store.get_task_mut(&uid)
                     {
+                        state.edit_generation = state.edit_generation.wrapping_add(1);
                         t_mut.add_session(session);
                         t_mut.sequence += 1;
                         let cloned = t_mut.clone();
@@ -4111,6 +4136,7 @@ pub async fn handle_key_event(
                     && let Some(uid) = state.get_selected_task().map(|t| t.uid.clone())
                     && let Some((t_mut, _)) = state.store.get_task_mut(&uid)
                 {
+                    state.edit_generation = state.edit_generation.wrapping_add(1);
                     t_mut.remove_session(real_idx);
                     t_mut.sequence += 1;
                     let cloned = t_mut.clone();
@@ -4162,6 +4188,7 @@ pub async fn handle_key_event(
                 if let Some(session) = crate::model::parser::parse_session_input(&input) {
                     let uid_clone = uid.clone();
                     if let Some((t_mut, _)) = state.store.get_task_mut(&uid_clone) {
+                        state.edit_generation = state.edit_generation.wrapping_add(1);
                         t_mut.remove_session(idx);
                         t_mut.add_session(session);
                         t_mut.sequence += 1;

@@ -25,6 +25,8 @@ pub type LoadedResult = Result<
     String,
 >;
 
+pub type LocalLoadedResult = Result<(Vec<CalendarListEntry>, Vec<(String, Vec<TodoTask>)>), String>;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NumericField {
     SortDays,
@@ -270,6 +272,7 @@ pub enum Message {
     ConfigUpdated(Box<Config>),
     ThemeChanged(AppTheme),
     Loaded(LoadedResult),
+    LocalLoaded(LocalLoadedResult),
     TasksRefreshed(Result<(String, Vec<TodoTask>), String>),
     RefreshedAll(Result<Vec<(String, Vec<TodoTask>)>, String>),
     MigrationComplete(Result<usize, String>),
