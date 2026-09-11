@@ -297,7 +297,12 @@ class TaskListWidgetReceiver : GlanceAppWidgetReceiver() {
 
     private fun isOwnId(context: Context, appWidgetId: Int): Boolean {
         val info = AppWidgetManager.getInstance(context).getAppWidgetInfo(appWidgetId)
-        return info?.provider == ComponentName(context.packageName, javaClass.name)
+        val ownComponent = ComponentName(context.packageName, javaClass.name)
+        val isOwn = info?.provider == ownComponent
+        if (!isOwn) {
+            android.util.Log.w("CfaitWidget", "ListReceiver ignoring id=$appWidgetId provider=${info?.provider} (expected $ownComponent)")
+        }
+        return isOwn
     }
 
     override fun onUpdate(

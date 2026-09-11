@@ -35,6 +35,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -52,8 +53,8 @@ import kotlinx.coroutines.launch
 /**
  * Configuration activity shown when the user places the task-entry widget.
  * Lets them pick a mode (quick-add task, journal entry today, or open with
- * search), per-mode settings, and a text color that stays readable against
- * their wallpaper.
+ * search), per-mode settings, a custom label, and a text color that stays
+ * readable against their wallpaper.
  */
 class TaskEntryWidgetConfigActivity : ComponentActivity() {
 
@@ -83,12 +84,15 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
         val s = "_$appWidgetId"
 
         val textColors = listOf(
-            Color.White to "White",
-            Color.Black to "Black",
-            Color(0xFFFFCC00) to "Yellow",
-            Color(0xFFFF5500) to "Orange",
-            Color(0xFF4FC3F7) to "Blue",
-            Color(0xFFB388FF) to "Purple",
+            Color.White to "white",
+            Color.Black to "black",
+            Color(0xFFFFCC00) to "yellow",
+            Color(0xFFFF5500) to "orange",
+            Color(0xFF4FC3F7) to "blue",
+            Color(0xFFB388FF) to "purple",
+            Color(0xFF69F0AE) to "mint",
+            Color(0xFFFF80AB) to "pink",
+            Color(0xFFB0BEC5) to "grey",
         )
 
         setContent {
@@ -100,7 +104,16 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
                 mutableStateOf(prefs.getString(KEY_SEARCH_QUERY + s, "is:ready") ?: "is:ready")
             }
             var textColorIndex by remember {
-                mutableStateOf(prefs.getInt(KEY_TEXT_COLOR_INDEX + s, 0))
+                mutableIntStateOf(prefs.getInt(KEY_TEXT_COLOR_INDEX + s, 0))
+            }
+            var customColor by remember {
+                mutableIntStateOf(prefs.getInt(KEY_CUSTOM_COLOR + s, -1))
+            }
+            var useCollectionColor by remember {
+                mutableStateOf(prefs.getBoolean(KEY_USE_COLLECTION_COLOR + s, false))
+            }
+            var customLabel by remember {
+                mutableStateOf(prefs.getString(KEY_CUSTOM_LABEL + s, "") ?: "")
             }
 
             val modeLabels = listOf("Add task", "Journal", "Search")
@@ -160,40 +173,108 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
 
                         Spacer(modifier = Modifier.height(8.dp))
 
+                        Text("Label", style = MaterialTheme.typography.labelLarge)
+                        OutlinedTextField(
+                            value = customLabel,
+                            onValueChange = { customLabel = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            placeholder = { Text(modeLabels[mode]) }
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
                         Text("Text color", style = MaterialTheme.typography.labelLarge)
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            textColors.forEachIndexed { index, (color, label) ->
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
+                            textColors.forEachIndexed { index, (color, _label) ->
+                                val selected = !useCollectionColor && customColor < 0 && index == textColorIndex
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .background(color = color, shape = CircleShape)
+                                        .then(
+                                            if (selected)
+                                                Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                                            else Modifier
+                                        )
+                                        .clickable {
+                                            textColorIndex = index
+                                            customColor = -1
+                                            useCollectionColor = false
+                                        }
+                                )
+                            }
+                            // Custom color swatch — tap to cycle through hues
+                            val customSelected = !useCollectionColor && customColor >= 0
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .background(
+                                        color = if (customColor >= 0) Color(customColor) else MaterialTheme.colorScheme.surfaceVariant,
+                                        shape = CircleShape
+                                    )
+                                    .then(
+                                        if (customSelected)
+                                            Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                                        else Modifier
+                                    )
+                                    .clickable {
+                                        val hue = ((customColor + 30) % 360).coerceAtLeast(0)
+                                        customColor = android.graphics.Color.HSVToColor(
+                                            floatArrayOf(hue.toFloat(), 0.8f, 1.0f)
+                                        )
+                                        useCollectionColor = false
+                                    }
+                            )
+                            // Collection color swatch
+                            if (mode != 2 && !selectedCalHref.isNullOrEmpty()) {
+                                val calColor = calendars.firstOrNull { it.href == selectedCalHref }?.color
+                                    ?.let { hex ->
+                                        try { Color(android.graphics.Color.parseColor(hex)) } catch (_: Exception) { null }
+                                    }
+                                if (calColor != null) {
                                     Box(
                                         modifier = Modifier
                                             .size(32.dp)
-                                            .background(color = color, shape = CircleShape)
+                                            .background(color = calColor, shape = CircleShape)
                                             .then(
-                                                if (index == textColorIndex)
+                                                if (useCollectionColor)
                                                     Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
                                                 else Modifier
                                             )
-                                            .clickable { textColorIndex = index }
+                                            .clickable {
+                                                useCollectionColor = true
+                                                customColor = -1
+                                            }
                                     )
-                                    Text(label, style = MaterialTheme.typography.labelSmall)
                                 }
                             }
                         }
 
                         Button(
                             onClick = {
-                                val colorArgb = textColors[textColorIndex].first.toArgb()
+                                val finalColor = when {
+                                    useCollectionColor -> {
+                                        val cal = calendars.firstOrNull { it.href == selectedCalHref }
+                                        cal?.color?.let { hex ->
+                                            try { android.graphics.Color.parseColor(hex) } catch (_: Exception) { 0xFFFFFFFF.toInt() }
+                                        } ?: 0xFFFFFFFF.toInt()
+                                    }
+                                    customColor >= 0 -> customColor
+                                    else -> textColors[textColorIndex].first.toArgb()
+                                }
                                 prefs.edit()
                                     .putInt(KEY_MODE + s, mode)
                                     .putString(KEY_CALENDAR_HREF + s, selectedCalHref)
                                     .putString(KEY_SEARCH_QUERY + s, searchQuery.ifBlank { "is:ready" })
-                                    .putInt(KEY_TEXT_COLOR + s, colorArgb)
+                                    .putInt(KEY_TEXT_COLOR + s, finalColor)
                                     .putInt(KEY_TEXT_COLOR_INDEX + s, textColorIndex)
+                                    .putInt(KEY_CUSTOM_COLOR + s, customColor)
+                                    .putBoolean(KEY_USE_COLLECTION_COLOR + s, useCollectionColor)
+                                    .putString(KEY_CUSTOM_LABEL + s, customLabel)
                                     .apply()
 
                                 val resultValue = Intent().putExtra(
@@ -236,5 +317,8 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
         const val KEY_SEARCH_QUERY = "search_query"
         const val KEY_TEXT_COLOR = "text_color"
         const val KEY_TEXT_COLOR_INDEX = "text_color_index"
+        const val KEY_CUSTOM_COLOR = "custom_color"
+        const val KEY_USE_COLLECTION_COLOR = "use_collection_color"
+        const val KEY_CUSTOM_LABEL = "custom_label"
     }
 }

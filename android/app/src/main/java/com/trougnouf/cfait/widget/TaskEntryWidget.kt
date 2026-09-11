@@ -91,7 +91,8 @@ class TaskEntryWidget : GlanceAppWidget() {
             val searchQuery = prefs.getString(TaskEntryWidgetConfigActivity.KEY_SEARCH_QUERY + suffix, "") ?: ""
             val textColorArgb = prefs.getInt(TaskEntryWidgetConfigActivity.KEY_TEXT_COLOR + suffix, 0xFFFFFFFF.toInt())
             val textColor = Color(textColorArgb)
-            val label = modeLabels[mode] ?: "Add task"
+            val customLabel = prefs.getString(TaskEntryWidgetConfigActivity.KEY_CUSTOM_LABEL + suffix, "") ?: ""
+            val label = customLabel.ifBlank { modeLabels[mode] ?: "Add task" }
 
             val params = when (mode) {
                 MODE_JOURNAL -> actionParametersOf(
@@ -144,6 +145,9 @@ class TaskEntryWidget : GlanceAppWidget() {
                 .remove(TaskEntryWidgetConfigActivity.KEY_SEARCH_QUERY + s)
                 .remove(TaskEntryWidgetConfigActivity.KEY_TEXT_COLOR + s)
                 .remove(TaskEntryWidgetConfigActivity.KEY_TEXT_COLOR_INDEX + s)
+                .remove(TaskEntryWidgetConfigActivity.KEY_CUSTOM_COLOR + s)
+                .remove(TaskEntryWidgetConfigActivity.KEY_USE_COLLECTION_COLOR + s)
+                .remove(TaskEntryWidgetConfigActivity.KEY_CUSTOM_LABEL + s)
                 .apply()
         }
     }
@@ -154,7 +158,12 @@ class TaskEntryWidgetReceiver : GlanceAppWidgetReceiver() {
 
     private fun isOwnId(context: Context, appWidgetId: Int): Boolean {
         val info = AppWidgetManager.getInstance(context).getAppWidgetInfo(appWidgetId)
-        return info?.provider == ComponentName(context.packageName, javaClass.name)
+        val ownComponent = ComponentName(context.packageName, javaClass.name)
+        val isOwn = info?.provider == ownComponent
+        if (!isOwn) {
+            android.util.Log.w("CfaitWidget", "EntryReceiver ignoring id=$appWidgetId provider=${info?.provider} (expected $ownComponent)")
+        }
+        return isOwn
     }
 
     override fun onUpdate(
