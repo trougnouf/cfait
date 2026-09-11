@@ -31,6 +31,7 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.trougnouf.cfait.MainActivity
+import com.trougnouf.cfait.R
 
 /** Intent extra that asks MainActivity to focus the new-task input. */
 const val EXTRA_QUICK_ADD = "quick_add"
@@ -53,10 +54,10 @@ private val MODE_QUICK_ADD = 0
 private val MODE_JOURNAL = 1
 private val MODE_SEARCH = 2
 
-private val modeLabels = mapOf(
-    MODE_QUICK_ADD to "Add task",
-    MODE_JOURNAL to "Journal",
-    MODE_SEARCH to "Search",
+private val modeLabelsRes = mapOf(
+    MODE_QUICK_ADD to R.string.widget_add_task,
+    MODE_JOURNAL to R.string.journal,
+    MODE_SEARCH to R.string.search,
 )
 
 /** State key used to force widget recomposition after config changes. */
@@ -92,7 +93,8 @@ class TaskEntryWidget : GlanceAppWidget() {
             val textColorArgb = prefs.getInt(TaskEntryWidgetConfigActivity.KEY_TEXT_COLOR + suffix, 0xFFFFFFFF.toInt())
             val textColor = Color(textColorArgb)
             val customLabel = prefs.getString(TaskEntryWidgetConfigActivity.KEY_CUSTOM_LABEL + suffix, "") ?: ""
-            val label = customLabel.ifBlank { modeLabels[mode] ?: "Add task" }
+            val defaultLabel = context.getString(modeLabelsRes[mode] ?: R.string.widget_add_task)
+            val label = customLabel.ifBlank { defaultLabel }
 
             val params = when (mode) {
                 MODE_JOURNAL -> actionParametersOf(

@@ -34,6 +34,8 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.ui.res.stringResource
+import com.trougnouf.cfait.R
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -116,12 +118,16 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
                 mutableStateOf(prefs.getString(KEY_CUSTOM_LABEL + s, "") ?: "")
             }
 
-            val modeLabels = listOf("Add task", "Journal", "Search")
+            val modeLabels = listOf(
+                stringResource(R.string.widget_add_task),
+                stringResource(R.string.journal),
+                stringResource(R.string.search)
+            )
 
             MaterialTheme {
                 Scaffold(
                     topBar = {
-                        TopAppBar(title = { Text("Cfait widget") })
+                        TopAppBar(title = { Text(stringResource(R.string.widget_title)) })
                     }
                 ) { padding ->
                     Column(
@@ -131,7 +137,7 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        Text("Mode", style = MaterialTheme.typography.labelLarge)
+                        Text(stringResource(R.string.widget_mode), style = MaterialTheme.typography.labelLarge)
                         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                             modeLabels.forEachIndexed { index, label ->
                                 SegmentedButton(
@@ -145,7 +151,7 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
                         }
 
                         if (mode != 2) {
-                            Text("Collection", style = MaterialTheme.typography.labelLarge)
+                            Text(stringResource(R.string.widget_collection), style = MaterialTheme.typography.labelLarge)
                             Row(
                                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -161,7 +167,7 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
                         }
 
                         if (mode == 2) {
-                            Text("Search query", style = MaterialTheme.typography.labelLarge)
+                            Text(stringResource(R.string.widget_search_query), style = MaterialTheme.typography.labelLarge)
                             OutlinedTextField(
                                 value = searchQuery,
                                 onValueChange = { searchQuery = it },
@@ -173,7 +179,7 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
 
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        Text("Label", style = MaterialTheme.typography.labelLarge)
+                        Text(stringResource(R.string.widget_label), style = MaterialTheme.typography.labelLarge)
                         OutlinedTextField(
                             value = customLabel,
                             onValueChange = { customLabel = it },
@@ -184,7 +190,7 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
 
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        Text("Text color", style = MaterialTheme.typography.labelLarge)
+                        Text(stringResource(R.string.widget_text_color), style = MaterialTheme.typography.labelLarge)
                         Row(
                             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -302,7 +308,7 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Add widget")
+                            Text(stringResource(R.string.widget_add_button))
                         }
                     }
                 }

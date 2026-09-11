@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.datastore.preferences.core.Preferences
@@ -44,6 +45,7 @@ import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.trougnouf.cfait.CfaitApplication
 import com.trougnouf.cfait.MainActivity
+import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.MobileFilterOptions
 import com.trougnouf.cfait.core.MobileTaskSummary
 
@@ -107,7 +109,10 @@ class TaskListWidget : GlanceAppWidget() {
             } else {
                 searchQuery
             }
-            val textColor = if ((bgColorInt ushr 24) > 0x80) {
+
+            // Calculate perceived brightness to ensure text remains readable.
+            // Luminance accounts for proper human eye perception of RGB components.
+            val textColor = if (bgColor.luminance() > 0.5f) {
                 Color.Black
             } else {
                 Color.White
@@ -147,6 +152,11 @@ class TaskListWidget : GlanceAppWidget() {
                 } catch (_: Exception) { emptyMap() }
             }
 
+            val strDueToday = context.getString(R.string.widget_due_today)
+            val strActive = context.getString(R.string.widget_active)
+            val strLoading = context.getString(R.string.loading)
+            val strNoTasks = context.getString(R.string.widget_no_tasks)
+
             GlanceTheme(colors = WidgetColorScheme) {
                 Column(
                     modifier = GlanceModifier
@@ -175,7 +185,7 @@ class TaskListWidget : GlanceAppWidget() {
                             val ongoing = tasks.count { it.isPaused }
                             if (dueToday > 0) {
                                 Text(
-                                    text = "$dueToday due today",
+                                    text = "$dueToday $strDueToday",
                                     style = TextStyle(
                                         fontSize = 13.sp,
                                         color = ColorProvider(textColor),
@@ -185,7 +195,7 @@ class TaskListWidget : GlanceAppWidget() {
                             }
                             if (ongoing > 0) {
                                 Text(
-                                    text = "$ongoing active",
+                                    text = "$ongoing $strActive",
                                     style = TextStyle(
                                         fontSize = 13.sp,
                                         color = ColorProvider(textColor),
@@ -200,7 +210,7 @@ class TaskListWidget : GlanceAppWidget() {
                     val vd = viewData
                     if (vd == null || vd.tasks.isEmpty()) {
                         Text(
-                            text = if (vd == null) "Loading…" else "No tasks",
+                            text = if (vd == null) strLoading else strNoTasks,
                             modifier = GlanceModifier.padding(top = 4.dp),
                             style = TextStyle(
                                 fontSize = 14.sp,
@@ -302,8 +312,9 @@ private fun TaskRow(task: MobileTaskSummary, textColor: Color, calColor: Color) 
                 )
             )
             if (task.dueDateIso != null && task.isDueToday) {
+                val context = androidx.glance.LocalContext.current
                 Text(
-                    text = "due today",
+                    text = context.getString(R.string.widget_due_today),
                     style = TextStyle(
                         fontSize = 12.sp,
                         color = ColorProvider(textColor.copy(alpha = 0.7f)),

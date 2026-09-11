@@ -32,6 +32,10 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.ui.res.stringResource
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import com.trougnouf.cfait.R
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -87,12 +91,12 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
                 mutableStateOf(prefs.getInt(KEY_MAX_TASKS + s, 8).toString())
             }
             val bgColors = listOf(
-                Color.Black to "Black",
-                Color(0xFF1C1B1F) to "Dark",
-                Color(0xFFE6E1E5) to "Light",
-                Color(0xFF4E3390) to "Purple",
-                Color(0xFF1B5E20) to "Green",
-                Color(0xFF8C1D18) to "Red",
+                Color.Black to stringResource(R.string.color_black),
+                Color(0xFF1C1B1F) to stringResource(R.string.color_dark),
+                Color(0xFFE6E1E5) to stringResource(R.string.color_light),
+                Color(0xFF4E3390) to stringResource(R.string.color_purple),
+                Color(0xFF1B5E20) to stringResource(R.string.color_green),
+                Color(0xFF8C1D18) to stringResource(R.string.color_red),
             )
             var bgColorIndex by remember {
                 mutableStateOf(prefs.getInt(KEY_BG_COLOR_INDEX + s, 0))
@@ -107,7 +111,7 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
             MaterialTheme {
                 Scaffold(
                     topBar = {
-                        TopAppBar(title = { Text("Cfait widget") })
+                        TopAppBar(title = { Text(stringResource(R.string.widget_title)) })
                     }
                 ) { padding ->
                     Column(
@@ -117,7 +121,7 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        Text("Search query", style = MaterialTheme.typography.labelLarge)
+                        Text(stringResource(R.string.widget_search_query), style = MaterialTheme.typography.labelLarge)
                         OutlinedTextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
@@ -131,7 +135,7 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Hide checked tasks")
+                            Text(stringResource(R.string.widget_hide_checked))
                             Switch(
                                 checked = hideChecked,
                                 onCheckedChange = { hideChecked = it }
@@ -143,7 +147,7 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Respect fold/unfold state")
+                            Text(stringResource(R.string.widget_respect_collapse))
                             Switch(
                                 checked = respectCollapse,
                                 onCheckedChange = { respectCollapse = it }
@@ -154,19 +158,20 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Max tasks: ")
+                            Text(stringResource(R.string.widget_max_tasks) + ": ")
                             Spacer(modifier = Modifier.width(8.dp))
                             OutlinedTextField(
                                 value = maxTasks,
                                 onValueChange = { maxTasks = it.filter { c -> c.isDigit() } },
                                 modifier = Modifier.width(80.dp),
-                                singleLine = true
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                             )
                         }
 
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        Text("Background", style = MaterialTheme.typography.labelLarge)
+                        Text(stringResource(R.string.widget_background), style = MaterialTheme.typography.labelLarge)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -194,7 +199,7 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
                             }
                         }
 
-                        Text("Opacity: ${(bgOpacity * 100).toInt()}%")
+                        Text(stringResource(R.string.widget_opacity, (bgOpacity * 100).toInt()))
                         Slider(
                             value = bgOpacity,
                             onValueChange = { bgOpacity = it },
@@ -243,7 +248,7 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Add widget")
+                            Text(stringResource(R.string.widget_add_button))
                         }
                     }
                 }
