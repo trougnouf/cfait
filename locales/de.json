@@ -677,7 +677,6 @@
     "show_journal_tab": "Journal-Tab in der Seitenleiste anzeigen",
     "show_less": "Weniger anzeigen",
     "show_locations_tab": "Zeige den Orte-Tab in der Seitenleiste",
-    "sidebar_tabs": "Seitenleisten-Tabs",
     "show_older_sessions": {
         "one": "Zeige 1 ältere Sitzung…",
         "other": "Zeige %{count} ältere Sitzungen…"
@@ -687,6 +686,7 @@
     "show_priority_numbers": "Zeige Prioritätsnummern (!X)",
     "show_tags_tab": "Zeige den Tags-Tab in der Seitenleiste",
     "show_task_goals_in_sidebar": "Zeige aufgabenspezifische Ziele in der Seitenleiste",
+    "sidebar_tabs": "Seitenleisten-Tabs",
     "snooze": "Schlummern…",
     "snooze_custom_title": "Benutzerdefiniert",
     "snooze_hint": "Schlummern (z.B. 15m, 1h)",
