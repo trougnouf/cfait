@@ -1039,6 +1039,28 @@ impl TaskStore {
             }
         }
 
+        // Fallback: if path splitting on ':' produced multiple segments but found
+        // no hierarchical match, the ':' may be part of the task summary itself
+        // (quotes were stripped before reaching us). Retry treating the full
+        // string as a single segment.
+        let mut fell_back = false;
+        if matches.is_empty() && path_segments.len() > 1 {
+            fell_back = true;
+            let single = crate::model::parser::strip_quotes(path_str);
+            for (href, map) in &self.calendars {
+                let is_system =
+                    href == crate::storage::LOCAL_TRASH_HREF || href == "local://recovery";
+                for (uid, task) in map {
+                    if uid.starts_with(&single)
+                        || (!is_system
+                            && crate::model::matcher::contains_ignore_case(&task.summary, &single))
+                    {
+                        matches.push(task.clone());
+                    }
+                }
+            }
+        }
+
         matches.sort_by_key(|t| t.uid.clone());
         matches.dedup_by(|a, b| a.uid == b.uid);
 
@@ -1047,8 +1069,11 @@ impl TaskStore {
         }
 
         if matches.len() > 1 {
-            let target_summary =
-                crate::model::parser::strip_quotes(path_segments.last().unwrap()).to_lowercase();
+            let target_summary = if fell_back {
+                crate::model::parser::strip_quotes(path_str).to_lowercase()
+            } else {
+                crate::model::parser::strip_quotes(path_segments.last().unwrap()).to_lowercase()
+            };
             let exact_matches: Vec<_> = matches
                 .iter()
                 .filter(|t| t.summary.to_lowercase() == target_summary)

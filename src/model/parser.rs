@@ -2686,6 +2686,11 @@ pub fn apply_smart_input(
     default_reminder_time: Option<NaiveTime>,
 ) {
     let mut summary_words = Vec::new();
+    // Save dependencies/relations before clearing: to_smart_string() does not
+    // serialize dep:/rel: tokens, so editing a task title would silently lose
+    // them. We restore the originals if the input contains no dep:/rel: tokens.
+    let saved_deps = std::mem::take(&mut task.dependencies);
+    let saved_related = std::mem::take(&mut task.related_to);
     // Reset fields
     task.unmapped_properties
         .retain(|p| p.key != "X-CFAIT-RECUR-FROM-COMPLETION");
@@ -2706,8 +2711,6 @@ pub fn apply_smart_input(
     task.categories.clear();
     task.alarms.clear();
     task.exdates.clear();
-    task.dependencies.clear();
-    task.related_to.clear();
     task.percent_complete = None;
 
     let mut explicit_note_flag: Option<bool> = None;
@@ -3678,6 +3681,18 @@ pub fn apply_smart_input(
                 }
             }
         }
+    }
+
+    // Restore dependencies/relations that were not serialized in the input.
+    // to_smart_string() omits dep:/rel: tokens, so editing a task title would
+    // silently lose them. If the input contained dep:/rel: tokens, the parser
+    // already populated task.dependencies/related_to; otherwise restore the
+    // originals.
+    if task.dependencies.is_empty() {
+        task.dependencies = saved_deps;
+    }
+    if task.related_to.is_empty() {
+        task.related_to = saved_related;
     }
 }
 
