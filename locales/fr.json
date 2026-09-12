@@ -292,7 +292,7 @@
     "filter_duration": "Filtrer par durée",
     "focus_hide_others": "Focus (masquer les autres)",
     "font_size": "Taille de la police",
-    "force_sync": "Forcer la synchronisation",
+    "force_sync": "Forcer la synchronisation (r)",
     "found_tasks_to_import": {
         "one": "1 tâche trouvée à importer",
         "other": "%{count} tâches trouvées à importer"
@@ -672,7 +672,7 @@
     "widget_add_button": "Ajouter le widget",
     "widget_search_query": "Requête de recherche",
     "widget_background": "Arrière-plan",
-    "widget_opacity": "Opacité : %{count}%",
+    "widget_opacity": "Opacité : %{count}",
     "widget_max_tasks": "Tâches max",
     "widget_hide_checked": "Masquer les tâches cochées",
     "widget_respect_collapse": "Respecter l'état plié/déplié",

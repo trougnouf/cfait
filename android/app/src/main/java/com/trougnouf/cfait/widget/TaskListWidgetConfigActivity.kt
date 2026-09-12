@@ -243,7 +243,7 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
                             }
                         }
 
-                        Text(stringResource(R.string.widget_opacity, (bgOpacity * 100).toInt()))
+                        Text(stringResource(R.string.widget_opacity, (bgOpacity * 100).toInt()) + "%")
                         Slider(
                             value = bgOpacity,
                             onValueChange = { bgOpacity = it },

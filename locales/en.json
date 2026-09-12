@@ -290,7 +290,7 @@
     "filter_duration": "Filter duration",
     "focus_hide_others": "Focus (hide others)",
     "font_size": "Font size",
-    "force_sync": "Force sync",
+    "force_sync": "Force sync (r)",
     "found_tasks_to_import": {
         "one": "Found 1 task to import",
         "other": "Found %{count} tasks to import"
@@ -874,7 +874,7 @@
     "widget_add_button": "Add widget",
     "widget_search_query": "Search query",
     "widget_background": "Background",
-    "widget_opacity": "Opacity: %{count}%",
+    "widget_opacity": "Opacity: %{count}",
     "widget_max_tasks": "Max tasks",
     "widget_hide_checked": "Hide checked tasks",
     "widget_respect_collapse": "Respect fold/unfold state",

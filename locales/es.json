@@ -852,7 +852,7 @@
     "widget_label_add_task": "Botón Cfait",
     "widget_label_task_list": "Lista de tareas",
     "widget_mode": "Modo",
-    "widget_opacity": "Opacidad: %{count}%",
+    "widget_opacity": "Opacidad: %{count}",
     "widget_search_query": "Consulta",
     "widget_text_color": "Color del texto",
     "widget_title": "Widget de Cfait",

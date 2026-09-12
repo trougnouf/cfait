@@ -3800,6 +3800,32 @@ mod i18n_tests {
         placeholders
     }
 
+    /// Detect stray `%` characters that are not part of a `%{...}` placeholder.
+    /// The Android build script converts `%{...}` to `%1$s` but leaves literal
+    /// `%` untouched, which crashes `java.util.Formatter` at runtime.
+    fn has_stray_percent(text: &str) -> bool {
+        let mut chars = text.chars().peekable();
+        while let Some(c) = chars.next() {
+            if c == '%' {
+                match chars.peek() {
+                    Some('{') => {
+                        chars.next();
+                        for inner in chars.by_ref() {
+                            if inner == '}' {
+                                break;
+                            }
+                        }
+                    }
+                    Some('%') => {
+                        chars.next();
+                    }
+                    _ => return true,
+                }
+            }
+        }
+        false
+    }
+
     #[test]
     fn test_translation_placeholders_and_limits() {
         let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
@@ -3824,6 +3850,17 @@ mod i18n_tests {
                 // Check placeholders perfectly match English defaults
                 if let Some(en_str) = en_val.as_str() {
                     let en_placeholders = extract_placeholders(en_str);
+                    // Strings with %{...} placeholders trigger Android's Formatter;
+                    // a stray literal '%' in that case crashes at runtime. Strings
+                    // without placeholders get formatted="false" and are safe.
+                    if !en_placeholders.is_empty() {
+                        assert!(
+                            !has_stray_percent(en_str),
+                            "Stray '%' in en.json key '{key}': \"{en_str}\". \
+                             Literal '%' alongside %{{...}} placeholders crashes \
+                             Android's java.util.Formatter after strings.xml generation."
+                        );
+                    }
 
                     if let Some(loc_val) = loc_obj.get(key) {
                         if let Some(loc_str) = loc_val.as_str() {
@@ -3833,12 +3870,24 @@ mod i18n_tests {
                                 "Placeholder mismatch in locale '{}' for key '{}'. Expected {:?}, got {:?}",
                                 lang, key, en_placeholders, loc_placeholders
                             );
+                            if !loc_placeholders.is_empty() {
+                                assert!(
+                                    !has_stray_percent(loc_str),
+                                    "Stray '%' in {lang}.json key '{key}': \"{loc_str}\""
+                                );
+                            }
                         } else if let Some(loc_dict) = loc_val.as_object()
                             && let Some(en_dict) = en_val.as_object()
                         {
                             for (plural_key, en_plural_val) in en_dict {
                                 if let Some(en_plural_str) = en_plural_val.as_str() {
                                     let en_pl_placeholders = extract_placeholders(en_plural_str);
+                                    if !en_pl_placeholders.is_empty() {
+                                        assert!(
+                                            !has_stray_percent(en_plural_str),
+                                            "Stray '%' in en.json plural key '{key}.{plural_key}': \"{en_plural_str}\""
+                                        );
+                                    }
                                     if let Some(loc_plural_val) = loc_dict.get(plural_key)
                                         && let Some(loc_plural_str) = loc_plural_val.as_str()
                                     {
@@ -3854,6 +3903,12 @@ mod i18n_tests {
                                             en_pl_placeholders,
                                             loc_pl_placeholders
                                         );
+                                        if !loc_pl_placeholders.is_empty() {
+                                            assert!(
+                                                !has_stray_percent(loc_plural_str),
+                                                "Stray '%' in {lang}.json plural key '{key}.{plural_key}': \"{loc_plural_str}\""
+                                            );
+                                        }
                                     }
                                 }
                             }
