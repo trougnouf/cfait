@@ -51,6 +51,7 @@ import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.core.MobileSyntaxType
 import com.trougnouf.cfait.core.MobileTaskSummary
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Spacer
@@ -1252,5 +1253,40 @@ fun triggerBackgroundSync(context: Context, api: CfaitMobile) {
             intent.setPackage(context.packageName)
             context.sendBroadcast(intent)
         }
+    }
+}
+
+/// Apply auto-indentation on Enter: if the cursor was at the end of a list item,
+/// insert the matching prefix (e.g. "- [ ] " with preserved indentation) on the new line.
+/// If the previous line was an empty item, remove it instead (exit the list).
+fun applyListAutoIndent(
+    oldValue: TextFieldValue,
+    newValue: TextFieldValue,
+    api: CfaitMobile,
+): TextFieldValue {
+    if (newValue.text.length <= oldValue.text.length ||
+        newValue.selection.start != oldValue.selection.start + 1 ||
+        newValue.text[oldValue.selection.start] != '\n'
+    ) {
+        return newValue
+    }
+
+    val cursor = oldValue.selection.start
+    val lineStart = oldValue.text.lastIndexOf('\n', cursor - 1).let { if (it == -1) 0 else it + 1 }
+    val prevLine = oldValue.text.substring(lineStart, cursor)
+    val prefix = api.extractListPrefix(prevLine)
+
+    if (prefix.isEmpty()) return newValue
+
+    return if (prevLine.trim() == prefix.trim()) {
+        // Empty item: remove the newline and prefix (exit the list)
+        val before = oldValue.text.substring(0, lineStart)
+        val after = newValue.text.substring(newValue.selection.start)
+        TextFieldValue(text = before + after, selection = TextRange(lineStart))
+    } else {
+        // Auto-indent the next item
+        val before = newValue.text.substring(0, newValue.selection.start)
+        val after = newValue.text.substring(newValue.selection.start)
+        TextFieldValue(text = before + prefix + after, selection = TextRange(newValue.selection.start + prefix.length))
     }
 }

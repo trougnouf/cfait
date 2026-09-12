@@ -2500,7 +2500,9 @@ fun HomeScreen(
                                     Column {
                                         OutlinedTextField(
                                             value = newDescriptionText,
-                                            onValueChange = { newDescriptionText = it },
+                                            onValueChange = { newValue ->
+                                                newDescriptionText = applyListAutoIndent(newDescriptionText, newValue, api)
+                                            },
                                             placeholder = {
                                                 Text(
                                                     stringResource(R.string.notes_create_subtasks_placeholder),

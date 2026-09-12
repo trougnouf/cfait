@@ -627,36 +627,13 @@ fun JournalMainView(
             OutlinedTextField(
                 value = text,
                 onValueChange = { newValue ->
-                    var finalValue = newValue
-                    if (newValue.text.length > text.text.length && 
-                        newValue.selection.start == text.selection.start + 1 &&
-                        newValue.text[text.selection.start] == '\n'
-                    ) {
-                        val cursor = text.selection.start
-                        val lineStart = text.text.lastIndexOf('\n', cursor - 1).let { if (it == -1) 0 else it + 1 }
-                        val prevLine = text.text.substring(lineStart, cursor)
-                        val prefix = api.extractListPrefix(prevLine)
-                        
-                        if (prefix.isNotEmpty()) {
-                            if (prevLine.trim() == prefix.trim()) {
-                                val before = text.text.substring(0, lineStart)
-                                val after = newValue.text.substring(newValue.selection.start)
-                                val newText = before + after
-                                finalValue = androidx.compose.ui.text.input.TextFieldValue(text = newText, selection = androidx.compose.ui.text.TextRange(lineStart))
-                            } else {
-                                val before = newValue.text.substring(0, newValue.selection.start)
-                                val after = newValue.text.substring(newValue.selection.start)
-                                val newText = before + prefix + after
-                                finalValue = androidx.compose.ui.text.input.TextFieldValue(text = newText, selection = androidx.compose.ui.text.TextRange(newValue.selection.start + prefix.length))
-                            }
-                        }
-                    }
+                    val finalValue = applyListAutoIndent(text, newValue, api)
 
                     if (finalValue.text != text.text) {
                         undoStack = (undoStack + finalValue).takeLast(50)
                         redoStack = emptyList()
                     }
-                    text = finalValue 
+                    text = finalValue
                 },
                 modifier = Modifier.weight(1f).fillMaxWidth().padding(8.dp),
                 placeholder = { Text(stringResource(R.string.notes_placeholder)) },
