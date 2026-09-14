@@ -64,6 +64,7 @@ fn parse_inline_elements(
     base_style: Style,
     strip_markers: bool,
     highlight_regex: Option<&regex::Regex>,
+    is_dark_theme: bool,
 ) -> Vec<Span<'static>> {
     let mut spans = Vec::new();
     let elements = crate::model::parser::parse_inline_markdown(text);
@@ -85,11 +86,19 @@ fn parse_inline_elements(
             ),
             crate::model::parser::InlineElement::Code { inner, raw } => (
                 if strip_markers { inner } else { raw },
-                Style::default().fg(Color::Yellow),
+                Style::default().fg(if is_dark_theme {
+                    Color::Yellow
+                } else {
+                    Color::Rgb(150, 100, 0)
+                }),
             ),
             crate::model::parser::InlineElement::Link { text, raw, .. } => (
                 if strip_markers { text } else { raw },
-                Style::default().fg(Color::Cyan),
+                Style::default().fg(if is_dark_theme {
+                    Color::Cyan
+                } else {
+                    Color::Blue
+                }),
             ),
         };
         push_highlighted_spans_tui(&mut spans, txt, style, highlight_regex);
@@ -122,6 +131,7 @@ fn highlight_markdown_raw(input: &str, is_dark_theme: bool) -> Text<'static> {
                     .add_modifier(Modifier::BOLD),
                 false,
                 None,
+                is_dark_theme,
             ));
         } else if trimmed.starts_with("- ") || trimmed.starts_with("* ") {
             spans.extend(crate::tui::view::parse_inline_elements(
@@ -133,6 +143,7 @@ fn highlight_markdown_raw(input: &str, is_dark_theme: bool) -> Text<'static> {
                 }),
                 false,
                 None,
+                is_dark_theme,
             ));
         } else if trimmed.starts_with("> ") {
             spans.extend(crate::tui::view::parse_inline_elements(
@@ -142,6 +153,7 @@ fn highlight_markdown_raw(input: &str, is_dark_theme: bool) -> Text<'static> {
                     .add_modifier(Modifier::ITALIC),
                 false,
                 None,
+                is_dark_theme,
             ));
         } else if trimmed.starts_with("```") {
             spans.extend(crate::tui::view::parse_inline_elements(
@@ -153,6 +165,7 @@ fn highlight_markdown_raw(input: &str, is_dark_theme: bool) -> Text<'static> {
                 }),
                 false,
                 None,
+                is_dark_theme,
             ));
         } else {
             spans.extend(crate::tui::view::parse_inline_elements(
@@ -160,6 +173,7 @@ fn highlight_markdown_raw(input: &str, is_dark_theme: bool) -> Text<'static> {
                 Style::default(),
                 false,
                 None,
+                is_dark_theme,
             ));
         }
 
@@ -573,7 +587,11 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         .and_then(|c| c.color.as_ref())
                         .and_then(|hex| color_utils::parse_hex_to_u8(hex))
                         .map(|(r, g, b)| Color::Rgb(r, g, b))
-                        .unwrap_or(Color::Cyan)
+                        .unwrap_or(if is_dark_theme {
+                            Color::Cyan
+                        } else {
+                            Color::Blue
+                        })
                 } else {
                     Color::DarkGray
                 };
@@ -714,7 +732,11 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                             title,
                             Style::default()
                                 .add_modifier(Modifier::BOLD)
-                                .fg(Color::Cyan),
+                                .fg(if is_dark_theme {
+                                    Color::Cyan
+                                } else {
+                                    Color::Blue
+                                }),
                         )),
                         Line::from(spans),
                         Line::from(""), // spacing
@@ -1084,7 +1106,11 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         let content = format!("{}  \u{f0796} Expand completed tasks", indent);
                         ListItem::new(Line::from(Span::styled(
                             content,
-                            Style::default().fg(Color::Cyan),
+                            Style::default().fg(if is_dark_theme {
+                                Color::Cyan
+                            } else {
+                                Color::Blue
+                            }),
                         )))
                     }
                     TaskListItem::CollapseGroup(_, depth) => {
@@ -1092,7 +1118,11 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         let content = format!("{}  \u{f0799} Collapse completed tasks", indent);
                         ListItem::new(Line::from(Span::styled(
                             content,
-                            Style::default().fg(Color::Cyan),
+                            Style::default().fg(if is_dark_theme {
+                                Color::Cyan
+                            } else {
+                                Color::Blue
+                            }),
                         )))
                     }
                     TaskListItem::Task(t) => {
@@ -1473,6 +1503,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                             base_style,
                             true,
                             state.search_highlight_regex.as_deref(),
+                            is_dark_theme,
                         );
 
                         let mut spans = vec![
@@ -1550,6 +1581,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                                     base_style,
                                     true,
                                     state.search_highlight_regex.as_deref(),
+                                    is_dark_theme,
                                 );
                                 let mut line_spans = vec![Span::raw(indent)];
                                 line_spans.extend(desc_spans);
@@ -2146,15 +2178,27 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         SyntaxType::Reminder => Style::default().fg(Color::LightRed),
                         SyntaxType::Operator => Style::default().fg(Color::Magenta), // Highlight boolean/operator tokens
                         SyntaxType::Goal => Style::default()
-                            .fg(Color::Cyan)
+                            .fg(if is_dark_theme {
+                                Color::Cyan
+                            } else {
+                                Color::Blue
+                            })
                             .add_modifier(Modifier::BOLD),
                         SyntaxType::Collection => {
                             Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
                         }
                         SyntaxType::Calendar => Style::default().fg(Color::Magenta), // Added for +cal/-cal
                         SyntaxType::Pin => Style::default().fg(Color::LightRed), // Added for +pin/-pin
-                        SyntaxType::Filter => Style::default().fg(Color::Cyan), // Added for search operators / filters
-                        SyntaxType::WikiLink => Style::default().fg(Color::Cyan),
+                        SyntaxType::Filter => Style::default().fg(if is_dark_theme {
+                            Color::Cyan
+                        } else {
+                            Color::Blue
+                        }), // Added for search operators / filters
+                        SyntaxType::WikiLink => Style::default().fg(if is_dark_theme {
+                            Color::Cyan
+                        } else {
+                            Color::Blue
+                        }),
                         SyntaxType::Dependency => Style::default()
                             .fg(Color::Rgb(229, 152, 52))
                             .add_modifier(Modifier::BOLD), // Orange for dep:

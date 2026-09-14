@@ -45,7 +45,7 @@ Tasks map strictly to iCalendar `VTODO` components, while daily notes map to `VJ
 ### 1.3. System Integrations
 *   **Keyring:** Passwords are never stored in plaintext `config.toml`. They are vaulted via OS keyrings: Windows Credential Manager, macOS Keychain, Linux Secret Portal (oo7) or Keyutils, Android Keystore.
 *   **Logging:** Outputs to `cache/cfait.log` (rotating `cfait.old.log`). Terminal stderr logging is enabled for CLI/GUI, but disabled for TUI to prevent screen tearing. Android uses dual logging (File + Logcat).
-*   **Crash Reporting (Android):** An `UncaughtExceptionHandler` writes panics to `cache/android_crash.txt`.
+*   **Crash Reporting (Android):** An `UncaughtExceptionHandler` should write panics to `cache/android_crash.txt` (but it doesn't work in practice).
 
 ---
 
