@@ -1346,7 +1346,7 @@ impl Config {
             } else if trimmed.starts_with("[tag_aliases]") {
                 out.push_str("\n# --- Aliases (Global Templates) ---\n");
                 out.push_str("# Map shortcuts to sets of tags/locations/priorities.\n");
-                out.push_str("# Example: \"#gardening\" = [\"#fun\", \"@@home\"]\n");
+                out.push_str("# Example: \"gardening\" = [\"#fun\", \"@@home\"]\n");
             } else if trimmed.starts_with("[goals]") {
                 out.push_str("\n# --- Goals & Habit Tracking ---\n");
                 out.push_str("# Set tracking goals for specific tags or locations.\n");
