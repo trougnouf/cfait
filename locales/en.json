@@ -409,7 +409,7 @@
     "help_en_fallback_title": "English Syntax (Always Supported)",
     "help_md_title": "Description & Sub-tasks",
     "help_org_alias_loc_desc": "Define location alias (inherits tags & priority too)",
-    "help_org_alias_tag_desc": "Define tag alias (supports tags, loc, and priority)",
+    "help_org_alias_tag_desc": "Define tag alias (one-way macro appending tags/loc/prio)",
     "help_org_permanent": "Permanent task (logs time instead of completing)",
     "help_log_time_syntax": "Log work sessions (supports day, time, and duration)",
     "help_org_priority": "Priority high (1) to low (9)",

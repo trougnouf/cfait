@@ -394,7 +394,7 @@
     "help_metadata_relation": "Relier à une autre tâche (frère)",
     "help_org_add_category": "Ajouter une catégorie/un tag (utiliser ':' pour hiérarchiser)",
     "help_org_alias_loc_desc": "Définir un alias de lieu (hérite aussi tags & prio)",
-    "help_org_alias_tag_desc": "Définir un alias de tag (tags, lieux, prio)",
+    "help_org_alias_tag_desc": "Définir un alias de tag (macro unidirectionnelle ajoutant tags, lieux, prio)",
     "help_org_done": "Définir la date de fin explicitement",
     "help_org_done_percent": "Définir le pourcentage d'achèvement",
     "help_org_escape_special": "Échapper les caractères spéciaux",

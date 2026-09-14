@@ -93,9 +93,9 @@ Evaluated instantly during text input. Supported across all clients.
 * Use `\` to escape special characters (e.g., `\#not-a-tag`).
 
 ### 2.2. Aliases (Macros)
-Users can define reusable shortcuts that expand into multiple tags, locations, or priorities.
+Users can define reusable shortcuts that physically expand into multiple tags, locations, or priorities.
 *   *Syntax:* `#gardening := #home:outside, @@garden, !4`
-*   Aliases are resolved retroactively across the database upon creation/edit. Cycle detection is strictly enforced (max depth 10).
+*   Aliases act as one-way text macros. They are resolved retroactively across the database upon creation/edit, meaning the target tags are physically appended to matching tasks. Because provenance (whether a tag was added manually or via alias) is not tracked, removing a tag from an alias definition will *not* remove it from existing tasks to prevent data loss. Cycle detection is strictly enforced (max depth 10).
 
 ### 2.3. Markdown Subtask Extraction & Round-Trip Editing (Context-Aware)
 If a task's description contains Markdown lists, Cfait extracts actionable items into distinct child tasks whenever the task is saved. 
