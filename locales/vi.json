@@ -605,7 +605,6 @@
     "show_goals_tab": "Hiện phần mục tiêu ở thanh bên",
     "show_less": "Ẩn bớt",
     "show_locations_tab": "Hiện phần vị trí ở thanh bên",
-    "sidebar_tabs": "Tab thanh bên",
     "show_older_sessions": {
         "one": "Hiện 1 phiên làm việc trước…",
         "other": "Hiện %{count} phiên làm việc trước…"
@@ -615,6 +614,7 @@
     "show_priority_numbers": "Hiện giá trị của ưu tiên (!X)",
     "show_tags_tab": "Hiện phần thẻ ở thanh bên",
     "show_task_goals_in_sidebar": "Hiện mục tiêu liên quan đến việc làm ở thanh bên",
+    "sidebar_tabs": "Tab thanh bên",
     "snooze": "Tạm ẩn…",
     "snooze_custom_title": "Tuỳ chỉnh",
     "snooze_hint": "Tạm ẩn (v.d. 15p, 1g)",
