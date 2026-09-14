@@ -3,6 +3,7 @@
     "about_license": "GPL-3.0 许可",
     "about_repository": "仓库：%{url}",
     "about_title": "Cfait",
+    "about_author": "作者：Benoit Brummer (Trougnouf)",
     "about_version": "版本 %{version} (%{commit})",
     "action_bar_position": "操作按钮位置",
     "action_bar_position_explain": "将常用按钮（搜索、同步、设置）移至屏幕底部，方便单手操作。",

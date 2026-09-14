@@ -3,6 +3,7 @@
     "about_license": "Licence GPL-3.0",
     "about_repository": "Repozitář: %{url}",
     "about_title": "Cfait",
+    "about_author": "od Benoit Brummer (Trougnouf)",
     "about_version": "Verze %{version} (%{commit})",
     "action_bar_position": "Umístění akčních tlačítek",
     "action_bar_position_explain": "Přesune často používaná tlačítka (hledání, synchronizace, nastavení) dolů pro snazší dosah jednou rukou.",

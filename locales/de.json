@@ -3,6 +3,7 @@
     "about_license": "GPL-3.0 Lizenz",
     "about_repository": "Repository: %{url}",
     "about_title": "Cfait",
+    "about_author": "von Benoit Brummer (Trougnouf)",
     "about_version": "Version %{version} (%{commit})",
     "action_bar_position": "Position des oberen Leiste",
     "action_bar_position_explain": "Die gesamte obere Leiste (Suche, Sync, Einstellungen) für bessere Einhand-Bedienung nach unten verschieben.",

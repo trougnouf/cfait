@@ -3,6 +3,7 @@
     "about_license": "Licencia GPL-3.0",
     "about_repository": "Repositorio: %{url}",
     "about_title": "Cfait",
+    "about_author": "por Benoit Brummer (Trougnouf)",
     "about_version": "Versión %{version} (%{commit})",
     "action_bar_position": "Posición de la barra superior",
     "action_bar_position_explain": "Mueve toda la barra superior (título, búsqueda, sincronización, configuración) a la parte inferior de la pantalla para facilitar el acceso con una sola mano.",

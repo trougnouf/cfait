@@ -261,6 +261,11 @@ pub fn view_help<'a>(tab: HelpTab, app: &'a GuiApp) -> Element<'a, Message> {
                     .style(|_: &Theme| text::Style {
                         color: Some(COL_MUTED)
                     }),
+                text(rust_i18n::t!("about_author").to_string())
+                    .size(14)
+                    .style(|_: &Theme| text::Style {
+                        color: Some(COL_MUTED)
+                    }),
                 tooltip(
                     version_btn,
                     text(rust_i18n::t!("click_to_copy").to_string()).size(12),

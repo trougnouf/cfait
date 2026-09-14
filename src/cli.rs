@@ -252,4 +252,8 @@ pub fn print_help(binary_name: &str) {
         rust_i18n::t!("cli_repo_label")
     );
     println!("    {:<15} GPL-3.0", rust_i18n::t!("cli_license_label"));
+    println!(
+        "    {:<15} Benoit Brummer (Trougnouf)",
+        rust_i18n::t!("cli_author_label")
+    );
 }

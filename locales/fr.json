@@ -9,6 +9,7 @@
     "about_license": "Licence GPL-3.0",
     "about_repository": "Dépôt : %{url}",
     "about_title": "Cfait",
+    "about_author": "par Benoit Brummer (Trougnouf)",
     "about_version": "Version %{version} (%{commit})",
     "action_bar_position": "Position des boutons d'action",
     "action_bar_position_explain": "Déplacer les boutons fréquemment utilisés (recherche, synchronisation, réglages) en bas de l'écran pour un accès plus facile à une main.",
