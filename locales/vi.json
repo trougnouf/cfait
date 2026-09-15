@@ -1,9 +1,9 @@
 {
+    "about_author": "bởi Benoit Brummer (Trougnouf)",
     "about_chat": "Trò chuyện: %{url}",
     "about_license": "Giấy phép GPL-3.0",
     "about_repository": "Kho mã: %{url}",
     "about_title": "Cfait",
-    "about_author": "bởi Benoit Brummer (Trougnouf)",
     "about_version": "Phiên bản %{version} (%{commit})",
     "action_bar_position": "Vị trí nút thao tác",
     "action_bar_position_explain": "Đưa các nút dùng thường xuyên (tìm kiếm, đồng bộ, cài đặt) xuống dưới cùng để dễ chạm bằng một tay.",
