@@ -127,26 +127,26 @@ pub fn print_help(binary_name: &str) {
         println!("{}", rust_i18n::t!("cli_action_commands_heading"));
         print_cmd(
             &format!(
-                "{} add <{}> [-c <id>] [--desc <text>] [-p <uid>] [-n] [-w]",
+                "{} add <{}> [-c <id>] [--desc <txt>] [-p <uid>]",
                 binary_name,
                 rust_i18n::t!("cli_task_placeholder")
             ),
             rust_i18n::t!("cli_desc_add").to_string(),
         );
         print_cmd(
-            &format!("{} edit <uid> [--tree] [-n] [-w]", binary_name),
+            &format!("{} edit <uid> [--tree]", binary_name),
             rust_i18n::t!("cli_desc_edit").to_string(),
         );
         print_cmd(
             &format!(
-                "{} replace <uid> [<task...>] [-c <id>] [--desc <text>] [-p <uid>] [--clear-*] [--file <path>] [--tree] [-n] [-w]",
+                "{} replace <uid> [<task...>] [--clear-*] [--file <path>] [--tree]",
                 binary_name
             ),
             rust_i18n::t!("cli_desc_replace").to_string(),
         );
         print_cmd(
             &format!(
-                "{} append <uid> <{}> [--desc <text>] [-n] [-w]",
+                "{} append <uid> <{}> [--desc <txt>]",
                 binary_name,
                 rust_i18n::t!("cli_task_placeholder")
             ),
@@ -169,23 +169,23 @@ pub fn print_help(binary_name: &str) {
             rust_i18n::t!("cli_desc_view").to_string(),
         );
         print_cmd(
-            &format!("{} start <uid> [-n] [-w]", binary_name),
+            &format!("{} start <uid>", binary_name),
             rust_i18n::t!("cli_desc_start").to_string(),
         );
         print_cmd(
-            &format!("{} pause <uid> [-n] [-w]", binary_name),
+            &format!("{} pause <uid>", binary_name),
             rust_i18n::t!("cli_desc_pause").to_string(),
         );
         print_cmd(
-            &format!("{} toggle <uid> [-n] [-w]", binary_name),
+            &format!("{} toggle <uid>", binary_name),
             rust_i18n::t!("cli_desc_toggle").to_string(),
         );
         print_cmd(
-            &format!("{} move <uid> <collection> [--tree] [-n] [-w]", binary_name),
+            &format!("{} move <uid> <collection> [--tree]", binary_name),
             rust_i18n::t!("cli_desc_move").to_string(),
         );
         print_cmd(
-            &format!("{} delete <uid> [-n] [-w]", binary_name),
+            &format!("{} delete <uid>", binary_name),
             rust_i18n::t!("cli_desc_delete").to_string(),
         );
         print_cmd(
