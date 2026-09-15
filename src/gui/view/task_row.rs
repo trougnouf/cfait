@@ -1917,6 +1917,16 @@ pub fn view_task_row<'a>(
                     );
 
                     if let Some(rrule) = &task.rrule {
+                        let pretty = crate::model::parser::prettify_recurrence(
+                            rrule,
+                            task.is_relative_recurrence(),
+                        );
+                        details_col = details_col.push(
+                            text(format!("- {}: {}", rust_i18n::t!("recurrence"), pretty))
+                                .size(12)
+                                .color(Color::from_rgb(0.7, 0.7, 0.7)),
+                        );
+
                         let (count, _, key) =
                             app.store.get_completion_history_stats(&task.uid, rrule);
                         if count > 0 {

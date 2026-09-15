@@ -1596,12 +1596,24 @@ async fn main() -> Result<()> {
                 t.checkbox_symbol()
             );
             println!("{}:      {}", rust_i18n::t!("cli_view_uid"), t.uid);
+            if let Some(s) = &t.dtstart {
+                println!(
+                    "{}:    {}",
+                    rust_i18n::t!("cli_view_start"),
+                    s.format_smart()
+                );
+            }
             if let Some(d) = &t.due {
                 println!(
                     "{}:      {}",
                     rust_i18n::t!("cli_view_due"),
                     d.format_smart()
                 );
+            }
+            if let Some(r) = &t.rrule {
+                let pretty =
+                    cfait::model::parser::prettify_recurrence(r, t.is_relative_recurrence());
+                println!("{}:    {}", rust_i18n::t!("cli_view_recur"), pretty);
             }
             if !t.categories.is_empty() {
                 println!(

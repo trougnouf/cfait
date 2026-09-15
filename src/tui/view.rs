@@ -1743,6 +1743,11 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 details_md.push_str(&format!("### {}\n", t!("habit_history")));
 
                 if let Some(rrule) = &task.rrule {
+                    let pretty = crate::model::parser::prettify_recurrence(
+                        rrule,
+                        task.is_relative_recurrence(),
+                    );
+                    details_md.push_str(&format!("- **{}:** {}\n", t!("recurrence"), pretty));
                     let (count, _, key) =
                         state.store.get_completion_history_stats(&task.uid, rrule);
                     if count > 0 {
