@@ -78,6 +78,53 @@
   </requires>
 
   <releases>
+    <release version="1.1.8" date="2026-09-15">
+      <description>
+        <p>Features:</p>
+        <ul>
+          <li>(android) Custom label, more colors, collection color, rename widget</li>
+          <li>Remote collection import/export with VJOURNAL support; move sidebar tab toggles to advanced settings</li>
+          <li>(widget) Respect fold/unfold state in task list widget; switch off journal tab on task open</li>
+          <li>(gui) Add tooltip and feedback to version copy button in about page ( https://github.com/trougnouf/cfait/issues/78 )</li>
+          <li>(android) Fix entry widget custom color cycling, add collection filter and quick-add to list widget, sync after widget actions</li>
+          <li>(android) Add list auto-indent to create-task description field (suggested by wunter8)</li>
+          <li>Add author Benoit Brummer (Trougnouf) to about and CLI</li>
+          <li>(ci) Mirror releases to GitLab as fallback when disroot is down ( https://codeberg.org/trougnouf/cfait/issues/101 )</li>
+        </ul>
+        <p>Bug Fixes:</p>
+        <ul>
+          <li>Restore nested VTODO comp-filter so sync works with SOGo</li>
+          <li>Gate duration formatter on goal type in list badge</li>
+          <li>(android) Fix widget config not applied and per-instance prefs overwriting</li>
+          <li>(android) Make widget config changes actually trigger recomposition</li>
+          <li>(android) Quick-add widget after journal and auto-switch tab from action bar</li>
+          <li>(android) Guard widget receivers and fix search widget collection picker</li>
+          <li>(android) Prevent widget layout bleed-over between TaskList and TaskEntry</li>
+          <li>Move offline refresh I/O off the iced main thread and add edit-generation guard against async store wipes in GUI and TUI ( https://github.com/trougnouf/cfait/issues/78 )</li>
+          <li>(parser) Preserve dependencies/relations across title edits and resolve dep: with colons in summary</li>
+          <li>(parser) Fix tag alias resolution and retain trigger tags on expansion</li>
+        </ul>
+        <p>Documentation:</p>
+        <ul>
+          <li>Clarify sorting settings explanations in GUI</li>
+          <li>Document data_dir config setting in SPECS.md</li>
+          <li>(i18n) Complete fr.json with missing keys</li>
+          <li>Clarify alias documentation ( https://github.com/trougnouf/cfait/issues/81 / https://github.com/trougnouf/cfait/issues/82 )</li>
+        </ul>
+        <p>Styling:</p>
+        <ul>
+          <li>(tui) Replace hardcoded colors for light themes</li>
+        </ul>
+        <p>Miscellaneous Tasks:</p>
+        <ul>
+          <li>(android) Re-enable widgets</li>
+          <li>(android) Ensure config activity finishes even if widget update fails</li>
+          <li>(i18n) Replace enfant with sous-tâche/sous-page in fr.json</li>
+          <li>(android) Localize widget strings and fix text contrast on dark backgrounds</li>
+          <li>(android) Fix widget opacity string crash and add force_sync shortcut to tooltip</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.1.7" date="2026-09-09">
       <description>
         <p>Features:</p>

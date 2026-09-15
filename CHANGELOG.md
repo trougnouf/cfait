@@ -1,5 +1,49 @@
 # Changelog
 
+## [1.1.8] - 2026-09-15
+
+### 🚀 Features
+
+- *(android)* Custom label, more colors, collection color, rename widget
+- Remote collection import/export with VJOURNAL support; move sidebar tab toggles to advanced settings
+- *(widget)* Respect fold/unfold state in task list widget; switch off journal tab on task open
+- *(gui)* Add tooltip and feedback to version copy button in about page ( https://github.com/trougnouf/cfait/issues/78 )
+- *(android)* Fix entry widget custom color cycling, add collection filter and quick-add to list widget, sync after widget actions
+- *(android)* Add list auto-indent to create-task description field (suggested by wunter8)
+- Add author Benoit Brummer (Trougnouf) to about and CLI
+- *(ci)* Mirror releases to GitLab as fallback when disroot is down ( https://codeberg.org/trougnouf/cfait/issues/101 )
+
+### 🐛 Bug Fixes
+
+- Restore nested VTODO comp-filter so sync works with SOGo
+- Gate duration formatter on goal type in list badge
+- *(android)* Fix widget config not applied and per-instance prefs overwriting
+- *(android)* Make widget config changes actually trigger recomposition
+- *(android)* Quick-add widget after journal and auto-switch tab from action bar
+- *(android)* Guard widget receivers and fix search widget collection picker
+- *(android)* Prevent widget layout bleed-over between TaskList and TaskEntry
+- Move offline refresh I/O off the iced main thread and add edit-generation guard against async store wipes in GUI and TUI ( https://github.com/trougnouf/cfait/issues/78 )
+- *(parser)* Preserve dependencies/relations across title edits and resolve dep: with colons in summary
+- *(parser)* Fix tag alias resolution and retain trigger tags on expansion
+
+### 📚 Documentation
+
+- Clarify sorting settings explanations in GUI
+- Document data_dir config setting in SPECS.md
+- *(i18n)* Complete fr.json with missing keys
+- Clarify alias documentation ( https://github.com/trougnouf/cfait/issues/81 / https://github.com/trougnouf/cfait/issues/82 )
+
+### 🎨 Styling
+
+- *(tui)* Replace hardcoded colors for light themes
+
+### ⚙️ Miscellaneous Tasks
+
+- *(android)* Re-enable widgets
+- *(android)* Ensure config activity finishes even if widget update fails
+- *(i18n)* Replace enfant with sous-tâche/sous-page in fr.json
+- *(android)* Localize widget strings and fix text contrast on dark backgrounds
+- *(android)* Fix widget opacity string crash and add force_sync shortcut to tooltip
 ## [1.1.7] - 2026-09-08
 
 ### 🚀 Features
@@ -774,6 +818,7 @@ Added FreeBSD installation instructions
 
 ### 🐛 Bug Fixes
 
+- *(i18n)* Improve Czech translation wording for sorting/priority terms
 - *(store)* Stop_task resets time tracking instead of accumulating
 - *(sync)* Deduplicate cross-collection uids and add android parent navigation
 - *(ci)* Build Android APKs originating from PRs with dummy signing key ( https://codeberg.org/trougnouf/cfait/pulls/68 )
@@ -844,7 +889,6 @@ Added FreeBSD installation instructions
 - *(gui,mobile)* Implement optimistic updates for remote calendar actions to prevent UI jitter ( https://codeberg.org/trougnouf/cfait/issues/62 )
 - *(mobile)* Prevent DST gap panics in implicit alarm evaluators
 - *(i18n)* Improve Czech translation terminology and add missing keys
-- *(i18n)* Improve Czech translation wording for sorting/priority terms
 - Hide collapsed sub-tasks which were picked up by the fallback routine for orphaned tasks (reported by @Shadowminx )
 - *(android)* Fix language switch on older (<13) Android versions ( https://github.com/trougnouf/cfait/issues/32 )
 
