@@ -1774,8 +1774,6 @@ impl TaskStore {
     ) -> Result<(Vec<crate::journal::Action>, Vec<DependencyWarning>), String> {
         let mut actions = Vec::new();
         let old_descendants = self.get_descendant_uids(root_uid);
-        let (clean_desc, extracted) =
-            crate::model::extractor::extract_markdown_tasks(markdown, is_journal);
 
         let root_calendar_href = if let Some(root) = self.get_task_ref(root_uid) {
             root.calendar_href.clone()
@@ -1783,13 +1781,24 @@ impl TaskStore {
             return Ok((actions, Vec::new()));
         };
 
+        let mut root_clone = self.get_task_ref(root_uid).unwrap().clone();
+        let mut tree_media = std::collections::HashMap::new();
+        tree_media.extend(root_clone.inline_media.clone());
+        for d_uid in &old_descendants {
+            if let Some(d) = self.get_task_ref(d_uid) {
+                tree_media.extend(d.inline_media.clone());
+            }
+        }
+        let (clean_desc, extracted) =
+            crate::model::extractor::extract_markdown_tasks(markdown, is_journal, &mut tree_media);
+
         let root_in_extracted = extracted
             .iter()
             .any(|ext| ext.parsed_existing_uid.as_deref() == Some(root_uid) || ext.uid == root_uid);
 
-        let mut root_clone = self.get_task_ref(root_uid).unwrap().clone();
         if !root_in_extracted {
             root_clone.description = clean_desc;
+            root_clone.inline_media = tree_media;
             root_clone.sequence += 1;
         }
 
@@ -1918,6 +1927,7 @@ impl TaskStore {
                 }
 
                 clone.description = ext.description.clone();
+                clone.inline_media = ext.inline_media.clone();
                 clone.is_note = ext.is_note;
                 clone.percent_complete = ext.percent_complete;
                 clone.parent_uid = parent_uid.clone();
@@ -1997,6 +2007,7 @@ impl TaskStore {
                 );
                 new_task.uid = task_uid.clone();
                 new_task.description = ext.description;
+                new_task.inline_media = ext.inline_media;
 
                 if let Some((p_cats, p_loc, p_prio)) = p_props {
                     new_task.inherit_properties(&p_cats, &p_loc, p_prio);
@@ -4943,6 +4954,7 @@ mod tests {
             raw_components: vec![],
             create_event: None,
             goal: None,
+            inline_media: std::collections::HashMap::new(),
             // Transient fields
             target_collection: None,
             is_blocked: false,

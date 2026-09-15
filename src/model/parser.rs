@@ -4155,3 +4155,86 @@ pub fn parse_inline_markdown(text_str: &str) -> Vec<InlineElement<'_>> {
 
     spans
 }
+
+/// Replace inline `data:` URI payloads with `cfait-media://UUID` placeholders,
+/// injecting each payload into the `media` map. The caller provides the map
+/// and stores it on the Task so `to_ics` can re-inject payloads for any
+/// placeholders that survive in the edited description.
+///
+/// A `data:` URI is recognized at the start of the text, right after `(` (a
+/// markdown link/image URL), or after whitespace — so `data:` inside an http
+/// URL path is not touched. The payload runs to the next whitespace, `)`,
+/// `]`, or end of string.
+pub fn strip_data_uris(
+    text: &str,
+    media: &mut std::collections::HashMap<String, String>,
+) -> String {
+    if !text.contains("data:") {
+        return text.to_string();
+    }
+
+    let bytes = text.as_bytes();
+    let n = bytes.len();
+    let mut out = String::new();
+    let mut i = 0;
+    let mut run_start = 0;
+
+    while i < n {
+        if bytes[i] == b'd'
+            && i + 5 <= n
+            && &bytes[i..i + 5] == b"data:"
+            && (i == 0 || bytes[i - 1] == b'(' || bytes[i - 1].is_ascii_whitespace())
+        {
+            if run_start < i {
+                out.push_str(&text[run_start..i]);
+            }
+            let mut j = i + 5;
+            while j < n && bytes[j] != b')' && bytes[j] != b']' && !bytes[j].is_ascii_whitespace() {
+                j += 1;
+            }
+            let uuid = uuid::Uuid::new_v4().to_string();
+            media.insert(uuid.clone(), text[i..j].to_string());
+            out.push_str(&format!("cfait-media://{}", uuid));
+            i = j;
+            run_start = j;
+        } else {
+            i += if bytes[i] < 0x80 {
+                1
+            } else if bytes[i] >> 5 == 0b110 {
+                2
+            } else if bytes[i] >> 4 == 0b1110 {
+                3
+            } else {
+                4
+            };
+        }
+    }
+    if run_start < n {
+        out.push_str(&text[run_start..n]);
+    }
+    out
+}
+
+/// Collect the media payloads referenced by `cfait-media://UUID` placeholders
+/// in `text` into a new map. Payloads whose placeholders were deleted by the
+/// user are automatically dropped (pruning).
+pub fn extract_referenced_media(
+    text: &str,
+    source_media: &std::collections::HashMap<String, String>,
+) -> std::collections::HashMap<String, String> {
+    let mut target_media = std::collections::HashMap::new();
+    let marker = "cfait-media://";
+    let mut rest = text;
+    while let Some(pos) = rest.find(marker) {
+        let after = &rest[pos + marker.len()..];
+        let end = after
+            .find(|c: char| !c.is_ascii_alphanumeric() && c != '-')
+            .unwrap_or(after.len());
+        let uuid = &after[..end];
+        if let Some(payload) = source_media.get(uuid) {
+            target_media.insert(uuid.to_string(), payload.clone());
+        }
+        rest = &after[end..];
+    }
+    target_media
+}

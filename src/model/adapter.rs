@@ -53,6 +53,40 @@ const HANDLED_KEYS: &[&str] = &[
     "X-CFAIT-PERMANENT",
 ];
 
+/// Return the description to serialize into ICS, re-injecting original `data:`
+/// URI payloads for any `cfait-media://UUID` placeholders that survive in the
+/// edited description. Placeholders that the user deleted are not re-injected.
+fn description_for_ics(task: &Task) -> String {
+    if task.inline_media.is_empty() {
+        return task.description.clone();
+    }
+    let marker = "cfait-media://";
+    let mut out = String::new();
+    let mut rest = task.description.as_str();
+    while let Some(pos) = rest.find(marker) {
+        out.push_str(&rest[..pos]);
+        let after = &rest[pos + marker.len()..];
+        let end = after
+            .find(|c: char| !c.is_ascii_alphanumeric() && c != '-')
+            .unwrap_or(after.len());
+        if end == 0 {
+            out.push_str(marker);
+            rest = after;
+            continue;
+        }
+        let uuid = &after[..end];
+        if let Some(payload) = task.inline_media.get(uuid) {
+            out.push_str(payload);
+        } else {
+            out.push_str(marker);
+            out.push_str(uuid);
+        }
+        rest = &after[end..];
+    }
+    out.push_str(rest);
+    out
+}
+
 pub struct IcsAdapter;
 
 impl IcsAdapter {
@@ -133,6 +167,7 @@ impl IcsAdapter {
     }
 
     pub fn to_ics(task: &Task) -> String {
+        let desc = description_for_ics(task);
         if task.is_journal {
             let mut buffer = String::new();
             buffer.push_str("BEGIN:VCALENDAR\r\n");
@@ -168,8 +203,7 @@ impl IcsAdapter {
                 .replace(';', "\\;");
             append_folded(&format!("SUMMARY:{}", escaped_summary));
 
-            let escaped_desc = task
-                .description
+            let escaped_desc = desc
                 .replace('\\', "\\\\")
                 .replace(',', "\\,")
                 .replace(';', "\\;")
@@ -235,8 +269,8 @@ impl IcsAdapter {
         let mut todo = Todo::new();
         todo.add_property("UID", &task.uid);
         todo.summary(&task.summary);
-        if !task.description.is_empty() {
-            todo.description(&task.description);
+        if !desc.is_empty() {
+            todo.description(&desc);
         }
         todo.timestamp(Utc::now());
         todo.add_property("SEQUENCE", task.sequence.to_string());
@@ -738,6 +772,11 @@ impl IcsAdapter {
             let description = extract_prop(&unfolded, "DESCRIPTION")
                 .map(|s| unescape_ics(&s))
                 .unwrap_or_default();
+            let (description, inline_media) = {
+                let mut media = std::collections::HashMap::new();
+                let stripped = crate::model::parser::strip_data_uris(&description, &mut media);
+                (stripped, media)
+            };
             let sequence = extract_prop(&unfolded, "SEQUENCE")
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(0);
@@ -886,6 +925,7 @@ impl IcsAdapter {
                 raw_components,
                 create_event: None,
                 goal: None,
+                inline_media,
                 target_collection: None,
                 is_blocked: false,
                 is_implicitly_blocked: false,
@@ -926,6 +966,11 @@ impl IcsAdapter {
         let description = get_prop("DESCRIPTION")
             .map(|s| unescape_ics(&s))
             .unwrap_or_default();
+        let (description, inline_media) = {
+            let mut media = std::collections::HashMap::new();
+            let stripped = crate::model::parser::strip_data_uris(&description, &mut media);
+            (stripped, media)
+        };
 
         let status = if let Some(val) = get_prop("STATUS") {
             match val.trim().to_uppercase().as_str() {
@@ -1480,6 +1525,7 @@ impl IcsAdapter {
             raw_components,
             create_event,
             goal,
+            inline_media,
             target_collection: None,
             is_blocked: false,
             is_implicitly_blocked: false,

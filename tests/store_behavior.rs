@@ -626,7 +626,8 @@ fn test_delete_task_tree_removes_descendants() {
 #[test]
 fn test_extract_markdown_tasks_full() {
     let input = "Root description.\n\n- [ ] Subtask 1\n  Details for subtask 1\n* [x] Subtask 2\n1. [ ] Numbered 1\n2. [ ] Numbered 2\n";
-    let (root_desc, tasks) = cfait::model::extract_markdown_tasks(input, false);
+    let (root_desc, tasks) =
+        cfait::model::extract_markdown_tasks(input, false, &mut std::collections::HashMap::new());
 
     assert_eq!(root_desc, "Root description.");
     assert_eq!(tasks.len(), 4);

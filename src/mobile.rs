@@ -3056,10 +3056,12 @@ impl CfaitMobile {
         let def_time =
             chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
 
-        let (cleaned_desc, extracted_subtasks) =
-            crate::model::extractor::extract_markdown_tasks(&description, false);
-
         let mut task = Task::new(&clean_input, &config.tag_aliases, def_time);
+        let (cleaned_desc, extracted_subtasks) = crate::model::extractor::extract_markdown_tasks(
+            &description,
+            false,
+            &mut task.inline_media,
+        );
 
         let store = self.controller.store.lock().await;
         let _warnings2 = store.resolve_dependencies(&mut task);
@@ -3124,6 +3126,7 @@ impl CfaitMobile {
                         .push_str(&format!("\n\n{}", ext.description));
                 }
             }
+            sub.inline_media = ext.inline_media.clone();
 
             sub.apply_extracted_status(ext.status);
 
@@ -3243,14 +3246,22 @@ impl CfaitMobile {
             .get_task_ref(&uid)
             .map(|t| t.is_journal)
             .unwrap_or(false);
-        let (clean_desc, extracted) =
-            crate::model::extractor::extract_markdown_tasks(&description, is_journal);
+        let mut parent_media = store
+            .get_task_ref(&uid)
+            .map(|t| t.inline_media.clone())
+            .unwrap_or_default();
+        let (clean_desc, extracted) = crate::model::extractor::extract_markdown_tasks(
+            &description,
+            is_journal,
+            &mut parent_media,
+        );
 
         let mut actions = Vec::new();
         let mut resolved_props = std::collections::HashMap::new();
 
         let parent_href = if let Some((task, _)) = store.get_task_mut(&uid) {
             task.description = clean_desc;
+            task.inline_media = parent_media;
             task.sequence += 1;
             let href = task.calendar_href.clone();
             resolved_props.insert(
@@ -3288,6 +3299,7 @@ impl CfaitMobile {
                         .push_str(&format!("\n\n{}", ext.description));
                 }
             }
+            sub.inline_media = ext.inline_media.clone();
 
             sub.apply_extracted_status(ext.status);
 

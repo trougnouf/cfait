@@ -359,6 +359,15 @@ pub struct Task {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub goal: Option<crate::config::Goal>,
 
+    /// Original `data:` URI payloads extracted from the description during
+    /// `from_ics`, preserved for lossless round-tripping. The description
+    /// itself contains short `cfait-media://UUID` placeholders that map
+    /// to entries in this map. On `to_ics`, each placeholder is replaced
+    /// with its original payload — so editing text *around* a placeholder
+    /// preserves the image, while deleting the placeholder drops it.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub inline_media: HashMap<String, String>,
+
     // Transient UI/runtime fields (not serialized)
     #[serde(skip)]
     pub target_collection: Option<String>,
@@ -755,6 +764,7 @@ impl Task {
             raw_components: Vec::new(),
             create_event: None,
             goal: None,
+            inline_media: HashMap::new(),
             target_collection: None,
             is_blocked: false,
             is_implicitly_blocked: false,

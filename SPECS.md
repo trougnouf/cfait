@@ -118,6 +118,7 @@ Users can also use the "Edit Tree" action (or `Ctrl+E`) to edit an entire existi
 Cfait natively supports rendering basic inline Markdown across task summaries, descriptions, and the raw text editors.
 *   **Supported Syntax:** `**bold**`, `__bold__`, `*italic*`, `_italic_`, `~~strikethrough~~`, `` `code` ``, standard Markdown links `[label](url)`, and bare URLs (any `scheme://` or `mailto:`).
 *   **Marker Visibility:** Formatting markers (e.g., `**`, `~~`, `` ` ``) are hidden in read-only views (such as the task list, sidebar, and read-only details) to keep the text clean. The markers are preserved and highlighted in the raw text editors and inputs to ensure a seamless text-based editing experience.
+*   **Inline `data:` URI stripping:** Inline base64 images (e.g. `![alt](data:image/png;base64,...)`) in CalDAV `DESCRIPTION` properties are stripped at the model boundary (`from_ics`) and replaced with short `cfait-media://UUID` placeholders, so multi-MB blobs never enter UI state, editor buffers, or the text shaper. The original payloads are stored in a separate `inline_media` map and re-injected by `to_ics` for any placeholders that survive in the edited description. Editing text around a placeholder preserves the image; deleting the placeholder drops it. User-pasted `data:` URIs are also stripped at the `extract_markdown_tasks` entry point.
 
 ---
 

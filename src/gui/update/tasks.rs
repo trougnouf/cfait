@@ -1713,8 +1713,6 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
         .and_then(|uid| app.store.get_task_ref(uid))
         .map(|t| t.is_journal)
         .unwrap_or(false);
-    let (cleaned_desc, extracted_subtasks) =
-        crate::model::extractor::extract_markdown_tasks(&desc_text, is_journal);
 
     if let Some(tree_uid) = &app.editing_tree_uid {
         let sync_options = crate::store::SyncTreeOptions {
@@ -1778,6 +1776,12 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
             app.edit_generation = app.edit_generation.wrapping_add(1);
             let old_href = task_ref.calendar_href.clone();
             let mut task = task_ref.clone();
+            let (cleaned_desc, extracted_subtasks) =
+                crate::model::extractor::extract_markdown_tasks(
+                    &desc_text,
+                    is_journal,
+                    &mut task.inline_media,
+                );
             task.description = cleaned_desc.clone();
             task.apply_smart_input(&clean_input, &app.tag_aliases, config_time);
 
@@ -1856,6 +1860,7 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                             .push_str(&format!("\n\n{}", ext.description));
                     }
                 }
+                sub.inline_media = ext.inline_media.clone();
 
                 sub.apply_extracted_status(ext.status);
 
@@ -1890,6 +1895,11 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
         }
     } else if !clean_input.is_empty() {
         let mut new_task = TodoTask::new(&clean_input, &app.tag_aliases, config_time);
+        let (cleaned_desc, extracted_subtasks) = crate::model::extractor::extract_markdown_tasks(
+            &desc_text,
+            is_journal,
+            &mut new_task.inline_media,
+        );
 
         let warnings = app.store.resolve_dependencies(&mut new_task);
         if !warnings.is_empty() {
@@ -2003,6 +2013,7 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                             .push_str(&format!("\n\n{}", ext.description));
                     }
                 }
+                sub.inline_media = ext.inline_media.clone();
 
                 sub.apply_extracted_status(ext.status);
 

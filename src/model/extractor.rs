@@ -14,6 +14,7 @@ pub struct ExtractedTask {
     pub status: crate::model::TaskStatus,
     pub percent_complete: Option<u8>,
     pub is_note: bool,
+    pub inline_media: std::collections::HashMap<String, String>,
 }
 
 fn parse_checkbox(s: &str) -> Option<(crate::model::TaskStatus, Option<u8>, &str)> {
@@ -233,7 +234,16 @@ enum StackItemKind {
 
 /// Takes a raw markdown string.
 /// Returns (Cleaned Root Description, List of Extracted Subtasks).
-pub fn extract_markdown_tasks(input: &str, is_journal: bool) -> (String, Vec<ExtractedTask>) {
+pub fn extract_markdown_tasks(
+    input: &str,
+    is_journal: bool,
+    parent_media: &mut std::collections::HashMap<String, String>,
+) -> (String, Vec<ExtractedTask>) {
+    // Strip new data: URIs from user input, appending payloads to parent_media
+    // so they become cfait-media://UUID placeholders that to_ics can re-inject.
+    let stripped = crate::model::parser::strip_data_uris(input, parent_media);
+    let input = stripped.as_str();
+
     let mut cleaned_root_desc = String::new();
     let mut extracted: Vec<ExtractedTask> = Vec::new();
 
@@ -411,6 +421,7 @@ pub fn extract_markdown_tasks(input: &str, is_journal: bool) -> (String, Vec<Ext
                 status: parsed_status,
                 percent_complete: parsed_pc,
                 is_note,
+                inline_media: std::collections::HashMap::new(),
             });
             active_task_idx = Some(new_idx);
         } else {
@@ -511,6 +522,16 @@ pub fn extract_markdown_tasks(input: &str, is_journal: bool) -> (String, Vec<Ext
     for task in &mut extracted {
         task.description = task.description.trim_end().to_string();
     }
+
+    // Distribute the payloads into the correct local inline_media dictionary
+    // for each subtask based solely on the referenced UUIDs.
+    for ext in &mut extracted {
+        ext.inline_media =
+            crate::model::parser::extract_referenced_media(&ext.description, parent_media);
+    }
+    let root_media =
+        crate::model::parser::extract_referenced_media(&cleaned_root_desc, parent_media);
+    *parent_media = root_media;
 
     (cleaned_root_desc, extracted)
 }

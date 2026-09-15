@@ -502,6 +502,7 @@ mod tests {
             raw_components: vec![],
             create_event: None,
             goal: None,
+            inline_media: std::collections::HashMap::new(),
             target_collection: None,
             is_blocked: false,
             is_implicitly_blocked: false,

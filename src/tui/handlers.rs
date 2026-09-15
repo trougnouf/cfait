@@ -764,8 +764,9 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
 
     if state.creating_with_desc {
         let desc_text = state.input_buffer.clone();
+        let mut parent_media = std::collections::HashMap::new();
         let (clean_desc, extracted) =
-            crate::model::extractor::extract_markdown_tasks(&desc_text, false);
+            crate::model::extractor::extract_markdown_tasks(&desc_text, false, &mut parent_media);
 
         let (clean_input_1, new_goals) =
             crate::model::parser::extract_inline_goals(&state.new_task_title);
@@ -819,6 +820,7 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
                 parent.description.push_str(&format!("\n\n{}", clean_desc));
             }
         }
+        parent.inline_media = parent_media;
         parent.parent_uid = state.creating_child_of.clone();
 
         let Some(target_href) = state
@@ -899,6 +901,7 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
                         .push_str(&format!("\n\n{}", ext.description));
                 }
             }
+            sub.inline_media = ext.inline_media.clone();
 
             sub.apply_extracted_status(ext.status);
 
@@ -947,8 +950,16 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
                 .get_task_ref(&uid)
                 .map(|t| t.is_journal)
                 .unwrap_or(false);
-            let (clean_desc, extracted) =
-                crate::model::extractor::extract_markdown_tasks(&desc_text, is_journal);
+            let mut parent_media = state
+                .store
+                .get_task_ref(&uid)
+                .map(|t| t.inline_media.clone())
+                .unwrap_or_default();
+            let (clean_desc, extracted) = crate::model::extractor::extract_markdown_tasks(
+                &desc_text,
+                is_journal,
+                &mut parent_media,
+            );
 
             let mut actions = Vec::new();
             let mut parent_href = String::new();
@@ -961,6 +972,7 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
             if let Some((t_mut, _)) = state.store.get_task_mut(&uid) {
                 state.edit_generation = state.edit_generation.wrapping_add(1);
                 t_mut.description = clean_desc;
+                t_mut.inline_media = parent_media;
                 t_mut.sequence += 1;
                 parent_href = t_mut.calendar_href.clone();
                 resolved_props.insert(
@@ -1001,6 +1013,7 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
                             .push_str(&format!("\n\n{}", ext.description));
                     }
                 }
+                sub.inline_media = ext.inline_media.clone();
 
                 sub.apply_extracted_status(ext.status);
 

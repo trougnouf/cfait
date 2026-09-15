@@ -171,10 +171,12 @@ async fn apply_markdown_update(
             .get_task_ref(full_uid)
             .map(|t| t.is_journal)
             .unwrap_or(false);
-        let (clean_desc, extracted) =
-            cfait::model::extractor::extract_markdown_tasks(description, is_journal);
-
         let mut task = store.get_task_ref(full_uid).unwrap().clone();
+        let (clean_desc, extracted) = cfait::model::extractor::extract_markdown_tasks(
+            description,
+            is_journal,
+            &mut task.inline_media,
+        );
         task.description = clean_desc.to_string();
         task.apply_smart_input(smart_input, &config.tag_aliases, def_time);
 
@@ -218,6 +220,7 @@ async fn apply_markdown_update(
                         .push_str(&format!("\n\n{}", ext.description));
                 }
             }
+            sub.inline_media = ext.inline_media;
 
             sub.apply_extracted_status(ext.status);
 

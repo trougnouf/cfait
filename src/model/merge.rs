@@ -72,6 +72,7 @@ pub fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task>
         raw_components: _,
         create_event: _,
         goal: _,
+        inline_media: _,
         is_blocked: _,
         is_implicitly_blocked: _,
         is_implicitly_future: _,
@@ -115,6 +116,7 @@ pub fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task>
     // Standard properties
     merge_field!(summary);
     merge_field!(description);
+    merge_field!(inline_media);
     merge_field!(status);
     merge_field!(priority);
     merge_field!(due);
