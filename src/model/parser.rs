@@ -1864,18 +1864,41 @@ pub fn prettify_recurrence(rrule: &str, is_relative: bool) -> String {
     let mut bymonth = "";
     let mut until = "";
 
-    // Parse RRULE components
+    // Parse RRULE components, tracking unrecognized parts
+    let mut has_unknown_part = false;
     for part in rrule.split(';') {
-        if let Some(v) = part.strip_prefix("FREQ=") {
-            freq = v;
-        } else if let Some(v) = part.strip_prefix("INTERVAL=") {
-            interval = v;
-        } else if let Some(v) = part.strip_prefix("BYDAY=") {
-            byday = v;
-        } else if let Some(v) = part.strip_prefix("BYMONTH=") {
-            bymonth = v;
-        } else if let Some(v) = part.strip_prefix("UNTIL=") {
-            until = v;
+        let key = part.split('=').next().unwrap_or("");
+        match key {
+            "FREQ" => freq = part.strip_prefix("FREQ=").unwrap_or(""),
+            "INTERVAL" => interval = part.strip_prefix("INTERVAL=").unwrap_or(""),
+            "BYDAY" => byday = part.strip_prefix("BYDAY=").unwrap_or(""),
+            "BYMONTH" => bymonth = part.strip_prefix("BYMONTH=").unwrap_or(""),
+            "UNTIL" => until = part.strip_prefix("UNTIL=").unwrap_or(""),
+            "" => {}
+            _ => has_unknown_part = true,
+        }
+    }
+
+    // Fall back to raw format when the RRULE contains parts the prettifier
+    // cannot represent without data loss
+    if has_unknown_part {
+        return format!("rec:{}", rrule);
+    }
+    // BYDAY is only handled for WEEKLY; for other frequencies it would be dropped
+    if !byday.is_empty() && freq != "WEEKLY" {
+        return format!("rec:{}", rrule);
+    }
+    // INTERVAL != 1 combined with BYDAY or BYMONTH: the interval and
+    // except/weekday sections are mutually exclusive, so one would be dropped
+    if !interval.is_empty() && interval != "1" && (!byday.is_empty() || !bymonth.is_empty()) {
+        return format!("rec:{}", rrule);
+    }
+    // WEEKLY + BYDAY (1-3 days) + BYMONTH: the weekday section only combines
+    // with BYMONTH for 4+ days, so fewer days would lose BYDAY
+    if freq == "WEEKLY" && !byday.is_empty() && !bymonth.is_empty() {
+        let day_count = byday.split(',').count();
+        if day_count < 4 {
+            return format!("rec:{}", rrule);
         }
     }
 

@@ -286,15 +286,12 @@ fn test_prettify_recurrence_with_weekday_and_until() {
 fn test_prettify_recurrence_raw_format_no_until() {
     use cfait::model::parser::prettify_recurrence;
 
-    // Note: The current prettify implementation doesn't check for COUNT,
-    // so it will still use smart format and append until. This is a known limitation.
+    // COUNT is not handled by the prettifier, so it falls back to raw rec: format
     let rrule = "FREQ=DAILY;COUNT=10;UNTIL=20251231";
     let pretty = prettify_recurrence(rrule, false);
 
-    // Currently outputs "@daily until 2025-12-31" even with COUNT present
-    // This could be improved in the future to detect COUNT and use rec: format
-    assert!(pretty.contains("@daily"));
-    assert!(pretty.contains("until 2025-12-31"));
+    // Should preserve the full RRULE in rec: format
+    assert_eq!(pretty, "rec:FREQ=DAILY;COUNT=10;UNTIL=20251231");
 }
 
 #[test]
@@ -887,4 +884,95 @@ fn test_user_scenario_eight_excluded_months() {
     // With 4 months included (8 excluded), should show except format
     // The 8 excluded months are: jan,feb,mar,apr,may,oct,nov,dec
     assert_eq!(pretty, "@monthly except jan,feb,mar,apr,may,oct,nov,dec");
+}
+
+#[test]
+fn test_unsupported_rrule_falls_back_to_rec() {
+    use cfait::model::parser::prettify_recurrence;
+
+    // BYMONTHDAY is not handled by the prettifier — must preserve via rec:
+    let rrule = "FREQ=MONTHLY;BYMONTHDAY=15";
+    let pretty = prettify_recurrence(rrule, false);
+    assert_eq!(pretty, "rec:FREQ=MONTHLY;BYMONTHDAY=15");
+
+    // BYSETPOS + BYDAY combo — both unsupported in pretty syntax
+    let rrule2 = "FREQ=MONTHLY;BYSETPOS=1;BYDAY=MO";
+    let pretty2 = prettify_recurrence(rrule2, false);
+    assert_eq!(pretty2, "rec:FREQ=MONTHLY;BYSETPOS=1;BYDAY=MO");
+
+    // COUNT — not representable in pretty syntax
+    let rrule3 = "FREQ=DAILY;COUNT=10";
+    let pretty3 = prettify_recurrence(rrule3, false);
+    assert_eq!(pretty3, "rec:FREQ=DAILY;COUNT=10");
+
+    // BYHOUR/BYMINUTE — not handled
+    let rrule4 = "FREQ=DAILY;BYHOUR=9;BYMINUTE=30";
+    let pretty4 = prettify_recurrence(rrule4, false);
+    assert_eq!(pretty4, "rec:FREQ=DAILY;BYHOUR=9;BYMINUTE=30");
+}
+
+#[test]
+fn test_unsupported_rrule_round_trip_preserves_custom_rule() {
+    use cfait::model::parser::prettify_recurrence;
+
+    // A custom monthly-by-monthday rule should survive a round-trip
+    // through to_smart_string -> apply_smart_input
+    let rrule = "FREQ=MONTHLY;BYMONTHDAY=15";
+    let pretty = prettify_recurrence(rrule, false);
+    assert_eq!(pretty, "rec:FREQ=MONTHLY;BYMONTHDAY=15");
+
+    // The inner RRULE still has BYMONTHDAY, so re-prettifying falls back again
+    let reparsed = prettify_recurrence(&pretty[4..], false);
+    assert_eq!(reparsed, "rec:FREQ=MONTHLY;BYMONTHDAY=15");
+}
+
+#[test]
+fn test_byday_with_non_weekly_freq_falls_back_to_rec() {
+    use cfait::model::parser::prettify_recurrence;
+
+    // BYDAY with MONTHLY — the prettifier only handles BYDAY for WEEKLY
+    let rrule = "FREQ=MONTHLY;BYDAY=MO";
+    let pretty = prettify_recurrence(rrule, false);
+    assert_eq!(pretty, "rec:FREQ=MONTHLY;BYDAY=MO");
+
+    // BYDAY with DAILY — same issue
+    let rrule2 = "FREQ=DAILY;BYDAY=MO,WE,FR";
+    let pretty2 = prettify_recurrence(rrule2, false);
+    assert_eq!(pretty2, "rec:FREQ=DAILY;BYDAY=MO,WE,FR");
+}
+
+#[test]
+fn test_interval_with_byday_or_bymonth_falls_back_to_rec() {
+    use cfait::model::parser::prettify_recurrence;
+
+    // INTERVAL + BYDAY — the interval section ignores BYDAY
+    let rrule = "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO";
+    let pretty = prettify_recurrence(rrule, false);
+    assert_eq!(pretty, "rec:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO");
+
+    // INTERVAL + BYMONTH — the interval section ignores BYMONTH
+    let rrule2 = "FREQ=MONTHLY;INTERVAL=2;BYMONTH=1,2,3";
+    let pretty2 = prettify_recurrence(rrule2, false);
+    assert_eq!(pretty2, "rec:FREQ=MONTHLY;INTERVAL=2;BYMONTH=1,2,3");
+}
+
+#[test]
+fn test_weekly_byday_few_days_with_bymonth_falls_back_to_rec() {
+    use cfait::model::parser::prettify_recurrence;
+
+    // WEEKLY + 1 day + BYMONTH — weekday section requires bymonth empty for 1-3 days
+    let rrule = "FREQ=WEEKLY;BYDAY=MO;BYMONTH=1";
+    let pretty = prettify_recurrence(rrule, false);
+    assert_eq!(pretty, "rec:FREQ=WEEKLY;BYDAY=MO;BYMONTH=1");
+
+    // WEEKLY + 3 days + BYMONTH — same issue
+    let rrule2 = "FREQ=WEEKLY;BYDAY=MO,WE,FR;BYMONTH=1,6";
+    let pretty2 = prettify_recurrence(rrule2, false);
+    assert_eq!(pretty2, "rec:FREQ=WEEKLY;BYDAY=MO,WE,FR;BYMONTH=1,6");
+
+    // WEEKLY + 4 days + BYMONTH — this IS handled (4+ days combines with BYMONTH)
+    let rrule3 = "FREQ=WEEKLY;BYDAY=MO,WE,FR,SA;BYMONTH=1,6";
+    let pretty3 = prettify_recurrence(rrule3, false);
+    assert!(pretty3.starts_with("@daily"));
+    assert!(pretty3.contains("except"));
 }
