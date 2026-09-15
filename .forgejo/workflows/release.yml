@@ -147,10 +147,49 @@ jobs:
           name: android-artifacts
           path: dist-android/*
 
-  # --- JOB 3: WINDOWS BUILD & PUBLISH (Arch) ---
-  # This job waits for Linux and Android, then bundles everything and releases.
-  build-windows-and-publish:
-    needs: [build-linux, build-android]
+  # --- JOB 3: WINDOWS BUILD (Arch) ---
+  build-windows:
+    runs-on: self-hosted-arch
+    container:
+      image: local/arch-builder
+      volumes:
+        - cargo-registry:/usr/local/cargo/registry
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build Windows Binaries
+        run: |
+          rustup target add x86_64-pc-windows-gnu
+          cargo build --release --target x86_64-pc-windows-gnu --features gui
+
+      - name: Create Windows Archive
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            RAW_VERSION="${{ github.ref_name }}"
+          else
+            RAW_VERSION="debug-${{ github.sha }}"
+          fi
+          mkdir -p dist
+          mkdir -p windows-staging
+          cp target/x86_64-pc-windows-gnu/release/cfait.exe windows-staging/
+          cp target/x86_64-pc-windows-gnu/release/cfait-gui.exe windows-staging/cfait-gui.exe
+          cp README.md LICENSE windows-staging/
+          (cd windows-staging && zip -r "../dist/cfait-windows-$RAW_VERSION.zip" .)
+
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: windows-artifacts
+          path: dist/*
+
+  # --- JOB 4: PUBLISH (Arch) ---
+  # Collects all artifacts, signs, and publishes to disroot, GitLab, and AUR.
+  publish:
+    needs: [build-linux, build-android, build-windows]
     runs-on: self-hosted-arch
     container:
       image: local/arch-builder
@@ -178,32 +217,19 @@ jobs:
           name: android-artifacts
           path: dist
 
-      # 3. Build Windows Binaries (On Arch)
-      - name: Build Windows Binaries
-        run: |
-          rustup target add x86_64-pc-windows-gnu
-          cargo build --release --target x86_64-pc-windows-gnu --features gui
+      # 3. Download Windows Artifacts
+      - name: Download Windows Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: windows-artifacts
+          path: dist
 
-      # 4. Package Windows
-      - name: Create Windows Archive
-        run: |
-          if [ "${{ github.ref_type }}" = "tag" ]; then
-            RAW_VERSION="${{ github.ref_name }}"
-          else
-            RAW_VERSION="debug-${{ github.sha }}"
-          fi
-          mkdir -p windows-staging
-          cp target/x86_64-pc-windows-gnu/release/cfait.exe windows-staging/
-          cp target/x86_64-pc-windows-gnu/release/cfait-gui.exe windows-staging/cfait-gui.exe
-          cp README.md LICENSE windows-staging/
-          (cd windows-staging && zip -r "../dist/cfait-windows-$RAW_VERSION.zip" .)
-
-      # 5. Generate Changelog
+      # 4. Generate Changelog
       - name: Generate Changelog
         run: |
           git-cliff --config cliff.toml --verbose --latest --strip header --output dist/CHANGELOG_RELEASE.md
 
-      # 6. Sign Release Artifacts
+      # 5. Sign Release Artifacts
       - name: Sign Release Artifacts
         if: startsWith(github.ref, 'refs/tags/')
         env:
@@ -221,7 +247,7 @@ jobs:
             fi
           done
 
-      # 7. Handle AUR
+      # 6. Handle AUR
       - name: Prepare AUR Files
         id: prepare-artifacts
         if: startsWith(github.ref, 'refs/tags/')
@@ -266,7 +292,7 @@ jobs:
 
           su builder -c "makepkg -p PKGBUILD_bin --printsrcinfo > .SRCINFO_bin"
 
-      # 8. Upload Everything (Atomic Release)
+      # 7. Upload Everything (Atomic Release)
       - name: Upload to git.disroot.org Releases
         if: startsWith(github.ref, 'refs/tags/')
         env:
@@ -294,7 +320,7 @@ jobs:
           # Upload PKGBUILD separately
           tea release assets create --repo ${{ github.repository }} ${{ github.ref_name }} PKGBUILD
 
-      # 8b. Mirror Release to GitLab (fallback if disroot is down)
+      # 7b. Mirror Release to GitLab (fallback if disroot is down)
       - name: Upload to GitLab Releases
         if: always() && steps.prepare-artifacts.outcome == 'success' && startsWith(github.ref, 'refs/tags/')
         env:
@@ -348,7 +374,7 @@ jobs:
 
           echo "GitLab release $TAG published."
 
-      # 9. Push to AUR
+      # 8. Push to AUR
       - name: Push to AUR
         if: startsWith(github.ref, 'refs/tags/')
         env:
