@@ -267,7 +267,7 @@ Tasks tagged with `is:permanent` act as endless trackers. When checked off (Comp
     *   *Ongoing Tasks:* Generate a persistent, swipable notification with a live Chronometer and "Pause"/"Done" actions.
     *   *Alarms:* High-priority. Includes inline "Snooze Custom" via `RemoteInput` text reply.
 *   **Intents:** Intercepts `ACTION_VIEW` for `.ics` files to launch the Import Screen.
-*   **Debug Export:** UI includes an advanced option to generate a zip of `cache/`, `data/`, `config/`, and `android_crash.txt`, sharing it via `ACTION_SEND`.
+*   **Debug Export:** UI includes an advanced option to generate a zip of `cache/`, `data/`, `config/`, and `android_crash.txt`, sharing it via `ACTION_SEND`. If a custom `data_dir` is configured, the export also bundles the internal default data directory (`data_internal/`) and the custom one (`data_custom/`) as backups.
 *   **AMOLED Black Theme:** A pure-black color variant for OLED screens, selectable from the theme picker.
 *   **Top Bar Position:** Configurable to top or bottom via settings (issue #31).
 

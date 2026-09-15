@@ -21,6 +21,10 @@ use crate::client::core::test_hooks::TEST_FORCE_SYNC_ERROR;
 
 static SYNC_LOCK: OnceLock<AsyncMutex<()>> = OnceLock::new();
 
+pub fn get_sync_lock() -> &'static AsyncMutex<()> {
+    SYNC_LOCK.get_or_init(|| AsyncMutex::new(()))
+}
+
 // This set encodes spaces and unsafe characters, but leaves '.' and other safe symbols alone.
 const PATH_ENCODE_SET: &AsciiSet = &CONTROLS
     .add(b' ')
@@ -565,7 +569,7 @@ impl RustyClient {
 
     pub async fn sync_journal(&self) -> Result<(Vec<String>, Vec<Task>), String> {
         // 1. Serialize sync loops process-wide to protect the physical journal file
-        let lock = SYNC_LOCK.get_or_init(|| AsyncMutex::new(()));
+        let lock = get_sync_lock();
         let _guard = lock.lock().await;
 
         let client = self.client.as_ref().ok_or("Offline")?;

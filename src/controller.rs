@@ -10,8 +10,14 @@ use crate::storage::{LocalCalendarRegistry, LocalStorage};
 use crate::store::TaskStore;
 use chrono::{DateTime, Utc};
 use serde_json;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use tokio::sync::Mutex;
+
+static PERSIST_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+pub fn get_persist_lock() -> &'static Mutex<()> {
+    PERSIST_LOCK.get_or_init(|| Mutex::new(()))
+}
 
 /// Central logic controller for Task operations.
 /// Handles business workflows and coordinates in-memory store mutations,
@@ -41,6 +47,7 @@ impl TaskController {
     /// Process a batch of actions atomically to ensure proper journal queueing.
     /// This is an instantaneous operation that saves to disk and returns without hitting the network.
     pub async fn persist_changes(&self, actions: Vec<Action>) -> Result<(), String> {
+        let _persist_guard = get_persist_lock().lock().await;
         let mut remote_actions = Vec::new();
 
         enum LocalOp {

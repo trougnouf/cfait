@@ -514,6 +514,7 @@ pub struct MobileConfig {
     pub password: String,
     pub tls_client_cert_path: Option<String>,
     pub tls_client_key_path: Option<String>,
+    pub data_dir: Option<String>,
     pub default_calendar: Option<String>,
     pub allow_insecure: bool,
     pub hide_completed: bool,
@@ -1319,6 +1320,13 @@ impl CfaitMobile {
         self.create_debug_export_internal()
     }
 
+    pub fn get_current_data_dir(&self) -> Result<String, MobileError> {
+        self.ctx
+            .get_data_dir()
+            .map(|p| p.to_string_lossy().into_owned())
+            .map_err(|e| MobileError::from(e.to_string()))
+    }
+
     pub fn set_locale(&self, locale: String) {
         crate::config::set_locale_with_fallback(&locale);
     }
@@ -1504,6 +1512,7 @@ impl CfaitMobile {
             password: c.password,
             tls_client_cert_path: c.tls_client_cert_path,
             tls_client_key_path: c.tls_client_key_path,
+            data_dir: c.data_dir,
             default_calendar: c.default_calendar,
             allow_insecure: c.allow_insecure_certs,
             hide_completed: c.hide_completed,
@@ -1677,6 +1686,7 @@ impl CfaitMobile {
         apply_mobile_credentials_update(&mut c, &config.username, &config.password);
         c.tls_client_cert_path = config.tls_client_cert_path;
         c.tls_client_key_path = config.tls_client_key_path;
+        c.data_dir = config.data_dir;
         c.allow_insecure_certs = config.allow_insecure;
         c.hide_completed = config.hide_completed;
         c.hide_aliases_in_sidebar = config.hide_aliases_in_sidebar;
@@ -2176,9 +2186,100 @@ impl CfaitMobile {
     }
 }
 
+/// Returns true if `file_name` is a Cfait-owned data file in the data directory
+/// (journal, alarm index, default local task file, or a local collection file
+/// including the registry).
+fn is_cfait_data_file(file_name: &str) -> bool {
+    file_name == "journal.json"
+        || file_name == "alarm_index.json"
+        || file_name == "local.json"
+        || (file_name.starts_with("local_") && file_name.ends_with(".json"))
+}
+
 // Block 2: Asynchronous functions
 #[uniffi::export(async_runtime = "tokio")]
 impl CfaitMobile {
+    /// Migrate local data files to a new directory and persist the new `data_dir`
+    /// in the config so the next app startup uses it.
+    ///
+    /// Locks down the persistence and sync pipeline (in the strict order
+    /// sync lock, persist lock, store lock) so no in-flight `persist_changes`
+    /// or background sync can race the copy.
+    pub async fn migrate_data_dir(
+        &self,
+        new_data_dir: Option<String>,
+    ) -> Result<String, MobileError> {
+        // Acquire locks in strict order to prevent deadlocks and completely eliminate sync races:
+        let _sync_guard = crate::client::sync::get_sync_lock().lock().await;
+        let _persist_guard = crate::controller::get_persist_lock().lock().await;
+        let _store_guard = self.controller.store.lock().await;
+
+        let old_dir = self
+            .ctx
+            .get_data_dir()
+            .map_err(|e| MobileError::from(e.to_string()))?;
+        let new_dir = match &new_data_dir {
+            Some(d) => PathBuf::from(d),
+            None => self
+                .ctx
+                .get_default_data_dir()
+                .map_err(|e| MobileError::from(e.to_string()))?,
+        };
+
+        if old_dir == new_dir {
+            // No migration needed; still update config for consistency.
+            let mut config = load_mobile_config_with_credentials(self.ctx.as_ref());
+            config.data_dir = new_data_dir;
+            config
+                .save_with_credentials(self.ctx.as_ref())
+                .map_err(|e| MobileError::from(e.to_string()))?;
+            return Ok(new_dir.to_string_lossy().into_owned());
+        }
+
+        // Ensure the new directory exists.
+        std::fs::create_dir_all(&new_dir).map_err(|e| MobileError::from(e.to_string()))?;
+
+        // 1. Safely copy ONLY known Cfait files to the new destination.
+        if let Ok(entries) = std::fs::read_dir(&old_dir) {
+            for entry in entries.flatten() {
+                if entry.file_type().is_ok_and(|ft| ft.is_file()) {
+                    let file_name = entry.file_name().to_string_lossy().to_string();
+                    if is_cfait_data_file(&file_name) {
+                        let src_path = entry.path();
+                        let dst_path = new_dir.join(&file_name);
+                        std::fs::copy(&src_path, &dst_path)
+                            .map_err(|e| MobileError::from(e.to_string()))?;
+                    }
+                }
+            }
+        }
+
+        // 2. Persist the new data_dir in the config so the app knows where to look upon restart.
+        let mut config = load_mobile_config_with_credentials(self.ctx.as_ref());
+        config.data_dir = new_data_dir;
+        config
+            .save_with_credentials(self.ctx.as_ref())
+            .map_err(|e| MobileError::from(e.to_string()))?;
+
+        // 3. Cleanup old files safely: delete the known files + locks we own.
+        if let Ok(entries) = std::fs::read_dir(&old_dir) {
+            for entry in entries.flatten() {
+                if entry.file_type().is_ok_and(|ft| ft.is_file()) {
+                    let file_name = entry.file_name().to_string_lossy().to_string();
+                    if is_cfait_data_file(&file_name) || file_name.ends_with(".lock") {
+                        let _ = std::fs::remove_file(entry.path());
+                    }
+                }
+            }
+        }
+
+        // Try to remove the old directory. If it contains user files, this will fail safely
+        // preventing data loss, but our tracked files are successfully cleaned up.
+        let _ = std::fs::remove_dir(&old_dir);
+
+        Ok(new_dir.to_string_lossy().into_owned())
+    }
+
     pub async fn add_alias(&self, key: String, tags: Vec<String>) -> Result<(), MobileError> {
         let mut c = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let tags_str = tags.join(",");
@@ -4086,6 +4187,25 @@ impl CfaitMobile {
             add_dir(&data_dir, "data/")?;
             add_dir(&config_dir, "config/")?;
             add_dir(&cache_dir, "cache/")?;
+
+            // If a custom data dir is set, also export the internal one as a backup
+            let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
+            if let Some(custom_dir) = config.data_dir {
+                if let Ok(conf_dir) = self.ctx.get_config_dir() {
+                    if let Some(parent) = conf_dir.parent() {
+                        let internal_data_dir = parent.join("data");
+                        if internal_data_dir != data_dir && internal_data_dir.exists() {
+                            add_dir(&internal_data_dir, "data_internal/")?;
+                        }
+                    }
+                }
+
+                let custom_path = std::path::PathBuf::from(custom_dir);
+                if custom_path != data_dir && custom_path.exists() {
+                    add_dir(&custom_path, "data_custom/")?;
+                }
+            }
+
             zip.finish().map_err(|e| MobileError::from(e.to_string()))?;
             return Ok(export_path.to_string_lossy().to_string());
         }

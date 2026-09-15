@@ -28,6 +28,7 @@ pub trait AppContext: Send + Sync + std::fmt::Debug {
     fn get_data_dir(&self) -> Result<PathBuf>;
     fn get_config_dir(&self) -> Result<PathBuf>;
     fn get_cache_dir(&self) -> Result<PathBuf>;
+    fn get_default_data_dir(&self) -> Result<PathBuf>;
 
     fn get_config_file_path(&self) -> Result<PathBuf> {
         Ok(self.get_config_dir()?.join("config.toml"))
@@ -60,26 +61,26 @@ impl StandardContext {
     /// When `override_root` is `Some(path)`, all directories will be created
     /// under that root using `data`, `config`, and `cache` subdirectories.
     ///
-    /// When `override_root` is `None`, the config file at the default config
-    /// directory is pre-read for a `data_dir` key. If present, data files are
-    /// stored there instead of the XDG default. This lets users relocate only
-    /// the data directory (e.g. into a sync folder) without moving config or
-    /// cache.
+    /// Regardless of whether `override_root` is set, the config file is
+    /// pre-read for a `data_dir` key. If present, data files are stored there
+    /// instead of the default location. This lets users relocate only the data
+    /// directory (e.g. into a sync folder or external storage) without moving
+    /// config or cache.
     pub fn new(override_root: Option<PathBuf>) -> Self {
-        let data_dir_override = if override_root.is_some() {
-            None
-        } else {
-            Self::read_data_dir_from_config()
-        };
+        let data_dir_override = Self::read_data_dir_from_config(override_root.as_deref());
         Self {
             override_root,
             data_dir_override,
         }
     }
 
-    fn read_data_dir_from_config() -> Option<PathBuf> {
-        let proj = Self::get_proj_dirs()?;
-        let config_path = proj.config_dir().join("config.toml");
+    fn read_data_dir_from_config(override_root: Option<&std::path::Path>) -> Option<PathBuf> {
+        let config_path = if let Some(root) = override_root {
+            root.join("config").join("config.toml")
+        } else {
+            let proj = Self::get_proj_dirs()?;
+            proj.config_dir().join("config.toml")
+        };
         if !config_path.exists() {
             return None;
         }
@@ -124,11 +125,15 @@ impl StandardContext {
 
 impl AppContext for StandardContext {
     fn get_data_dir(&self) -> Result<PathBuf> {
-        if let Some(root) = &self.override_root {
-            return Self::ensure_exists(root.join("data"));
-        }
         if let Some(dir) = &self.data_dir_override {
             return Self::ensure_exists(dir.clone());
+        }
+        self.get_default_data_dir()
+    }
+
+    fn get_default_data_dir(&self) -> Result<PathBuf> {
+        if let Some(root) = &self.override_root {
+            return Self::ensure_exists(root.join("data"));
         }
         let proj = Self::get_proj_dirs().ok_or_else(|| anyhow::anyhow!("No home directory"))?;
         Self::ensure_exists(proj.data_dir().to_path_buf())
@@ -181,6 +186,10 @@ impl Default for TestContext {
 
 impl AppContext for TestContext {
     fn get_data_dir(&self) -> Result<PathBuf> {
+        self.get_default_data_dir()
+    }
+
+    fn get_default_data_dir(&self) -> Result<PathBuf> {
         let p = self.root.join("data");
         std::fs::create_dir_all(&p)?;
         Ok(p)

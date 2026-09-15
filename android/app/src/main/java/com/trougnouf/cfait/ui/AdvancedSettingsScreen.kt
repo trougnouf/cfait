@@ -57,6 +57,10 @@ fun AdvancedSettingsScreen(
 
     var tlsClientCertPath by remember { mutableStateOf("") }
     var tlsClientKeyPath by remember { mutableStateOf("") }
+    var useExternalStorage by remember { mutableStateOf(false) }
+    var currentDataDirPath by remember { mutableStateOf("") }
+    var showMigrationDialog by remember { mutableStateOf(false) }
+    var pendingExternalStorage by remember { mutableStateOf(false) }
 
     var sortStandardByPriority by remember { mutableStateOf(false) }
     var pausedSortBehavior by remember { mutableStateOf("tiebreak") }
@@ -93,6 +97,9 @@ fun AdvancedSettingsScreen(
 
             tlsClientCertPath = cfg.tlsClientCertPath ?: ""
             tlsClientKeyPath = cfg.tlsClientKeyPath ?: ""
+            val extDir = context.getExternalFilesDir(null)?.absolutePath
+            useExternalStorage = (extDir != null && cfg.dataDir == extDir)
+            currentDataDirPath = try { api.getCurrentDataDir() } catch (_: Exception) { "" }
 
             sortStandardByPriority = cfg.sortStandardByPriority
             pausedSortBehavior = cfg.pausedSortBehavior
@@ -142,6 +149,7 @@ fun AdvancedSettingsScreen(
 
                 tlsClientCertPath = tlsClientCertPath.takeIf { it.isNotBlank() },
                 tlsClientKeyPath = tlsClientKeyPath.takeIf { it.isNotBlank() },
+                dataDir = cfg.dataDir,
 
                 sortStandardByPriority = sortStandardByPriority,
                 pausedSortBehavior = pausedSortBehavior,
@@ -216,6 +224,60 @@ fun AdvancedSettingsScreen(
     }
 
     BackHandler { handleBack() }
+
+    if (showMigrationDialog) {
+        AlertDialog(
+            onDismissRequest = { showMigrationDialog = false },
+            title = { Text(stringResource(R.string.migrate_data_title)) },
+            text = { Text(stringResource(R.string.migrate_data_text)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    // Reject if external storage is requested but unavailable.
+                    if (pendingExternalStorage && context.getExternalFilesDir(null) == null) {
+                        showMigrationDialog = false
+                        useExternalStorage = false
+                        status = context.getString(R.string.error_external_storage_unavailable)
+                        return@TextButton
+                    }
+
+                    // Save all pending UI changes to disk before migration so they
+                    // are not lost when we overwrite the config with the new dataDir.
+                    saveToDisk()
+
+                    showMigrationDialog = false
+                    useExternalStorage = pendingExternalStorage
+
+                    scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                        try {
+                            val extDir = context.getExternalFilesDir(null)?.absolutePath
+                            val targetDataDir = if (pendingExternalStorage) extDir else null
+
+                            // The Rust side holds the store lock during the copy
+                            // to prevent UI-triggered writes from racing the migration.
+                            api.migrateDataDir(targetDataDir)
+
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                val packageManager = context.packageManager
+                                val intent = packageManager.getLaunchIntentForPackage(context.packageName)
+                                val componentName = intent?.component
+                                val mainIntent = Intent.makeRestartActivityTask(componentName)
+                                context.startActivity(mainIntent)
+                                Runtime.getRuntime().exit(0)
+                            }
+                        } catch (e: Exception) {
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                useExternalStorage = !pendingExternalStorage
+                                status = context.getString(R.string.migration_failed, e.message ?: "")
+                            }
+                        }
+                    }
+                }) { Text(stringResource(R.string.migrate_and_restart)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showMigrationDialog = false }) { Text(stringResource(R.string.cancel)) }
+            }
+        )
+    }
 
     // Pre-resolve strings that will be referenced from non-composable contexts (eg. inside coroutine)
     val exportExporting = stringResource(R.string.export_debug_status_exporting)
@@ -683,6 +745,31 @@ fun AdvancedSettingsScreen(
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(
+                    checked = useExternalStorage,
+                    onCheckedChange = { isChecked ->
+                        pendingExternalStorage = isChecked
+                        showMigrationDialog = true
+                    }
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.use_external_storage_label))
+            }
+            Text(
+                stringResource(R.string.use_external_storage_explain),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
+            )
+            if (currentDataDirPath.isNotEmpty()) {
+                Text(
+                    stringResource(R.string.use_external_storage_path, currentDataDirPath),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+            }
             OutlinedTextField(
                 value = trashRetention,
                 onValueChange = { trashRetention = it },
