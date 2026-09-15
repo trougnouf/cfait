@@ -48,10 +48,10 @@ We offer both **Stable** and **Rolling** releases. We highly encourage users to 
 
 *(Note: On our releases page, the "Rolling" tag stays pinned at the very top. To find the latest stable version, scroll past it and click "Downloads" on the numbered release).*
 
-* **🐧 Linux:** Available on [Flathub](https://flathub.org/apps/com.trougnouf.Cfait), the AUR (`yay -S cfait`), or via `.deb` / `.tar.gz` on our [Releases page](https://git.disroot.org/trougnouf/cfait/releases).
+* **🐧 Linux:** Available on [Flathub](https://flathub.org/apps/com.trougnouf.Cfait), the AUR (`yay -S cfait`), or via `.deb` / `.tar.gz` on our [Releases page](https://git.disroot.org/trougnouf/cfait/releases) <small>([GitLab mirror](https://gitlab.com/trougnouf/cfait/-/releases))</small>.
 * **👺 FreeBSD:** Available in [Ports/Packages](https://www.freshports.org/deskutils/cfait/), install with `pkg install cfait`
 * **📱 Android:** Get it on [F-Droid](https://f-droid.org/packages/com.trougnouf.cfait/), [Google Play](https://play.google.com/store/apps/details?id=com.trougnouf.cfait), or download the APK.
-* **🪟 Windows:** Check the [Releases page](https://git.disroot.org/trougnouf/cfait/releases) for binaries.
+* **🪟 Windows:** Check the [Releases page](https://git.disroot.org/trougnouf/cfait/releases) <small>([GitLab mirror](https://gitlab.com/trougnouf/cfait/-/releases))</small> for binaries.
 * **🍎 MacOS:** Download pre-compiled binaries provided by Martin Stut on https://static.stut.de/cfait-macos/
 * **⚙️ Rust (Cargo):** `cargo install cfait` (TUI) or `cargo install cfait --features gui --bin cfait-gui` (GUI).
 

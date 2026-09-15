@@ -223,6 +223,7 @@ jobs:
 
       # 7. Handle AUR
       - name: Prepare AUR Files
+        id: prepare-artifacts
         if: startsWith(github.ref, 'refs/tags/')
         run: |
           RAW_VERSION="${{ github.ref_name }}"
@@ -292,6 +293,60 @@ jobs:
 
           # Upload PKGBUILD separately
           tea release assets create --repo ${{ github.repository }} ${{ github.ref_name }} PKGBUILD
+
+      # 8b. Mirror Release to GitLab (fallback if disroot is down)
+      - name: Upload to GitLab Releases
+        if: always() && steps.prepare-artifacts.outcome == 'success' && startsWith(github.ref, 'refs/tags/')
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_RELEASE_TOKEN }}
+        run: |
+          set -eu
+          GITLAB="https://gitlab.com"
+          API="$GITLAB/api/v4/projects/trougnouf%2Fcfait"
+          TAG="${{ github.ref_name }}"
+          AUTH="PRIVATE-TOKEN: $GITLAB_TOKEN"
+
+          # Delete existing release if this is a re-run
+          curl --silent --fail --header "$AUTH" --request DELETE "$API/releases/$TAG" || true
+
+          # Create the release with the changelog as description
+          jq -Rs '{ tag_name: "'"$TAG"'", name: "'"$TAG"'", description: . }' < dist/CHANGELOG_RELEASE.md \
+            | curl --silent --fail \
+              --header "$AUTH" \
+              --header "Content-Type: application/json" \
+              --request POST "$API/releases" --data @-
+
+          upload_and_link() {
+            local file="$1"
+            echo "Uploading $file..."
+            local upload_url
+            upload_url=$(curl --silent --fail \
+              --header "$AUTH" \
+              --request POST \
+              "$API/uploads" \
+              --form "file=@$file" \
+              | jq -r '.url')
+            local asset_url="$GITLAB$upload_url"
+            curl --silent --fail \
+              --header "$AUTH" \
+              --header "Content-Type: application/json" \
+              --request POST \
+              "$API/releases/$TAG/assets/links" \
+              --data "{\"name\":\"$file\",\"url\":\"$asset_url\"}" > /dev/null
+          }
+
+          echo "Uploading all assets to GitLab..."
+          cd dist
+          for file in *; do
+            if [ "$file" != "CHANGELOG_RELEASE.md" ] && [ "$file" != "PKGBUILD" ] && [ "$file" != ".SRCINFO" ] && [ "$file" != "PKGBUILD_bin" ] && [ "$file" != ".SRCINFO_bin" ] && [ -f "$file" ]; then
+              upload_and_link "$file"
+            fi
+          done
+
+          # Upload PKGBUILD separately
+          upload_and_link "PKGBUILD"
+
+          echo "GitLab release $TAG published."
 
       # 9. Push to AUR
       - name: Push to AUR
