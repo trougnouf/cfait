@@ -49,15 +49,30 @@ class AlarmWorker(
 
             if (firing.isNotEmpty()) {
                 Log.d("CfaitAlarmWorker", "Found ${firing.size} firing alarm(s)")
+
+                val prefs = context.getSharedPreferences("cfait_fired_alarms", Context.MODE_PRIVATE)
+                val recentlyFired = prefs.getStringSet("fired_uids", emptySet()) ?: emptySet()
+                val newFired = mutableSetOf<String>()
+
                 firing.forEach { alarm ->
+                    newFired.add(alarm.alarmUid)
+                    val isNew = !recentlyFired.contains(alarm.alarmUid)
+
                     showNotification(
                         context,
                         alarm.title,
                         alarm.body,
                         alarm.taskUid,
-                        alarm.alarmUid
+                        alarm.alarmUid,
+                        isNew
                     )
                 }
+
+                prefs.edit().putStringSet("fired_uids", newFired).apply()
+            } else {
+                // Clean up prefs if no alarms are firing
+                context.getSharedPreferences("cfait_fired_alarms", Context.MODE_PRIVATE)
+                    .edit().remove("fired_uids").apply()
             }
 
             AlarmScheduler.scheduleNextAlarm(context, api)
@@ -76,7 +91,8 @@ class AlarmWorker(
         title: String,
         body: String,
         taskUid: String,
-        alarmUid: String
+        alarmUid: String,
+        isNew: Boolean
     ) {
         if (ActivityCompat.checkSelfPermission(
                 context,
@@ -168,6 +184,7 @@ class AlarmWorker(
             .setContentIntent(tapPending)
             .setDeleteIntent(deletePending) // Swipe = Dismiss
             .setAutoCancel(true)
+            .setOnlyAlertOnce(!isNew)
             // ACTION ORDER: Snooze..., Start, Done
             .addAction(customSnoozeAction)
             .addAction(R.drawable.ic_launcher_foreground, context.getString(R.string.start), startPending)
