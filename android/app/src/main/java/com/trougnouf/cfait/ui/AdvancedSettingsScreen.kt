@@ -97,7 +97,8 @@ fun AdvancedSettingsScreen(
 
             tlsClientCertPath = cfg.tlsClientCertPath ?: ""
             tlsClientKeyPath = cfg.tlsClientKeyPath ?: ""
-            val extDir = context.getExternalFilesDir(null)?.absolutePath
+            @Suppress("DEPRECATION")
+            val extDir = context.externalMediaDirs.firstOrNull()?.absolutePath
             useExternalStorage = (extDir != null && cfg.dataDir == extDir)
             currentDataDirPath = try { api.getCurrentDataDir() } catch (_: Exception) { "" }
 
@@ -136,6 +137,7 @@ fun AdvancedSettingsScreen(
             val finalShowLocationsTab = if (!showLocationsTab && !atLeastOneTab) true else showLocationsTab
             val finalShowGoalsTab = if (!showGoalsTab && !atLeastOneTab) true else showGoalsTab
             val finalShowJournalTab = if (!showJournalTab && !atLeastOneTab) true else showJournalTab
+            @Suppress("DEPRECATION")
             val newCfg = cfg.copy(
                 maxDoneRoots = maxDoneRoots.toUIntOrNull() ?: 20u,
                 maxDoneSubtasks = maxDoneSubtasks.toUIntOrNull() ?: 5u,
@@ -149,7 +151,7 @@ fun AdvancedSettingsScreen(
 
                 tlsClientCertPath = tlsClientCertPath.takeIf { it.isNotBlank() },
                 tlsClientKeyPath = tlsClientKeyPath.takeIf { it.isNotBlank() },
-                dataDir = if (useExternalStorage) context.getExternalFilesDir(null)?.absolutePath else null,
+                dataDir = if (useExternalStorage) context.externalMediaDirs.firstOrNull()?.absolutePath else null,
 
                 sortStandardByPriority = sortStandardByPriority,
                 pausedSortBehavior = pausedSortBehavior,
@@ -232,7 +234,8 @@ fun AdvancedSettingsScreen(
             text = { Text(stringResource(R.string.switch_data_dir_text)) },
             confirmButton = {
                 TextButton(onClick = {
-                    if (pendingExternalStorage && context.getExternalFilesDir(null) == null) {
+                    @Suppress("DEPRECATION")
+                    if (pendingExternalStorage && context.externalMediaDirs.firstOrNull() == null) {
                         showSwitchDialog = false
                         useExternalStorage = false
                         status = context.getString(R.string.error_external_storage_unavailable)
