@@ -59,7 +59,7 @@ fun AdvancedSettingsScreen(
     var tlsClientKeyPath by remember { mutableStateOf("") }
     var useExternalStorage by remember { mutableStateOf(false) }
     var currentDataDirPath by remember { mutableStateOf("") }
-    var showMigrationDialog by remember { mutableStateOf(false) }
+    var showSwitchDialog by remember { mutableStateOf(false) }
     var pendingExternalStorage by remember { mutableStateOf(false) }
 
     var sortStandardByPriority by remember { mutableStateOf(false) }
@@ -149,7 +149,7 @@ fun AdvancedSettingsScreen(
 
                 tlsClientCertPath = tlsClientCertPath.takeIf { it.isNotBlank() },
                 tlsClientKeyPath = tlsClientKeyPath.takeIf { it.isNotBlank() },
-                dataDir = cfg.dataDir,
+                dataDir = if (useExternalStorage) context.getExternalFilesDir(null)?.absolutePath else null,
 
                 sortStandardByPriority = sortStandardByPriority,
                 pausedSortBehavior = pausedSortBehavior,
@@ -225,56 +225,40 @@ fun AdvancedSettingsScreen(
 
     BackHandler { handleBack() }
 
-    if (showMigrationDialog) {
+    if (showSwitchDialog) {
         AlertDialog(
-            onDismissRequest = { showMigrationDialog = false },
-            title = { Text(stringResource(R.string.migrate_data_title)) },
-            text = { Text(stringResource(R.string.migrate_data_text)) },
+            onDismissRequest = { showSwitchDialog = false },
+            title = { Text(stringResource(R.string.switch_data_dir_title)) },
+            text = { Text(stringResource(R.string.switch_data_dir_text)) },
             confirmButton = {
                 TextButton(onClick = {
-                    // Reject if external storage is requested but unavailable.
                     if (pendingExternalStorage && context.getExternalFilesDir(null) == null) {
-                        showMigrationDialog = false
+                        showSwitchDialog = false
                         useExternalStorage = false
                         status = context.getString(R.string.error_external_storage_unavailable)
                         return@TextButton
                     }
 
-                    // Save all pending UI changes to disk before migration so they
-                    // are not lost when we overwrite the config with the new dataDir.
-                    saveToDisk()
-
-                    showMigrationDialog = false
+                    showSwitchDialog = false
                     useExternalStorage = pendingExternalStorage
 
-                    scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                        try {
-                            val extDir = context.getExternalFilesDir(null)?.absolutePath
-                            val targetDataDir = if (pendingExternalStorage) extDir else null
+                    try {
+                        saveToDisk()
 
-                            // The Rust side holds the store lock during the copy
-                            // to prevent UI-triggered writes from racing the migration.
-                            api.migrateDataDir(targetDataDir)
-
-                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                val packageManager = context.packageManager
-                                val intent = packageManager.getLaunchIntentForPackage(context.packageName)
-                                val componentName = intent?.component
-                                val mainIntent = Intent.makeRestartActivityTask(componentName)
-                                context.startActivity(mainIntent)
-                                Runtime.getRuntime().exit(0)
-                            }
-                        } catch (e: Exception) {
-                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                useExternalStorage = !pendingExternalStorage
-                                status = context.getString(R.string.migration_failed, e.message ?: "")
-                            }
-                        }
+                        val packageManager = context.packageManager
+                        val intent = packageManager.getLaunchIntentForPackage(context.packageName)
+                        val componentName = intent?.component
+                        val mainIntent = Intent.makeRestartActivityTask(componentName)
+                        context.startActivity(mainIntent)
+                        Runtime.getRuntime().exit(0)
+                    } catch (e: Exception) {
+                        useExternalStorage = !pendingExternalStorage
+                        status = "Error: ${e.message}"
                     }
-                }) { Text(stringResource(R.string.migrate_and_restart)) }
+                }) { Text(stringResource(R.string.switch_and_restart)) }
             },
             dismissButton = {
-                TextButton(onClick = { showMigrationDialog = false }) { Text(stringResource(R.string.cancel)) }
+                TextButton(onClick = { showSwitchDialog = false }) { Text(stringResource(R.string.cancel)) }
             }
         )
     }
@@ -750,7 +734,7 @@ fun AdvancedSettingsScreen(
                     checked = useExternalStorage,
                     onCheckedChange = { isChecked ->
                         pendingExternalStorage = isChecked
-                        showMigrationDialog = true
+                        showSwitchDialog = true
                     }
                 )
                 Spacer(Modifier.width(8.dp))

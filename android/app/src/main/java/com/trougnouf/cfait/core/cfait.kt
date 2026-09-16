@@ -913,8 +913,6 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_log_message(): Int
 
-    external fun uniffi_cfait_checksum_method_cfaitmobile_migrate_data_dir(): Int
-
     external fun uniffi_cfait_checksum_method_cfaitmobile_migrate_local_to(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_move_calendar(): Int
@@ -1314,11 +1312,6 @@ internal object UniffiLib {
         `message`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
-
-    external fun uniffi_cfait_fn_method_cfaitmobile_migrate_data_dir(
-        `ptr`: Long,
-        `newDataDir`: RustBuffer.ByValue,
-    ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_migrate_local_to(
         `ptr`: Long,
@@ -1942,9 +1935,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cfait_checksum_method_cfaitmobile_log_message() and 0xFFFF) != 6951) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if ((lib.uniffi_cfait_checksum_method_cfaitmobile_migrate_data_dir() and 0xFFFF) != 57866) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cfait_checksum_method_cfaitmobile_migrate_local_to() and 0xFFFF) != 34749) {
@@ -2778,16 +2768,6 @@ public interface CfaitMobileInterface {
         `tag`: kotlin.String,
         `message`: kotlin.String,
     )
-
-    /**
-     * Migrate local data files to a new directory and persist the new `data_dir`
-     * in the config so the next app startup uses it.
-     *
-     * Locks down the persistence and sync pipeline (in the strict order
-     * sync lock, persist lock, store lock) so no in-flight `persist_changes`
-     * or background sync can race the copy.
-     */
-    suspend fun `migrateDataDir`(`newDataDir`: kotlin.String?): kotlin.String
 
     suspend fun `migrateLocalTo`(
         `sourceHref`: kotlin.String,
@@ -3988,33 +3968,6 @@ open class CfaitMobile :
             )
         }
     }
-
-    /**
-     * Migrate local data files to a new directory and persist the new `data_dir`
-     * in the config so the next app startup uses it.
-     *
-     * Locks down the persistence and sync pipeline (in the strict order
-     * sync lock, persist lock, store lock) so no in-flight `persist_changes`
-     * or background sync can race the copy.
-     */
-    @Throws(MobileException::class)
-    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `migrateDataDir`(`newDataDir`: kotlin.String?): kotlin.String =
-        uniffiRustCallAsync(
-            callWithHandle { uniffiHandle ->
-                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_migrate_data_dir(
-                    uniffiHandle,
-                    FfiConverterOptionalString.lower(`newDataDir`),
-                )
-            },
-            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
-            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
-            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
-            // lift function
-            { FfiConverterString.lift(it) },
-            // Error FFI converter
-            MobileException.ErrorHandler,
-        )
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
