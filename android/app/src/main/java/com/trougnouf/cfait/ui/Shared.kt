@@ -1151,8 +1151,8 @@ fun CursorContextBanner(
     if (isFoundWiki || (suggestions.isEmpty() && activeToken != null && resolvedDep != null)) {
         val isDep = activeToken!!.kind == com.trougnouf.cfait.core.MobileSyntaxType.DEPENDENCY
         val isWiki = activeToken!!.kind == com.trougnouf.cfait.core.MobileSyntaxType.WIKI_LINK
-        val iconChar = if (!resolvedDep!!.isFound) NfIcons.SYNC_ALERT else if (isDep) NfIcons.BLOCKED else NfIcons.LINK
-        val color = if (!resolvedDep!!.isFound) Color(0xFFE53935) else if (isDep) Color(0xFFFF9800) else Color(0xFF42A5F5)
+        val iconChar = if (!resolvedDep!!.isFound && isWiki) NfIcons.NEW_FILE else if (!resolvedDep!!.isFound) NfIcons.SYNC_ALERT else if (isDep) NfIcons.BLOCKED else NfIcons.LINK
+        val color = if (!resolvedDep!!.isFound && isWiki) Color(0xFF4FC3F7) else if (!resolvedDep!!.isFound) Color(0xFFE53935) else if (isDep) Color(0xFFFF9800) else Color(0xFF42A5F5)
         val scope = rememberCoroutineScope()
 
         Box(
@@ -1185,7 +1185,7 @@ fun CursorContextBanner(
                 NfIcon(iconChar, 14.sp, color)
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = if (resolvedDep!!.isFound) "$rawWord ➔ ${resolvedDep!!.summary}" else "$rawWord (tap to create)",
+                    text = if (resolvedDep!!.isFound) "$rawWord ➔ ${resolvedDep!!.summary}" else if (isWiki) "Create '$rawWord'" else "$rawWord (tap to create)",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = color,

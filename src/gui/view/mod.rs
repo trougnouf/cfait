@@ -3525,6 +3525,7 @@ pub fn build_context_banner<'a>(
                     .editing_tree_uid
                     .as_ref()
                     .or(app.editing_uid.as_ref())
+                    .or(app.creating_child_of.as_ref())
                     .or(app.journal_editing_uid.as_ref())
                     .map(|s| s.as_str());
 
@@ -3566,12 +3567,26 @@ pub fn build_context_banner<'a>(
                                 )
                             }
                         }
-                        Err(_) => (
-                            icon::SYNC_ALERT,
-                            Color::from_rgb(0.9, 0.2, 0.2),
-                            format!("Unknown: {}", clean_uid),
-                            None,
-                        ),
+                        Err(_) => {
+                            if kind == SyntaxType::WikiLink {
+                                (
+                                    icon::NEW_FILE,
+                                    Color::from_rgb(0.2, 0.7, 1.0),
+                                    format!("Create '{}'", clean_uid),
+                                    Some(Message::OpenWikiLink(
+                                        clean_uid.clone(),
+                                        context_uid.map(|s| s.to_string()),
+                                    )),
+                                )
+                            } else {
+                                (
+                                    icon::SYNC_ALERT,
+                                    Color::from_rgb(0.9, 0.2, 0.2),
+                                    format!("Unknown: {}", clean_uid),
+                                    None,
+                                )
+                            }
+                        }
                     }
                 };
 

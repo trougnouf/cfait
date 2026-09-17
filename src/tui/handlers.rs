@@ -1362,6 +1362,7 @@ pub async fn handle_key_event(
                         .editing_tree_uid
                         .as_ref()
                         .or(state.editing_uid.as_ref())
+                        .or(state.creating_child_of.as_ref())
                         .or(state.journal_editing_uid.as_ref())
                         .map(|s| s.as_str());
                     let is_url = clean_uid.contains("://") || clean_uid.starts_with("mailto:");
@@ -1370,66 +1371,60 @@ pub async fn handle_key_event(
                         crate::system::open_url(&clean_uid);
                         state.message = rust_i18n::t!("open_url").to_string();
                     } else {
-                        let target_uid = match state
-                            .store
-                            .resolve_dependency_ref(&clean_uid, context_uid)
-                        {
-                            Ok(resolved_uid) => resolved_uid,
-                            Err(_) => {
-                                if kind == crate::model::parser::SyntaxType::WikiLink {
-                                    let config = crate::config::Config::load(state.ctx.as_ref())
-                                        .unwrap_or_default();
-                                    let mut new_task = crate::model::Task::new(
-                                        &clean_uid,
-                                        &state.tag_aliases,
-                                        chrono::NaiveTime::parse_from_str(
+                        let target_uid =
+                            match state.store.resolve_dependency_ref(&clean_uid, context_uid) {
+                                Ok(resolved_uid) => resolved_uid,
+                                Err(_) => {
+                                    if kind == crate::model::parser::SyntaxType::WikiLink {
+                                        let config =
+                                            crate::config::Config::load(state.ctx.as_ref())
+                                                .unwrap_or_default();
+                                        let def_time = chrono::NaiveTime::parse_from_str(
                                             &config.default_reminder_time,
                                             "%H:%M",
                                         )
-                                        .ok(),
-                                    );
-                                    let ctx_is_journal = context_uid
-                                        .and_then(|u| state.store.get_task_ref(u))
-                                        .map(|t| t.is_journal)
-                                        .unwrap_or(state.sidebar_mode == SidebarMode::Journal);
-                                    if ctx_is_journal {
-                                        new_task.is_journal = true;
-                                        new_task.is_note = true;
-                                    }
-                                    let target_href = context_uid
-                                        .and_then(|u| state.store.get_task_ref(u))
-                                        .map(|t| t.calendar_href.clone())
-                                        .or_else(|| state.active_cal_href.clone())
-                                        .unwrap_or_else(|| {
-                                            crate::storage::LOCAL_CALENDAR_HREF.to_string()
-                                        });
-                                    new_task.calendar_href = target_href;
-                                    let new_uid = new_task.uid.clone();
-                                    state.edit_generation = state.edit_generation.wrapping_add(1);
-                                    state.store.add_task(new_task.clone());
+                                        .ok();
+                                        let ctx_is_journal = context_uid
+                                            .and_then(|u| state.store.get_task_ref(u))
+                                            .map(|t| t.is_journal)
+                                            .unwrap_or(state.sidebar_mode == SidebarMode::Journal);
 
-                                    let tx = action_tx.clone();
-                                    tokio::spawn(async move {
-                                        let _ = tx
-                                            .send(crate::tui::action::Action::PersistBatch(vec![
-                                                crate::journal::Action::Create(new_task),
-                                            ]))
-                                            .await;
-                                    });
-                                    new_uid
-                                } else {
-                                    state.message = format!("Searching: '{}'", clean_uid);
-                                    state.input_buffer = clean_uid;
-                                    state.active_search_query = state.input_buffer.clone();
-                                    state.search_collapsed_tasks.clear();
-                                    state.selected_categories.clear();
-                                    state.selected_locations.clear();
-                                    state.refresh_filtered_view();
-                                    state.mode = InputMode::Normal;
-                                    return None;
+                                        let (final_uid, actions) =
+                                            state.store.walk_or_create_wiki_path(
+                                                &clean_uid,
+                                                context_uid,
+                                                ctx_is_journal,
+                                                &state.tag_aliases,
+                                                def_time,
+                                                state.active_cal_href.clone(),
+                                            );
+
+                                        if !actions.is_empty() {
+                                            state.edit_generation =
+                                                state.edit_generation.wrapping_add(1);
+                                            let tx = action_tx.clone();
+                                            tokio::spawn(async move {
+                                                let _ = tx
+                                                    .send(crate::tui::action::Action::PersistBatch(
+                                                        actions,
+                                                    ))
+                                                    .await;
+                                            });
+                                        }
+                                        final_uid
+                                    } else {
+                                        state.message = format!("Searching: '{}'", clean_uid);
+                                        state.input_buffer = clean_uid;
+                                        state.active_search_query = state.input_buffer.clone();
+                                        state.search_collapsed_tasks.clear();
+                                        state.selected_categories.clear();
+                                        state.selected_locations.clear();
+                                        state.refresh_filtered_view();
+                                        state.mode = InputMode::Normal;
+                                        return None;
+                                    }
                                 }
-                            }
-                        };
+                            };
 
                         if let Some(href) = state.store.index.get(&target_uid).cloned() {
                             state.active_search_query.clear();
