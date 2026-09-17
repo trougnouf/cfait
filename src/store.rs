@@ -2071,13 +2071,20 @@ impl TaskStore {
 
         // Soft-delete missing descendants
         for old_uid in old_descendants {
-            if !active_uids.contains(&old_uid)
-                && let Some((deleted, trashed_opt)) =
+            if !active_uids.contains(&old_uid) {
+                if let Some(old_task) = self.get_task_ref(&old_uid)
+                    && old_task.is_journal
+                {
+                    // Do not delete sub-pages just because they aren't in the parent's markdown
+                    continue;
+                }
+                if let Some((deleted, trashed_opt)) =
                     self.soft_delete_task(&old_uid, options.trash_retention_days)
-            {
-                actions.push(crate::journal::Action::Delete(deleted));
-                if let Some(trashed) = trashed_opt {
-                    actions.push(crate::journal::Action::Create(trashed));
+                {
+                    actions.push(crate::journal::Action::Delete(deleted));
+                    if let Some(trashed) = trashed_opt {
+                        actions.push(crate::journal::Action::Create(trashed));
+                    }
                 }
             }
         }

@@ -115,14 +115,8 @@ fn compute_task_lines(input: &str, is_journal: bool) -> Vec<bool> {
                 let has_is_note = after_marker.contains("is:note")
                     || after_marker.contains("is:page")
                     || after_marker.contains("is:journal");
-                let has_wiki_link = after_marker.trim().starts_with("[[");
 
-                if has_checkbox
-                    || has_uid
-                    || has_is_note
-                    || has_wiki_link
-                    || (!is_journal && !has_checkbox)
-                {
+                if has_checkbox || has_uid || has_is_note || (!is_journal && !has_checkbox) {
                     is_task_line[i] = true;
                 }
             }
@@ -560,6 +554,11 @@ pub fn serialize_task_tree(
                     || t.calendar_href == "local://recovery")
                     && t.calendar_href != root.calendar_href
                 {
+                    continue;
+                }
+                // Skip journal sub-pages! They belong in the wiki tree (sidebar),
+                // not as inline Markdown list items in the editor.
+                if t.is_journal && t.uid != root_uid {
                     continue;
                 }
                 children_map.entry(p.clone()).or_default().push(t);

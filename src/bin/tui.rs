@@ -229,9 +229,6 @@ async fn apply_markdown_update(
             sub.calendar_href = task.calendar_href.clone();
             sub.percent_complete = ext.percent_complete;
             sub.is_note = ext.is_note;
-            if is_journal && ext.is_note {
-                sub.is_journal = true;
-            }
             store.add_task(sub.clone());
             actions.push(cfait::journal::Action::Create(sub));
         }

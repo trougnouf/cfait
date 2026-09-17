@@ -1871,9 +1871,6 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                     sub.percent_complete = Some(pc);
                 }
                 sub.is_note = ext.is_note;
-                if is_journal && ext.is_note {
-                    sub.is_journal = true;
-                }
 
                 app.store.add_task(sub.clone());
                 actions.push(crate::journal::Action::Create(sub));
@@ -1971,7 +1968,6 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
             let inherited_href = new_task.calendar_href.clone();
 
             let parent_uid = new_task.uid.clone();
-            let parent_is_journal = new_task.is_journal;
 
             let mut resolved_props = std::collections::HashMap::new();
             resolved_props.insert(
@@ -2033,9 +2029,6 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                     sub.percent_complete = Some(pc);
                 }
                 sub.is_note = ext.is_note;
-                if parent_is_journal && ext.is_note {
-                    sub.is_journal = true;
-                }
 
                 tasks_to_create.push(sub);
             }

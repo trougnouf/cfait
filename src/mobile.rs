@@ -3142,6 +3142,10 @@ impl CfaitMobile {
 
             sub.parent_uid = Some(ext.parent_uid.unwrap_or(parent_uid.clone()));
             sub.dependencies = ext.dependencies;
+            if let Some(pc) = ext.percent_complete {
+                sub.percent_complete = Some(pc);
+            }
+            sub.is_note = ext.is_note;
 
             let active_cal = self.session.lock().await.active_calendar_href.clone();
             sub.calendar_href = active_cal
