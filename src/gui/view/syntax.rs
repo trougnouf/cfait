@@ -79,7 +79,7 @@ impl Highlighter for SmartInputHighlighter {
         // Pass context to tokenizer
         let tokens = tokenize_smart_input(line, self.is_search);
 
-        let spans: Vec<(Range<usize>, Self::Highlight)> = tokens
+        let mut spans: Vec<(Range<usize>, Self::Highlight)> = tokens
             .into_iter()
             .map(|t| {
                 let text = &line[t.start..t.end];
@@ -99,6 +99,16 @@ impl Highlighter for SmartInputHighlighter {
                 (t.start..t.end, format)
             })
             .collect();
+
+        if spans.is_empty() {
+            spans.push((
+                0..line.len(),
+                highlighter::Format {
+                    color: None,
+                    font: None,
+                },
+            ));
+        }
 
         spans.into_iter()
     }
@@ -190,7 +200,7 @@ impl Highlighter for SessionHighlighter {
             cursor = end;
         }
 
-        if cursor < line.len() {
+        if cursor < line.len() || spans.is_empty() {
             spans.push((
                 cursor..line.len(),
                 highlighter::Format {
@@ -406,6 +416,15 @@ impl Highlighter for MarkdownHighlighter {
 
         let rest_start = checkbox_end;
         if rest_start >= line.len() {
+            if spans.is_empty() {
+                spans.push((
+                    0..line.len(),
+                    highlighter::Format {
+                        color: None,
+                        font: None,
+                    },
+                ));
+            }
             return spans.into_iter();
         }
 
@@ -480,6 +499,15 @@ impl Highlighter for MarkdownHighlighter {
                 spans.push((elem_cursor..elem_cursor + raw.len(), format));
             }
             elem_cursor += raw.len();
+        }
+        if spans.is_empty() {
+            spans.push((
+                0..line.len(),
+                highlighter::Format {
+                    color: None,
+                    font: None,
+                },
+            ));
         }
         spans.into_iter()
     }
