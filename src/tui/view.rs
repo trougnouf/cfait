@@ -1237,7 +1237,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                             }
                         } else if is_future_start {
                             let start_ref = t.dtstart.as_ref().unwrap();
-                            let start_str = start_ref.format_smart();
+                            let start_str = start_ref.format_display();
 
                             if let Some(due) = &t.due {
                                 let is_same_day = start_ref.to_date_naive() == due.to_date_naive();
@@ -1247,15 +1247,13 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                                             .with_timezone(&chrono::Local)
                                             .format("%H:%M")
                                             .to_string(),
-                                        crate::model::DateType::AllDay(_) => due.format_smart(),
-                                        crate::model::DateType::Month(_, _) => due.format_smart(),
-                                        crate::model::DateType::Year(_) => due.format_smart(),
+                                        _ => due.format_display(),
                                     }
                                 } else {
-                                    due.format_smart()
+                                    due.format_display()
                                 };
 
-                                if start_str == due.format_smart() {
+                                if start_str == due.format_display() {
                                     (
                                         format!(" ►{}⌛", start_str),
                                         Style::default().fg(Color::DarkGray),
@@ -1287,7 +1285,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                                 })
                             };
 
-                            (format!(" @{}⌛", d.format_smart()), style)
+                            (format!(" @{}⌛", d.format_display()), style)
                         } else {
                             (String::new(), Style::default())
                         };

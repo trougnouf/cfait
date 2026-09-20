@@ -265,6 +265,8 @@ pub struct MobileTaskSummary {
     pub is_search_context: bool,
     pub visible: bool,
     pub is_collapsed: bool,
+    pub due_date_display: String,
+    pub start_date_display: String,
 }
 
 impl MobileTaskSummary {
@@ -312,6 +314,8 @@ impl MobileTaskSummary {
             is_search_context: false,
             visible: true,
             is_collapsed: false,
+            due_date_display: String::new(),
+            start_date_display: String::new(),
         }
     }
 }
@@ -381,6 +385,8 @@ pub struct MobileTask {
     pub is_search_context: bool,
     pub is_note: bool,
     pub is_journal: bool,
+    pub due_date_display: String,
+    pub start_date_display: String,
 }
 
 #[derive(uniffi::Record, Clone)]
@@ -987,6 +993,17 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
     let created_date_iso = t.created_date().map(|d| d.to_rfc3339());
     let last_modified_date_iso = t.last_modified_date().map(|d| d.to_rfc3339());
 
+    let due_date_display = t
+        .due
+        .as_ref()
+        .map(|d| d.format_display())
+        .unwrap_or_default();
+    let start_date_display = t
+        .dtstart
+        .as_ref()
+        .map(|d| d.format_display())
+        .unwrap_or_default();
+
     let has_alarms = !t
         .alarms
         .iter()
@@ -1102,6 +1119,8 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
         is_search_context: t.is_search_context,
         is_note: t.is_note || t.is_journal,
         is_journal: t.is_journal,
+        due_date_display,
+        start_date_display,
     }
 }
 
@@ -1132,6 +1151,17 @@ fn task_to_summary(t: &Task, store: &TaskStore) -> MobileTaskSummary {
     let tree_location_count = store.count_tree_locations(&t.uid) as u32;
 
     let completed_date_iso = t.completion_date().map(|d| d.to_rfc3339());
+
+    let due_date_display = t
+        .due
+        .as_ref()
+        .map(|d| d.format_display())
+        .unwrap_or_default();
+    let start_date_display = t
+        .dtstart
+        .as_ref()
+        .map(|d| d.format_display())
+        .unwrap_or_default();
 
     MobileTaskSummary {
         uid: t.uid.clone(),
@@ -1185,6 +1215,8 @@ fn task_to_summary(t: &Task, store: &TaskStore) -> MobileTaskSummary {
         is_search_context: t.is_search_context,
         visible: true,
         is_collapsed: t.collapsed,
+        due_date_display,
+        start_date_display,
     }
 }
 

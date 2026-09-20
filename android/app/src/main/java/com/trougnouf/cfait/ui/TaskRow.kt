@@ -258,34 +258,24 @@ fun TaskRow(
                         }
                         Text(dateStr, fontSize = 10.sp, color = doneColor, lineHeight = 10.sp)
 
-                    } else if (task.task.isFutureStart && task.task.startDateIso != null) {
+                    } else if (task.task.isFutureStart && task.task.startDateDisplay.isNotEmpty()) {
                         val dimColor = Color(0xFFBDBDBD) // Lighter Gray
                         NfIcon(NfIcons.HOURGLASS_START, size = 10.sp, color = dimColor, lineHeight = 10.sp)
 
-                        val startStr = remember(task.task.startDateIso, task.task.isAlldayStart) {
-                            if (task.task.isAlldayStart) {
-                                task.task.startDateIso!!.take(10)
-                            } else {
-                                formatIsoToLocal(task.task.startDateIso!!)
-                            }
-                        }
+                        val startStr = task.task.startDateDisplay
 
-                        if (task.task.dueDateIso != null) {
-                            val rawDueStr = remember(task.task.dueDateIso, task.task.isAlldayDue) {
-                                if (task.task.isAlldayDue) {
-                                    task.task.dueDateIso!!.take(10)
-                                } else {
-                                    formatIsoToLocal(task.task.dueDateIso!!)
-                                }
-                            }
+                        if (task.task.dueDateDisplay.isNotEmpty()) {
+                            val rawDueStr = task.task.dueDateDisplay
+                            val startIso = task.task.startDateIso ?: ""
+                            val dueIso = task.task.dueDateIso ?: ""
 
                             val displayDueStr = if (
-                                startStr.length >= 10 &&
-                                rawDueStr.length >= 10 &&
-                                startStr.substring(0, 10) == rawDueStr.substring(0, 10) &&
+                                startIso.length >= 10 &&
+                                dueIso.length >= 10 &&
+                                startIso.substring(0, 10) == dueIso.substring(0, 10) &&
                                 !task.task.isAlldayDue
                             ) {
-                                if (rawDueStr.length > 11) rawDueStr.substring(11) else rawDueStr
+                                if (rawDueStr.length > 5) rawDueStr.substring(rawDueStr.length - 5) else rawDueStr
                             } else {
                                 rawDueStr
                             }
@@ -304,7 +294,7 @@ fun TaskRow(
                         } else {
                             Text(startStr, fontSize = 10.sp, color = dimColor, lineHeight = 10.sp)
                         }
-                    } else if (!task.task.dueDateIso.isNullOrEmpty()) {
+                    } else if (task.task.dueDateDisplay.isNotEmpty()) {
                         val isOverdue = remember(task.task.dueDateIso, task.task.isDone, task.task.isAlldayDue) {
                             if (task.task.isDone || task.task.dueDateIso == null) {
                                 false
@@ -333,15 +323,7 @@ fun TaskRow(
                             Color.Gray
                         };
 
-                        val displayStr = remember(task.task.dueDateIso, task.task.isAlldayDue) {
-                            if (task.task.isAlldayDue) {
-                                task.task.dueDateIso!!.take(10)
-                            } else {
-                                formatIsoToLocal(task.task.dueDateIso!!)
-                            }
-                        }
-
-                        Text(displayStr, fontSize = 10.sp, color = dueColor, lineHeight = 10.sp)
+                        Text(task.task.dueDateDisplay, fontSize = 10.sp, color = dueColor, lineHeight = 10.sp)
                         NfIcon(NfIcons.HOURGLASS_END, size = 10.sp, color = dueColor, lineHeight = 10.sp)
                     }
 

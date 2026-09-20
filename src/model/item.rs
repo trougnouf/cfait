@@ -159,6 +159,51 @@ impl DateType {
         }
     }
 
+    pub fn format_display(&self) -> String {
+        let now = Local::now().date_naive();
+        let target_date = self.to_date_naive();
+        let days_diff = (target_date - now).num_days();
+
+        let date_part = if days_diff == 0 {
+            rust_i18n::t!("parser_today")
+                .split(',')
+                .next()
+                .unwrap_or("today")
+                .to_string()
+        } else if days_diff == 1 {
+            rust_i18n::t!("parser_tomorrow")
+                .split(',')
+                .next()
+                .unwrap_or("tomorrow")
+                .to_string()
+        } else if days_diff == -1 {
+            rust_i18n::t!("parser_yesterday")
+                .split(',')
+                .next()
+                .unwrap_or("yesterday")
+                .to_string()
+        } else {
+            match self {
+                DateType::Month(y, m) => return format!("{:04}-{:02}", y, m),
+                DateType::Year(y) => return format!("{:04}", y),
+                _ => target_date.format("%Y-%m-%d").to_string(),
+            }
+        };
+
+        match self {
+            DateType::Specific(dt) => {
+                use chrono::Timelike;
+                let local = dt.with_timezone(&Local);
+                if local.hour() == 0 && local.minute() == 0 && local.second() == 0 {
+                    date_part
+                } else {
+                    format!("{} {}", date_part, local.format("%H:%M"))
+                }
+            }
+            _ => date_part,
+        }
+    }
+
     pub fn to_utc_with_default_time(&self, default_time: NaiveTime) -> DateTime<Utc> {
         match self {
             DateType::Specific(dt) => *dt,

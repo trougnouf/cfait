@@ -297,7 +297,7 @@ pub fn view_task_row<'a>(
                     }
                 } else if is_future_start {
                     let start_ref = task.dtstart.as_ref().unwrap();
-                    let start_str = start_ref.format_smart();
+                    let start_str = start_ref.format_display();
                     let start_date_str = start_ref.to_date_naive().format("%Y-%m-%d").to_string();
                     let start_btn = button(
                         row![
@@ -318,15 +318,13 @@ pub fn view_task_row<'a>(
                                 crate::model::DateType::Specific(dt) => {
                                     dt.with_timezone(&chrono::Local).format("%H:%M").to_string()
                                 }
-                                crate::model::DateType::AllDay(_) => due.format_smart(),
-                                crate::model::DateType::Month(_, _) => due.format_smart(),
-                                crate::model::DateType::Year(_) => due.format_smart(),
+                                _ => due.format_display(),
                             }
                         } else {
-                            due.format_smart()
+                            due.format_display()
                         };
 
-                        if start_str == due.format_smart() {
+                        if start_str == due.format_display() {
                             row_content = row_content.push(start_btn);
                         } else {
                             let due_date_str = due.to_date_naive().format("%Y-%m-%d").to_string();
@@ -353,7 +351,7 @@ pub fn view_task_row<'a>(
                         button(
                             row![
                                 icon::icon(icon::CALENDAR).size(12).color(due_color),
-                                text(d.format_smart()).size(14).color(due_color)
+                                text(d.format_display()).size(14).color(due_color)
                             ]
                             .spacing(3)
                             .align_y(iced::Alignment::Center),

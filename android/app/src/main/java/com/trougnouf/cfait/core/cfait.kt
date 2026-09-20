@@ -5817,6 +5817,8 @@ data class MobileTask(
     var `isSearchContext`: kotlin.Boolean,
     var `isNote`: kotlin.Boolean,
     var `isJournal`: kotlin.Boolean,
+    var `dueDateDisplay`: kotlin.String,
+    var `startDateDisplay`: kotlin.String,
 ) {
     companion object
 }
@@ -5887,6 +5889,8 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
         )
 
     override fun allocationSize(value: MobileTask) =
@@ -5950,7 +5954,9 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
                 FfiConverterSequenceString.allocationSize(value.`visibleLocations`) +
                 FfiConverterBoolean.allocationSize(value.`isSearchContext`) +
                 FfiConverterBoolean.allocationSize(value.`isNote`) +
-                FfiConverterBoolean.allocationSize(value.`isJournal`)
+                FfiConverterBoolean.allocationSize(value.`isJournal`) +
+                FfiConverterString.allocationSize(value.`dueDateDisplay`) +
+                FfiConverterString.allocationSize(value.`startDateDisplay`)
         )
 
     override fun write(
@@ -6017,6 +6023,8 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
         FfiConverterBoolean.write(value.`isSearchContext`, buf)
         FfiConverterBoolean.write(value.`isNote`, buf)
         FfiConverterBoolean.write(value.`isJournal`, buf)
+        FfiConverterString.write(value.`dueDateDisplay`, buf)
+        FfiConverterString.write(value.`startDateDisplay`, buf)
     }
 }
 
@@ -6063,6 +6071,8 @@ data class MobileTaskSummary(
     var `isSearchContext`: kotlin.Boolean,
     var `visible`: kotlin.Boolean,
     var `isCollapsed`: kotlin.Boolean,
+    var `dueDateDisplay`: kotlin.String,
+    var `startDateDisplay`: kotlin.String,
 ) {
     companion object
 }
@@ -6115,6 +6125,8 @@ public object FfiConverterTypeMobileTaskSummary : FfiConverterRustBuffer<MobileT
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
         )
 
     override fun allocationSize(value: MobileTaskSummary) =
@@ -6160,7 +6172,9 @@ public object FfiConverterTypeMobileTaskSummary : FfiConverterRustBuffer<MobileT
                 FfiConverterBoolean.allocationSize(value.`hasRelatedTo`) +
                 FfiConverterBoolean.allocationSize(value.`isSearchContext`) +
                 FfiConverterBoolean.allocationSize(value.`visible`) +
-                FfiConverterBoolean.allocationSize(value.`isCollapsed`)
+                FfiConverterBoolean.allocationSize(value.`isCollapsed`) +
+                FfiConverterString.allocationSize(value.`dueDateDisplay`) +
+                FfiConverterString.allocationSize(value.`startDateDisplay`)
         )
 
     override fun write(
@@ -6209,6 +6223,8 @@ public object FfiConverterTypeMobileTaskSummary : FfiConverterRustBuffer<MobileT
         FfiConverterBoolean.write(value.`isSearchContext`, buf)
         FfiConverterBoolean.write(value.`visible`, buf)
         FfiConverterBoolean.write(value.`isCollapsed`, buf)
+        FfiConverterString.write(value.`dueDateDisplay`, buf)
+        FfiConverterString.write(value.`startDateDisplay`, buf)
     }
 }
 

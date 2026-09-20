@@ -37,6 +37,7 @@ Tasks map strictly to iCalendar `VTODO` components, while daily notes map to `VJ
     *   *Specific:* Exact DateTime (UTC).
     *   *All-Day:* NaiveDate.
     *   *Fuzzy:* Month/Year precision (stored as All-Day with `X-CFAIT-FUZZY-DUE`/`START` properties).
+    *   *Display:* Rendered in UI lists using relative dates for `today`, `tomorrow`, and `yesterday` (including time if specific), falling back to absolute dates otherwise. `Task::to_smart_string()` strictly preserves canonical ISO tokens.
 *   **Hierarchy:** `RELATED-TO` establishes the `parent_uid`.
 *   **Dependencies:** `RELATED-TO;RELTYPE=DEPENDS-ON` establishes blocking relationships. `RELTYPE=SIBLING` establishes related tasks.
 *   **Time Tracking:** Logged via `X-TIME-SPENT` (total seconds), `X-LAST-START` (unix timestamp), and `X-CFAIT-SESSION` (WorkSessions holding Unix start/end timestamps). The duration badge shown in task lists displays the aggregated time across the task's entire subtree (union-merged to avoid double-counting cascade overlaps), not just the task's own tracked time. Detail views and notifications show per-task time.
