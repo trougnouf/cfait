@@ -50,11 +50,15 @@ fn extract_uid_tag(line: &str) -> (String, Option<String>) {
     (line.trim_end().to_string(), None)
 }
 
-fn compute_task_lines(input: &str, is_journal: bool) -> Vec<bool> {
+fn compute_task_lines(input: &str, global_is_journal: bool) -> Vec<bool> {
     let lines_vec: Vec<&str> = input.lines().collect();
     let mut is_task_line = vec![false; lines_vec.len()];
     let mut indents = vec![0; lines_vec.len()];
     let mut is_list = vec![false; lines_vec.len()];
+    let mut explicit_task = vec![false; lines_vec.len()];
+
+    // Stack of (indent, is_journal)
+    let mut context_stack: Vec<(usize, bool)> = vec![(0, global_is_journal)];
 
     for (i, line) in lines_vec.iter().enumerate() {
         let mut indent = 0;
@@ -71,13 +75,27 @@ fn compute_task_lines(input: &str, is_journal: bool) -> Vec<bool> {
             }
         }
         indents[i] = indent;
-        let rest = &line[byte_offset..];
 
+        // Update context_stack based on indentation
+        while let Some(&(stack_indent, _)) = context_stack.last() {
+            if context_stack.len() > 1 && stack_indent >= indent {
+                context_stack.pop();
+            } else {
+                break;
+            }
+        }
+
+        let current_is_journal = context_stack
+            .last()
+            .map(|&(_, j)| j)
+            .unwrap_or(global_is_journal);
+
+        let rest = &line[byte_offset..];
         let mut list_marker = false;
         let mut after_marker = rest;
         let mut is_header = false;
 
-        if !is_journal
+        if !current_is_journal
             && rest.starts_with('#')
             && rest
                 .find(' ')
@@ -106,6 +124,7 @@ fn compute_task_lines(input: &str, is_journal: bool) -> Vec<bool> {
 
         if is_header {
             is_task_line[i] = true;
+            explicit_task[i] = true;
         } else {
             is_list[i] = list_marker;
 
@@ -116,8 +135,17 @@ fn compute_task_lines(input: &str, is_journal: bool) -> Vec<bool> {
                     || after_marker.contains("is:page")
                     || after_marker.contains("is:journal");
 
-                if has_checkbox || has_uid || has_is_note || (!is_journal && !has_checkbox) {
+                if has_checkbox || has_uid || has_is_note || (!current_is_journal && !has_checkbox)
+                {
                     is_task_line[i] = true;
+                    if has_checkbox || has_uid || has_is_note {
+                        explicit_task[i] = true;
+                    }
+
+                    let looks_like_journal =
+                        after_marker.contains("is:page") || after_marker.contains("is:journal");
+
+                    context_stack.push((indent, looks_like_journal));
                 }
             }
         }
@@ -133,7 +161,7 @@ fn compute_task_lines(input: &str, is_journal: bool) -> Vec<bool> {
                     if indents[j] <= curr_indent {
                         break; // Hit a sibling or outdent, so no children
                     }
-                    if is_task_line[j] {
+                    if explicit_task[j] || is_task_line[j] {
                         is_task_line[i] = true;
                         break;
                     }
@@ -554,11 +582,6 @@ pub fn serialize_task_tree(
                     || t.calendar_href == "local://recovery")
                     && t.calendar_href != root.calendar_href
                 {
-                    continue;
-                }
-                // Skip journal sub-pages! They belong in the wiki tree (sidebar),
-                // not as inline Markdown list items in the editor.
-                if t.is_journal && t.uid != root_uid {
                     continue;
                 }
                 children_map.entry(p.clone()).or_default().push(t);

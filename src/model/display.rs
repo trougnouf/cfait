@@ -149,16 +149,9 @@ impl TaskDisplay for Task {
         use crate::model::item::AlarmTrigger;
         use chrono::{Duration, Local};
 
-        let mut s = if self.is_journal {
-            format!(
-                "[[{}]]",
-                crate::model::parser::escape_summary(&self.summary)
-            )
-        } else {
-            crate::model::parser::escape_summary(&self.summary)
-        };
+        let mut s = crate::model::parser::escape_summary(&self.summary);
 
-        if self.is_note && !self.is_journal {
+        if self.is_note || self.is_journal {
             if s.is_empty() {
                 s = "-".to_string();
             } else {
@@ -273,6 +266,10 @@ impl TaskDisplay for Task {
 
         if self.pinned {
             s.push_str(" is:pinned");
+        }
+
+        if self.is_journal {
+            s.push_str(" is:page");
         }
 
         if self.manual_block {
