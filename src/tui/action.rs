@@ -33,6 +33,7 @@ pub enum Action {
     DuplicateTask(String),
     DeleteTaskTree(String),
     PersistBatch(Vec<crate::journal::Action>), // <-- ADD THIS
+    ReloadConfig,
 }
 
 #[derive(Debug)]

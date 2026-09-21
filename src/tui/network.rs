@@ -404,6 +404,13 @@ pub async fn run_network_actor(
                 }
             }
 
+            Action::ReloadConfig => {
+                crate::config::Config::invalidate_cache();
+                if let Ok(cfg) = crate::config::Config::load_with_credentials(ctx.as_ref()) {
+                    let _ = event_tx.send(AppEvent::ConfigUpdated(Box::new(cfg))).await;
+                }
+            }
+
             Action::MigrateLocal(source_href, target_href) => {
                 let _ = event_tx
                     .send(AppEvent::Status {

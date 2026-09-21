@@ -1333,6 +1333,15 @@ impl Config {
                 out.push_str("\n# --- Storage ---\n");
             } else if trimmed.starts_with("url =") {
                 out.push_str("\n# --- Connection Settings ---\n");
+                out.push_str(
+                    "# To connect to a CalDAV server (Nextcloud, Fastmail, Radicale, etc.),\n",
+                );
+                out.push_str("# fill in your `url` and `username`.\n");
+                out.push_str("#\n");
+                out.push_str("# Because passwords are not stored in plaintext, you have two options to set it:\n");
+                out.push_str("# 1. Run `cfait login <url> <username>` in your terminal.\n");
+                out.push_str("# 2. Or, temporarily add `password = \"your-password\"` below.\n");
+                out.push_str("#    Cfait will vault it into your OS Keyring on the next run and automatically remove it from this file.\n");
             } else if trimmed.starts_with("default_calendar =") {
                 out.push_str("\n# --- UI & Behavior ---\n");
             } else if trimmed.starts_with("sort_cutoff_days =") {
@@ -1364,12 +1373,10 @@ impl Config {
                     " # String (Optional): Directory for local data files. Overrides the XDG default (~/.local/share/cfait). Tilde (~) is expanded.",
                 );
             } else if trimmed.starts_with("url =") {
-                out.push_str("# URL: The full address to your CalDAV server endpoint.\n");
+                out.push_str("# URL: The full address to your CalDAV server endpoint (e.g. https://cloud.example.com/remote.php/dav/).\n");
                 out.push_str(line);
             } else if trimmed.starts_with("username =") {
                 out.push_str(line);
-                out.push_str("\n# To set or update your password, manually add `password = \"your_password\"` below.\n");
-                out.push_str("# Cfait will securely move it to your OS keyring on the next run and remove it from this file.");
             } else if trimmed.starts_with("tls_client_cert_path =") {
                 out.push_str(line);
                 out.push_str(

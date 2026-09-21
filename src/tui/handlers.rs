@@ -584,6 +584,69 @@ async fn execute_task_action(
     }
 }
 
+fn open_config_in_editor(ctx: &dyn crate::context::AppContext) -> Result<(), String> {
+    let config_path = Config::get_path_string(ctx).map_err(|e| e.to_string())?;
+
+    let path = std::path::Path::new(&config_path);
+    if !path.exists() {
+        let default_cfg = Config::default();
+        let _ = default_cfg.save(ctx);
+    }
+
+    let config = Config::load(ctx).unwrap_or_default();
+    let mut editor_cmd = None;
+    if config.description_editor == "builtin" {
+        // Fallback to system editor for TOML
+    } else if !config.description_editor.is_empty() {
+        editor_cmd = Some(config.description_editor.clone());
+    }
+
+    if editor_cmd.is_none() {
+        if let Ok(v) = std::env::var("VISUAL")
+            && !v.is_empty()
+        {
+            editor_cmd = Some(v);
+        }
+        if editor_cmd.is_none()
+            && let Ok(e) = std::env::var("EDITOR")
+            && !e.is_empty()
+        {
+            editor_cmd = Some(e);
+        }
+    }
+    let cmd = editor_cmd.unwrap_or_else(|| "nano".to_string());
+
+    let _ = crossterm::execute!(std::io::stdout(), crossterm::terminal::LeaveAlternateScreen);
+    let _ = crossterm::terminal::disable_raw_mode();
+
+    #[cfg(target_os = "windows")]
+    let status = std::process::Command::new("cmd")
+        .arg("/C")
+        .arg(format!("{} \"{}\"", cmd, config_path))
+        .status();
+
+    #[cfg(not(target_os = "windows"))]
+    let status = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(format!("{} \"{}\"", cmd, config_path))
+        .status();
+
+    let _ = crossterm::terminal::enable_raw_mode();
+    let _ = crossterm::execute!(
+        std::io::stdout(),
+        crossterm::terminal::EnterAlternateScreen,
+        crossterm::event::EnableMouseCapture,
+        crossterm::terminal::Clear(crossterm::terminal::ClearType::All)
+    );
+
+    let success = status.map(|s| s.success()).unwrap_or(false);
+    if !success {
+        return Err(format!("Failed to open editor '{}'", cmd));
+    }
+
+    Ok(())
+}
+
 fn run_external_editor(
     initial_content: &str,
     ctx: &dyn crate::context::AppContext,
@@ -1663,8 +1726,24 @@ pub async fn handle_key_event(
                                 let _ = tx.send(crate::tui::action::Action::Refresh).await;
                             });
                         }
-                        ":login" | ":settings" => {
+                        ":login" => {
                             state.message = "Run `cfait login <url> <username>` in your terminal to update credentials.".to_string();
+                        }
+                        ":settings" | ":config" => {
+                            if let Err(e) = open_config_in_editor(state.ctx.as_ref()) {
+                                state.message = e;
+                            } else {
+                                let tx = action_tx.clone();
+                                tokio::spawn(async move {
+                                    let _ = tx.send(crate::tui::action::Action::ReloadConfig).await;
+                                    let _ = tx.send(crate::tui::action::Action::Refresh).await;
+                                });
+                                state.message = "Configuration reloaded.".to_string();
+                            }
+                            state.mode = InputMode::Normal;
+                            state.reset_input();
+                            state.needs_redraw = true;
+                            return None;
                         }
                         _ => {}
                     }
