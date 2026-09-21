@@ -1366,6 +1366,10 @@ impl Config {
             } else if trimmed.starts_with("url =") {
                 out.push_str("# URL: The full address to your CalDAV server endpoint.\n");
                 out.push_str(line);
+            } else if trimmed.starts_with("username =") {
+                out.push_str(line);
+                out.push_str("\n# To set or update your password, manually add `password = \"your_password\"` below.\n");
+                out.push_str("# Cfait will securely move it to your OS keyring on the next run and remove it from this file.");
             } else if trimmed.starts_with("tls_client_cert_path =") {
                 out.push_str(line);
                 out.push_str(

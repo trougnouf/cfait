@@ -1569,6 +1569,10 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                     |_| Message::Refresh,
                 );
             }
+            ":login" | ":settings" => {
+                app.input_value = text_editor::Content::new();
+                return Task::done(Message::OpenSettings);
+            }
             _ => {}
         }
     }

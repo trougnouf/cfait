@@ -97,6 +97,7 @@
     "cli_desc_collection_create": "Create a remote CalDAV collection.",
     "cli_desc_collection_edit": "Edit a remote CalDAV collection.",
     "cli_desc_collection_list": "List all available collections.",
+    "cli_desc_login": "Configure CalDAV server and securely prompt for password.",
     "cli_desc_list": "List tasks (respects config visibility).",
     "cli_desc_move": "Move a task to a different collection.\nUse --tree to move the task and all its subtasks.",
     "move_task_tree": "Move task tree",

@@ -1663,6 +1663,9 @@ pub async fn handle_key_event(
                                 let _ = tx.send(crate::tui::action::Action::Refresh).await;
                             });
                         }
+                        ":login" | ":settings" => {
+                            state.message = "Run `cfait login <url> <username>` in your terminal to update credentials.".to_string();
+                        }
                         _ => {}
                     }
                     state.mode = InputMode::Normal;

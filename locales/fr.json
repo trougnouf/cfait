@@ -87,6 +87,7 @@
     "cli_desc_import_default": "Importer dans la collection locale par défaut.",
     "cli_desc_import_specific": "Importer dans un calendrier local spécifique.",
     "cli_desc_list": "Lister les tâches (respecte les paramètres de visibilité).",
+    "cli_desc_login": "Configurer le serveur CalDAV et demander le mot de passe en toute sécurité.",
     "cli_desc_move": "Déplacer une tâche vers une autre collection.\nUtilisez --tree pour déplacer la tâche et toutes ses sous-tâches.",
     "cli_desc_no_wait": "Mettre l'action en attente dans le journal local et quitter sans synchroniser.",
     "cli_desc_pause": "Mettre en pause le suivi du temps d'une tâche.",

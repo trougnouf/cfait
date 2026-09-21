@@ -207,6 +207,10 @@ pub fn print_help(binary_name: &str) {
             ),
             rust_i18n::t!("cli_desc_collection_edit").to_string(),
         );
+        print_cmd(
+            &format!("{} login <url> <username>", binary_name),
+            rust_i18n::t!("cli_desc_login").to_string(),
+        );
         println!();
     }
 

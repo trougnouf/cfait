@@ -1726,6 +1726,29 @@ async fn main() -> Result<()> {
             }
             return Ok(());
         }
+        "login" => {
+            if args.len() < 4 {
+                eprintln!("Usage: {} login <url> <username>", binary_name);
+                std::process::exit(1);
+            }
+            let url = &args[2];
+            let username = &args[3];
+            let pass =
+                rpassword::prompt_password(rust_i18n::t!("tui_password_prompt").to_string())?;
+
+            let mut config = cfait::config::Config::load(ctx.as_ref()).unwrap_or_default();
+            let old_config = config.clone();
+
+            config.url = url.clone();
+            config.username = username.clone();
+            config.password = pass;
+
+            config.update_sync_timestamp_if_changed(&old_config);
+            config.save_with_credentials(ctx.as_ref())?;
+
+            println!("Credentials successfully saved to OS keyring.");
+            return Ok(());
+        }
         "collection" => {
             let sub = args.get(2).map(|s| s.as_str()).unwrap_or("list");
             if sub == "list" {
