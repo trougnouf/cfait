@@ -1346,6 +1346,36 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.ics_import_task_count = None;
             Task::none()
         }
+        Message::ConfirmDeleteAllDialog => {
+            app.confirm_delete_all_open = true;
+            Task::none()
+        }
+        Message::CancelDeleteAll => {
+            app.confirm_delete_all_open = false;
+            Task::none()
+        }
+        Message::ExecuteDeleteAll => {
+            app.confirm_delete_all_open = false;
+            let uids: Vec<String> = app
+                .tasks
+                .iter()
+                .filter_map(|t| {
+                    if let crate::store::TaskListItem::Task(task) = t {
+                        Some(task.uid.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            if !uids.is_empty() {
+                crate::gui::update::common::dispatch_intent(
+                    app,
+                    crate::model::AppIntent::DeleteTasks { uids },
+                );
+            }
+            Task::none()
+        }
+
         Message::IcsImportDialogConfirm => {
             if let Some(calendar_href) = &app.ics_import_selected_calendar.clone()
                 && let Some(ics_content) = &app.ics_import_content.clone()

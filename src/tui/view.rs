@@ -2430,6 +2430,47 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         f.render_widget(p, area);
     }
 
+    if state.mode == InputMode::ConfirmDeleteAll {
+        let area = centered_rect(60, 50, f.area());
+        f.render_widget(Clear, area);
+
+        let tasks_to_delete: Vec<&crate::model::Task> = state
+            .tasks
+            .iter()
+            .filter_map(|t| {
+                if let TaskListItem::Task(task) = t {
+                    Some(task.as_ref())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let mut items = Vec::new();
+        for t in tasks_to_delete.iter().take(10) {
+            items.push(ListItem::new(format!("- {}", t.summary)));
+        }
+        if tasks_to_delete.len() > 10 {
+            items.push(
+                ListItem::new(format!("...and {} more", tasks_to_delete.len() - 10))
+                    .style(Style::default().fg(Color::DarkGray)),
+            );
+        }
+
+        let title = format!(
+            " {} (y/Enter: Confirm, n/Esc: Cancel) ",
+            rust_i18n::t!("delete_all_title")
+        );
+        let popup = List::new(items).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(title)
+                .border_style(Style::default().fg(Color::Red)),
+        );
+
+        f.render_widget(popup, area);
+    }
+
     // Action menu popup
     if state.mode == InputMode::ActionMenu {
         let area = centered_rect(50, 60, f.area());

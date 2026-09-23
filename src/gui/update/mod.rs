@@ -81,6 +81,9 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::IcsImportDialogCalendarSelected(_)
         | Message::IcsImportDialogCancel
         | Message::IcsImportDialogConfirm
+        | Message::ConfirmDeleteAllDialog
+        | Message::CancelDeleteAll
+        | Message::ExecuteDeleteAll
         | Message::AddLocalCalendar
         | Message::DeleteLocalCalendar(_)
         | Message::LocalCalendarNameChanged(_, _)

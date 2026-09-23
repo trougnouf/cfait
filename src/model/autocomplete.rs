@@ -59,6 +59,7 @@ pub fn suggest(
             (":undo", "Undo last action"),
             (":redo", "Redo last undone action"),
             (":empty-trash", "Empty the local trash"),
+            (":delete-all", "Delete all visible tasks"),
         ];
         let mut suggestions = Vec::new();
         for (cmd, desc) in cmds {

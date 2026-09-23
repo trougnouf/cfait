@@ -259,6 +259,8 @@ pub struct GuiApp {
     pub ics_import_selected_calendar: Option<String>,
     pub ics_import_task_count: Option<usize>,
 
+    pub confirm_delete_all_open: bool,
+
     // Double click tracking
     pub last_click: Option<(std::time::Instant, String)>, // Added
     pub last_title_click: Option<std::time::Instant>,
@@ -792,6 +794,8 @@ impl Default for GuiApp {
             ics_import_content: None,
             ics_import_selected_calendar: None,
             ics_import_task_count: None,
+
+            confirm_delete_all_open: false,
 
             undo_history: crate::journal::UndoHistory::new(),
 

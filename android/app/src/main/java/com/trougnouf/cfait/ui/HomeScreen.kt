@@ -180,7 +180,8 @@ fun HomeScreen(
     var localHasUnsynced by remember { mutableStateOf(hasUnsynced) }
     var isPullRefreshing by remember { mutableStateOf(false) }
     val goalIcon = rememberSaveable { NfIcons.GOAL_ICONS.random() }
-    
+    var showDeleteAllDialog by rememberSaveable { mutableStateOf(false) }
+
     var showCalendarsTab by remember { mutableStateOf(showCalendarsTab) }
     var showTagsTab by remember { mutableStateOf(showTagsTab) }
     var showLocationsTab by remember { mutableStateOf(showLocationsTab) }
@@ -640,6 +641,11 @@ fun HomeScreen(
                         checkSyncStatus()
                         triggerBackgroundSync(context, api)
                     }
+                    newTaskText = androidx.compose.ui.text.input.TextFieldValue("")
+                    return
+                }
+                ":delete-all" -> {
+                    showDeleteAllDialog = true
                     newTaskText = androidx.compose.ui.text.input.TextFieldValue("")
                     return
                 }
@@ -1293,6 +1299,69 @@ fun HomeScreen(
                 TextButton(onClick = { sessionTaskUid = null; sessionInputText = "" }) {
                     Text(stringResource(R.string.cancel))
                 }
+            }
+        )
+    }
+
+    if (showDeleteAllDialog) {
+        val tasksToDelete = tasks.filter { !it.task.uid.startsWith("virtual-") }
+        AlertDialog(
+            onDismissRequest = { showDeleteAllDialog = false },
+            title = { Text(stringResource(R.string.delete_all_title)) },
+            text = {
+                Column {
+                    val count = tasksToDelete.size
+                    Text(
+                        com.trougnouf.cfait.ui.resolvePluralMap(
+                            stringResource(R.string.delete_all_confirm, count),
+                            count
+                        )
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                        items(tasksToDelete.take(10)) { t ->
+                            Text("- ${t.task.summary}", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        if (tasksToDelete.size > 10) {
+                            item { Text("...and ${tasksToDelete.size - 10} more", color = Color.Gray) }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteAllDialog = false
+                    val uids = tasksToDelete.map { it.task.uid }
+                    scope.launch {
+                        try {
+                            val actionDesc = api.dispatch(AppIntent.DeleteTasks(uids))
+                            updateTaskList()
+                            onDataChanged()
+                            triggerBackgroundSync(context, api)
+                            if (showUndoSnackbar) {
+                                val result = snackbarHostState.showSnackbar(
+                                    message = actionDesc,
+                                    actionLabel = context.getString(R.string.undo),
+                                    duration = SnackbarDuration.Short
+                                )
+                                if (result == SnackbarResult.ActionPerformed) {
+                                    val desc = api.undo()
+                                    updateTaskList()
+                                    checkSyncStatus()
+                                    onDataChanged()
+                                    if (desc != null) {
+                                        Toast.makeText(context, context.getString(R.string.task_action_undone, desc), Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            if (e is CancellationException) throw e
+                        }
+                    }
+                }) { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteAllDialog = false }) { Text(stringResource(R.string.cancel)) }
             }
         )
     }

@@ -217,6 +217,9 @@ pub enum AppIntent {
     DeleteTaskTree {
         uid: String,
     },
+    DeleteTasks {
+        uids: Vec<String>,
+    },
     TogglePin {
         uid: String,
     },

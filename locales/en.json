@@ -181,6 +181,11 @@
     "default_time_label": "Default time:",
     "delete": "Delete",
     "delete_all_calendar_events": "Delete all calendar events",
+    "delete_all_title": "Delete all visible tasks",
+    "delete_all_confirm": {
+        "one": "Are you sure you want to delete 1 task?",
+        "other": "Are you sure you want to delete %{count} tasks?"
+    },
     "delete_calendar_events_on_completion_label": "Delete events on completion",
     "delete_task_tree": "Delete task tree",
     "deleting_events_background": "Deleting events in background…",

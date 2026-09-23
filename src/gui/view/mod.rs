@@ -190,6 +190,129 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
 
     if app.ics_import_dialog_open {
         stack_children.push(view_ics_import_overlay(app));
+    } else if app.confirm_delete_all_open {
+        let uids: Vec<_> = app
+            .tasks
+            .iter()
+            .filter_map(|t| {
+                if let crate::store::TaskListItem::Task(task) = t {
+                    Some(task.as_ref())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let icon_header = container(
+            icon::icon(icon::TRASH)
+                .size(30)
+                .color(Color::from_rgb(0.9, 0.2, 0.2)),
+        )
+        .padding(5)
+        .center_x(Length::Fill);
+
+        let title = text(rust_i18n::t!("delete_all_title"))
+            .size(24)
+            .font(iced::Font {
+                weight: iced::font::Weight::Bold,
+                ..Default::default()
+            })
+            .width(Length::Fill)
+            .align_x(Horizontal::Center);
+
+        let count = uids.len();
+        let prompt = if count == 1 {
+            rust_i18n::t!("delete_all_confirm.one").to_string()
+        } else {
+            rust_i18n::t!("delete_all_confirm.other", count = count).to_string()
+        };
+
+        let mut list_col = column![text(prompt).size(16)].spacing(10);
+
+        let mut tasks_col = column![].spacing(5);
+        for t in uids.iter().take(10) {
+            tasks_col = tasks_col.push(text(format!("- {}", t.summary)).size(14).style(
+                |t: &Theme| text::Style {
+                    color: Some(t.extended_palette().background.base.text),
+                },
+            ));
+        }
+        if uids.len() > 10 {
+            tasks_col = tasks_col.push(
+                text(format!("...and {} more", uids.len() - 10))
+                    .size(14)
+                    .style(|_t: &Theme| text::Style {
+                        color: Some(Color::from_rgb(0.5, 0.5, 0.5)),
+                    }),
+            );
+        }
+
+        list_col = list_col.push(scrollable(tasks_col).height(Length::Fixed(200.0)));
+
+        let buttons = row![
+            button(text(rust_i18n::t!("cancel")).size(14))
+                .style(iced::widget::button::secondary)
+                .padding([8, 16])
+                .on_press(Message::CancelDeleteAll),
+            button(text(rust_i18n::t!("delete")).size(14))
+                .style(iced::widget::button::danger)
+                .padding([8, 16])
+                .on_press(Message::ExecuteDeleteAll)
+        ]
+        .spacing(10)
+        .align_y(iced::Alignment::Center);
+
+        let modal_content = column![
+            icon_header,
+            title,
+            Space::new().height(Length::Fixed(10.0)),
+            list_col,
+            Space::new().height(Length::Fixed(20.0)),
+            buttons
+        ]
+        .spacing(5)
+        .align_x(iced::Alignment::Center);
+
+        let modal_card = container(modal_content)
+            .padding(20)
+            .width(Length::Fixed(400.0))
+            .max_height(600.0)
+            .style(|theme: &Theme| {
+                let palette = theme.extended_palette();
+                container::Style {
+                    background: Some(
+                        Color {
+                            a: 0.98,
+                            ..palette.background.weak.color
+                        }
+                        .into(),
+                    ),
+                    border: iced::Border {
+                        color: palette.background.strong.color,
+                        width: 1.0,
+                        radius: 12.0.into(),
+                    },
+                    shadow: iced::Shadow {
+                        color: Color::BLACK.scale_alpha(0.5),
+                        offset: Vector::new(0.0, 4.0),
+                        blur_radius: 10.0,
+                    },
+                    ..Default::default()
+                }
+            });
+
+        stack_children.push(
+            container(modal_card)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x(Length::Fill)
+                .center_y(Length::Fill)
+                .style(|_| container::Style {
+                    background: Some(Color::from_rgba(0.0, 0.0, 0.0, 0.7).into()),
+                    ..Default::default()
+                })
+                .into(),
+        );
     } else if !app.ringing_tasks.is_empty() {
         let (task, alarm) = &app.ringing_tasks[0];
 

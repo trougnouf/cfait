@@ -1726,6 +1726,12 @@ pub async fn handle_key_event(
                                 let _ = tx.send(crate::tui::action::Action::Refresh).await;
                             });
                         }
+                        ":delete-all" => {
+                            state.mode = InputMode::ConfirmDeleteAll;
+                            state.reset_input();
+                            state.message = rust_i18n::t!("delete_all_title").to_string();
+                            return None;
+                        }
                         ":login" => {
                             state.message = "Run `cfait login <url> <username>` in your terminal to update credentials.".to_string();
                         }
@@ -2261,6 +2267,31 @@ pub async fn handle_key_event(
             }
             KeyCode::PageUp => {
                 state.details_scroll = state.details_scroll.saturating_sub(10);
+            }
+            _ => {}
+        },
+        InputMode::ConfirmDeleteAll => match key.code {
+            KeyCode::Enter | KeyCode::Char('y') | KeyCode::Char('Y') => {
+                let uids: Vec<String> = state
+                    .tasks
+                    .iter()
+                    .filter_map(|t| {
+                        if let TaskListItem::Task(task) = t {
+                            Some(task.uid.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                if !uids.is_empty() {
+                    dispatch_intent_tui(state, AppIntent::DeleteTasks { uids }, action_tx);
+                }
+                state.mode = InputMode::Normal;
+                state.message = String::new();
+            }
+            KeyCode::Esc | KeyCode::Char('n') | KeyCode::Char('N') => {
+                state.mode = InputMode::Normal;
+                state.message = rust_i18n::t!("editing_cancelled").to_string();
             }
             _ => {}
         },

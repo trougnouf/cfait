@@ -71,6 +71,7 @@ pub enum InputMode {
     EditingSession(String, usize),
     JumpingToDate,
     ActionMenu,
+    ConfirmDeleteAll,
     Help(crate::help::HelpTab),
 }
 

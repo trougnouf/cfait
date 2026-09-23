@@ -4498,6 +4498,15 @@ impl TaskStore {
                 potential_uids.push(uid.clone());
                 potential_uids.extend(self.get_descendant_uids(uid));
             }
+            AppIntent::DeleteTasks { uids } => {
+                if let Some(first) = uids.first() {
+                    primary_uid = Some(first.clone());
+                }
+                for uid in uids {
+                    potential_uids.push(uid.clone());
+                    potential_uids.extend(self.get_descendant_uids(uid));
+                }
+            }
             AppIntent::MakeChild { uid, parent_uid } => {
                 primary_uid = Some(uid.clone());
                 potential_uids.push(uid.clone());
@@ -4623,6 +4632,32 @@ impl TaskStore {
 
                 for u in &all_uids {
                     actions.extend(self.cleanup_references(u));
+                }
+            }
+            AppIntent::DeleteTasks { uids } => {
+                let mut processed_uids = HashSet::new();
+                for uid in uids {
+                    if processed_uids.contains(uid) {
+                        continue;
+                    }
+                    let desc = self.get_descendant_uids(uid);
+                    processed_uids.insert(uid.clone());
+                    for d in &desc {
+                        processed_uids.insert(d.clone());
+                    }
+
+                    let pairs = self.soft_delete_task_tree(uid, config.trash_retention_days);
+                    for (deleted, trashed_opt) in pairs {
+                        actions.push(JournalAction::Delete(deleted));
+                        if let Some(trashed) = trashed_opt {
+                            actions.push(JournalAction::Create(trashed));
+                        }
+                    }
+
+                    actions.extend(self.cleanup_references(uid));
+                    for u in &desc {
+                        actions.extend(self.cleanup_references(u));
+                    }
                 }
             }
             AppIntent::CancelTask { uid } => {
@@ -4855,6 +4890,13 @@ impl TaskStore {
             AppIntent::CompleteTree { .. } => "Completed tree",
             AppIntent::CancelTask { .. } => "Cancelled",
             AppIntent::DeleteTask { .. } => "Deleted task",
+            AppIntent::DeleteTasks { uids } => {
+                if uids.len() == 1 {
+                    "Deleted task"
+                } else {
+                    "Deleted multiple tasks"
+                }
+            }
             AppIntent::DeleteTaskTree { .. } => "Deleted tree",
             AppIntent::MoveTask { .. } => "Moved task",
             AppIntent::MoveTaskTree { .. } => "Moved tree",

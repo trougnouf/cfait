@@ -1089,6 +1089,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             } else if app.moving_task_uid.is_some() {
                 app.moving_task_uid = None;
                 captured_action = true;
+            } else if app.confirm_delete_all_open {
+                app.confirm_delete_all_open = false;
+                captured_action = true;
             } else if app.ics_import_dialog_open {
                 app.ics_import_dialog_open = false;
                 app.ics_import_file_path = None;
@@ -1568,6 +1571,10 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                     },
                     |_| Message::Refresh,
                 );
+            }
+            ":delete-all" => {
+                app.input_value = text_editor::Content::new();
+                return Task::done(Message::ConfirmDeleteAllDialog);
             }
             ":login" | ":settings" => {
                 app.input_value = text_editor::Content::new();
