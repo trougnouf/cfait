@@ -231,23 +231,31 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
 
         let mut tasks_col = column![].spacing(5);
         for t in uids.iter().take(10) {
-            tasks_col = tasks_col.push(text(format!("- {}", t.summary)).size(14).style(
-                |t: &Theme| text::Style {
-                    color: Some(t.extended_palette().background.base.text),
-                },
-            ));
+            tasks_col = tasks_col.push(
+                text(format!("- {}", t.summary))
+                    .size(14)
+                    .wrapping(iced::widget::text::Wrapping::Glyph)
+                    .style(|t: &Theme| text::Style {
+                        color: Some(t.extended_palette().background.base.text),
+                    }),
+            );
         }
         if uids.len() > 10 {
             tasks_col = tasks_col.push(
                 text(format!("...and {} more", uids.len() - 10))
                     .size(14)
+                    .wrapping(iced::widget::text::Wrapping::Glyph)
                     .style(|_t: &Theme| text::Style {
                         color: Some(Color::from_rgb(0.5, 0.5, 0.5)),
                     }),
             );
         }
 
-        list_col = list_col.push(scrollable(tasks_col).height(Length::Fixed(200.0)));
+        list_col = list_col.push(
+            scrollable(tasks_col)
+                .width(Length::Fill)
+                .height(Length::Fixed(200.0)),
+        );
 
         let buttons = row![
             button(text(rust_i18n::t!("cancel")).size(14))
