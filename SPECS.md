@@ -164,7 +164,7 @@ Tasks sort deterministically by rank (0 to 9), then by Overdue -> Priority -> Du
 All clients maintain an active session Undo/Redo stack. Every task mutation applied to the `TaskStore` pushes an `UndoRecord` (containing the exact inverse journal actions derived from pre-mutation snapshots).
 *   **Android:** Mutations trigger a transient Snackbar allowing 1-tap Undo. Markdown editors feature explicit ↶/↷ toolbar buttons.
 *   **Desktop (GUI/TUI):** Global `Ctrl+Z` (Undo) and `Ctrl+Y` / `Ctrl+Shift+Z` (Redo) shortcuts.
-*   **Smart Commands:** If the Add Task input starts with `:` and contains no spaces (e.g., `:undo`, `:redo`, `:empty-trash`, `:login`), it is intercepted and executed as a session command rather than creating a task. 
+*   **Smart Commands:** If the Add Task input starts with `:` and contains no spaces (e.g., `:undo`, `:redo`, `:empty-trash`, `:delete-all`, `:login`), it is intercepted and executed as a session command rather than creating a task. 
 *   **Auto-Complete:** The `CursorContextBanner` acts as a unified auto-complete engine, suggesting commands (when typing `:`), tags (when typing `#`), locations (when typing `@@`), collections (when typing `col:`), and relationships (when typing `dep:`, `rel:`, or `[[`). Suggestions are typically ordered by exact prefix match, then by descending frequency/usage, and finally alphabetically.
 
 ### 4.1. The "Yank" Relationship System
