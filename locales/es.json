@@ -88,6 +88,7 @@
     "cli_desc_import_default": "Importar a la colección local predeterminada.",
     "cli_desc_import_specific": "Añadir a una colección interna concreta.",
     "cli_desc_list": "Enumerar las tareas (siguiendo la configuración de visualización establecida).",
+    "cli_desc_login": "Configura el servidor CalDAV y solicita la contraseña de forma segura.",
     "cli_desc_move": "Mueve una tarea a otra colección.\nUtiliza --tree para mover la tarea y todas sus subtareas.",
     "cli_desc_no_wait": "Añadir la acción a la cola del registro interno y salir sin sincronizar.",
     "cli_desc_pause": "Pausar registro en esta tarea.",
