@@ -825,3 +825,125 @@ async fn test_companion_events_batching() {
         .unwrap();
     assert_eq!(count, 3); // 3 deletion futures for legacy suffixes
 }
+
+#[test]
+fn test_undo_delete_tree_preserves_referencing_task() {
+    let mut store = make_store();
+    let config = cfait::config::Config {
+        trash_retention_days: 14,
+        ..Default::default()
+    };
+
+    // "Peel the potatoes" depends on "Water the tomatoes"; deleting the
+    // latter must not eat the former when the delete is undone.
+    let mut blocked = Task::new("Water the tomatoes", &HashMap::new(), None);
+    blocked.uid = "blocked".to_string();
+    blocked.calendar_href = "cal1".to_string();
+
+    let mut blocker = Task::new("Peel the potatoes", &HashMap::new(), None);
+    blocker.uid = "blocker".to_string();
+    blocker.calendar_href = "cal1".to_string();
+    blocker.dependencies = vec!["blocked".to_string()];
+
+    store.add_task(blocked);
+    store.add_task(blocker);
+
+    let (_forward, reverse, _desc, _primary) = store.apply_task_intent(
+        &cfait::model::AppIntent::DeleteTaskTree {
+            uid: "blocked".to_string(),
+        },
+        &config,
+    );
+
+    assert!(
+        store.get_task_ref("blocked").is_some(),
+        "blocked should be in trash"
+    );
+    assert!(
+        store.get_task_ref("blocker").is_some(),
+        "blocker should still exist"
+    );
+    assert!(
+        store
+            .get_task_ref("blocker")
+            .unwrap()
+            .dependencies
+            .is_empty(),
+        "blocker's dependency should be cleaned up"
+    );
+
+    store.apply_actions(&reverse);
+
+    assert!(
+        store.get_task_ref("blocked").is_some(),
+        "blocked should be restored"
+    );
+    assert!(
+        store.get_task_ref("blocker").is_some(),
+        "blocker was never deleted and must survive the undo"
+    );
+    assert_eq!(
+        store.get_task_ref("blocker").unwrap().dependencies,
+        vec!["blocked".to_string()],
+        "blocker's dependency should be restored by undo"
+    );
+}
+
+#[test]
+fn test_undo_delete_tasks_batch_preserves_referencing_tasks() {
+    let mut store = make_store();
+    let config = cfait::config::Config {
+        trash_retention_days: 14,
+        ..Default::default()
+    };
+
+    let mut a = Task::new("Water the tomatoes", &HashMap::new(), None);
+    a.uid = "a".to_string();
+    a.calendar_href = "cal1".to_string();
+
+    let mut c = Task::new("Sketch the greenhouse", &HashMap::new(), None);
+    c.uid = "c".to_string();
+    c.calendar_href = "cal1".to_string();
+
+    // "Plan the herb bed" depends on a and is related to c; deleting a and c
+    // in one batch must not eat it when the delete is undone.
+    let mut b = Task::new("Plan the herb bed", &HashMap::new(), None);
+    b.uid = "b".to_string();
+    b.calendar_href = "cal1".to_string();
+    b.dependencies = vec!["a".to_string()];
+    b.related_to = vec!["c".to_string()];
+
+    store.add_task(a);
+    store.add_task(c);
+    store.add_task(b);
+
+    let (_forward, reverse, _desc, _primary) = store.apply_task_intent(
+        &cfait::model::AppIntent::DeleteTasks {
+            uids: vec!["a".to_string(), "c".to_string()],
+        },
+        &config,
+    );
+
+    assert!(store.get_task_ref("a").is_some(), "a should be in trash");
+    assert!(store.get_task_ref("c").is_some(), "c should be in trash");
+    assert!(store.get_task_ref("b").is_some(), "b should still exist");
+
+    store.apply_actions(&reverse);
+
+    assert!(store.get_task_ref("a").is_some(), "a should be restored");
+    assert!(store.get_task_ref("c").is_some(), "c should be restored");
+    assert!(
+        store.get_task_ref("b").is_some(),
+        "b was never deleted and must survive the undo"
+    );
+    assert_eq!(
+        store.get_task_ref("b").unwrap().dependencies,
+        vec!["a".to_string()],
+        "b's dependency should be restored"
+    );
+    assert_eq!(
+        store.get_task_ref("b").unwrap().related_to,
+        vec!["c".to_string()],
+        "b's relation should be restored"
+    );
+}

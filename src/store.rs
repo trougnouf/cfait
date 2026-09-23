@@ -4453,6 +4453,20 @@ impl TaskStore {
         actions
     }
 
+    /// Uids of tasks that reference `uid` via a dependency or related_to and
+    /// will be rewritten by `cleanup_references` when `uid` is deleted.
+    /// Children are excluded (they are deleted together with `uid`).
+    fn referring_uids(&self, uid: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        if let Some(blocked) = self.blocking_index.get(uid) {
+            out.extend(blocked.iter().cloned());
+        }
+        if let Some(related) = self.related_from_index.get(uid) {
+            out.extend(related.iter().cloned());
+        }
+        out
+    }
+
     /// Applies a Task-related AppIntent to the in-memory store and returns the tuple
     /// (forward_actions, reverse_actions, intent_description, primary_uid) for journaling and undo stacks.
     /// This method ignores Session-related intents (like SetSearchTerm).
@@ -4484,14 +4498,25 @@ impl TaskStore {
                 potential_uids.push(uid.clone());
                 potential_uids.extend(self.get_descendant_uids(uid));
             }
-            AppIntent::DeleteTask { uid }
-            | AppIntent::MoveTask { uid, .. }
-            | AppIntent::RemoveParent { uid } => {
+            AppIntent::DeleteTask { uid } => {
+                primary_uid = Some(uid.clone());
+                potential_uids.push(uid.clone());
+                potential_uids.extend(self.referring_uids(uid));
+            }
+            AppIntent::MoveTask { uid, .. } | AppIntent::RemoveParent { uid } => {
                 primary_uid = Some(uid.clone());
                 potential_uids.push(uid.clone());
             }
-            AppIntent::DeleteTaskTree { uid }
-            | AppIntent::MoveTaskTree { uid, .. }
+            AppIntent::DeleteTaskTree { uid } => {
+                primary_uid = Some(uid.clone());
+                let desc = self.get_descendant_uids(uid);
+                potential_uids.push(uid.clone());
+                for u in std::iter::once(uid).chain(desc.iter()) {
+                    potential_uids.extend(self.referring_uids(u));
+                }
+                potential_uids.extend(desc);
+            }
+            AppIntent::MoveTaskTree { uid, .. }
             | AppIntent::DuplicateTaskTree { uid }
             | AppIntent::CompleteTree { uid } => {
                 primary_uid = Some(uid.clone());
@@ -4503,8 +4528,12 @@ impl TaskStore {
                     primary_uid = Some(first.clone());
                 }
                 for uid in uids {
+                    let desc = self.get_descendant_uids(uid);
                     potential_uids.push(uid.clone());
-                    potential_uids.extend(self.get_descendant_uids(uid));
+                    for u in std::iter::once(uid).chain(desc.iter()) {
+                        potential_uids.extend(self.referring_uids(u));
+                    }
+                    potential_uids.extend(desc);
                 }
             }
             AppIntent::MakeChild { uid, parent_uid } => {
