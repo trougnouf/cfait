@@ -652,6 +652,68 @@ impl DaemonLock {
     }
 }
 
+#[cfg(not(target_os = "android"))]
+pub struct SyncLock {
+    _file: std::fs::File,
+}
+
+#[cfg(not(target_os = "android"))]
+impl SyncLock {
+    /// Serializes journal syncs across processes.
+    ///
+    /// `sync_journal` peeks the front of the journal, applies the action to
+    /// the server, and only then pops it. Without cross-process serialization,
+    /// two instances (e.g. TUI + GUI, or TUI + CLI) can peek the same action
+    /// and apply it to the server twice.
+    ///
+    /// Best-effort: returns `None` if the lock is still held after `timeout`
+    /// (e.g. another process is stuck on a slow network call) or cannot be
+    /// created, so a sync can still proceed rather than block forever.
+    pub async fn acquire(ctx: &dyn AppContext, timeout: Duration) -> Option<Self> {
+        let path = match ctx.get_data_dir() {
+            Ok(dir) => dir.join("sync.lock"),
+            Err(_) => return None,
+        };
+        let file = match std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&path)
+        {
+            Ok(file) => file,
+            Err(e) => {
+                log::warn!("sync lock: could not open {}: {}", path.display(), e);
+                return None;
+            }
+        };
+
+        let deadline = Instant::now() + timeout;
+        loop {
+            match file.try_lock_exclusive() {
+                Ok(()) => return Some(Self { _file: file }),
+                Err(e)
+                    if e.kind() == std::io::ErrorKind::WouldBlock
+                        || e.kind() == std::io::ErrorKind::PermissionDenied =>
+                {
+                    if Instant::now() >= deadline {
+                        log::warn!(
+                            "sync lock: still held after {}s, proceeding without it",
+                            timeout.as_secs()
+                        );
+                        return None;
+                    }
+                    tokio::time::sleep(Duration::from_millis(200)).await;
+                }
+                Err(e) => {
+                    log::warn!("sync lock: failed to lock {}: {}", path.display(), e);
+                    return None;
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 #[cfg(not(target_os = "android"))]
 mod lock_tests {
@@ -682,6 +744,27 @@ mod lock_tests {
         assert!(
             excl2.is_some(),
             "Exclusive lock should succeed when no shared locks exist"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_sync_lock_serializes_across_handles() {
+        let ctx = TestContext::new();
+
+        // 1. First acquire succeeds
+        let first = SyncLock::acquire(&ctx, Duration::from_secs(5)).await;
+        assert!(first.is_some(), "First sync lock should be acquired");
+
+        // 2. Second acquire times out while the first is held
+        let second = SyncLock::acquire(&ctx, Duration::from_millis(500)).await;
+        assert!(second.is_none(), "Second sync lock should time out");
+
+        // 3. After release, the lock is available again
+        drop(first);
+        let third = SyncLock::acquire(&ctx, Duration::from_secs(5)).await;
+        assert!(
+            third.is_some(),
+            "Sync lock should be reacquirable after release"
         );
     }
 }

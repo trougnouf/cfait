@@ -567,10 +567,25 @@ impl RustyClient {
         }
     }
 
+    /// How long to wait for another process to finish syncing before giving
+    /// up the cross-process lock and proceeding anyway. A stuck process
+    /// (e.g. hung on a slow network call) must not block our syncs forever.
+    const CROSS_PROCESS_SYNC_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
+
     pub async fn sync_journal(&self) -> Result<(Vec<String>, Vec<Task>), String> {
         // 1. Serialize sync loops process-wide to protect the physical journal file
         let lock = get_sync_lock();
         let _guard = lock.lock().await;
+
+        // 2. Serialize across processes so two instances (e.g. TUI + GUI)
+        //    cannot peek and apply the same journal action to the server
+        //    twice. Best-effort: if the lock is held by a stuck process we
+        //    proceed without it after the timeout (double-applied actions are
+        //    still handled gracefully via 412/404).
+        #[cfg(not(target_os = "android"))]
+        let _cross_process_guard =
+            crate::storage::SyncLock::acquire(self.ctx.as_ref(), Self::CROSS_PROCESS_SYNC_TIMEOUT)
+                .await;
 
         let client = self.client.as_ref().ok_or("Offline")?;
         let mut warnings = Vec::new();
