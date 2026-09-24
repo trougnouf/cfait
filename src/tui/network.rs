@@ -204,7 +204,8 @@ pub async fn run_network_actor(
             cached_results.push((cal.href.clone(), tasks));
         }
     }
-    if !cached_results.is_empty() {
+    let has_cached = !cached_results.is_empty();
+    if has_cached {
         merge_results_into_store(&store, &cached_results).await;
         let _ = event_tx.send(AppEvent::TasksLoaded(cached_results)).await;
     }
@@ -239,6 +240,12 @@ pub async fn run_network_actor(
                     human: rust_i18n::t!("sync_warning", msg = e).to_string(),
                 })
                 .await;
+            // If no cached tasks were sent either, the UI is still waiting for
+            // its first TasksLoaded — send an empty one so it stops showing
+            // "Tasks (Loading...)".
+            if !has_cached {
+                let _ = event_tx.send(AppEvent::TasksLoaded(vec![])).await;
+            }
         }
     }
 
@@ -261,16 +268,17 @@ pub async fn run_network_actor(
                     EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_)
                 )
             {
+                // A batched event may carry paths from both our own write and
+                // an external one, so check each path individually (the
+                // suppression is per-file and non-consuming).
                 let is_relevant = event.paths.iter().any(|p| {
-                    p.file_name()
+                    let is_watched_file = p
+                        .file_name()
                         .and_then(|n| n.to_str())
-                        .is_some_and(|name| name.ends_with(".json") && name != "alarm_index.json")
+                        .is_some_and(|name| name.ends_with(".json") && name != "alarm_index.json");
+                    is_watched_file && !crate::storage::is_suppressed_local_write(p)
                 });
-                let is_our_own_write = event
-                    .paths
-                    .iter()
-                    .any(|p| crate::storage::is_suppressed_local_write(p));
-                if is_relevant && !is_our_own_write {
+                if is_relevant {
                     // Best-effort: a full channel already guarantees a reload is
                     // pending, so dropping a redundant signal is safe and keeps
                     // the notify thread from ever blocking.
@@ -420,30 +428,52 @@ pub async fn run_network_actor(
                                 crate::config::Config::invalidate_cache();
                                 let cfg =
                                     crate::config::Config::load_with_credentials(ctx.as_ref()).ok();
+                                // Use the freshly loaded config when available:
+                                // `enable_local_mode` may have changed since
+                                // startup (e.g. edited by another instance).
+                                let local_mode = cfg
+                                    .as_ref()
+                                    .map(|c| c.enable_local_mode)
+                                    .unwrap_or(enable_local_mode);
                                 let (cals, tasks) = crate::cache::Cache::load_all_disk_state(
                                     ctx.as_ref(),
-                                    enable_local_mode,
+                                    local_mode,
                                 );
                                 (cfg, cals, tasks)
                             }
                         })
                         .await;
 
-                        if let Ok((cfg_opt, cached_cals, cached_tasks)) = res {
-                            if let Some(cfg) = cfg_opt {
-                                let _ = event_tx.send(AppEvent::ConfigUpdated(Box::new(cfg))).await;
+                        match res {
+                            Ok((cfg_opt, cached_cals, cached_tasks)) => {
+                                if let Some(cfg) = cfg_opt {
+                                    let _ =
+                                        event_tx.send(AppEvent::ConfigUpdated(Box::new(cfg))).await;
+                                }
+                                let _ = event_tx.send(AppEvent::CalendarsLoaded(cached_cals)).await;
+                                // Replace the actor's store with the fresh disk state (under a
+                                // single lock) so later PersistBatch actions — e.g. deleting a
+                                // task created externally — operate on current data.
+                                let mut s = store.lock().await;
+                                s.clear();
+                                for (href, tasks) in &cached_tasks {
+                                    s.insert(href.clone(), tasks.clone());
+                                }
+                                drop(s);
+                                let _ = event_tx
+                                    .send(AppEvent::FullStateReloaded(cached_tasks))
+                                    .await;
                             }
-                            let _ = event_tx.send(AppEvent::CalendarsLoaded(cached_cals)).await;
-                            // Replace the actor's store with the fresh disk state (under a
-                            // single lock) so later PersistBatch actions — e.g. deleting a
-                            // task created externally — operate on current data.
-                            let mut s = store.lock().await;
-                            s.clear();
-                            for (href, tasks) in &cached_tasks {
-                                s.insert(href.clone(), tasks.clone());
+                            Err(e) => {
+                                // Route the failure to the UI so it stops showing
+                                // "Tasks (Loading...)" instead of hanging.
+                                let _ = event_tx
+                                    .send(AppEvent::Error(format!(
+                                        "offline refresh failed: {}",
+                                        e
+                                    )))
+                                    .await;
                             }
-                            drop(s);
-                            let _ = event_tx.send(AppEvent::FullStateReloaded(cached_tasks)).await;
                         }
                     }
 

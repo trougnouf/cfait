@@ -159,16 +159,17 @@ pub fn spawn_background_worker(
                             EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_)
                         )
                     {
+                        // A batched event may carry paths from both our own write
+                        // and an external one, so check each path individually
+                        // (the suppression is per-file and non-consuming).
                         let is_relevant = event.paths.iter().any(|p| {
-                            p.file_name().and_then(|n| n.to_str()).is_some_and(|name| {
-                                name.ends_with(".json") && name != "alarm_index.json"
-                            })
+                            let is_watched_file =
+                                p.file_name().and_then(|n| n.to_str()).is_some_and(|name| {
+                                    name.ends_with(".json") && name != "alarm_index.json"
+                                });
+                            is_watched_file && !crate::storage::is_suppressed_local_write(p)
                         });
-                        let is_our_own_write = event
-                            .paths
-                            .iter()
-                            .any(|p| crate::storage::is_suppressed_local_write(p));
-                        if is_relevant && !is_our_own_write {
+                        if is_relevant {
                             // Best-effort: a full channel already guarantees a reload
                             // is pending, so dropping a redundant signal is safe and
                             // keeps the notify thread from ever blocking.
@@ -238,21 +239,33 @@ pub fn spawn_background_worker(
                                 (Box::new(cfg), cals, tasks)
                             })
                             .await;
-                            if let Ok((cfg, cals, tasks)) = res {
-                                // Replace the worker's store with the fresh disk state
-                                // (under a single lock) so later Batch actions operate
-                                // on current data.
-                                let mut s = controller.store.lock().await;
-                                s.clear();
-                                for (href, list) in &tasks {
-                                    s.insert(href.clone(), list.clone());
+                            match res {
+                                Ok((cfg, cals, tasks)) => {
+                                    // Replace the worker's store with the fresh disk
+                                    // state (under a single lock) so later Batch
+                                    // actions operate on current data.
+                                    let mut s = controller.store.lock().await;
+                                    s.clear();
+                                    for (href, list) in &tasks {
+                                        s.insert(href.clone(), list.clone());
+                                    }
+                                    drop(s);
+                                    let _ = ui_tx
+                                        .send(crate::gui::message::Message::ExternalReloaded(
+                                            cfg, cals, tasks,
+                                        ))
+                                        .await;
                                 }
-                                drop(s);
-                                let _ = ui_tx
-                                    .send(crate::gui::message::Message::ExternalReloaded(
-                                        cfg, cals, tasks,
-                                    ))
-                                    .await;
+                                Err(e) => {
+                                    // Route the failure through LocalLoaded so the UI
+                                    // releases its loading state instead of waiting
+                                    // for an ExternalReloaded that never comes.
+                                    let _ = ui_tx
+                                        .send(crate::gui::message::Message::LocalLoaded(Err(
+                                            format!("external reload failed: {}", e),
+                                        )))
+                                        .await;
+                                }
                             }
                         }
                         None => break,

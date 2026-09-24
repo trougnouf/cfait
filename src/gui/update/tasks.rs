@@ -7,6 +7,7 @@ use crate::gui::message::Message;
 use crate::gui::state::{Focus, GuiApp, SidebarMode};
 use crate::gui::subscription::ACTIVE_FOCUS;
 use crate::gui::update::common;
+use crate::gui::update::network::release_loading;
 use crate::model::AppIntent;
 use crate::storage::LOCAL_TRASH_HREF;
 use chrono::NaiveTime;
@@ -1293,7 +1294,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     );
                 } else {
                     app.error_msg = Some(rust_i18n::t!("error_cannot_export_offline").to_string());
-                    app.loading = false;
+                    return release_loading(app);
                 }
             }
             Task::none()

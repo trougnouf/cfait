@@ -16,7 +16,10 @@ use iced::Task;
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {
         Message::Refresh => {
+            // Coalesce instead of dropping: a refresh requested while a load is
+            // in flight is re-dispatched when that load finishes.
             if app.loading {
+                app.pending_refresh = true;
                 return Task::none();
             }
             app.loading = true;
@@ -99,65 +102,22 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             crate::gui::update::common::update_journal_state(app);
             refresh_filtered_tasks(app);
-            app.loading = false;
-            Task::none()
+            release_loading(app)
         }
         Message::LocalLoaded(Err(e)) => {
             log::error!("Local load failed: {}", e);
             app.error_msg = Some(e);
-            app.loading = false;
-            Task::none()
+            release_loading(app)
         }
         Message::ExternalChangeDetected => {
+            // Coalesce instead of dropping: the in-flight load may have read the
+            // disk before this change happened, so the reload must run after it
+            // finishes (see release_loading).
             if app.loading {
-                // A load is already in flight and will pick up the disk changes,
-                // so this one can be safely dropped.
+                app.pending_external_reload = true;
                 return Task::none();
             }
-            app.loading = true;
-            app.error_msg = None;
-            app.pending_refresh_generation = app.edit_generation;
-
-            // Prefer the background worker: channel FIFO guarantees its pending
-            // Batches (disk writes) complete before the reload reads the disk,
-            // and the worker's store is refreshed in the same pass.
-            let routed = app
-                .bg_tx
-                .as_ref()
-                .is_some_and(|tx| tx.try_send(WorkerCommand::FlushAndLoad).is_ok());
-
-            if routed {
-                Task::none()
-            } else {
-                // Fallback: no worker (or its channel is full). Load directly.
-                let ctx = app.ctx.clone();
-                let local_mode_enabled = app.core_config.enable_local_mode;
-                Task::perform(
-                    async move {
-                        // All disk I/O (config + calendars + tasks) is blocking, so run
-                        // the whole reload on the blocking pool, not the runtime worker.
-                        tokio::task::spawn_blocking(move || {
-                            crate::config::Config::invalidate_cache();
-                            let cfg = crate::config::Config::load_with_credentials(ctx.as_ref())
-                                .unwrap_or_default();
-                            let (cals, tasks) = crate::cache::Cache::load_all_disk_state(
-                                ctx.as_ref(),
-                                local_mode_enabled,
-                            );
-                            (Box::new(cfg), cals, tasks)
-                        })
-                        .await
-                        .unwrap_or_else(|_| {
-                            (
-                                Box::new(crate::config::Config::default()),
-                                Vec::new(),
-                                Vec::new(),
-                            )
-                        })
-                    },
-                    |(cfg, cals, tasks)| Message::ExternalReloaded(cfg, cals, tasks),
-                )
-            }
+            trigger_external_reload(app)
         }
         Message::ExternalReloaded(cfg, calendars, store_data) => {
             crate::gui::update::settings::apply_config_to_app(app, &cfg);
@@ -179,8 +139,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             crate::gui::update::common::update_journal_state(app);
             refresh_filtered_tasks(app);
-            app.loading = false;
-            Task::none()
+            release_loading(app)
         }
         Message::InitBackgroundWorker(tx) => {
             app.bg_tx = Some(tx.clone());
@@ -345,7 +304,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             app.state = AppState::Active;
             refresh_filtered_tasks(app);
-            app.loading = false;
 
             if let Some(tx) = &app.alarm_tx {
                 let _ = tx.try_send(SystemEvent::EnableAlarms);
@@ -356,6 +314,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             let scroll_cmd = scroll_to_selected(app, false);
 
             if app.error_msg.is_none() {
+                // Continue into the full fetch: loading stays up until
+                // RefreshedAll finishes.
                 app.loading = true;
                 app.pending_refresh_generation = app.edit_generation;
                 Task::batch(vec![
@@ -365,7 +325,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     scroll_cmd,
                 ])
             } else {
-                scroll_cmd
+                // The connection failed: release the loading state now (and any
+                // refresh or external reload coalesced during it).
+                Task::batch(vec![release_loading(app), scroll_cmd])
             }
         }
         Message::Loaded(Err(e)) => {
@@ -435,8 +397,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 }
             }
 
-            app.loading = false;
-            Task::none()
+            release_loading(app)
         }
         Message::RefreshedAll(Ok(results)) => {
             if app.edit_generation == app.pending_refresh_generation {
@@ -448,21 +409,19 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             app.last_sync_failed = false;
             refresh_filtered_tasks(app);
-            app.loading = false;
 
             if let Some(tx) = &app.bg_tx {
                 let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::SyncNow);
             }
 
             // FIXED: Do not steal focus after background sync completes
-            scroll_to_selected(app, false)
+            Task::batch(vec![release_loading(app), scroll_to_selected(app, false)])
         }
         Message::RefreshedAll(Err(e)) => {
             log::error!("Sync warning (RefreshedAll): {}", e);
             app.error_msg = Some(rust_i18n::t!("sync_warning", msg = e).to_string());
             app.last_sync_failed = true;
-            app.loading = false;
-            Task::none()
+            release_loading(app)
         }
         Message::TasksRefreshed(Ok((href, mut tasks))) => {
             app.error_msg = None;
@@ -476,20 +435,22 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::SyncNow);
             }
 
+            // The user may have switched calendars while the fetch was in
+            // flight: release the loading state regardless, and only refresh
+            // the view when the fetched calendar is still the active one.
             if app.active_cal_href.as_deref() == Some(&href) {
                 refresh_filtered_tasks(app);
-                app.loading = false;
                 // FIXED: Do not steal focus after changing calendars
-                return scroll_to_selected(app, false);
+                Task::batch(vec![release_loading(app), scroll_to_selected(app, false)])
+            } else {
+                release_loading(app)
             }
-            Task::none()
         }
         Message::TasksRefreshed(Err(e)) => {
             log::error!("Fetch failed (TasksRefreshed): {}", e);
             app.error_msg = Some(rust_i18n::t!("error_fetch_failed", error = e).to_string());
             app.last_sync_failed = true;
-            app.loading = false;
-            Task::none()
+            release_loading(app)
         }
         Message::MigrationComplete(Ok(count)) => {
             app.loading = false;
@@ -503,10 +464,90 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::MigrationComplete(Err(e)) => {
             log::error!("Migration failed: {}", e);
-            app.loading = false;
             app.error_msg = Some(rust_i18n::t!("migration_failed", error = e).to_string());
-            Task::none()
+            release_loading(app)
         }
         _ => Task::none(),
+    }
+}
+
+/// Starts the disk reload triggered by an external change (another cfait
+/// instance wrote the data or cache files). Marks the app as loading and
+/// routes the work to the background worker when one is available, falling
+/// back to a direct blocking-pool load otherwise.
+pub(crate) fn trigger_external_reload(app: &mut GuiApp) -> Task<Message> {
+    app.loading = true;
+    app.error_msg = None;
+    app.pending_refresh_generation = app.edit_generation;
+
+    // Prefer the background worker: channel FIFO guarantees its pending
+    // Batches (disk writes) complete before the reload reads the disk,
+    // and the worker's store is refreshed in the same pass.
+    let routed = app
+        .bg_tx
+        .as_ref()
+        .is_some_and(|tx| tx.try_send(WorkerCommand::FlushAndLoad).is_ok());
+
+    if routed {
+        Task::none()
+    } else {
+        // Fallback: no worker (or its channel is full). Load directly.
+        let ctx = app.ctx.clone();
+        Task::perform(
+            async move {
+                // All disk I/O (config + calendars + tasks) is blocking, so run
+                // the whole reload on the blocking pool, not the runtime worker.
+                match tokio::task::spawn_blocking(move || {
+                    crate::config::Config::invalidate_cache();
+                    let cfg = crate::config::Config::load_with_credentials(ctx.as_ref())
+                        .unwrap_or_default();
+                    let (cals, tasks) = crate::cache::Cache::load_all_disk_state(
+                        ctx.as_ref(),
+                        cfg.enable_local_mode,
+                    );
+                    (Box::new(cfg), cals, tasks)
+                })
+                .await
+                {
+                    Ok((cfg, cals, tasks)) => Ok((cfg, cals, tasks)),
+                    Err(e) => Err(format!("external reload failed: {}", e)),
+                }
+            },
+            |res| match res {
+                Ok((cfg, cals, tasks)) => Message::ExternalReloaded(cfg, cals, tasks),
+                // Route the failure through LocalLoaded so the store is left
+                // untouched and the loading state is released.
+                Err(e) => Message::LocalLoaded(Err(e)),
+            },
+        )
+    }
+}
+
+/// Releases the loading state once a load has finished and, if a refresh or
+/// external reload was coalesced while the load was in flight, re-dispatches
+/// it now. Returns the follow-up task (`Task::none()` when nothing was
+/// pending).
+pub(crate) fn release_loading(app: &mut GuiApp) -> Task<Message> {
+    app.loading = false;
+    let pending_external_reload = app.pending_external_reload;
+    let pending_refresh = app.pending_refresh;
+    app.pending_external_reload = false;
+    app.pending_refresh = false;
+
+    let mut tasks = Vec::new();
+    if pending_external_reload {
+        tasks.push(trigger_external_reload(app));
+    }
+    if pending_refresh {
+        // Re-dispatch the coalesced refresh. If the external reload above just
+        // started, it will coalesce again and run after that one instead.
+        tasks.push(Task::perform(async { Ok::<(), String>(()) }, |_| {
+            Message::Refresh
+        }));
+    }
+    match tasks.len() {
+        0 => Task::none(),
+        1 => tasks.pop().unwrap(),
+        _ => Task::batch(tasks),
     }
 }

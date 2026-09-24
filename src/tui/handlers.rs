@@ -1180,6 +1180,9 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
         AppEvent::ConfigUpdated(cfg) => {
             state.tag_aliases = cfg.tag_aliases.clone();
             state.goals = cfg.goals.clone();
+            // Keep the UI's view of local mode in sync with the config the
+            // network actor just used for its reload.
+            state.local_mode_enabled = cfg.enable_local_mode;
             state.show_calendars_tab = cfg.show_calendars_tab;
             state.show_tags_tab = cfg.show_tags_tab;
             state.show_locations_tab = cfg.show_locations_tab;

@@ -212,6 +212,12 @@ pub struct GuiApp {
     /// Snapshot of edit_generation when an async local refresh was started.
     /// Compared on LocalLoaded to decide whether a full store replace is safe.
     pub pending_refresh_generation: u64,
+    /// An external change was detected while a load was in flight; the reload
+    /// is re-dispatched once the load finishes (see `release_loading`).
+    pub pending_external_reload: bool,
+    /// A manual refresh was requested while a load was in flight; the refresh
+    /// is re-dispatched once the load finishes (see `release_loading`).
+    pub pending_refresh: bool,
 
     // Onboarding / Config
     pub ob_url: String,
@@ -711,6 +717,8 @@ impl Default for GuiApp {
             info_msg_version: 0,
             edit_generation: 0,
             pending_refresh_generation: 0,
+            pending_external_reload: false,
+            pending_refresh: false,
             ob_url: String::new(),
             ob_user: String::new(),
             ob_pass: String::new(),

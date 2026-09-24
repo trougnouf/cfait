@@ -324,3 +324,82 @@ mod gui_worker {
         drop(cmd_tx); // stops the worker
     }
 }
+
+#[cfg(feature = "gui")]
+mod gui_coalesce {
+    //! The GUI must never drop a load-triggering message while a load is in
+    //! flight: `ExternalChangeDetected` and `Refresh` arriving during a load
+    //! are coalesced and re-run once the load finishes. These tests drive the
+    //! message handler directly (no iced runtime needed).
+    use cfait::context::TestContext;
+    use cfait::gui::message::Message;
+    use cfait::gui::state::GuiApp;
+    use cfait::gui::update::network::handle;
+    use std::sync::Arc;
+
+    fn new_app() -> GuiApp {
+        // The default context is a real StandardContext; swap in a sandboxed
+        // one so no test ever touches the user's data dir.
+        GuiApp {
+            ctx: Arc::new(TestContext::new()),
+            ..Default::default()
+        }
+    }
+
+    /// A load is in flight when an external change is detected: the change is
+    /// remembered, not dropped, and the in-flight load is allowed to finish.
+    #[test]
+    fn external_change_during_load_is_coalesced() {
+        let mut app = new_app();
+        app.loading = true;
+
+        let task = handle(&mut app, Message::ExternalChangeDetected);
+        assert!(app.loading, "in-flight load must not be disturbed");
+        assert!(app.pending_external_reload, "change must be remembered");
+
+        // The in-flight load finishes: the coalesced reload must start.
+        let follow_up = handle(&mut app, Message::LocalLoaded(Ok((vec![], vec![]))));
+        assert!(!app.pending_external_reload, "flag must be consumed");
+        assert!(
+            app.loading,
+            "coalesced external reload must now be in flight"
+        );
+        let _ = (task, follow_up);
+    }
+
+    /// An external change detected while idle starts a reload immediately.
+    #[test]
+    fn external_change_when_idle_reloads_immediately() {
+        let mut app = new_app();
+        app.loading = false;
+
+        let task = handle(&mut app, Message::ExternalChangeDetected);
+        assert!(!app.pending_external_reload);
+        assert!(app.loading, "reload must start immediately");
+        let _ = task;
+    }
+
+    /// A manual refresh requested during a load is coalesced and re-dispatched
+    /// when the load finishes.
+    #[test]
+    fn refresh_during_load_is_coalesced() {
+        let mut app = new_app();
+        app.loading = true;
+
+        let task = handle(&mut app, Message::Refresh);
+        assert!(app.loading);
+        assert!(app.pending_refresh);
+
+        // The load finishes; iced then processes the re-dispatched refresh,
+        // which we simulate by handling the message directly.
+        let follow_up = handle(&mut app, Message::LocalLoaded(Ok((vec![], vec![]))));
+        assert!(!app.pending_refresh, "flag must be consumed");
+        assert!(
+            !app.loading,
+            "loading released until the re-dispatched refresh runs"
+        );
+        let refresh_task = handle(&mut app, Message::Refresh);
+        assert!(app.loading, "coalesced refresh must start a new load");
+        let _ = (task, follow_up, refresh_task);
+    }
+}
