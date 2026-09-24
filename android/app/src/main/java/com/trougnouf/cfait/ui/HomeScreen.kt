@@ -273,17 +273,11 @@ fun HomeScreen(
             newCache[href] = hrefTasks
         }
 
-        // Find calendars that were active in the current tab but have 0 tasks now.
-        // Only do this when the fresh list is non-empty: an empty list is more
-        // likely a transient state (mid-sync, mid-load) than a real deletion of
-        // every task, and wiping the cache here is what leaves the list blank
-        // when returning from the journal.
-        if (tasks.isNotEmpty()) {
-            val currentTab = tabs.getOrNull(pagerState.currentPage)
-            currentTab?.hrefs?.forEach { href ->
-                if (!groupedTasks.containsKey(href)) {
-                    newCache[href] = emptyList() // Clear ghosts
-                }
+        // Find calendars that were active in the current tab but have 0 tasks now
+        val currentTab = tabs.getOrNull(pagerState.currentPage)
+        currentTab?.hrefs?.forEach { href ->
+            if (!groupedTasks.containsKey(href)) {
+                newCache[href] = emptyList() // Clear ghosts
             }
         }
         taskCache = newCache
