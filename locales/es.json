@@ -176,6 +176,11 @@
     "default_time_label": "Hora por defecto:",
     "delete": "Eliminar",
     "delete_all_calendar_events": "Borrar todos los eventos del calendario",
+    "delete_all_confirm": {
+        "one": "¿Quieres eliminar esta tarea?",
+        "other": "¿Eliminar %{count} tareas?"
+    },
+    "delete_all_title": "Eliminar todas las tareas visibles",
     "delete_calendar_events_on_completion_label": "Borrar eventos al completarse",
     "delete_task_tree": "Eliminar árbol de tareas",
     "deleting_events_background": "Borrando eventos en segundo plano…",
