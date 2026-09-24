@@ -258,7 +258,9 @@ pub enum Message {
     JumpToRandomTask,
     FocusSelected,
     ClearFocus,
-    SnapToSelected { focus: bool },
+    SnapToSelected {
+        focus: bool,
+    },
     TagHovered(Option<String>),
     FocusTag(String),
     FocusLocation(String),
@@ -270,6 +272,14 @@ pub enum Message {
     // --- System & Network Events ---
     ConfigLoaded(Result<Box<Config>, String>),
     ConfigUpdated(Box<Config>),
+    /// A watched data/cache file changed on disk (another cfait instance wrote it).
+    ExternalChangeDetected,
+    /// Result of the disk reload triggered by `ExternalChangeDetected`.
+    ExternalReloaded(
+        Box<Config>,
+        Vec<CalendarListEntry>,
+        Vec<(String, Vec<TodoTask>)>,
+    ),
     ThemeChanged(AppTheme),
     Loaded(LoadedResult),
     LocalLoaded(LocalLoadedResult),

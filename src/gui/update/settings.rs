@@ -53,7 +53,7 @@ where
     true
 }
 
-fn apply_config_to_app(app: &mut GuiApp, config: &crate::config::Config) {
+pub fn apply_config_to_app(app: &mut GuiApp, config: &crate::config::Config) {
     app.core_config = config.clone();
     app.sort_calendars();
     app.hidden_calendars = config.hidden_calendars.clone().into_iter().collect();

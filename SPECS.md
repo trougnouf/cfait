@@ -19,6 +19,7 @@ Cfait is an offline-first task manager that seamlessly synchronizes with CalDAV 
 *   **Background Sync:** 
     *   *Desktop (GUI/CLI daemon):* A background worker reads the Journal and pushes changes via `RustyClient`.
     *   *Android:* Handled via `WorkManager`. `PeriodicSyncWorker` runs based on `auto_refresh_interval_mins` (min 15 mins). Foreground manual syncs trigger immediate updates.
+*   **Cross-Instance Change Detection:** The TUI and GUI watch the data and cache directories (via `notify`) for `.json` files written by other cfait processes (e.g. a `cfait sync` in another terminal or the daemon). On an external change, the in-memory store is reloaded from disk without a network round-trip. Writes made by the running instance itself are suppressed via a last-write timestamp so they don't trigger a spurious reload.
 *   **Settings Sync:** User configuration (e.g., `default_calendar`, `disabled_calendars`, sorting presets, goals) and aliases sync across devices via a hidden `VTODO` task with UID `cfait-global-settings-v1` (status `CANCELLED`, category `cfait-internal`). 
     * *Exclusions:* Purely local view state (`hidden_calendars`, window dimensions, UI scale, expanded tree paths) intentionally do not sync so that each device retains its own independent viewing context.
     * *System Tags:* The `cfait-internal` category must be explicitly excluded from user-facing tag lists and autocomplete suggestions.

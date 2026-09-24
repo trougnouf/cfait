@@ -108,6 +108,66 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.loading = false;
             Task::none()
         }
+        Message::ExternalChangeDetected => {
+            if app.loading {
+                // A load is already in flight and will pick up the disk changes,
+                // so this one can be safely dropped.
+                return Task::none();
+            }
+            app.loading = true;
+            app.error_msg = None;
+            let ctx = app.ctx.clone();
+            let local_mode_enabled = app.core_config.enable_local_mode;
+            app.pending_refresh_generation = app.edit_generation;
+            Task::perform(
+                async move {
+                    // All disk I/O (config + calendars + tasks) is blocking, so run
+                    // the whole reload on the blocking pool, not the runtime worker.
+                    tokio::task::spawn_blocking(move || {
+                        crate::config::Config::invalidate_cache();
+                        let cfg = crate::config::Config::load_with_credentials(ctx.as_ref())
+                            .unwrap_or_default();
+                        let (cals, tasks) = crate::cache::Cache::load_all_disk_state(
+                            ctx.as_ref(),
+                            local_mode_enabled,
+                        );
+                        (Box::new(cfg), cals, tasks)
+                    })
+                    .await
+                    .unwrap_or_else(|_| {
+                        (
+                            Box::new(crate::config::Config::default()),
+                            Vec::new(),
+                            Vec::new(),
+                        )
+                    })
+                },
+                |(cfg, cals, tasks)| Message::ExternalReloaded(cfg, cals, tasks),
+            )
+        }
+        Message::ExternalReloaded(cfg, calendars, store_data) => {
+            crate::gui::update::settings::apply_config_to_app(app, &cfg);
+            app.calendars = calendars;
+            app.sort_calendars();
+
+            if app.edit_generation == app.pending_refresh_generation {
+                // No user edits during the async load: safe to replace the store
+                // with fresh disk data (picks up other instances' changes & deletions)
+                app.store.clear();
+                for (href, tasks) in store_data {
+                    app.store.insert(href, tasks);
+                }
+            } else {
+                log::debug!(
+                    "Skipping external reload store update: edit generation changed during load"
+                );
+            }
+
+            crate::gui::update::common::update_journal_state(app);
+            refresh_filtered_tasks(app);
+            app.loading = false;
+            Task::none()
+        }
         Message::InitBackgroundWorker(tx) => {
             app.bg_tx = Some(tx.clone());
             if let Some(client) = &app.client {

@@ -68,6 +68,8 @@ tower = { version = "0.5", features = ["util"] }
 tower-service = "0.3" # Explicitly add tower-service for the trait
 tower-layer = "0.3"   # And tower-layer for the Layer trait
 strum = { version = "0.28", features = ["derive"] }
+# Filesystem watching for cross-instance sync (enabled by the tui and gui features)
+notify = { version = "8.2.0", optional = true }
 
 # --- ANDROID / INTEROP ---
 uniffi = { version = "0.32", features = ["tokio", "build", "cli"], optional = true }
@@ -133,10 +135,11 @@ harness = false
 
 [features]
 default = ["tui"]
-tui = ["dep:ratatui", "dep:crossterm", "dep:rpassword", "dep:tui-markdown", "dep:unicode-width", "dep:regex"]
-gui = ["dep:iced", "dep:iced_aw", "dep:rfd", "dep:regex"]
+tui = ["dep:ratatui", "dep:crossterm", "dep:rpassword", "dep:tui-markdown", "dep:unicode-width", "dep:regex", "notify"]
+gui = ["dep:iced", "dep:iced_aw", "dep:rfd", "dep:regex", "notify"]
 mobile = ["dep:uniffi", "dep:uniffi_bindgen"]
 test_hooks = []
+notify = ["dep:notify"]
 
 
 

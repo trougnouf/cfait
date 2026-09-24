@@ -269,6 +269,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::LocalLoaded(_)
         | Message::RefreshedAll(_)
         | Message::TasksRefreshed(_)
+        | Message::ExternalChangeDetected
+        | Message::ExternalReloaded(_, _, _)
         | Message::MigrationComplete(_) => network::handle(app, message),
 
         Message::OpenContextMenu(..)

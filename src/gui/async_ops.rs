@@ -139,8 +139,67 @@ pub fn spawn_background_worker(
         let controller = TaskController::new(store, client_container.clone(), ctx.clone());
         let mut sync_pending = false;
 
+        // Watch the data and cache directories for changes made by other cfait
+        // instances (e.g. a `cfait sync` in another terminal). Writes by this
+        // process are suppressed via the LAST_LOCAL_WRITE stamp in atomic_write.
+        let (watch_tx, mut watch_rx) = tokio::sync::mpsc::channel(100);
+        let mut watching = false;
+        let mut _watcher = None;
+        {
+            use notify::{EventKind, RecursiveMode, Watcher};
+            if let Ok(mut w) =
+                notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+                    if let Ok(event) = res
+                        && matches!(
+                            event.kind,
+                            EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_)
+                        )
+                    {
+                        let is_relevant = event.paths.iter().any(|p| {
+                            p.file_name().and_then(|n| n.to_str()).is_some_and(|name| {
+                                name.ends_with(".json") && name != "alarm_index.json"
+                            })
+                        });
+                        if is_relevant && crate::storage::time_since_last_local_write() > 1000 {
+                            // Best-effort: a full channel already guarantees a reload
+                            // is pending, so dropping a redundant signal is safe and
+                            // keeps the notify thread from ever blocking.
+                            let _ = watch_tx.try_send(());
+                        }
+                    }
+                })
+            {
+                if let Ok(data_dir) = ctx.get_data_dir() {
+                    let _ = w.watch(&data_dir, RecursiveMode::NonRecursive);
+                }
+                if let Ok(cache_dir) = ctx.get_cache_dir() {
+                    let _ = w.watch(&cache_dir, RecursiveMode::NonRecursive);
+                }
+                _watcher = Some(w);
+                watching = true;
+            }
+        }
+
+        let mut external_change_pending = false;
+
         loop {
             tokio::select! {
+                // External file change; the guard disables this branch once the
+                // watcher channel closes so a dead watcher can't hot-spin the loop.
+                res = watch_rx.recv(), if watching => {
+                    if res.is_some() {
+                        external_change_pending = true;
+                    } else {
+                        watching = false;
+                    }
+                }
+                // Debounce external file changes by 200ms
+                _ = sleep(Duration::from_millis(200)), if external_change_pending => {
+                    external_change_pending = false;
+                    let _ = ui_tx
+                        .send(crate::gui::message::Message::ExternalChangeDetected)
+                        .await;
+                }
                 cmd = rx.recv() => {
                     match cmd {
                         Some(WorkerCommand::UpdateClient(c)) => {

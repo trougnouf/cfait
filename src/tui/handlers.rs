@@ -1105,6 +1105,24 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
     // Ensure the [UNSYNCED] badge reflects the current journal state on every event
     state.unsynced_changes = !crate::journal::Journal::load(state.ctx.as_ref()).is_empty();
     match event {
+        // The external-change reload itself is driven by the OfflineRefresh
+        // action dispatched in mod.rs; here we just keep the badge fresh.
+        AppEvent::ExternalChangeDetected => {}
+        AppEvent::FullStateReloaded(results) => {
+            if state.edit_generation == state.pending_refresh_generation {
+                // Full replace: picks up external edits, deletions, and removed
+                // calendars. Skipped if the user edited during the async load.
+                state.store.clear();
+                for (href, tasks) in results {
+                    if !state.local_mode_enabled && href.starts_with("local://") {
+                        continue;
+                    }
+                    state.store.insert(href, tasks);
+                }
+            }
+            state.refresh_filtered_view();
+            state.loading = false;
+        }
         AppEvent::Status { key: _, human } => state.message = human,
         AppEvent::Error(s) => {
             state.message = format!("Error: {}", s);

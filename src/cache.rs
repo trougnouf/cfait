@@ -96,4 +96,39 @@ impl Cache {
         }
         Ok(vec![])
     }
+
+    /// Load the full disk state (calendars + tasks for every calendar, with the
+    /// journal applied) in one pass. Used by the TUI/GUI to pick up changes made
+    /// by other cfait instances without hitting the network.
+    pub fn load_all_disk_state(
+        ctx: &dyn AppContext,
+        local_mode_enabled: bool,
+    ) -> (Vec<CalendarListEntry>, Vec<(String, Vec<Task>)>) {
+        let mut cached_cals = Self::load_calendars(ctx).unwrap_or_default();
+        if local_mode_enabled && let Ok(locals) = crate::storage::LocalCalendarRegistry::load(ctx) {
+            for loc in locals {
+                if !cached_cals.iter().any(|c| c.href == loc.href) {
+                    cached_cals.push(loc);
+                }
+            }
+        }
+        if !local_mode_enabled {
+            cached_cals.retain(|c| !c.href.starts_with("local://"));
+        }
+
+        let mut cached_tasks = Vec::new();
+        for cal in &cached_cals {
+            if cal.href.starts_with("local://") {
+                if let Ok(mut tasks) = crate::storage::LocalStorage::load_for_href(ctx, &cal.href) {
+                    crate::journal::Journal::apply_to_tasks(ctx, &mut tasks, &cal.href);
+                    cached_tasks.push((cal.href.clone(), tasks));
+                }
+            } else if let Ok((mut tasks, _)) = Self::load(ctx, &cal.href) {
+                crate::journal::Journal::apply_to_tasks(ctx, &mut tasks, &cal.href);
+                cached_tasks.push((cal.href.clone(), tasks));
+            }
+        }
+
+        (cached_cals, cached_tasks)
+    }
 }

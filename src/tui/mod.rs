@@ -323,9 +323,18 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
             // Check for Sync Complete Status (use stable key emitted by network actor)
             let enable_alarms =
                 matches!(event, AppEvent::Status { key: ref k, .. } if k == "ready");
-            let is_task_update = matches!(event, AppEvent::TasksLoaded(_));
+            let is_task_update = matches!(
+                event,
+                AppEvent::TasksLoaded(_) | AppEvent::FullStateReloaded(_)
+            );
+            let is_external = matches!(event, AppEvent::ExternalChangeDetected);
 
             handlers::handle_app_event(&mut app_state, event, &default_cal);
+
+            if is_external {
+                app_state.pending_refresh_generation = app_state.edit_generation;
+                let _ = action_tx.try_send(crate::tui::action::Action::OfflineRefresh);
+            }
 
             if let Some(tx) = &app_state.alarm_actor_tx {
                 if is_task_update {

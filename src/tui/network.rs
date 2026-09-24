@@ -245,223 +245,313 @@ pub async fn run_network_actor(
     // ------------------------------------------------------------------
     // 2. ACTION LOOP
     // ------------------------------------------------------------------
-    while let Some(action) = action_rx.recv().await {
-        match action {
-            Action::Quit => break,
-
-            Action::SwitchCalendar(href) => match client.get_tasks(&href).await {
-                Ok(t) => {
-                    merge_results_into_store(&store, &[(href.clone(), t.clone())]).await;
-                    let _ = event_tx.send(AppEvent::TasksLoaded(vec![(href, t)])).await;
-                }
-                Err(e) => {
-                    let _ = event_tx.send(AppEvent::Error(e.to_string())).await;
-                }
-            },
-
-            Action::IsolateCalendar(href) => match client.get_tasks(&href).await {
-                Ok(t) => {
-                    merge_results_into_store(&store, &[(href.clone(), t.clone())]).await;
-                    let _ = event_tx.send(AppEvent::TasksLoaded(vec![(href, t)])).await;
-                }
-                Err(e) => {
-                    let _ = event_tx.send(AppEvent::Error(e.to_string())).await;
-                }
-            },
-
-            Action::ToggleCalendarVisibility(href) => match client.get_tasks(&href).await {
-                Ok(t) => {
-                    merge_results_into_store(&store, &[(href.clone(), t.clone())]).await;
-                    let _ = event_tx.send(AppEvent::TasksLoaded(vec![(href, t)])).await;
-                }
-                Err(e) => {
-                    let _ = event_tx
-                        .send(AppEvent::Error(
-                            rust_i18n::t!("error_fetch_failed", error = e.to_string()).to_string(),
-                        ))
-                        .await;
-                }
-            },
-
-            Action::PersistBatch(actions) => {
-                // To keep the network actor's store in sync, apply actions here too
-                let mut s = store.lock().await;
-                for action in &actions {
-                    match action {
-                        crate::journal::Action::Create(t) | crate::journal::Action::Update(t) => {
-                            s.update_or_add_task(t.clone());
-                        }
-                        crate::journal::Action::Delete(t) => {
-                            let _ = s.delete_task(&t.uid);
-                        }
-                        crate::journal::Action::Move(t, target) => {
-                            let _ = s.move_task(&t.uid, target.clone());
-                        }
-                    }
-                }
-                drop(s);
-
-                let client_container = Arc::new(Mutex::new(Some(client.clone())));
-                let controller = TaskController::new(store.clone(), client_container, ctx.clone());
-
-                match controller.persist_changes(actions).await {
-                    Ok(_) => {
-                        let controller_clone = controller.clone();
-                        let event_tx_clone = event_tx.clone();
-                        let ctx_clone = ctx.clone();
-
-                        tokio::spawn(async move {
-                            if let Ok((_warns, synced_tasks, config_changed)) =
-                                controller_clone.sync_and_update_store().await
-                            {
-                                if config_changed
-                                    && let Ok(cfg) = crate::config::Config::load(ctx_clone.as_ref())
-                                {
-                                    let _ = event_tx_clone
-                                        .send(AppEvent::ConfigUpdated(Box::new(cfg)))
-                                        .await;
-                                }
-
-                                // Send TaskSynced events instead of TasksLoaded to update metadata
-                                // without overwriting the UI's optimistic state!
-                                for sync_task in synced_tasks {
-                                    let _ = event_tx_clone
-                                        .send(AppEvent::TaskSynced(Box::new(sync_task)))
-                                        .await;
-                                }
-
-                                let _ = event_tx_clone
-                                    .send(AppEvent::Status {
-                                        key: "status_saved".to_string(),
-                                        human: rust_i18n::t!("status_saved").to_string(),
-                                    })
-                                    .await;
-                            }
-                        });
-                    }
-                    Err(e) => {
-                        let _ = event_tx.send(AppEvent::Error(e)).await;
-                    }
+    // Watch the data and cache directories for changes made by other cfait
+    // instances (e.g. a `cfait sync` in another terminal). Writes by this
+    // process are suppressed via the LAST_LOCAL_WRITE stamp in atomic_write.
+    let (watch_tx, mut watch_rx) = tokio::sync::mpsc::channel(100);
+    let mut watching = false;
+    let mut _watcher = None;
+    {
+        use notify::{EventKind, RecursiveMode, Watcher};
+        if let Ok(mut w) = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+            if let Ok(event) = res
+                && matches!(
+                    event.kind,
+                    EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_)
+                )
+            {
+                let is_relevant = event.paths.iter().any(|p| {
+                    p.file_name()
+                        .and_then(|n| n.to_str())
+                        .is_some_and(|name| name.ends_with(".json") && name != "alarm_index.json")
+                });
+                if is_relevant && crate::storage::time_since_last_local_write() > 1000 {
+                    // Best-effort: a full channel already guarantees a reload is
+                    // pending, so dropping a redundant signal is safe and keeps
+                    // the notify thread from ever blocking.
+                    let _ = watch_tx.try_send(());
                 }
             }
+        }) {
+            if let Ok(data_dir) = ctx.get_data_dir() {
+                let _ = w.watch(&data_dir, RecursiveMode::NonRecursive);
+            }
+            if let Ok(cache_dir) = ctx.get_cache_dir() {
+                let _ = w.watch(&cache_dir, RecursiveMode::NonRecursive);
+            }
+            _watcher = Some(w);
+            watching = true;
+        }
+    }
 
-            Action::Refresh => {
-                let _ = event_tx
-                    .send(AppEvent::Status {
-                        key: "syncing".to_string(),
-                        human: rust_i18n::t!("syncing").to_string(),
-                    })
-                    .await;
+    let mut external_change_pending = false;
 
-                let mut calendars = match client.get_calendars().await {
-                    Ok((c, _)) => c,
-                    Err(e) => {
-                        let _ = event_tx.send(AppEvent::Error(e.to_string())).await;
-                        vec![]
-                    }
+    loop {
+        tokio::select! {
+            // External file change; the guard disables this branch once the
+            // watcher channel closes so a dead watcher can't hot-spin the loop.
+            res = watch_rx.recv(), if watching => {
+                if res.is_some() {
+                    external_change_pending = true;
+                } else {
+                    watching = false;
+                }
+            }
+            // Debounce external file changes by 200ms
+            _ = tokio::time::sleep(std::time::Duration::from_millis(200)), if external_change_pending => {
+                external_change_pending = false;
+                let _ = event_tx.send(AppEvent::ExternalChangeDetected).await;
+            }
+            action_opt = action_rx.recv() => {
+                let action = match action_opt {
+                    Some(a) => a,
+                    None => break,
                 };
-                apply_local_mode_filter(&mut calendars, enable_local_mode);
+                match action {
+                    Action::Quit => break,
 
-                // Merge local calendars from registry
-                if enable_local_mode && let Ok(locals) = LocalCalendarRegistry::load(ctx.as_ref()) {
-                    for loc in locals {
-                        if !calendars.iter().any(|c| c.href == loc.href) {
-                            calendars.push(loc);
-                        }
-                    }
-                }
-
-                let _ = event_tx
-                    .send(AppEvent::CalendarsLoaded(calendars.clone()))
-                    .await;
-
-                let client_container = Arc::new(tokio::sync::Mutex::new(Some(client.clone())));
-                let controller = TaskController::new(store.clone(), client_container, ctx.clone());
-
-                if let Ok((_warns, _synced, config_changed)) =
-                    controller.sync_and_update_store().await
-                    && config_changed
-                    && let Ok(cfg) = crate::config::Config::load(ctx.as_ref())
-                {
-                    let _ = event_tx.send(AppEvent::ConfigUpdated(Box::new(cfg))).await;
-                }
-
-                match client.get_all_tasks(&calendars).await {
-                    Ok(results) => {
-                        merge_results_into_store(&store, &results).await;
-                        let _ = event_tx.send(AppEvent::TasksLoaded(results)).await;
-
-                        let _ = event_tx
-                            .send(AppEvent::Status {
-                                key: "refreshed".to_string(),
-                                human: rust_i18n::t!("refreshed").to_string(),
-                            })
-                            .await;
-                    }
-                    Err(e) => {
-                        let _ = event_tx.send(AppEvent::Error(e.to_string())).await;
-                    }
-                }
-            }
-
-            Action::ReloadConfig => {
-                crate::config::Config::invalidate_cache();
-                if let Ok(cfg) = crate::config::Config::load_with_credentials(ctx.as_ref()) {
-                    let _ = event_tx.send(AppEvent::ConfigUpdated(Box::new(cfg))).await;
-                }
-            }
-
-            Action::MigrateLocal(source_href, target_href) => {
-                let _ = event_tx
-                    .send(AppEvent::Status {
-                        key: "migrating_local".to_string(),
-                        human: rust_i18n::t!("migrating_local").to_string(),
-                    })
-                    .await;
-
-                // FIX: Load tasks from disk. The client is dumb; we must provide the data.
-                if let Ok(local_tasks) = LocalStorage::load_for_href(ctx.as_ref(), &source_href) {
-                    match client.migrate_tasks(local_tasks, &target_href).await {
-                        Ok(count) => {
-                            let human = if count == 1 {
-                                rust_i18n::t!("migration_complete_moved.one").to_string()
-                            } else {
-                                rust_i18n::t!("migration_complete_moved.other", count = count)
-                                    .to_string()
-                            };
-                            let _ = event_tx
-                                .send(AppEvent::Status {
-                                    key: "migration_complete".to_string(),
-                                    human,
-                                })
-                                .await;
-
-                            // Trigger refresh to show moved tasks
-                            let _ = event_tx
-                                .send(AppEvent::Status {
-                                    key: "refreshing".to_string(),
-                                    human: rust_i18n::t!("refreshing").to_string(),
-                                })
-                                .await;
-                            // (Existing refresh logic usually follows here or user presses 'r')
+                    Action::SwitchCalendar(href) => match client.get_tasks(&href).await {
+                        Ok(t) => {
+                            merge_results_into_store(&store, &[(href.clone(), t.clone())]).await;
+                            let _ = event_tx.send(AppEvent::TasksLoaded(vec![(href, t)])).await;
                         }
                         Err(e) => {
                             let _ = event_tx.send(AppEvent::Error(e.to_string())).await;
                         }
+                    },
+
+                    Action::IsolateCalendar(href) => match client.get_tasks(&href).await {
+                        Ok(t) => {
+                            merge_results_into_store(&store, &[(href.clone(), t.clone())]).await;
+                            let _ = event_tx.send(AppEvent::TasksLoaded(vec![(href, t)])).await;
+                        }
+                        Err(e) => {
+                            let _ = event_tx.send(AppEvent::Error(e.to_string())).await;
+                        }
+                    },
+
+                    Action::ToggleCalendarVisibility(href) => match client.get_tasks(&href).await {
+                        Ok(t) => {
+                            merge_results_into_store(&store, &[(href.clone(), t.clone())]).await;
+                            let _ = event_tx.send(AppEvent::TasksLoaded(vec![(href, t)])).await;
+                        }
+                        Err(e) => {
+                            let _ = event_tx
+                                .send(AppEvent::Error(
+                                    rust_i18n::t!("error_fetch_failed", error = e.to_string()).to_string(),
+                                ))
+                                .await;
+                        }
+                    },
+
+                    Action::PersistBatch(actions) => {
+                        // To keep the network actor's store in sync, apply actions here too
+                        let mut s = store.lock().await;
+                        for action in &actions {
+                            match action {
+                                crate::journal::Action::Create(t) | crate::journal::Action::Update(t) => {
+                                    s.update_or_add_task(t.clone());
+                                }
+                                crate::journal::Action::Delete(t) => {
+                                    let _ = s.delete_task(&t.uid);
+                                }
+                                crate::journal::Action::Move(t, target) => {
+                                    let _ = s.move_task(&t.uid, target.clone());
+                                }
+                            }
+                        }
+                        drop(s);
+
+                        let client_container = Arc::new(Mutex::new(Some(client.clone())));
+                        let controller = TaskController::new(store.clone(), client_container, ctx.clone());
+
+                        match controller.persist_changes(actions).await {
+                            Ok(_) => {
+                                let controller_clone = controller.clone();
+                                let event_tx_clone = event_tx.clone();
+                                let ctx_clone = ctx.clone();
+
+                                tokio::spawn(async move {
+                                    if let Ok((_warns, synced_tasks, config_changed)) =
+                                        controller_clone.sync_and_update_store().await
+                                    {
+                                        if config_changed
+                                            && let Ok(cfg) = crate::config::Config::load(ctx_clone.as_ref())
+                                        {
+                                            let _ = event_tx_clone
+                                                .send(AppEvent::ConfigUpdated(Box::new(cfg)))
+                                                .await;
+                                        }
+
+                                        // Send TaskSynced events instead of TasksLoaded to update metadata
+                                        // without overwriting the UI's optimistic state!
+                                        for sync_task in synced_tasks {
+                                            let _ = event_tx_clone
+                                                .send(AppEvent::TaskSynced(Box::new(sync_task)))
+                                                .await;
+                                        }
+
+                                        let _ = event_tx_clone
+                                            .send(AppEvent::Status {
+                                                key: "status_saved".to_string(),
+                                                human: rust_i18n::t!("status_saved").to_string(),
+                                            })
+                                            .await;
+                                    }
+                                });
+                            }
+                            Err(e) => {
+                                let _ = event_tx.send(AppEvent::Error(e)).await;
+                            }
+                        }
                     }
-                } else {
-                    let _ = event_tx
-                        .send(AppEvent::Error(
-                            rust_i18n::t!("failed_to_load_local_tasks").to_string(),
-                        ))
+
+                    Action::OfflineRefresh => {
+                        // All disk I/O is blocking, so run the whole reload on the
+                        // blocking pool rather than a tokio worker thread.
+                        let res = tokio::task::spawn_blocking({
+                            let ctx = ctx.clone();
+                            move || {
+                                crate::config::Config::invalidate_cache();
+                                let cfg =
+                                    crate::config::Config::load_with_credentials(ctx.as_ref()).ok();
+                                let (cals, tasks) = crate::cache::Cache::load_all_disk_state(
+                                    ctx.as_ref(),
+                                    enable_local_mode,
+                                );
+                                (cfg, cals, tasks)
+                            }
+                        })
                         .await;
+
+                        if let Ok((cfg_opt, cached_cals, cached_tasks)) = res {
+                            if let Some(cfg) = cfg_opt {
+                                let _ = event_tx.send(AppEvent::ConfigUpdated(Box::new(cfg))).await;
+                            }
+                            let _ = event_tx.send(AppEvent::CalendarsLoaded(cached_cals)).await;
+                            let _ = event_tx.send(AppEvent::FullStateReloaded(cached_tasks)).await;
+                        }
+                    }
+
+                    Action::Refresh => {
+                        let _ = event_tx
+                            .send(AppEvent::Status {
+                                key: "syncing".to_string(),
+                                human: rust_i18n::t!("syncing").to_string(),
+                            })
+                            .await;
+
+                        let mut calendars = match client.get_calendars().await {
+                            Ok((c, _)) => c,
+                            Err(e) => {
+                                let _ = event_tx.send(AppEvent::Error(e.to_string())).await;
+                                vec![]
+                            }
+                        };
+                        apply_local_mode_filter(&mut calendars, enable_local_mode);
+
+                        // Merge local calendars from registry
+                        if enable_local_mode && let Ok(locals) = LocalCalendarRegistry::load(ctx.as_ref()) {
+                            for loc in locals {
+                                if !calendars.iter().any(|c| c.href == loc.href) {
+                                    calendars.push(loc);
+                                }
+                            }
+                        }
+
+                        let _ = event_tx
+                            .send(AppEvent::CalendarsLoaded(calendars.clone()))
+                            .await;
+
+                        let client_container = Arc::new(tokio::sync::Mutex::new(Some(client.clone())));
+                        let controller = TaskController::new(store.clone(), client_container, ctx.clone());
+
+                        if let Ok((_warns, _synced, config_changed)) =
+                            controller.sync_and_update_store().await
+                            && config_changed
+                            && let Ok(cfg) = crate::config::Config::load(ctx.as_ref())
+                        {
+                            let _ = event_tx.send(AppEvent::ConfigUpdated(Box::new(cfg))).await;
+                        }
+
+                        match client.get_all_tasks(&calendars).await {
+                            Ok(results) => {
+                                merge_results_into_store(&store, &results).await;
+                                let _ = event_tx.send(AppEvent::TasksLoaded(results)).await;
+
+                                let _ = event_tx
+                                    .send(AppEvent::Status {
+                                        key: "refreshed".to_string(),
+                                        human: rust_i18n::t!("refreshed").to_string(),
+                                    })
+                                    .await;
+                            }
+                            Err(e) => {
+                                let _ = event_tx.send(AppEvent::Error(e.to_string())).await;
+                            }
+                        }
+                    }
+
+                    Action::ReloadConfig => {
+                        crate::config::Config::invalidate_cache();
+                        if let Ok(cfg) = crate::config::Config::load_with_credentials(ctx.as_ref()) {
+                            let _ = event_tx.send(AppEvent::ConfigUpdated(Box::new(cfg))).await;
+                        }
+                    }
+
+                    Action::MigrateLocal(source_href, target_href) => {
+                        let _ = event_tx
+                            .send(AppEvent::Status {
+                                key: "migrating_local".to_string(),
+                                human: rust_i18n::t!("migrating_local").to_string(),
+                            })
+                            .await;
+
+                        // FIX: Load tasks from disk. The client is dumb; we must provide the data.
+                        if let Ok(local_tasks) = LocalStorage::load_for_href(ctx.as_ref(), &source_href) {
+                            match client.migrate_tasks(local_tasks, &target_href).await {
+                                Ok(count) => {
+                                    let human = if count == 1 {
+                                        rust_i18n::t!("migration_complete_moved.one").to_string()
+                                    } else {
+                                        rust_i18n::t!("migration_complete_moved.other", count = count)
+                                            .to_string()
+                                    };
+                                    let _ = event_tx
+                                        .send(AppEvent::Status {
+                                            key: "migration_complete".to_string(),
+                                            human,
+                                        })
+                                        .await;
+
+                                    // Trigger refresh to show moved tasks
+                                    let _ = event_tx
+                                        .send(AppEvent::Status {
+                                            key: "refreshing".to_string(),
+                                            human: rust_i18n::t!("refreshing").to_string(),
+                                        })
+                                        .await;
+                                    // (Existing refresh logic usually follows here or user presses 'r')
+                                }
+                                Err(e) => {
+                                    let _ = event_tx.send(AppEvent::Error(e.to_string())).await;
+                                }
+                            }
+                        } else {
+                            let _ = event_tx
+                                .send(AppEvent::Error(
+                                    rust_i18n::t!("failed_to_load_local_tasks").to_string(),
+                                ))
+                                .await;
+                        }
+                    }
+
+                    // Any other actions are ignored by the network actor; the TUI/store
+                    // layer is responsible for computing state changes and emitting explicit
+                    // persistence commands.
+                    _ => {}
                 }
             }
-
-            // Any other actions are ignored by the network actor; the TUI/store
-            // layer is responsible for computing state changes and emitting explicit
-            // persistence commands.
-            _ => {}
         }
     }
 }

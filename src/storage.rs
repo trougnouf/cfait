@@ -13,7 +13,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[cfg(not(target_os = "android"))]
 use fs2::FileExt;
@@ -25,6 +27,27 @@ pub const LOCAL_CALENDAR_NAME: &str = "Local";
 pub const LOCAL_TRASH_HREF: &str = "local://trash";
 pub const LOCAL_REGISTRY_FILENAME: &str = "local_calendars.json";
 const LOCAL_STORAGE_VERSION: u32 = 10;
+
+/// Timestamp (ms since epoch) of the last write this process made to a file that
+/// the TUI/GUI file watchers observe. Used to suppress reloads triggered by our
+/// own persistence, so only genuinely external changes trigger a reload.
+static LAST_LOCAL_WRITE: AtomicU64 = AtomicU64::new(0);
+
+pub fn record_local_write() {
+    if let Ok(dur) = SystemTime::now().duration_since(UNIX_EPOCH) {
+        LAST_LOCAL_WRITE.store(dur.as_millis() as u64, Ordering::Relaxed);
+    }
+}
+
+pub fn time_since_last_local_write() -> u64 {
+    if let Ok(dur) = SystemTime::now().duration_since(UNIX_EPOCH) {
+        let now = dur.as_millis() as u64;
+        let last = LAST_LOCAL_WRITE.load(Ordering::Relaxed);
+        now.saturating_sub(last)
+    } else {
+        u64::MAX
+    }
+}
 
 #[derive(Serialize, Deserialize)]
 struct LocalStorageData {
@@ -312,6 +335,17 @@ impl LocalStorage {
         file.sync_all()?;
 
         fs::rename(tmp_path, path)?;
+
+        // Stamp writes to files observed by the TUI/GUI file watchers (same filter
+        // as the watchers) so our own persistence doesn't trigger a spurious
+        // external-change reload. Unwatched writes (alarm_index.json, config.toml)
+        // must not open the suppression window.
+        if let Some(name) = path.file_name().and_then(|n| n.to_str())
+            && name.ends_with(".json")
+            && name != "alarm_index.json"
+        {
+            record_local_write();
+        }
         Ok(())
     }
 

@@ -24,6 +24,9 @@ pub enum SidebarMode {
 pub enum Action {
     SwitchCalendar(String),
     Refresh,
+    /// Reload calendars/tasks from the local disk state (no network), used to
+    /// pick up changes made by other cfait instances.
+    OfflineRefresh,
     Quit,
     StartCreateChild(String),
     MigrateLocal(String, String), // (source_calendar_href, target_calendar_href)
@@ -38,9 +41,14 @@ pub enum Action {
 
 #[derive(Debug)]
 pub enum AppEvent {
+    /// A watched data/cache file changed on disk (another cfait instance wrote it).
+    ExternalChangeDetected,
     ConfigUpdated(Box<crate::config::Config>),
     CalendarsLoaded(Vec<CalendarListEntry>),
     TasksLoaded(Vec<(String, Vec<Task>)>),
+    /// Full replacement of the in-memory store from disk (external change).
+    /// Unlike `TasksLoaded`, this also clears calendars that no longer exist.
+    FullStateReloaded(Vec<(String, Vec<Task>)>),
     TaskSynced(Box<Task>),
     /// An event that carries a stable message key plus a localized/human string.
     /// Use `key` in tests and logic for stable comparisons; `human` is intended
