@@ -25,6 +25,25 @@ use tokio::sync::mpsc::Sender;
 use crate::store::{TaskListItem, select_weighted_random_index};
 use rust_i18n::t;
 
+/// Send a `PersistBatch` to the network actor without blocking the UI loop.
+///
+/// The inline `try_send` is load-bearing: an edit's persistence must be
+/// enqueued before any later `OfflineRefresh` (also sent inline from the event
+/// loop), so the actor writes the change to disk before it reloads state from
+/// disk. The spawn fallback only kicks in when the action channel is full.
+fn send_persist_batch(action_tx: &Sender<Action>, actions: Vec<crate::journal::Action>) {
+    match action_tx.try_send(Action::PersistBatch(actions)) {
+        Ok(()) => {}
+        Err(tokio::sync::mpsc::error::TrySendError::Full(action)) => {
+            let tx = action_tx.clone();
+            tokio::spawn(async move {
+                let _ = tx.send(action).await;
+            });
+        }
+        Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {}
+    }
+}
+
 fn is_undo(key: &KeyEvent) -> bool {
     matches!(key.code, KeyCode::Char('z') | KeyCode::Char('Z'))
         && key.modifiers.contains(KeyModifiers::CONTROL)
@@ -36,10 +55,7 @@ fn dispatch_intent_tui(state: &mut AppState, intent: AppIntent, action_tx: &Send
     let actions = state.apply_task_intent(&intent, &config);
     state.refresh_filtered_view();
     if !actions.is_empty() {
-        let tx = action_tx.clone();
-        tokio::spawn(async move {
-            let _ = tx.send(Action::PersistBatch(actions)).await;
-        });
+        send_persist_batch(action_tx, actions);
     }
 }
 
@@ -64,14 +80,7 @@ fn handle_alarm_action(
         extra(state);
         state.refresh_filtered_view();
         update_alarms(state);
-        let tx = action_tx.clone();
-        tokio::spawn(async move {
-            let _ = tx
-                .send(Action::PersistBatch(vec![crate::journal::Action::Update(
-                    cloned,
-                )]))
-                .await;
-        });
+        send_persist_batch(action_tx, vec![crate::journal::Action::Update(cloned)]);
         true
     } else {
         false
@@ -576,10 +585,7 @@ async fn execute_task_action(
         let actions = state.apply_task_intent(&i, &config);
         state.refresh_filtered_view();
         if !actions.is_empty() {
-            let tx = action_tx.clone();
-            tokio::spawn(async move {
-                let _ = tx.send(Action::PersistBatch(actions)).await;
-            });
+            send_persist_batch(action_tx, actions);
         }
     }
 }
@@ -772,10 +778,7 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
         }
 
         if !actions.is_empty() {
-            let tx = action_tx.clone();
-            tokio::spawn(async move {
-                let _ = tx.send(Action::PersistBatch(actions)).await;
-            });
+            send_persist_batch(action_tx, actions);
         }
         state.mode = InputMode::Normal;
         state.reset_input();
@@ -926,16 +929,7 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
         state.edit_generation = state.edit_generation.wrapping_add(1);
         state.store.add_task(parent.clone());
 
-        tokio::spawn({
-            let tx = action_tx.clone();
-            async move {
-                let _ = tx
-                    .send(Action::PersistBatch(vec![crate::journal::Action::Create(
-                        parent,
-                    )]))
-                    .await;
-            }
-        });
+        send_persist_batch(action_tx, vec![crate::journal::Action::Create(parent)]);
 
         for ext in extracted {
             let mut sub = Task::new(&ext.raw_text, &state.tag_aliases, def_time);
@@ -979,16 +973,7 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
             sub.is_note = ext.is_note;
 
             state.store.add_task(sub.clone());
-            tokio::spawn({
-                let tx = action_tx.clone();
-                async move {
-                    let _ = tx
-                        .send(Action::PersistBatch(vec![crate::journal::Action::Create(
-                            sub,
-                        )]))
-                        .await;
-                }
-            });
+            send_persist_batch(action_tx, vec![crate::journal::Action::Create(sub)]);
         }
 
         state.refresh_filtered_view();
@@ -1483,14 +1468,7 @@ pub async fn handle_key_event(
                                         if !actions.is_empty() {
                                             state.edit_generation =
                                                 state.edit_generation.wrapping_add(1);
-                                            let tx = action_tx.clone();
-                                            tokio::spawn(async move {
-                                                let _ = tx
-                                                    .send(crate::tui::action::Action::PersistBatch(
-                                                        actions,
-                                                    ))
-                                                    .await;
-                                            });
+                                            send_persist_batch(action_tx, actions);
                                         }
                                         final_uid
                                     } else {
@@ -1545,14 +1523,7 @@ pub async fn handle_key_event(
                                         actions.extend(state.apply_task_intent(&intent, &config));
                                     }
                                     if !actions.is_empty() {
-                                        let tx = action_tx.clone();
-                                        tokio::spawn(async move {
-                                            let _ = tx
-                                                .send(crate::tui::action::Action::PersistBatch(
-                                                    actions,
-                                                ))
-                                                .await;
-                                        });
+                                        send_persist_batch(action_tx, actions);
                                     }
                                 }
 
@@ -1699,10 +1670,7 @@ pub async fn handle_key_event(
                                     state.list_state.select(Some(idx));
                                 }
 
-                                let tx = action_tx.clone();
-                                tokio::spawn(async move {
-                                    let _ = tx.send(Action::PersistBatch(record.reverse)).await;
-                                });
+                                send_persist_batch(action_tx, record.reverse);
                                 state.message =
                                     rust_i18n::t!("task_action_undone", desc = record.description)
                                         .to_string();
@@ -1721,10 +1689,7 @@ pub async fn handle_key_event(
                                     state.list_state.select(Some(idx));
                                 }
 
-                                let tx = action_tx.clone();
-                                tokio::spawn(async move {
-                                    let _ = tx.send(Action::PersistBatch(record.forward)).await;
-                                });
+                                send_persist_batch(action_tx, record.forward);
                                 state.message =
                                     rust_i18n::t!("task_action_redone", desc = record.description)
                                         .to_string();
@@ -2829,10 +2794,7 @@ pub async fn handle_key_event(
                                 state.journal_editing_uid = None;
                             }
                             if !actions.is_empty() {
-                                let tx = action_tx.clone();
-                                tokio::spawn(async move {
-                                    let _ = tx.send(Action::PersistBatch(actions)).await;
-                                });
+                                send_persist_batch(action_tx, actions);
                             }
                         }
                     } else if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone()) {
@@ -3203,10 +3165,7 @@ pub async fn handle_key_event(
                     let actions = state.apply_task_intent(&intent, &config);
                     state.refresh_filtered_view();
                     if !actions.is_empty() {
-                        let tx = action_tx.clone();
-                        tokio::spawn(async move {
-                            let _ = tx.send(Action::PersistBatch(actions)).await;
-                        });
+                        send_persist_batch(action_tx, actions);
                     }
                 }
             }
@@ -3337,10 +3296,7 @@ pub async fn handle_key_event(
                         state.list_state.select(Some(idx));
                     }
 
-                    let tx = action_tx.clone();
-                    tokio::spawn(async move {
-                        let _ = tx.send(Action::PersistBatch(record.reverse)).await;
-                    });
+                    send_persist_batch(action_tx, record.reverse);
                     state.message =
                         rust_i18n::t!("task_action_undone", desc = record.description).to_string();
                 }
@@ -4281,15 +4237,7 @@ pub async fn handle_key_event(
                     let cloned = t_mut.clone();
                     state.mode = InputMode::Normal;
                     state.refresh_filtered_view();
-                    // Send via PersistBatch
-                    let tx = action_tx.clone();
-                    tokio::spawn(async move {
-                        let _ = tx
-                            .send(Action::PersistBatch(vec![crate::journal::Action::Update(
-                                cloned,
-                            )]))
-                            .await;
-                    });
+                    send_persist_batch(action_tx, vec![crate::journal::Action::Update(cloned)]);
                 }
             }
             KeyCode::Char('e') | KeyCode::Enter => {
@@ -4604,12 +4552,7 @@ pub async fn handle_key_event(
                                     state.active_cal_href.clone(),
                                 );
                                 if !actions.is_empty() {
-                                    let tx = action_tx.clone();
-                                    tokio::spawn(async move {
-                                        let _ = tx
-                                            .send(crate::tui::action::Action::PersistBatch(actions))
-                                            .await;
-                                    });
+                                    send_persist_batch(action_tx, actions);
                                 }
                                 final_uid
                             }
@@ -4669,12 +4612,7 @@ pub async fn handle_key_event(
                                     actions.extend(state.apply_task_intent(&intent, &config));
                                 }
                                 if !actions.is_empty() {
-                                    let tx = action_tx.clone();
-                                    tokio::spawn(async move {
-                                        let _ = tx
-                                            .send(crate::tui::action::Action::PersistBatch(actions))
-                                            .await;
-                                    });
+                                    send_persist_batch(action_tx, actions);
                                 }
                             }
                         }

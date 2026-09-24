@@ -13,9 +13,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 #[cfg(not(target_os = "android"))]
 use fs2::FileExt;
@@ -28,25 +27,41 @@ pub const LOCAL_TRASH_HREF: &str = "local://trash";
 pub const LOCAL_REGISTRY_FILENAME: &str = "local_calendars.json";
 const LOCAL_STORAGE_VERSION: u32 = 10;
 
-/// Timestamp (ms since epoch) of the last write this process made to a file that
-/// the TUI/GUI file watchers observe. Used to suppress reloads triggered by our
-/// own persistence, so only genuinely external changes trigger a reload.
-static LAST_LOCAL_WRITE: AtomicU64 = AtomicU64::new(0);
+/// Files this process recently wrote via `atomic_write`, with the write time.
+/// Used to suppress watcher events caused by our own persistence, so only
+/// genuinely external changes trigger a reload.
+static RECENT_LOCAL_WRITES: OnceLock<Mutex<HashMap<PathBuf, Instant>>> = OnceLock::new();
 
-pub fn record_local_write() {
-    if let Ok(dur) = SystemTime::now().duration_since(UNIX_EPOCH) {
-        LAST_LOCAL_WRITE.store(dur.as_millis() as u64, Ordering::Relaxed);
-    }
+/// How long a recorded write suppresses watcher events for its path.
+const WRITE_SUPPRESSION_WINDOW: Duration = Duration::from_millis(500);
+
+fn recent_local_writes() -> &'static Mutex<HashMap<PathBuf, Instant>> {
+    RECENT_LOCAL_WRITES.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-pub fn time_since_last_local_write() -> u64 {
-    if let Ok(dur) = SystemTime::now().duration_since(UNIX_EPOCH) {
-        let now = dur.as_millis() as u64;
-        let last = LAST_LOCAL_WRITE.load(Ordering::Relaxed);
-        now.saturating_sub(last)
-    } else {
-        u64::MAX
-    }
+pub fn record_local_write(path: &Path) {
+    let mut map = recent_local_writes().lock().unwrap();
+    // Drop stale entries so the map stays bounded.
+    let cutoff = Instant::now()
+        .checked_sub(WRITE_SUPPRESSION_WINDOW)
+        .unwrap_or(Instant::now());
+    map.retain(|_, at| *at > cutoff);
+    map.insert(path.to_path_buf(), Instant::now());
+}
+
+/// Returns true if `path` was written by this process within the suppression
+/// window. The record is NOT consumed: a single `atomic_write` rename makes
+/// notify emit several events for the same final path (the rename "to" plus a
+/// combined rename event), and every one of them must be suppressed. The
+/// window is short, so the only thing this can miss is a genuine external
+/// write to the very same file within the window of our own write; the next
+/// change is still picked up.
+pub fn is_suppressed_local_write(path: &Path) -> bool {
+    let map = recent_local_writes().lock().unwrap();
+    let fresh_until = Instant::now()
+        .checked_sub(WRITE_SUPPRESSION_WINDOW)
+        .unwrap_or(Instant::now());
+    map.get(path).is_some_and(|at| *at > fresh_until)
 }
 
 #[derive(Serialize, Deserialize)]
@@ -334,18 +349,19 @@ impl LocalStorage {
         file.write_all(contents.as_ref())?;
         file.sync_all()?;
 
-        fs::rename(tmp_path, path)?;
-
-        // Stamp writes to files observed by the TUI/GUI file watchers (same filter
-        // as the watchers) so our own persistence doesn't trigger a spurious
-        // external-change reload. Unwatched writes (alarm_index.json, config.toml)
-        // must not open the suppression window.
+        // Record the write BEFORE the rename: the rename is what generates the
+        // watcher event on the final path, so the suppression must already be in
+        // place when that event is delivered. Recording after the rename lets a
+        // racing notify thread see the path as unrecorded and treat our own
+        // persistence as an external change.
         if let Some(name) = path.file_name().and_then(|n| n.to_str())
             && name.ends_with(".json")
             && name != "alarm_index.json"
         {
-            record_local_write();
+            record_local_write(path);
         }
+
+        fs::rename(tmp_path, path)?;
         Ok(())
     }
 

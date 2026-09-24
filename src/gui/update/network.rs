@@ -116,34 +116,48 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             app.loading = true;
             app.error_msg = None;
-            let ctx = app.ctx.clone();
-            let local_mode_enabled = app.core_config.enable_local_mode;
             app.pending_refresh_generation = app.edit_generation;
-            Task::perform(
-                async move {
-                    // All disk I/O (config + calendars + tasks) is blocking, so run
-                    // the whole reload on the blocking pool, not the runtime worker.
-                    tokio::task::spawn_blocking(move || {
-                        crate::config::Config::invalidate_cache();
-                        let cfg = crate::config::Config::load_with_credentials(ctx.as_ref())
-                            .unwrap_or_default();
-                        let (cals, tasks) = crate::cache::Cache::load_all_disk_state(
-                            ctx.as_ref(),
-                            local_mode_enabled,
-                        );
-                        (Box::new(cfg), cals, tasks)
-                    })
-                    .await
-                    .unwrap_or_else(|_| {
-                        (
-                            Box::new(crate::config::Config::default()),
-                            Vec::new(),
-                            Vec::new(),
-                        )
-                    })
-                },
-                |(cfg, cals, tasks)| Message::ExternalReloaded(cfg, cals, tasks),
-            )
+
+            // Prefer the background worker: channel FIFO guarantees its pending
+            // Batches (disk writes) complete before the reload reads the disk,
+            // and the worker's store is refreshed in the same pass.
+            let routed = app
+                .bg_tx
+                .as_ref()
+                .is_some_and(|tx| tx.try_send(WorkerCommand::FlushAndLoad).is_ok());
+
+            if routed {
+                Task::none()
+            } else {
+                // Fallback: no worker (or its channel is full). Load directly.
+                let ctx = app.ctx.clone();
+                let local_mode_enabled = app.core_config.enable_local_mode;
+                Task::perform(
+                    async move {
+                        // All disk I/O (config + calendars + tasks) is blocking, so run
+                        // the whole reload on the blocking pool, not the runtime worker.
+                        tokio::task::spawn_blocking(move || {
+                            crate::config::Config::invalidate_cache();
+                            let cfg = crate::config::Config::load_with_credentials(ctx.as_ref())
+                                .unwrap_or_default();
+                            let (cals, tasks) = crate::cache::Cache::load_all_disk_state(
+                                ctx.as_ref(),
+                                local_mode_enabled,
+                            );
+                            (Box::new(cfg), cals, tasks)
+                        })
+                        .await
+                        .unwrap_or_else(|_| {
+                            (
+                                Box::new(crate::config::Config::default()),
+                                Vec::new(),
+                                Vec::new(),
+                            )
+                        })
+                    },
+                    |(cfg, cals, tasks)| Message::ExternalReloaded(cfg, cals, tasks),
+                )
+            }
         }
         Message::ExternalReloaded(cfg, calendars, store_data) => {
             crate::gui::update::settings::apply_config_to_app(app, &cfg);

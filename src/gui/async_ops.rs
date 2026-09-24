@@ -124,6 +124,9 @@ pub enum WorkerCommand {
     UpdateClient(Option<RustyClient>),
     Batch(Vec<Action>),
     SyncNow,
+    /// Reload the disk state (config + calendars + tasks) and replace the
+    /// worker's store with it. Used when another cfait instance changed files.
+    FlushAndLoad,
 }
 
 pub fn spawn_background_worker(
@@ -140,8 +143,9 @@ pub fn spawn_background_worker(
         let mut sync_pending = false;
 
         // Watch the data and cache directories for changes made by other cfait
-        // instances (e.g. a `cfait sync` in another terminal). Writes by this
-        // process are suppressed via the LAST_LOCAL_WRITE stamp in atomic_write.
+        // instances (e.g. a `cfait sync` in another terminal). Events for files
+        // this process just wrote are suppressed per-file in atomic_write, so a
+        // quick external edit right after our own persistence is not lost.
         let (watch_tx, mut watch_rx) = tokio::sync::mpsc::channel(100);
         let mut watching = false;
         let mut _watcher = None;
@@ -160,7 +164,11 @@ pub fn spawn_background_worker(
                                 name.ends_with(".json") && name != "alarm_index.json"
                             })
                         });
-                        if is_relevant && crate::storage::time_since_last_local_write() > 1000 {
+                        let is_our_own_write = event
+                            .paths
+                            .iter()
+                            .any(|p| crate::storage::is_suppressed_local_write(p));
+                        if is_relevant && !is_our_own_write {
                             // Best-effort: a full channel already guarantees a reload
                             // is pending, so dropping a redundant signal is safe and
                             // keeps the notify thread from ever blocking.
@@ -212,6 +220,40 @@ pub fn spawn_background_worker(
                         }
                         Some(WorkerCommand::SyncNow) => {
                             sync_pending = true;
+                        }
+                        Some(WorkerCommand::FlushAndLoad) => {
+                            // Channel FIFO guarantees any earlier Batch (disk writes)
+                            // is fully persisted before this reload reads the disk.
+                            let ctx_clone = ctx.clone();
+                            let res = tokio::task::spawn_blocking(move || {
+                                crate::config::Config::invalidate_cache();
+                                let cfg = crate::config::Config::load_with_credentials(
+                                    ctx_clone.as_ref(),
+                                )
+                                .unwrap_or_default();
+                                let (cals, tasks) = crate::cache::Cache::load_all_disk_state(
+                                    ctx_clone.as_ref(),
+                                    cfg.enable_local_mode,
+                                );
+                                (Box::new(cfg), cals, tasks)
+                            })
+                            .await;
+                            if let Ok((cfg, cals, tasks)) = res {
+                                // Replace the worker's store with the fresh disk state
+                                // (under a single lock) so later Batch actions operate
+                                // on current data.
+                                let mut s = controller.store.lock().await;
+                                s.clear();
+                                for (href, list) in &tasks {
+                                    s.insert(href.clone(), list.clone());
+                                }
+                                drop(s);
+                                let _ = ui_tx
+                                    .send(crate::gui::message::Message::ExternalReloaded(
+                                        cfg, cals, tasks,
+                                    ))
+                                    .await;
+                            }
                         }
                         None => break,
                     }
