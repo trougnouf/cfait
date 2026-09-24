@@ -439,7 +439,11 @@ fun HomeScreen(
     }
 
     // --- Functions ---
+    // Monotonic generation counter so a slow, stale getViewTasks response can
+    // never overwrite a newer one (the source of the intermittent blank list).
+    val updateTaskGen = remember { java.util.concurrent.atomic.AtomicInteger(0) }
     fun updateTaskList() {
+        val gen = updateTaskGen.incrementAndGet()
         scope.launch {
             try {
                 val options = MobileFilterOptions(
@@ -455,7 +459,10 @@ fun HomeScreen(
                     respectTreeCollapse = false
                 )
                 val newViewData = api.getViewTasks(options)
-                onUpdateViewData(newViewData, api.getConfig().tagAliases)
+                // Only apply the result if no newer fetch has started since.
+                if (gen == updateTaskGen.get()) {
+                    onUpdateViewData(newViewData, api.getConfig().tagAliases)
+                }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
             }
@@ -1053,6 +1060,16 @@ fun HomeScreen(
         expandedLocations, matchAllCategories
     ) {
         updateTaskList()
+    }
+
+    // Re-fetch when leaving the journal so the collection view shows fresh data
+    // instead of whatever the journal left the list in.
+    var prevSidebarTab by remember { mutableIntStateOf(sidebarTab) }
+    LaunchedEffect(sidebarTab) {
+        if (prevSidebarTab == 4 && sidebarTab != 4) {
+            updateTaskList()
+        }
+        prevSidebarTab = sidebarTab
     }
 
     LaunchedEffect(scrollTrigger, autoScrollUid, tasks) {
