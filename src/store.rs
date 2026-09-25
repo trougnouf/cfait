@@ -642,6 +642,18 @@ fn session_fully_covered(s: i64, e: i64, intervals: &[(i64, i64)]) -> bool {
     covered >= (e - s).max(0)
 }
 
+/// Raw per-task data collected during a single store scan for goal scoring.
+/// Sessions are unclipped; each period evaluation clips them on the fly, so
+/// one scan can serve the current progress plus the whole history.
+struct ClaimedTaskData {
+    sessions: Vec<(i64, i64)>,
+    last_started_at: Option<i64>,
+    completion_ts: Option<i64>,
+    time_spent_seconds: u64,
+    estimated_duration: Option<u32>,
+    descendant_intervals: Vec<(i64, i64)>,
+}
+
 impl TaskStore {
     /// Construct a new TaskStore with an AppContext reference for persistence.
     pub fn new(ctx: Arc<dyn AppContext>) -> Self {
@@ -2639,10 +2651,60 @@ impl TaskStore {
         end_ts: i64,
     ) -> u32 {
         let config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
-        let default_dur = config.default_duration_goal_mins;
-        let count_sessions = config.sessions_count_as_completions;
+        let now_ts = chrono::Utc::now().timestamp();
+        let claimed = self.collect_claimed_tasks(key, goal, &config, now_ts);
+        Self::score_goal_period(&claimed, goal, &config, start_ts, end_ts, now_ts)
+    }
+
+    /// Calculates the current progress and the historical completion
+    /// percentages over the last `periods` periods with a single store scan.
+    /// Equivalent to calling `calculate_goal_progress` and
+    /// `calculate_goal_history` back to back, but the per-task collection
+    /// (the expensive part) happens once instead of `periods + 1` times.
+    pub fn calculate_goal_progress_and_history(
+        &self,
+        key: &str,
+        goal: &crate::config::Goal,
+        periods: u32,
+    ) -> (u32, Vec<f32>) {
+        let config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
         let now = chrono::Utc::now();
         let now_ts = now.timestamp();
+        let claimed = self.collect_claimed_tasks(key, goal, &config, now_ts);
+
+        let (start_ts, end_ts) = goal.interval.get_period_bounds(now, 0);
+        let progress = Self::score_goal_period(&claimed, goal, &config, start_ts, end_ts, now_ts);
+
+        let mut history = Vec::with_capacity(periods as usize);
+        for offset in (-(periods as i32) + 1)..=0 {
+            let (start_ts, end_ts) = goal.interval.get_period_bounds(now, offset);
+            let prog = if offset == 0 {
+                progress
+            } else {
+                Self::score_goal_period(&claimed, goal, &config, start_ts, end_ts, now_ts)
+            };
+            let pct = if goal.target > 0 {
+                (prog as f32 / goal.target as f32).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            history.push(pct);
+        }
+        (progress, history)
+    }
+
+    /// Single scan over the store collecting the raw per-task data of every
+    /// task claimed by `key`. Duration goals union-merge all sessions
+    /// globally (total time worked); count goals count per task with cascade
+    /// dedup (a parent's session fully covered by a descendant's overlapping
+    /// session is skipped).
+    fn collect_claimed_tasks(
+        &self,
+        key: &str,
+        goal: &crate::config::Goal,
+        config: &crate::config::Config,
+        now_ts: i64,
+    ) -> Vec<ClaimedTaskData> {
         let is_tag = key.starts_with('#');
         let is_task = key.starts_with("task:");
         let clean_key = if is_tag {
@@ -2654,19 +2716,10 @@ impl TaskStore {
         } else {
             key
         };
+        let need_descendants = goal.goal_type == crate::config::GoalType::Count
+            && config.sessions_count_as_completions;
 
-        // Collect per-task data for claimed tasks. Duration goals union-merge
-        // all sessions globally (total time worked). Count goals count per
-        // task with cascade dedup (a parent's session fully covered by a
-        // descendant's overlapping session is skipped).
-        struct ClaimedTask<'a> {
-            task: &'a crate::model::Task,
-            sessions: Vec<(i64, i64)>,
-            has_sessions_in_period: bool,
-        }
-        let mut claimed_tasks: Vec<ClaimedTask> = Vec::new();
-        let mut est_credits: Vec<u32> = Vec::new();
-
+        let mut claimed = Vec::new();
         for (href, map) in &self.calendars {
             if href == crate::storage::LOCAL_TRASH_HREF || href == "local://recovery" {
                 continue;
@@ -2675,60 +2728,76 @@ impl TaskStore {
                 if !self.task_is_claimed_by_goal(t, is_tag, is_task, clean_key) {
                     continue;
                 }
-
-                let mut sessions: Vec<(i64, i64)> = Vec::new();
-                let mut has_sessions_in_period = false;
-
-                for session in &t.sessions {
-                    if session.end >= start_ts && session.start < end_ts {
-                        let clip_start = session.start.max(start_ts);
-                        let clip_end = session.end.min(end_ts);
-                        if clip_end > clip_start {
-                            sessions.push((clip_start, clip_end));
-                            has_sessions_in_period = true;
-                        }
-                    }
-                }
-
-                if let Some(start) = t.last_started_at {
-                    let current = now_ts.min(end_ts);
-                    if current > start_ts {
-                        let clip_start = start.max(start_ts);
-                        if current > clip_start {
-                            sessions.push((clip_start, current));
-                            has_sessions_in_period = true;
-                        }
-                    }
-                }
-
-                if t.status == crate::model::TaskStatus::Completed
-                    && let Some(comp) = t.completion_date()
-                    && comp.timestamp() >= start_ts
-                    && comp.timestamp() < end_ts
-                {
-                    let total_tracked = (t.time_spent_seconds / 60) as u32;
-                    let est = t.estimated_duration.unwrap_or(default_dur);
-                    if est > total_tracked {
-                        est_credits.push(est - total_tracked);
-                    }
-                }
-
-                claimed_tasks.push(ClaimedTask {
-                    task: t,
-                    sessions,
-                    has_sessions_in_period,
+                claimed.push(ClaimedTaskData {
+                    sessions: t.sessions.iter().map(|s| (s.start, s.end)).collect(),
+                    last_started_at: t.last_started_at,
+                    completion_ts: if t.status == crate::model::TaskStatus::Completed {
+                        t.completion_date().map(|c| c.timestamp())
+                    } else {
+                        None
+                    },
+                    time_spent_seconds: t.time_spent_seconds,
+                    estimated_duration: t.estimated_duration,
+                    descendant_intervals: if need_descendants {
+                        self.collect_descendant_intervals(&t.uid, now_ts)
+                    } else {
+                        Vec::new()
+                    },
                 });
             }
         }
+        claimed
+    }
 
+    /// Score one period from pre-collected claimed-task data. Sessions are
+    /// clipped to the period on the fly; a running timer counts up to
+    /// `now_ts` (or the period end, for past periods).
+    fn score_goal_period(
+        claimed: &[ClaimedTaskData],
+        goal: &crate::config::Goal,
+        config: &crate::config::Config,
+        start_ts: i64,
+        end_ts: i64,
+        now_ts: i64,
+    ) -> u32 {
         match goal.goal_type {
             crate::config::GoalType::Duration => {
                 // Union-merge all sessions from all claimed tasks. Overlapping
                 // cascade sessions collapse — each second counts once.
-                let mut all_intervals: Vec<(i64, i64)> = claimed_tasks
-                    .iter()
-                    .flat_map(|ct| ct.sessions.iter().copied())
-                    .collect();
+                let mut all_intervals: Vec<(i64, i64)> = Vec::new();
+                let mut est_credits: Vec<u32> = Vec::new();
+                for ct in claimed {
+                    for &(s, e) in &ct.sessions {
+                        if e >= start_ts && s < end_ts {
+                            let clip_start = s.max(start_ts);
+                            let clip_end = e.min(end_ts);
+                            if clip_end > clip_start {
+                                all_intervals.push((clip_start, clip_end));
+                            }
+                        }
+                    }
+                    if let Some(start) = ct.last_started_at {
+                        let current = now_ts.min(end_ts);
+                        if current > start_ts {
+                            let clip_start = start.max(start_ts);
+                            if current > clip_start {
+                                all_intervals.push((clip_start, current));
+                            }
+                        }
+                    }
+                    if let Some(comp) = ct.completion_ts
+                        && comp >= start_ts
+                        && comp < end_ts
+                    {
+                        let total_tracked = (ct.time_spent_seconds / 60) as u32;
+                        let est = ct
+                            .estimated_duration
+                            .unwrap_or(config.default_duration_goal_mins);
+                        if est > total_tracked {
+                            est_credits.push(est - total_tracked);
+                        }
+                    }
+                }
                 all_intervals.sort_unstable_by_key(|(s, _)| *s);
                 let mut merged: Vec<(i64, i64)> = Vec::with_capacity(all_intervals.len());
                 for (s, e) in all_intervals {
@@ -2753,43 +2822,57 @@ impl TaskStore {
             }
             crate::config::GoalType::Count => {
                 let mut progress = 0u32;
-                for ct in &claimed_tasks {
+                for ct in claimed {
                     let mut task_progress = 0u32;
 
-                    if count_sessions {
-                        // Collect descendant intervals for cascade dedup.
-                        let desc_intervals =
-                            self.collect_descendant_intervals(&ct.task.uid, now_ts);
+                    // Whether the task has any tracked time in this period
+                    // (drives the completion fallback below).
+                    let mut has_sessions_in_period = false;
+                    for &(s, e) in &ct.sessions {
+                        if e >= start_ts && s < end_ts {
+                            let clip_start = s.max(start_ts);
+                            let clip_end = e.min(end_ts);
+                            if clip_end > clip_start {
+                                has_sessions_in_period = true;
+                            }
+                        }
+                    }
+                    if let Some(start) = ct.last_started_at {
+                        let current = now_ts.min(end_ts);
+                        if current > start_ts {
+                            let clip_start = start.max(start_ts);
+                            if current > clip_start {
+                                has_sessions_in_period = true;
+                            }
+                        }
+                    }
+
+                    if config.sessions_count_as_completions {
                         // Attribute each session to exactly one period (the
                         // one containing its start) so a midnight-spanning
                         // session is not double-counted across two periods.
-                        for session in &ct.task.sessions {
-                            if session.start >= start_ts
-                                && session.start < end_ts
-                                && !session_fully_covered(
-                                    session.start,
-                                    session.end,
-                                    &desc_intervals,
-                                )
+                        for &(s, e) in &ct.sessions {
+                            if s >= start_ts
+                                && s < end_ts
+                                && !session_fully_covered(s, e, &ct.descendant_intervals)
                             {
                                 task_progress += 1;
                             }
                         }
-                        if let Some(start) = ct.task.last_started_at
+                        if let Some(start) = ct.last_started_at
                             && start >= start_ts
                             && start < end_ts
-                            && !session_fully_covered(start, now_ts, &desc_intervals)
+                            && !session_fully_covered(start, now_ts, &ct.descendant_intervals)
                         {
                             task_progress += 1;
                         }
                     }
 
-                    if ct.task.status == crate::model::TaskStatus::Completed
-                        && let Some(comp) = ct.task.completion_date()
-                        && comp.timestamp() >= start_ts
-                        && comp.timestamp() < end_ts
+                    if let Some(comp) = ct.completion_ts
+                        && comp >= start_ts
+                        && comp < end_ts
                         && task_progress == 0
-                        && !ct.has_sessions_in_period
+                        && !has_sessions_in_period
                     {
                         task_progress += 1;
                     }

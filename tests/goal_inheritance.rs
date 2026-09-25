@@ -513,3 +513,84 @@ fn aggregated_time_three_level_tree() {
     let agg = store.get_aggregated_time_seconds("root");
     assert_eq!(agg, 9000, "three-level tree: union gives root's full span");
 }
+
+/// The combined progress+history call must agree with the individual
+/// methods: same current progress, same per-period history.
+#[test]
+fn duration_progress_and_history_agree_with_individual_calls() {
+    let mut store = make_store();
+
+    let goal = make_goal(GoalType::Duration, 120);
+    let now = chrono::Utc::now();
+
+    // One session in the middle of each of the last four weeks.
+    let mut task = Task::new("Task #work", &HashMap::new(), None);
+    task.uid = "task".to_string();
+    task.calendar_href = "cal".to_string();
+    for offset in 0..4i32 {
+        let (start, end) = goal.interval.get_period_bounds(now, -offset);
+        let span = end - start;
+        task.sessions.push(WorkSession {
+            start: start + span / 4,
+            end: start + span / 4 + 3600,
+        });
+    }
+    store.add_task(task);
+
+    let (progress, history) = store.calculate_goal_progress_and_history("#work", &goal, 7);
+
+    // Current week: 60 min. Each older week: 60 min, up to three back.
+    assert_eq!(
+        progress, 60,
+        "current progress should be this week's 60 min"
+    );
+    assert_eq!(history.len(), 7, "history should cover 7 periods");
+    assert_eq!(
+        history,
+        vec![0.0, 0.0, 0.0, 0.5, 0.5, 0.5, 0.5],
+        "history should show 60/120 for the last four weeks"
+    );
+
+    // And it must match the individual methods exactly.
+    assert_eq!(progress, store.calculate_goal_progress("#work", &goal));
+    assert_eq!(history, store.calculate_goal_history("#work", &goal, 7));
+}
+
+/// Same equivalence check for count goals with session counting enabled.
+#[test]
+fn count_progress_and_history_agree_with_individual_calls() {
+    let mut store = make_store_with_session_counting();
+
+    let goal = make_goal(GoalType::Count, 5);
+    let now = chrono::Utc::now();
+
+    // One session this week, two last week, one two weeks ago.
+    let mut task = Task::new("Task #work", &HashMap::new(), None);
+    task.uid = "task".to_string();
+    task.calendar_href = "cal".to_string();
+    let counts: [i32; 3] = [1, 2, 1];
+    for (offset, n) in counts.iter().enumerate() {
+        let (start, end) = goal.interval.get_period_bounds(now, -(offset as i32));
+        let span = end - start;
+        for i in 0..*n {
+            let offset_s = (i * 7200) as i64;
+            task.sessions.push(WorkSession {
+                start: start + span / 4 + offset_s,
+                end: start + span / 4 + offset_s + 3600,
+            });
+        }
+    }
+    store.add_task(task);
+
+    let (progress, history) = store.calculate_goal_progress_and_history("#work", &goal, 7);
+
+    assert_eq!(progress, 1, "one session this week");
+    assert_eq!(
+        history,
+        vec![0.0, 0.0, 0.0, 0.0, 0.2, 0.4, 0.2],
+        "history should count sessions per week"
+    );
+
+    assert_eq!(progress, store.calculate_goal_progress("#work", &goal));
+    assert_eq!(history, store.calculate_goal_history("#work", &goal, 7));
+}
