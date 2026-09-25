@@ -7,8 +7,10 @@ pub mod core;
 pub mod middleware;
 pub mod redirect;
 pub mod sync; // Restore this module
+pub mod timeout;
 
 // Restore exports from local module
 pub use crate::client::redirect::{FollowRedirectLayer, FollowRedirectService};
+pub use crate::client::timeout::TimeoutService;
 
 pub use crate::client::core::{GET_CTAG, RustyClient};
