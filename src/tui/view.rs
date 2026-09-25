@@ -1235,7 +1235,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                             } else {
                                 (String::new(), Style::default())
                             }
-                        } else if is_future_start {
+                        } else if is_future_start && t.dtstart.is_some() {
                             let start_ref = t.dtstart.as_ref().unwrap();
                             let start_str = start_ref.format_display();
 
@@ -1315,15 +1315,19 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
                         let prefix_blocked = Span::raw(if is_blocked { " [B] " } else { " " });
 
+                        // Exact width of the spans built below: indent + "[x]"
+                        // + optional "[+z]" + " [B] " (or a single space).
                         let prefix_width = (if state.active_cal_href.is_some() {
-                            t.depth * 2 + 6
-                        } else {
-                            6
-                        }) + if t.has_visible_subtasks && t.collapsed {
-                            3
+                            t.depth * 2
                         } else {
                             0
-                        };
+                        }) + 3
+                            + if t.has_visible_subtasks && t.collapsed {
+                                3
+                            } else {
+                                0
+                            }
+                            + if is_blocked { 5 } else { 1 };
 
                         // Build metadata spans
                         let mut metadata_spans = Vec::new();
@@ -1815,11 +1819,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
             // --- Work Sessions (recent) ---
             if !task.sessions.is_empty() {
-                let mut total_mins: i64 = 0;
-                let mut session_lines: Vec<String> = Vec::new();
+                let total_mins: i64 = task.sessions.iter().map(|s| (s.end - s.start) / 60).sum();
                 // Show most recent sessions first
-                for session in task.sessions.iter().rev() {
-                    total_mins += (session.end - session.start) / 60;
+                let mut session_lines: Vec<String> = Vec::new();
+                for session in task.sessions.iter().rev().take(3) {
                     let s_dt = chrono::DateTime::from_timestamp(session.start, 0)
                         .unwrap_or_else(|| chrono::DateTime::from_timestamp(0, 0).unwrap())
                         .with_timezone(&chrono::Local);
@@ -1843,8 +1846,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         m = total_mins % 60
                     )
                 ));
-                for line in session_lines.into_iter().take(3) {
-                    details_md.push_str(&line);
+                for line in &session_lines {
+                    details_md.push_str(line);
                     details_md.push('\n');
                 }
                 if task.sessions.len() > 3 {
@@ -1894,7 +1897,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         let calculated_height = required_lines + 2;
         let available_height = v_chunks[0].height;
         let max_details_height = available_height / 2;
-        let final_details_height = calculated_height.clamp(3, max_details_height);
+        let final_details_height = calculated_height.min(max_details_height.max(3));
 
         // Recalculate layout with final details height
         let main_chunks = Layout::default()
@@ -2117,7 +2120,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     }
 
                     let slice: String = state.input_buffer.chars().skip(skipped_chars).collect();
-                    let vis_cursor_x = cursor_visual_x - skipped_w;
+                    let vis_cursor_x = cursor_visual_x.saturating_sub(skipped_w);
                     (slice, vis_cursor_x as u16)
                 } else {
                     (state.input_buffer.clone(), cursor_visual_x as u16)
