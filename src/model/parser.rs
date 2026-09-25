@@ -511,17 +511,10 @@ fn merge_assignment_tokens(parts: &[(usize, usize, String)]) -> Vec<String> {
     while i < parts.len() {
         let mut tok = parts[i].2.clone();
 
-        if tok == ":=" {
-            if let Some(prev) = merged_tokens.last_mut() {
-                prev.push_str(":=");
-                if i + 1 < parts.len() {
-                    prev.push_str(&parts[i + 1].2);
-                    i += 1;
-                }
-            }
-            i += 1;
-            continue;
-        } else if i + 1 < parts.len() && (tok.ends_with(":=") || parts[i + 1].2.starts_with(":=")) {
+        // Glue a spaced `key :=` pair (or a `key:=` prefix) into one token.
+        // A bare `:=` token can never reach here: the previous iteration would
+        // have already absorbed it.
+        if i + 1 < parts.len() && (tok.ends_with(":=") || parts[i + 1].2.starts_with(":=")) {
             tok.push_str(&parts[i + 1].2);
             i += 1;
         }
@@ -537,7 +530,11 @@ fn merge_assignment_tokens(parts: &[(usize, usize, String)]) -> Vec<String> {
         if tok.contains(":=") {
             while j + 1 < merged_tokens.len() {
                 let next = &merged_tokens[j + 1];
-                if tok.ends_with(',') || next == "," || next.starts_with(',') {
+                // The RHS continues while the accumulated token ends with ','
+                // (comma-separated list) or still has no value at all (spaced
+                // `key := value` form, where the value tokens follow).
+                if tok.ends_with(',') || tok.ends_with(":=") || next == "," || next.starts_with(',')
+                {
                     tok.push_str(next);
                     j += 1;
                 } else {

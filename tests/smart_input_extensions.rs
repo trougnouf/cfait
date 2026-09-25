@@ -130,6 +130,28 @@ fn test_inline_alias_definition() {
 }
 
 #[test]
+fn test_inline_alias_definition_spaced() {
+    // SPECS.md documents the spaced form: #gardening := #home:outside, @@garden, !4
+    // The whole RHS must be captured, not just the first token.
+    let input = "Water the beds #gardening := #home:outside, @@garden, !4";
+
+    let (clean, map) = cfait::model::parser::extract_inline_aliases(input);
+
+    assert_eq!(clean, "Water the beds #gardening");
+    assert!(map.contains_key("gardening"));
+
+    let values = map.get("gardening").unwrap();
+    assert_eq!(
+        values,
+        &[
+            "#home:outside".to_string(),
+            "@@garden".to_string(),
+            "!4".to_string()
+        ]
+    );
+}
+
+#[test]
 fn test_recurrence_with_until() {
     let aliases = HashMap::new();
 
