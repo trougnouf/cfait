@@ -1344,17 +1344,29 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::SnoozeCustomSubmit(t_uid, a_uid) => {
-            app.ringing_tasks
-                .retain(|(t, a)| !(t.uid == t_uid && a.uid == a_uid));
-
-            let mins = if let Ok(n) = app.snooze_custom_input.parse::<u32>() {
-                n
+            // Parse before dismissing the alarm: on a typo the alarm keeps
+            // ringing instead of silently snoozing for a fallback 10 minutes.
+            let input = app.snooze_custom_input.trim();
+            let mins = if let Ok(n) = input.parse::<u32>() {
+                Some(n)
             } else {
-                crate::model::parser::parse_duration(&app.snooze_custom_input).unwrap_or(10)
+                crate::model::parser::parse_duration(input)
             };
-            app.snooze_custom_input.clear();
-
-            handle(app, Message::SnoozeAlarm(t_uid, a_uid, mins))
+            match mins {
+                Some(mins) => {
+                    app.ringing_tasks
+                        .retain(|(t, a)| !(t.uid == t_uid && a.uid == a_uid));
+                    app.snooze_custom_input.clear();
+                    handle(app, Message::SnoozeAlarm(t_uid, a_uid, mins))
+                }
+                None => {
+                    app.error_msg = Some(
+                        rust_i18n::t!("error_invalid_duration", val = input.to_string())
+                            .to_string(),
+                    );
+                    Task::none()
+                }
+            }
         }
 
         Message::CompleteTaskFromAlarm(t_uid, a_uid) => {
@@ -1500,27 +1512,38 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some(uid) = app.adding_session_uid.clone() {
                 let input_text = app.session_input.text();
 
-                if let Some(session) = crate::model::parser::parse_session_input(&input_text)
-                    && let Some((t_mut, _)) = app.store.get_task_mut(&uid)
-                {
-                    app.edit_generation = app.edit_generation.wrapping_add(1);
-                    if let Some(idx) = app.editing_session_idx {
-                        t_mut.remove_session(idx);
+                match crate::model::parser::parse_session_input(&input_text) {
+                    Some(session) => {
+                        if let Some((t_mut, _)) = app.store.get_task_mut(&uid) {
+                            app.edit_generation = app.edit_generation.wrapping_add(1);
+                            if let Some(idx) = app.editing_session_idx {
+                                t_mut.remove_session(idx);
+                            }
+
+                            t_mut.add_session(session);
+                            t_mut.sequence += 1;
+                            let cloned = t_mut.clone();
+
+                            app.adding_session_uid = None;
+                            app.editing_session_idx = None;
+                            app.session_input = iced::widget::text_editor::Content::new();
+                            common::refresh_filtered_tasks(app);
+
+                            if let Some(tx) = &app.bg_tx {
+                                let _ =
+                                    tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(vec![
+                                        crate::journal::Action::Update(cloned),
+                                    ]));
+                            }
+                        } else {
+                            app.error_msg = Some(rust_i18n::t!("error_task_not_found").to_string());
+                        }
                     }
-
-                    t_mut.add_session(session);
-                    t_mut.sequence += 1;
-                    let cloned = t_mut.clone();
-
-                    app.adding_session_uid = None;
-                    app.editing_session_idx = None;
-                    app.session_input = iced::widget::text_editor::Content::new();
-                    common::refresh_filtered_tasks(app);
-
-                    if let Some(tx) = &app.bg_tx {
-                        let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(vec![
-                            crate::journal::Action::Update(cloned),
-                        ]));
+                    // Keep the session input open so the user can correct it.
+                    None => {
+                        app.error_msg = Some(
+                            rust_i18n::t!("error_format", msg = "Invalid time format").to_string(),
+                        );
                     }
                 }
             }
