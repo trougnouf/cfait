@@ -1429,10 +1429,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 && let Some(session) = task.sessions.get(idx)
             {
                 let s_dt = chrono::DateTime::from_timestamp(session.start, 0)
-                    .unwrap()
+                    .unwrap_or_else(|| chrono::DateTime::from_timestamp(0, 0).unwrap())
                     .with_timezone(&chrono::Local);
                 let e_dt = chrono::DateTime::from_timestamp(session.end, 0)
-                    .unwrap()
+                    .unwrap_or_else(|| chrono::DateTime::from_timestamp(0, 0).unwrap())
                     .with_timezone(&chrono::Local);
                 let prefill = format!(
                     "{} {}-{}",

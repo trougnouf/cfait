@@ -1541,7 +1541,7 @@ async fn main() -> Result<()> {
                     let smart = t.to_smart_string();
                     let summary_escaped = cfait::model::parser::escape_summary(&t.summary);
                     let metadata = smart.replacen(&summary_escaped, "", 1).trim().to_string();
-                    let uid_short = &t.uid[..std::cmp::min(8, t.uid.len())];
+                    let uid_short: String = t.uid.chars().take(8).collect();
 
                     let meta_str = if metadata.is_empty() {
                         String::new()
