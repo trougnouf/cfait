@@ -371,10 +371,11 @@ impl IcsAdapter {
             } else {
                 todo.add_property("DURATION", format!("PT{}M", mins));
             }
+        }
 
-            if let Some(max) = task.estimated_duration_max {
-                todo.add_property("X-CFAIT-ESTIMATED-DURATION-MAX", format!("PT{}M", max));
-            }
+        // Written independently: a max without a min must survive a round trip
+        if let Some(max) = task.estimated_duration_max {
+            todo.add_property("X-CFAIT-ESTIMATED-DURATION-MAX", format!("PT{}M", max));
         }
 
         if task.priority > 0 {
@@ -796,7 +797,16 @@ impl IcsAdapter {
                         .ok()
                         .map(|d| DateType::Specific(Utc.from_utc_datetime(&d)))
                 } else {
-                    None
+                    // Floating datetime: interpret in the device local zone,
+                    // same as the VTODO path
+                    NaiveDateTime::parse_from_str(clean_value, "%Y%m%dT%H%M%S")
+                        .ok()
+                        .map(|d| {
+                            DateType::Specific(crate::model::item::safe_local_to_utc(
+                                d.date(),
+                                d.time(),
+                            ))
+                        })
                 }
             } else {
                 None
@@ -959,10 +969,14 @@ impl IcsAdapter {
             todo.properties().get(key).map(|p| p.value().to_string())
         };
 
-        let uid = get_prop("UID").unwrap_or_default();
         let summary = get_prop("SUMMARY")
             .map(|s| unescape_ics(&s))
             .unwrap_or_default();
+        let uid = get_prop("UID").unwrap_or_else(|| {
+            // UID is REQUIRED per RFC 5545; fall back deterministically so a
+            // malformed object can't shadow other tasks in the same calendar
+            format!("cfait-nouid-{}-{}", href, summary)
+        });
         let description = get_prop("DESCRIPTION")
             .map(|s| unescape_ics(&s))
             .unwrap_or_default();
@@ -1081,12 +1095,11 @@ impl IcsAdapter {
             |prop: &icalendar::Property, fuzzy: Option<String>| -> Option<DateType> {
                 let val = prop.value();
 
-                // Check if it's a standard date first
-                let standard_date = if val.len() >= 8 {
-                    NaiveDate::parse_from_str(&val[0..8], "%Y%m%d").ok()
-                } else {
-                    None
-                };
+                // Check if it's a standard date first (byte slice via get() so
+                // a non-ASCII value can't panic on a char boundary)
+                let standard_date = val
+                    .get(0..8)
+                    .and_then(|s| NaiveDate::parse_from_str(s, "%Y%m%d").ok());
 
                 // Stale Detection: Only use fuzzy metadata if it matches the actual property value
                 if let Some(f) = fuzzy
@@ -1188,6 +1201,9 @@ impl IcsAdapter {
                                 'D' => minutes += n * 24 * 60,
                                 'H' if in_time => minutes += n * 60,
                                 'M' if in_time => minutes += n,
+                                // Round seconds up to the nearest minute so a
+                                // PT30S trigger doesn't fire immediately
+                                'S' if in_time => minutes += (n + 59) / 60,
                                 _ => {}
                             }
                         }
