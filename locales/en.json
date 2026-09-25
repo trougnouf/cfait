@@ -295,6 +295,7 @@
     "export_debug_status_failed": "Export failed: %{error}",
     "export_debug_status_ready": "Export ready",
     "export_error": "Export error: %{error}",
+    "export_collection_not_found": "Export error: collection '%{collection}' not found or not cached. Run 'cfait sync' first to fetch it.",
     "export_local_tasks_to_server": "Export local tasks to server",
     "export_select_destination_collection": "Export: select destination collection",
     "export_select_source_collection": "Export: select source collection",

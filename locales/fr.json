@@ -283,6 +283,7 @@
     "export_debug_status_failed": "Échec de l'exportation : %{error}",
     "export_debug_status_ready": "Prêt à exporter",
     "export_error": "Erreur d'exportation : %{error}",
+    "export_collection_not_found": "Erreur d'exportation : la collection '%{collection}' est introuvable ou non mise en cache. Lancez d'abord 'cfait sync' pour la récupérer.",
     "export_local_tasks_to_server": "Exporter les tâches locales vers le serveur",
     "export_select_destination_collection": "Export : choisir la collection de destination",
     "export_select_source_collection": "Export : choisir la collection source",

@@ -395,13 +395,16 @@ async fn main() -> Result<()> {
 
     // Parse for --root argument before creating the context
     let mut override_root: Option<PathBuf> = None;
-    if let Some(pos) = args.iter().position(|arg| arg == "--root" || arg == "-r")
-        && pos + 1 < args.len()
-    {
-        override_root = Some(PathBuf::from(args[pos + 1].clone()));
-        // Remove the flag and its value so they don't interfere with other parsing
-        args.remove(pos);
-        args.remove(pos);
+    if let Some(pos) = args.iter().position(|arg| arg == "--root" || arg == "-r") {
+        if pos + 1 < args.len() {
+            override_root = Some(PathBuf::from(args[pos + 1].clone()));
+            // Remove the flag and its value so they don't interfere with other parsing
+            args.remove(pos);
+            args.remove(pos);
+        } else {
+            eprintln!("Error: Missing value for --root");
+            std::process::exit(1);
+        }
     }
 
     let ctx: Arc<dyn AppContext> = Arc::new(StandardContext::new(override_root));
@@ -436,8 +439,13 @@ async fn main() -> Result<()> {
                 std::process::exit(1);
             }
             let file_path = &args[2];
-            let collection_id = if args.len() > 4 && args[3] == "--collection" {
-                Some(args[4].clone())
+            let collection_id = if args.get(3).is_some_and(|a| a == "--collection") {
+                if args.len() > 4 {
+                    Some(args[4].clone())
+                } else {
+                    eprintln!("Error: Missing value for --collection");
+                    std::process::exit(1);
+                }
             } else {
                 None
             };
@@ -538,8 +546,13 @@ async fn main() -> Result<()> {
             return Ok(());
         }
         "export" => {
-            let collection_id = if args.len() > 3 && args[2] == "--collection" {
-                Some(args[3].clone())
+            let collection_id = if args.get(2).is_some_and(|a| a == "--collection") {
+                if args.len() > 3 {
+                    Some(args[3].clone())
+                } else {
+                    eprintln!("Error: Missing value for --collection");
+                    std::process::exit(1);
+                }
             } else {
                 None
             };
@@ -564,11 +577,16 @@ async fn main() -> Result<()> {
             } else {
                 // Remote collection: load from cache (offline-first)
                 let store = build_store_cli(&ctx).await;
-                store
-                    .calendars
-                    .get(&href)
-                    .map(|m| m.values().cloned().collect::<Vec<_>>())
-                    .unwrap_or_default()
+                match store.calendars.get(&href) {
+                    Some(m) => m.values().cloned().collect::<Vec<_>>(),
+                    None => {
+                        eprintln!(
+                            "{}",
+                            rust_i18n::t!("export_collection_not_found", collection = href)
+                        );
+                        std::process::exit(1);
+                    }
+                }
             };
             println!("{}", LocalStorage::to_ics_string(&tasks));
             return Ok(());
@@ -629,7 +647,9 @@ async fn main() -> Result<()> {
         "daemon" => {
             println!("{}", rust_i18n::t!("starting_daemon"));
             #[cfg(not(target_os = "android"))]
-            let _presence_lock = cfait::storage::PresenceLock::acquire_shared(ctx.as_ref()).ok();
+            let _presence_lock = cfait::storage::PresenceLock::acquire_shared(ctx.as_ref())
+                .map_err(|e| eprintln!("Warning: Could not acquire presence lock: {}", e))
+                .ok();
             loop {
                 let config =
                     cfait::config::Config::load_with_credentials(ctx.as_ref()).unwrap_or_default();
@@ -749,11 +769,10 @@ async fn main() -> Result<()> {
                 let _ = config.save_with_credentials(ctx.as_ref());
             }
 
-            let trimmed = clean_input.trim();
-            if trimmed.is_empty()
-                || (!trimmed.contains(' ')
-                    && (trimmed.contains(":=") || trimmed.to_lowercase().starts_with("loc:")))
-            {
+            // A pure alias/goal definition leaves only the key token behind
+            // (e.g. `#garden := #balcony, #green` -> `#garden`); don't create
+            // a task for it. Mirrors the mobile ALIAS_UPDATED early return.
+            if cfait::model::is_pure_alias_remainder(&clean_input, config_changed) {
                 println!("{}", rust_i18n::t!("goal_or_alias_updated"));
                 return Ok(());
             }
@@ -1033,6 +1052,43 @@ async fn main() -> Result<()> {
             if let Some(path) = file_path {
                 if is_append {
                     eprintln!("Error: --file is not supported for append command");
+                    std::process::exit(1);
+                }
+                // --file replaces the whole task, so the other modifiers would
+                // be silently ignored; refuse instead.
+                let mut exclusive = Vec::new();
+                if desc_text.is_some() {
+                    exclusive.push("--desc");
+                }
+                if parent_uid_arg.is_some() {
+                    exclusive.push("--parent");
+                }
+                if col_href.is_some() {
+                    exclusive.push("--collection");
+                }
+                if clear_parent {
+                    exclusive.push("--clear-parent");
+                }
+                if clear_due {
+                    exclusive.push("--clear-due");
+                }
+                if clear_start {
+                    exclusive.push("--clear-start");
+                }
+                if clear_tags {
+                    exclusive.push("--clear-tags");
+                }
+                if clear_loc {
+                    exclusive.push("--clear-loc");
+                }
+                if clear_deps {
+                    exclusive.push("--clear-deps");
+                }
+                if !exclusive.is_empty() {
+                    eprintln!(
+                        "Error: --file cannot be combined with {}",
+                        exclusive.join(", ")
+                    );
                     std::process::exit(1);
                 }
                 let new_content = std::fs::read_to_string(&path).unwrap_or_else(|e| {
@@ -1582,6 +1638,14 @@ async fn main() -> Result<()> {
         "tree" => {
             let mut partial = String::new();
             for arg in args.iter().skip(2) {
+                if arg.starts_with('-') {
+                    eprintln!("Error: Unknown flag '{}' for tree command", arg);
+                    std::process::exit(1);
+                }
+                if !partial.is_empty() {
+                    eprintln!("Error: tree command takes exactly one <uid>");
+                    std::process::exit(1);
+                }
                 partial = arg.clone();
             }
             if partial.is_empty() {
@@ -1609,6 +1673,12 @@ async fn main() -> Result<()> {
             for arg in args.iter().skip(2) {
                 if arg == "--json" {
                     as_json = true;
+                } else if arg.starts_with('-') {
+                    eprintln!("Error: Unknown flag '{}' for {} command", arg, command);
+                    std::process::exit(1);
+                } else if !partial.is_empty() {
+                    eprintln!("Error: {} command takes exactly one <uid>", command);
+                    std::process::exit(1);
                 } else {
                     partial = arg.clone();
                 }
@@ -1855,8 +1925,13 @@ async fn main() -> Result<()> {
                 "create" => {
                     let name = &args[3];
                     let mut color = None;
-                    if args.len() >= 6 && args[4] == "--color" {
-                        color = Some(args[5].as_str());
+                    if args.get(4).is_some_and(|a| a == "--color") {
+                        if args.len() >= 6 {
+                            color = Some(args[5].as_str());
+                        } else {
+                            eprintln!("Error: Missing value for --color");
+                            std::process::exit(1);
+                        }
                     }
                     match client.create_calendar(name, color).await {
                         Ok(href) => {
@@ -2080,7 +2155,9 @@ async fn main() -> Result<()> {
         .ok();
 
     #[cfg(not(target_os = "android"))]
-    let _presence_lock = cfait::storage::PresenceLock::acquire_shared(ctx.as_ref()).ok();
+    let _presence_lock = cfait::storage::PresenceLock::acquire_shared(ctx.as_ref())
+        .map_err(|e| eprintln!("Warning: Could not acquire presence lock: {}", e))
+        .ok();
 
     cfait::tui::run(ctx).await
 }
