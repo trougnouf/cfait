@@ -747,6 +747,11 @@
     "tooltip_toggle_quick_filter": "Toggle '%{term}' (w)",
     "tooltip_toggle_space": "Toggle (Space)",
     "translation_help": "Help translate Cfait: %{url}",
+    "trash_emptied": {
+        "one": "Trash emptied (1 item removed).",
+        "other": "Trash emptied (%{count} items removed)."
+    },
+    "trash_is_empty": "Trash is already empty.",
     "trash_retention_days_label": "Trash retention (days)",
     "trash_retention_explain": "Keep deleted items in local trash for this many days. Set to 0 to delete immediately.",
     "tui_caldav_setup_title": "CalDAV Connection Setup",

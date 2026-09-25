@@ -119,8 +119,9 @@ impl TaskController {
             }
         }
 
+        let mut first_local_err: Option<String> = None;
         for (href, ops) in local_ops_by_href {
-            let _ = LocalStorage::modify_for_href(self.ctx.as_ref(), &href, |all| {
+            if let Err(e) = LocalStorage::modify_for_href(self.ctx.as_ref(), &href, |all| {
                 for op in ops {
                     match op {
                         LocalOp::Upsert(task) => {
@@ -135,11 +136,14 @@ impl TaskController {
                         }
                     }
                 }
-            });
+            }) && first_local_err.is_none()
+            {
+                first_local_err = Some(e.to_string());
+            }
         }
 
         if remote_actions.is_empty() {
-            return Ok(());
+            return first_local_err.map_or(Ok(()), Err);
         }
 
         {
@@ -167,7 +171,9 @@ impl TaskController {
         })
         .map_err(|e| e.to_string())?;
 
-        Ok(())
+        // Local disk failures are reported after the remote actions have been
+        // journaled, so a failed local write never loses queued remote work.
+        first_local_err.map(Err).unwrap_or(Ok(()))
     }
 
     /// Synchronizes the configuration and aliases via a hidden CalDAV VTODO.
@@ -533,26 +539,27 @@ impl TaskController {
     }
 
     pub async fn empty_trash(&self) -> Result<usize, String> {
-        let mut store = self.store.lock().await;
-        let mut tasks_to_purge = Vec::new();
+        // Enumerate from disk so items created by another instance (CLI,
+        // background daemon) are purged even if our in-memory store never
+        // loaded them.
+        let disk_trash =
+            LocalStorage::load_for_href(self.ctx.as_ref(), crate::storage::LOCAL_TRASH_HREF)
+                .map_err(|e| e.to_string())?;
+        let count = disk_trash.len();
+        if count == 0 {
+            return Ok(0);
+        }
 
-        if let Some(trash_map) = store.calendars.get(crate::storage::LOCAL_TRASH_HREF) {
-            for task in trash_map.values() {
-                tasks_to_purge.push(task.uid.clone());
+        // Drop them from the in-memory store too, so the UI reflects the purge.
+        {
+            let mut store = self.store.lock().await;
+            for task in &disk_trash {
+                let _ = store.delete_task(&task.uid);
             }
         }
 
-        let mut purged_tasks = Vec::new();
-        for uid in tasks_to_purge {
-            if let Some((task, _)) = store.delete_task(&uid) {
-                purged_tasks.push(task);
-            }
-        }
-        drop(store);
-
-        let count = purged_tasks.len();
-        let actions = purged_tasks.into_iter().map(Action::Delete).collect();
-        let _ = self.persist_changes(actions).await;
+        let actions = disk_trash.into_iter().map(Action::Delete).collect();
+        self.persist_changes(actions).await?;
         Ok(count)
     }
 
@@ -563,38 +570,44 @@ impl TaskController {
             return Ok(0);
         }
 
+        // Enumerate from disk so retention pruning also works when the
+        // in-memory store is empty (e.g. TUI startup before the first load).
+        let disk_trash =
+            LocalStorage::load_for_href(self.ctx.as_ref(), crate::storage::LOCAL_TRASH_HREF)
+                .map_err(|e| e.to_string())?;
+
         let now = Utc::now();
-        let mut tasks_to_purge = Vec::new();
-
-        let mut store = self.store.lock().await;
-
-        if let Some(trash_map) = store.calendars.get(crate::storage::LOCAL_TRASH_HREF) {
-            for task in trash_map.values() {
-                if let Some(prop) = task
-                    .unmapped_properties
-                    .iter()
-                    .find(|p| p.key == "X-TRASHED-DATE")
-                    && let Ok(dt) = DateTime::parse_from_rfc3339(&prop.value)
-                {
-                    let age_days = (now - dt.with_timezone(&Utc)).num_days();
-                    if age_days >= retention_days {
-                        tasks_to_purge.push(task.uid.clone());
-                    }
+        let mut purged_tasks = Vec::new();
+        for task in disk_trash {
+            // Tasks without a parseable X-TRASHED-DATE are kept, so a
+            // missing property never causes data loss.
+            if let Some(prop) = task
+                .unmapped_properties
+                .iter()
+                .find(|p| p.key == "X-TRASHED-DATE")
+                && let Ok(dt) = DateTime::parse_from_rfc3339(&prop.value)
+            {
+                let age_days = (now - dt.with_timezone(&Utc)).num_days();
+                if age_days >= retention_days {
+                    purged_tasks.push(task);
                 }
             }
         }
 
-        let mut purged_tasks = Vec::new();
-        for uid in tasks_to_purge {
-            if let Some((task, _)) = store.delete_task(&uid) {
-                purged_tasks.push(task);
-            }
+        if purged_tasks.is_empty() {
+            return Ok(0);
         }
-        drop(store);
 
         let count = purged_tasks.len();
+        {
+            let mut store = self.store.lock().await;
+            for task in &purged_tasks {
+                let _ = store.delete_task(&task.uid);
+            }
+        }
+
         let actions = purged_tasks.into_iter().map(Action::Delete).collect();
-        let _ = self.persist_changes(actions).await;
+        self.persist_changes(actions).await?;
         Ok(count)
     }
 }

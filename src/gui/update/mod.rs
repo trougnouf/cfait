@@ -176,7 +176,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::TogglePin(_)
         | Message::SetTreeCollapse(_, _)
         | Message::EditTaskTree(_)
-        | Message::KeyboardEditTree => tasks::handle(app, message),
+        | Message::KeyboardEditTree
+        | Message::EmptyTrashResult(_) => tasks::handle(app, message),
 
         Message::FocusInput
         | Message::FocusSearch

@@ -804,6 +804,11 @@
     "tooltip_toggle_quick_filter": "Basculer '%{term}' (w)",
     "tooltip_toggle_space": "Basculer (Espace)",
     "translation_help": "Aidez à traduire Cfait : %{url}",
+    "trash_emptied": {
+        "one": "Corbeille vidée (1 élément supprimé).",
+        "other": "Corbeille vidée (%{count} éléments supprimés)."
+    },
+    "trash_is_empty": "La corbeille est déjà vide.",
     "trash_retention_days_label": "Conservation corbeille (jours)",
     "trash_retention_explain": "Conserver les éléments supprimés dans la corbeille locale pendant ces jours. 0 pour désactiver.",
     "tui_caldav_setup_title": "Configuration de la connexion CalDAV",

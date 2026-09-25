@@ -229,6 +229,41 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+        Message::EmptyTrashResult(Ok(count)) => {
+            if count > 0 {
+                // Invalidate any refresh that started before the purge so it
+                // cannot resurrect the trashed items.
+                app.edit_generation = app.edit_generation.wrapping_add(1);
+                app.store.remove(crate::storage::LOCAL_TRASH_HREF);
+                common::refresh_filtered_tasks(app);
+            }
+            app.info_msg = Some(if count == 1 {
+                rust_i18n::t!("trash_emptied.one").to_string()
+            } else if count > 1 {
+                rust_i18n::t!("trash_emptied.other", count = count).to_string()
+            } else {
+                rust_i18n::t!("trash_is_empty").to_string()
+            });
+            app.info_msg_version = app.info_msg_version.wrapping_add(1);
+            app.error_msg = None;
+
+            let version = app.info_msg_version;
+            Task::batch(vec![
+                common::scroll_to_selected_delayed(app, false),
+                Task::perform(
+                    async move {
+                        tokio::time::sleep(std::time::Duration::from_secs(4)).await;
+                        version
+                    },
+                    Message::DismissInfo,
+                ),
+            ])
+        }
+        Message::EmptyTrashResult(Err(e)) => {
+            log::error!("Empty trash failed: {}", e);
+            app.error_msg = Some(e);
+            Task::none()
+        }
         Message::ApplySuggestion(range, text) => {
             if app.sidebar_mode == SidebarMode::Journal {
                 let current = app.journal_editor_content.text();
@@ -1570,10 +1605,8 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                 app.input_value = text_editor::Content::new();
                 let ctrl = app.controller.clone();
                 return Task::perform(
-                    async move {
-                        let _ = ctrl.empty_trash().await;
-                    },
-                    |_| Message::Refresh,
+                    async move { ctrl.empty_trash().await },
+                    Message::EmptyTrashResult,
                 );
             }
             ":delete-all" => {

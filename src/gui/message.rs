@@ -286,6 +286,8 @@ pub enum Message {
     TasksRefreshed(Result<(String, Vec<TodoTask>), String>),
     RefreshedAll(Result<Vec<(String, Vec<TodoTask>)>, String>),
     MigrationComplete(Result<usize, String>),
+    /// Result of the `:empty-trash` command (items purged, or the error).
+    EmptyTrashResult(Result<usize, String>),
     FontLoaded(Result<(), String>),
     DismissError,
     DismissInfo(usize),

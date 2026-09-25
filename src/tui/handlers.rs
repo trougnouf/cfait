@@ -1705,17 +1705,41 @@ pub async fn handle_key_event(
                             }
                         }
                         ":empty-trash" => {
+                            // Mark the generation now so a full-store reload
+                            // arriving later is dropped if the user edits in
+                            // the meantime (and applied otherwise).
+                            state.pending_refresh_generation = state.edit_generation;
                             let tx = action_tx.clone();
-                            let store_arc =
-                                std::sync::Arc::new(tokio::sync::Mutex::new(state.store.clone()));
+                            let ctx = state.ctx.clone();
+                            // The controller's in-memory store stays empty on
+                            // purpose: `empty_trash` enumerates and purges
+                            // from disk, and the UI store is updated by the
+                            // disk reload the network actor performs next.
                             let ctrl = crate::controller::TaskController::new(
-                                store_arc,
+                                std::sync::Arc::new(tokio::sync::Mutex::new(
+                                    crate::store::TaskStore::new(ctx.clone()),
+                                )),
                                 std::sync::Arc::new(tokio::sync::Mutex::new(None)),
-                                state.ctx.clone(),
+                                ctx,
                             );
                             tokio::spawn(async move {
-                                let _ = ctrl.empty_trash().await;
-                                let _ = tx.send(crate::tui::action::Action::Refresh).await;
+                                match ctrl.empty_trash().await {
+                                    Ok(count) => {
+                                        let _ = tx
+                                            .send(crate::tui::action::Action::EmptyTrashResult(
+                                                count, None,
+                                            ))
+                                            .await;
+                                    }
+                                    Err(e) => {
+                                        let _ = tx
+                                            .send(crate::tui::action::Action::EmptyTrashResult(
+                                                0,
+                                                Some(e),
+                                            ))
+                                            .await;
+                                    }
+                                }
                             });
                         }
                         ":delete-all" => {

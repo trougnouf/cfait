@@ -47,6 +47,58 @@ async fn merge_results_into_store(
     s.insert_many(results.to_vec());
 }
 
+/// Reloads the full disk state (config, calendars, tasks) on the blocking
+/// pool, replaces the actor's store, and emits the matching events. Used for
+/// offline refresh (another instance changed the files) and after
+/// `:empty-trash` so the UI and the actor's store stay in sync.
+async fn reload_disk_state(
+    ctx: &Arc<dyn AppContext>,
+    enable_local_mode: bool,
+    store: &Arc<Mutex<TaskStore>>,
+    event_tx: &Sender<AppEvent>,
+) -> Result<(), String> {
+    // All disk I/O is blocking, so run the whole reload on the
+    // blocking pool rather than a tokio worker thread.
+    let res = tokio::task::spawn_blocking({
+        let ctx = ctx.clone();
+        move || {
+            crate::config::Config::invalidate_cache();
+            let cfg = crate::config::Config::load_with_credentials(ctx.as_ref()).ok();
+            // Use the freshly loaded config when available:
+            // `enable_local_mode` may have changed since
+            // startup (e.g. edited by another instance).
+            let local_mode = cfg
+                .as_ref()
+                .map(|c| c.enable_local_mode)
+                .unwrap_or(enable_local_mode);
+            let (cals, tasks) = crate::cache::Cache::load_all_disk_state(ctx.as_ref(), local_mode);
+            (cfg, cals, tasks)
+        }
+    })
+    .await;
+
+    match res {
+        Ok((cfg_opt, cached_cals, cached_tasks)) => {
+            if let Some(cfg) = cfg_opt {
+                let _ = event_tx.send(AppEvent::ConfigUpdated(Box::new(cfg))).await;
+            }
+            let _ = event_tx.send(AppEvent::CalendarsLoaded(cached_cals)).await;
+            // Replace the actor's store with the fresh disk state (under a
+            // single lock) so later PersistBatch actions — e.g. deleting a
+            // task created externally — operate on current data.
+            let mut s = store.lock().await;
+            s.clear();
+            s.insert_many(cached_tasks.clone());
+            drop(s);
+            let _ = event_tx
+                .send(AppEvent::FullStateReloaded(cached_tasks))
+                .await;
+            Ok(())
+        }
+        Err(e) => Err(format!("offline refresh failed: {}", e)),
+    }
+}
+
 pub async fn run_network_actor(
     ctx: Arc<dyn AppContext>,
     config: NetworkActorConfig,
@@ -418,58 +470,39 @@ pub async fn run_network_actor(
                     }
 
                     Action::OfflineRefresh => {
-                        // All disk I/O is blocking, so run the whole reload on the
-                        // blocking pool rather than a tokio worker thread.
-                        let res = tokio::task::spawn_blocking({
-                            let ctx = ctx.clone();
-                            move || {
-                                crate::config::Config::invalidate_cache();
-                                let cfg =
-                                    crate::config::Config::load_with_credentials(ctx.as_ref()).ok();
-                                // Use the freshly loaded config when available:
-                                // `enable_local_mode` may have changed since
-                                // startup (e.g. edited by another instance).
-                                let local_mode = cfg
-                                    .as_ref()
-                                    .map(|c| c.enable_local_mode)
-                                    .unwrap_or(enable_local_mode);
-                                let (cals, tasks) = crate::cache::Cache::load_all_disk_state(
-                                    ctx.as_ref(),
-                                    local_mode,
-                                );
-                                (cfg, cals, tasks)
-                            }
-                        })
-                        .await;
+                        if let Err(e) =
+                            reload_disk_state(&ctx, enable_local_mode, &store, &event_tx).await
+                        {
+                            // Route the failure to the UI so it stops showing
+                            // "Tasks (Loading...)" instead of hanging.
+                            let _ = event_tx.send(AppEvent::Error(e)).await;
+                        }
+                    }
 
-                        match res {
-                            Ok((cfg_opt, cached_cals, cached_tasks)) => {
-                                if let Some(cfg) = cfg_opt {
-                                    let _ =
-                                        event_tx.send(AppEvent::ConfigUpdated(Box::new(cfg))).await;
-                                }
-                                let _ = event_tx.send(AppEvent::CalendarsLoaded(cached_cals)).await;
-                                // Replace the actor's store with the fresh disk state (under a
-                                // single lock) so later PersistBatch actions — e.g. deleting a
-                                // task created externally — operate on current data.
-                                let mut s = store.lock().await;
-                                s.clear();
-                                s.insert_many(cached_tasks.clone());
-                                drop(s);
-                                let _ = event_tx
-                                    .send(AppEvent::FullStateReloaded(cached_tasks))
-                                    .await;
-                            }
-                            Err(e) => {
-                                // Route the failure to the UI so it stops showing
-                                // "Tasks (Loading...)" instead of hanging.
-                                let _ = event_tx
-                                    .send(AppEvent::Error(format!(
-                                        "offline refresh failed: {}",
-                                        e
-                                    )))
-                                    .await;
-                            }
+                    Action::EmptyTrashResult(_count, Some(e)) => {
+                        let _ = event_tx.send(AppEvent::Error(e)).await;
+                    }
+                    Action::EmptyTrashResult(count, None) => {
+                        let _ = event_tx
+                            .send(AppEvent::Status {
+                                key: if count > 0 {
+                                    "trash_emptied".to_string()
+                                } else {
+                                    "trash_is_empty".to_string()
+                                },
+                                human: if count == 1 {
+                                    rust_i18n::t!("trash_emptied.one").to_string()
+                                } else if count > 1 {
+                                    rust_i18n::t!("trash_emptied.other", count = count).to_string()
+                                } else {
+                                    rust_i18n::t!("trash_is_empty").to_string()
+                                },
+                            })
+                            .await;
+                        if let Err(e) =
+                            reload_disk_state(&ctx, enable_local_mode, &store, &event_tx).await
+                        {
+                            let _ = event_tx.send(AppEvent::Error(e)).await;
                         }
                     }
 

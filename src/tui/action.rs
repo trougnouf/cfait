@@ -37,6 +37,10 @@ pub enum Action {
     DeleteTaskTree(String),
     PersistBatch(Vec<crate::journal::Action>), // <-- ADD THIS
     ReloadConfig,
+    /// Result of the `:empty-trash` command: items purged, or the error.
+    /// On success the network actor reloads the disk state so the UI and the
+    /// actor's store both drop the purged items.
+    EmptyTrashResult(usize, Option<String>),
 }
 
 #[derive(Debug)]
