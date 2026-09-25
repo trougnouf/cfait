@@ -2291,6 +2291,38 @@ fn view_main_content(app: &GuiApp, show_logo: bool, is_expanded: bool) -> Elemen
         .into()
 }
 
+/// Word-level deletion (Ctrl+Backspace / Ctrl+Delete, Option+ on macOS) on
+/// top of iced's default key bindings. The custom closure replaces the
+/// defaults entirely, so every other key press must fall back to
+/// `Binding::from_key_press`, which also handles the unfocused case.
+fn word_delete_key_binding(
+    key_press: text_editor::KeyPress,
+) -> Option<text_editor::Binding<Message>> {
+    use iced::keyboard::key::Named;
+    use text_editor::{Binding, Motion, Status};
+
+    let is_word_delete_key = matches!(
+        key_press.key,
+        iced::keyboard::Key::Named(Named::Backspace | Named::Delete)
+    );
+    let word_mod =
+        key_press.modifiers.control() || (cfg!(target_os = "macos") && key_press.modifiers.alt());
+
+    if matches!(key_press.status, Status::Focused { .. }) && is_word_delete_key && word_mod {
+        let is_backspace = matches!(key_press.key, iced::keyboard::Key::Named(Named::Backspace));
+        let motion = if is_backspace {
+            Motion::WordLeft
+        } else {
+            Motion::WordRight
+        };
+        return Some(Binding::Sequence(vec![
+            Binding::Select(motion),
+            Binding::Delete,
+        ]));
+    }
+    Binding::from_key_press(key_press)
+}
+
 fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
     let is_dark_mode = app.theme().extended_palette().is_dark;
 
@@ -2301,6 +2333,7 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
         .id("main_input")
         .placeholder(&app.current_placeholder)
         .on_action(Message::InputChanged)
+        .key_binding(word_delete_key_binding)
         .highlight_with::<self::syntax::SmartInputHighlighter>(
             (is_dark_mode, false),
             |highlight, _theme| *highlight,
@@ -2402,6 +2435,7 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
             .id("description_input")
             .placeholder(placeholder)
             .on_action(Message::DescriptionChanged)
+            .key_binding(word_delete_key_binding)
             .highlight_with::<self::syntax::MarkdownHighlighter>(
                 is_dark_mode,
                 |highlight, _theme| *highlight,
@@ -3190,6 +3224,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
             rust_i18n::t!("journal_no_notes", name = active_name).to_string()
         })
         .on_action(Message::JournalContentChanged)
+        .key_binding(word_delete_key_binding)
         .highlight_with::<self::syntax::MarkdownHighlighter>(is_dark_mode, |highlight, _theme| {
             *highlight
         })

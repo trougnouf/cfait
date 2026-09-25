@@ -637,6 +637,115 @@ impl AppState {
             }
         }
     }
+
+    // --- WORD-LEVEL EDITING ---
+    // UAX#29 word boundaries (unicode-segmentation), the same semantics the
+    // GUI's cosmic-text word motions use, so both clients agree on where a
+    // word starts and ends.
+
+    /// Char position of the word boundary to the left of `pos`: the last word
+    /// start strictly left of the cursor on the same line, or the newline
+    /// before the line when the cursor is at a line start.
+    fn word_left_position(&self, pos: usize) -> usize {
+        use unicode_segmentation::UnicodeSegmentation;
+        let total = self.input_buffer.chars().count();
+        let pos = pos.min(total);
+        let chars: Vec<char> = self.input_buffer.chars().collect();
+        let line_start = chars[..pos]
+            .iter()
+            .rposition(|&c| c == '\n')
+            .map(|i| i + 1)
+            .unwrap_or(0);
+        let col = pos - line_start;
+        if col == 0 {
+            return line_start.saturating_sub(1);
+        }
+        let line_end = chars[line_start..]
+            .iter()
+            .position(|&c| c == '\n')
+            .map(|i| line_start + i)
+            .unwrap_or(total);
+        let line: String = chars[line_start..line_end].iter().collect();
+        let col_bytes: usize = line.chars().take(col).map(char::len_utf8).sum();
+        let start_bytes = line
+            .unicode_word_indices()
+            .map(|(i, _)| i)
+            .rfind(|&i| i < col_bytes)
+            .unwrap_or(0);
+        line_start + line[..start_bytes].chars().count()
+    }
+
+    /// Char position of the word boundary to the right of `pos`: the first word
+    /// end strictly right of the cursor on the same line, or the newline after
+    /// the line when the cursor is at a line end.
+    fn word_right_position(&self, pos: usize) -> usize {
+        use unicode_segmentation::UnicodeSegmentation;
+        let total = self.input_buffer.chars().count();
+        let pos = pos.min(total);
+        let chars: Vec<char> = self.input_buffer.chars().collect();
+        let line_start = chars[..pos]
+            .iter()
+            .rposition(|&c| c == '\n')
+            .map(|i| i + 1)
+            .unwrap_or(0);
+        let line_end = chars[line_start..]
+            .iter()
+            .position(|&c| c == '\n')
+            .map(|i| line_start + i)
+            .unwrap_or(total);
+        let col = pos - line_start;
+        if col == line_end - line_start {
+            return if line_end < total {
+                line_end + 1
+            } else {
+                total
+            };
+        }
+        let line: String = chars[line_start..line_end].iter().collect();
+        let col_bytes: usize = line.chars().take(col).map(char::len_utf8).sum();
+        let end_bytes = line
+            .unicode_word_indices()
+            .map(|(i, w)| i + w.len())
+            .find(|&e| e > col_bytes)
+            .unwrap_or(line.len());
+        line_start + line[..end_bytes].chars().count()
+    }
+
+    pub fn move_cursor_word_left(&mut self) {
+        self.cursor_position = self.word_left_position(self.cursor_position);
+    }
+    pub fn move_cursor_word_right(&mut self) {
+        self.cursor_position = self.word_right_position(self.cursor_position);
+    }
+    pub fn delete_word_backward(&mut self) {
+        let start = self.word_left_position(self.cursor_position);
+        if start < self.cursor_position {
+            let old = self.input_buffer.clone();
+            let chars: Vec<char> = self.input_buffer.chars().collect();
+            self.input_buffer = chars[..start]
+                .iter()
+                .chain(chars[self.cursor_position..].iter())
+                .collect();
+            self.cursor_position = start;
+            if old != self.input_buffer {
+                self.text_history.push(old);
+            }
+        }
+    }
+    pub fn delete_word_forward(&mut self) {
+        let end = self.word_right_position(self.cursor_position);
+        if end > self.cursor_position {
+            let old = self.input_buffer.clone();
+            let chars: Vec<char> = self.input_buffer.chars().collect();
+            self.input_buffer = chars[..self.cursor_position]
+                .iter()
+                .chain(chars[end..].iter())
+                .collect();
+            if old != self.input_buffer {
+                self.text_history.push(old);
+            }
+        }
+    }
     pub fn reset_input(&mut self) {
         self.input_buffer.clear();
         self.cursor_position = 0;
@@ -1051,5 +1160,130 @@ mod tests {
         state.move_cursor_left(); // Should stay 0
 
         assert_eq!(state.cursor_position, 0);
+    }
+
+    #[test]
+    fn test_word_left_position() {
+        let mut state = AppState::new();
+        state.input_buffer = "water the garden".to_string();
+
+        // Words (byte starts): "water"(0) "the"(6) "garden"(10). Spaces are not
+        // words, so the cursor jumps word-start to word-start: 10 -> 6 -> 0.
+        assert_eq!(state.word_left_position(16), 10); // end -> before "garden"
+        assert_eq!(state.word_left_position(8), 6); // inside "the" -> before "the"
+        assert_eq!(state.word_left_position(6), 0); // before "the" -> start (no word-start in between)
+        assert_eq!(state.word_left_position(5), 0); // after "water" -> start
+        assert_eq!(state.word_left_position(0), 0); // start -> no-op
+    }
+
+    #[test]
+    fn test_word_right_position() {
+        let mut state = AppState::new();
+        state.input_buffer = "water the garden".to_string();
+
+        // Words (byte ends): "water"(5) "the"(9) "garden"(16). The cursor jumps
+        // word-end to word-end: 5 -> 9 -> 16.
+        assert_eq!(state.word_right_position(0), 5); // start -> after "water"
+        assert_eq!(state.word_right_position(5), 9); // after "water" -> after "the"
+        assert_eq!(state.word_right_position(6), 9); // before "the" -> after "the"
+        assert_eq!(state.word_right_position(9), 16); // after "the" -> end
+        assert_eq!(state.word_right_position(10), 16); // before "garden" -> end
+        assert_eq!(state.word_right_position(16), 16); // end -> no-op
+    }
+
+    #[test]
+    fn test_word_positions_cross_lines() {
+        let mut state = AppState::new();
+        state.input_buffer = "abc\ndef".to_string();
+
+        // At the start of line 2 / end of line 1 the boundary is the newline,
+        // so a word delete from there merges the lines.
+        assert_eq!(state.word_left_position(4), 3); // start of line 2 -> the newline
+        assert_eq!(state.word_right_position(3), 4); // end of line 1 -> start of line 2
+        assert_eq!(state.word_left_position(0), 0); // buffer start -> no-op
+        assert_eq!(state.word_right_position(7), 7); // buffer end -> no-op
+    }
+
+    #[test]
+    fn test_word_positions_multibyte() {
+        let mut state = AppState::new();
+        // "café" (4 chars, 5 bytes) + space + "thé" (3 chars, 4 bytes) = 8 chars, 10 bytes
+        state.input_buffer = "café thé".to_string();
+
+        assert_eq!(state.word_left_position(8), 5); // end -> before "thé" (after the space)
+        assert_eq!(state.word_left_position(4), 0); // inside "café" -> start
+        assert_eq!(state.word_right_position(0), 4); // start -> after "café"
+        assert_eq!(state.word_right_position(5), 8); // after the space -> end
+    }
+
+    #[test]
+    fn test_delete_word_backward() {
+        let mut state = AppState::new();
+        state.input_buffer = "water the garden".to_string();
+        state.cursor_position = 16;
+
+        state.delete_word_backward();
+        assert_eq!(state.input_buffer, "water the "); // deleted "garden"
+        assert_eq!(state.cursor_position, 10);
+
+        state.delete_word_backward();
+        assert_eq!(state.input_buffer, "water "); // deleted "the " (word + trailing space)
+        assert_eq!(state.cursor_position, 6);
+
+        state.delete_word_backward();
+        assert_eq!(state.input_buffer, ""); // deleted "water "
+        assert_eq!(state.cursor_position, 0);
+
+        // Each word delete is a single undo step
+        let restored = state.text_history.pop_undo(state.input_buffer.clone());
+        assert_eq!(restored, Some("water ".to_string()));
+
+        // At position 0 the delete is a no-op
+        state.input_buffer.clear();
+        state.cursor_position = 0;
+        state.delete_word_backward();
+        assert_eq!(state.input_buffer, "");
+    }
+
+    #[test]
+    fn test_delete_word_forward() {
+        let mut state = AppState::new();
+        state.input_buffer = "water the garden".to_string();
+        state.cursor_position = 0;
+
+        state.delete_word_forward();
+        assert_eq!(state.input_buffer, " the garden"); // deleted "water"
+        assert_eq!(state.cursor_position, 0);
+
+        state.delete_word_forward();
+        assert_eq!(state.input_buffer, " garden"); // deleted " the" (space + "the"); the second space remains
+        assert_eq!(state.cursor_position, 0);
+
+        state.delete_word_forward();
+        assert_eq!(state.input_buffer, ""); // deleted " garden"
+        assert_eq!(state.cursor_position, 0);
+
+        // At the end of the buffer the delete is a no-op
+        state.input_buffer.clear();
+        state.cursor_position = 0;
+        state.delete_word_forward();
+        assert_eq!(state.input_buffer, "");
+    }
+
+    #[test]
+    fn test_delete_word_merges_lines() {
+        let mut state = AppState::new();
+        state.input_buffer = "abc\ndef".to_string();
+        state.cursor_position = 4; // start of line 2
+        state.delete_word_backward();
+        assert_eq!(state.input_buffer, "abcdef");
+        assert_eq!(state.cursor_position, 3);
+
+        let mut state = AppState::new();
+        state.input_buffer = "abc\ndef".to_string();
+        state.cursor_position = 3; // end of line 1
+        state.delete_word_forward();
+        assert_eq!(state.input_buffer, "abcdef");
+        assert_eq!(state.cursor_position, 3);
     }
 }

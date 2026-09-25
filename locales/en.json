@@ -378,6 +378,8 @@
     "help_about": "Help & about",
     "help_about_tab": " About ",
     "help_advanced_prompt": "For advanced syntax (recurrence, aliases, geo-locations) or keyboard shortcuts, open the interactive TUI or GUI and press '?'.",
+    "help_editor_word_delete": "Delete previous / next word (in editors)",
+    "help_editor_word_nav": "Move to previous / next word (in editors)",
     "help_keyboard_create_desc": "Create task with description",
     "help_keyboard_move_selection": "Move selection down / up",
     "help_keyboard_scroll_page": "Scroll page down / up",

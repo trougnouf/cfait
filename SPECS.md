@@ -303,6 +303,7 @@ Daily notes and wiki pages are `VJOURNAL` components (see 1.2). They share a uni
     *   `M`: Move task (or task tree) to another collection.
     *   `t`: Log time session manually.
     *   `Ctrl+Z` / `Ctrl+Y` / `Ctrl+Shift+Z`: Undo / Redo.
+*   **Text Editing (in editors):** `Ctrl+Left` / `Ctrl+Right`: move by word. `Ctrl+Backspace` / `Ctrl+Delete`: delete previous / next word (UAX#29 boundaries). On macOS, use `Option` instead of `Ctrl`.
 *   **Tree/Relationships:** 
     *   `z`: Fold/Unfold tree.
     *   `>` / `.` : Demote (Indent / Make child of previous).

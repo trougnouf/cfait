@@ -1955,6 +1955,19 @@ pub async fn handle_key_event(
                 state.reset_input();
                 state.editing_uid = None;
             }
+            // Word-level editing (UAX#29 boundaries, same as the GUI)
+            KeyCode::Backspace if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                state.delete_word_backward();
+            }
+            KeyCode::Delete if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                state.delete_word_forward();
+            }
+            KeyCode::Left if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                state.move_cursor_word_left();
+            }
+            KeyCode::Right if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                state.move_cursor_word_right();
+            }
             KeyCode::Char(c) => state.enter_char(c),
             KeyCode::Backspace => state.delete_char(),
             KeyCode::Left => state.move_cursor_left(),
@@ -2078,6 +2091,19 @@ pub async fn handle_key_event(
                 } else if !c.is_control() || c == '\n' {
                     state.enter_char(c);
                 }
+            }
+            // Word-level editing (UAX#29 boundaries, same as the GUI)
+            KeyCode::Backspace if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                state.delete_word_backward();
+            }
+            KeyCode::Delete if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                state.delete_word_forward();
+            }
+            KeyCode::Left if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                state.move_cursor_word_left();
+            }
+            KeyCode::Right if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                state.move_cursor_word_right();
             }
             KeyCode::Backspace => state.delete_char(),
             KeyCode::Left => state.move_cursor_left(),

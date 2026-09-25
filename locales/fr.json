@@ -334,6 +334,8 @@
     "help_about": "Aide & à propos",
     "help_about_tab": " À propos ",
     "help_advanced_prompt": "Pour la syntaxe avancée (récurrence, alias, géolocalisation) ou les raccourcis clavier, ouvrir l'IHM textuelle interactive ou graphique et appuyer sur '?'.",
+    "help_editor_word_delete": "Supprimer le mot précédent / suivant (dans les éditeurs)",
+    "help_editor_word_nav": "Aller au mot précédent / suivant (dans les éditeurs)",
     "help_en_fallback_dates": "Dates relatives",
     "help_en_fallback_logic": "Chronologie & logique de récurrence",
     "help_en_fallback_prefixes": "Propriétés de la tâche",

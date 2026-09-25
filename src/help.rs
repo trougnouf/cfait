@@ -654,6 +654,16 @@ pub fn get_shortcuts_help(is_gui: bool) -> Vec<HelpSection> {
                     desc: format!("{}/{}", rust_i18n::t!("undo"), rust_i18n::t!("redo")),
                     example: "".to_string(),
                 },
+                HelpItem {
+                    keys: "Ctrl + Left / Ctrl + Right".to_string(),
+                    desc: rust_i18n::t!("help_editor_word_nav").to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "Ctrl + Bksp / Ctrl + Del".to_string(),
+                    desc: rust_i18n::t!("help_editor_word_delete").to_string(),
+                    example: "".to_string(),
+                },
             ],
         },
         HelpSection {
