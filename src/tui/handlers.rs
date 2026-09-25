@@ -3678,10 +3678,14 @@ pub async fn handle_key_event(
                         })
                         .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
 
-                    let (desc, is_daily) = if let Some(uid) = &state.journal_editing_uid {
-                        let t = state.store.get_task_ref(uid).unwrap();
+                    let (desc, is_daily) = if let Some(uid) = &state.journal_editing_uid
+                        && let Some(t) = state.store.get_task_ref(uid)
+                    {
                         (t.description.clone(), false)
                     } else {
+                        // Stale pointer (the task disappeared, e.g. after a reload
+                        // or undo): fall back to the daily entry and clear it.
+                        state.journal_editing_uid = None;
                         let entry = state
                             .store
                             .get_journal_entry(&target_href, state.journal_date);
@@ -3878,10 +3882,14 @@ pub async fn handle_key_event(
                         })
                         .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
 
-                    let (desc, is_daily) = if let Some(uid) = &state.journal_editing_uid {
-                        let t = state.store.get_task_ref(uid).unwrap();
+                    let (desc, is_daily) = if let Some(uid) = &state.journal_editing_uid
+                        && let Some(t) = state.store.get_task_ref(uid)
+                    {
                         (t.description.clone(), false)
                     } else {
+                        // Stale pointer (the task disappeared, e.g. after a reload
+                        // or undo): fall back to the daily entry and clear it.
+                        state.journal_editing_uid = None;
                         let entry = state
                             .store
                             .get_journal_entry(&target_href, state.journal_date);
@@ -4007,10 +4015,14 @@ pub async fn handle_key_event(
                         })
                         .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
 
-                    let (desc, is_daily) = if let Some(uid) = &state.journal_editing_uid {
-                        let t = state.store.get_task_ref(uid).unwrap();
+                    let (desc, is_daily) = if let Some(uid) = &state.journal_editing_uid
+                        && let Some(t) = state.store.get_task_ref(uid)
+                    {
                         (t.description.clone(), false)
                     } else {
+                        // Stale pointer (the task disappeared, e.g. after a reload
+                        // or undo): fall back to the daily entry and clear it.
+                        state.journal_editing_uid = None;
                         let entry = state
                             .store
                             .get_journal_entry(&target_href, state.journal_date);
@@ -4262,10 +4274,10 @@ pub async fn handle_key_event(
                     && let Some(session) = task.sessions.get(real_idx)
                 {
                     let s_dt = chrono::DateTime::from_timestamp(session.start, 0)
-                        .unwrap()
+                        .unwrap_or_else(|| chrono::DateTime::from_timestamp(0, 0).unwrap())
                         .with_timezone(&chrono::Local);
                     let e_dt = chrono::DateTime::from_timestamp(session.end, 0)
-                        .unwrap()
+                        .unwrap_or_else(|| chrono::DateTime::from_timestamp(0, 0).unwrap())
                         .with_timezone(&chrono::Local);
                     let prefill = format!(
                         "{} {}-{}",
