@@ -1297,6 +1297,7 @@ impl IcsAdapter {
         let unfolded = icalendar::parser::unfold(raw_ics);
         let mut in_vtodo = false;
         let mut in_valarm = false;
+        let mut current_is_override = false;
 
         for line in unfolded.lines() {
             let line = line.trim();
@@ -1304,6 +1305,7 @@ impl IcsAdapter {
 
             if line_upper == "BEGIN:VTODO" {
                 in_vtodo = true;
+                current_is_override = false;
                 continue;
             }
             if line_upper == "END:VTODO" {
@@ -1320,6 +1322,16 @@ impl IcsAdapter {
             }
 
             if in_vtodo && !in_valarm {
+                // A VTODO carrying RECURRENCE-ID is an override of a single
+                // occurrence; its relations and sessions must not leak into
+                // the master task.
+                if line_upper.starts_with("RECURRENCE-ID") {
+                    current_is_override = true;
+                    continue;
+                }
+                if current_is_override {
+                    continue;
+                }
                 // Case-insensitive checks
                 if line_upper.starts_with("RELATED-TO")
                     && let Some((raw_key, val)) = line.split_once(':')
@@ -1417,16 +1429,34 @@ impl IcsAdapter {
 
         let mut alarms = Vec::new();
         let mut in_alarm = false;
+        let mut in_master = false;
+        let mut master_is_override = false;
         let mut current_alarm_lines: Vec<String> = Vec::new();
 
         for line in raw_ics.lines() {
             let trim = line.trim();
+            // Track the enclosing component so alarms from sibling overrides
+            // or companion VEVENTs don't leak into the master task
+            if trim == "BEGIN:VTODO" || trim == "BEGIN:VJOURNAL" {
+                in_master = true;
+                master_is_override = false;
+            } else if trim == "END:VTODO" || trim == "END:VJOURNAL" {
+                in_master = false;
+            } else if in_master && trim.to_uppercase().starts_with("RECURRENCE-ID") {
+                master_is_override = true;
+            }
             if trim == "BEGIN:VALARM" {
-                in_alarm = true;
+                in_alarm = in_master && !master_is_override;
                 continue;
             }
             if trim == "END:VALARM" {
+                let was_collecting = in_alarm;
                 in_alarm = false;
+                if !was_collecting {
+                    // Alarm belongs to a sibling override or companion
+                    // component; its lines were never collected.
+                    continue;
+                }
                 let mut alarm = Alarm {
                     uid: Uuid::new_v4().to_string(),
                     action: "DISPLAY".to_string(),
