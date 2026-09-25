@@ -149,6 +149,7 @@ pub struct AppState {
     pub edit_scroll_offset: u16,
     pub edit_scroll_x: u16,
     pub details_scroll: u16,
+    pub help_scroll_offset: u16,
     pub editing_uid: Option<String>,
     pub editing_tree_uid: Option<String>,
     pub move_selection_state: ListState,
@@ -293,6 +294,7 @@ impl AppState {
             edit_scroll_offset: 0,
             edit_scroll_x: 0,
             details_scroll: 0,
+            help_scroll_offset: 0,
             editing_uid: None,
             editing_tree_uid: None,
             move_selection_state: ListState::default(),
@@ -472,8 +474,7 @@ impl AppState {
 
         let mut goals_progress = HashMap::new();
         for (key, goal) in &self.goals {
-            let prog = self.store.calculate_goal_progress(key, goal);
-            let history = self.store.calculate_goal_history(key, goal, 7);
+            let (prog, history) = self.store.calculate_goal_progress_and_history(key, goal, 7);
             goals_progress.insert(key.clone(), (prog, history));
         }
         self.cached_goals_progress = goals_progress;
@@ -496,12 +497,11 @@ impl AppState {
                         continue;
                     }
                     if let Some(goal) = &t.goal {
-                        let progress = self
-                            .store
-                            .calculate_goal_progress(&format!("task:{}", t.uid), goal);
-                        let history =
-                            self.store
-                                .calculate_goal_history(&format!("task:{}", t.uid), goal, 7);
+                        let (progress, history) = self.store.calculate_goal_progress_and_history(
+                            &format!("task:{}", t.uid),
+                            goal,
+                            7,
+                        );
                         task_goals.push((
                             t.uid.clone(),
                             t.summary.clone(),

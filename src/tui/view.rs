@@ -1073,21 +1073,6 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             .wrap(Wrap { trim: true })
             .scroll((state.details_scroll, 0));
         f.render_widget(p, main_chunks[0]);
-
-        // Render simple footer
-        let footer_area = v_chunks[1];
-        f.render_widget(Clear, footer_area);
-
-        if state.mode == InputMode::EditingDescription || state.mode == InputMode::JumpingToDate {
-            // Let the standard editor popup render over this
-        } else {
-            let help = Paragraph::new(
-                " [/]: Collection | ←/→/↑/↓: Date | Shift+↑/↓: Scroll | t: Today | g: Go to | a/e/Enter: Edit | C: Subpage | Tab: Focus | q: Quit ",
-            )
-            .alignment(Alignment::Right)
-            .block(Block::default().borders(Borders::ALL).title(" Actions "));
-            f.render_widget(help, footer_area);
-        }
     }
 
     if state.sidebar_mode != SidebarMode::Journal {
@@ -1768,35 +1753,35 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     }
                 }
 
-                if let Some(goal) = &task.goal {
-                    let progress = state
-                        .store
-                        .calculate_goal_progress(&format!("task:{}", task.uid), goal);
-                    let (cur_str, tar_str) = if goal.goal_type == crate::config::GoalType::Duration
-                    {
-                        crate::model::parser::format_goal_duration(progress, goal.target)
-                    } else {
-                        (progress.to_string(), goal.target.to_string())
-                    };
-
-                    let target_display = goal.format_target_display(&tar_str);
-                    details_md.push_str(&format!(
-                        "- {}: {}\n",
-                        rust_i18n::t!("goal_target_label"),
-                        target_display
-                    ));
-                    details_md.push_str(&format!(
-                        "- {}: {}\n",
-                        rust_i18n::t!("goal_progress_label"),
-                        cur_str
-                    ));
-                }
-
                 if let Some(goal) = &effective_goal {
-                    let history =
-                        state
-                            .store
-                            .calculate_goal_history(&format!("task:{}", task.uid), goal, 7);
+                    // One store scan serves both the current progress and the
+                    // history heatmap (effective_goal is task.goal when set).
+                    let (progress, history) = state.store.calculate_goal_progress_and_history(
+                        &format!("task:{}", task.uid),
+                        goal,
+                        7,
+                    );
+                    if task.goal.is_some() {
+                        let (cur_str, tar_str) =
+                            if goal.goal_type == crate::config::GoalType::Duration {
+                                crate::model::parser::format_goal_duration(progress, goal.target)
+                            } else {
+                                (progress.to_string(), goal.target.to_string())
+                            };
+
+                        let target_display = goal.format_target_display(&tar_str);
+                        details_md.push_str(&format!(
+                            "- {}: {}\n",
+                            rust_i18n::t!("goal_target_label"),
+                            target_display
+                        ));
+                        details_md.push_str(&format!(
+                            "- {}: {}\n",
+                            rust_i18n::t!("goal_progress_label"),
+                            cur_str
+                        ));
+                    }
+
                     let mut heatmap_str = String::new();
                     for pct in history {
                         if pct >= 1.0 {
@@ -2770,7 +2755,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         let p = Paragraph::new(lines)
             .block(block)
             .wrap(Wrap { trim: false })
-            .scroll((state.edit_scroll_offset, 0));
+            .scroll((state.help_scroll_offset, 0));
 
         f.render_widget(p, area);
     }

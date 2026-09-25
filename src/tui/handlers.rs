@@ -2377,7 +2377,7 @@ pub async fn handle_key_event(
                     crate::help::HelpTab::About => crate::help::HelpTab::Syntax,
                 };
                 state.mode = InputMode::Help(next_tab);
-                state.edit_scroll_offset = 0;
+                state.help_scroll_offset = 0;
             }
             KeyCode::BackTab | KeyCode::Left | KeyCode::Char('h') => {
                 let prev_tab = match current_tab {
@@ -2386,19 +2386,19 @@ pub async fn handle_key_event(
                     crate::help::HelpTab::About => crate::help::HelpTab::Shortcuts,
                 };
                 state.mode = InputMode::Help(prev_tab);
-                state.edit_scroll_offset = 0;
+                state.help_scroll_offset = 0;
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                state.edit_scroll_offset = state.edit_scroll_offset.saturating_add(1);
+                state.help_scroll_offset = state.help_scroll_offset.saturating_add(1);
             }
             KeyCode::Up | KeyCode::Char('k') => {
-                state.edit_scroll_offset = state.edit_scroll_offset.saturating_sub(1);
+                state.help_scroll_offset = state.help_scroll_offset.saturating_sub(1);
             }
             KeyCode::PageDown => {
-                state.edit_scroll_offset = state.edit_scroll_offset.saturating_add(10);
+                state.help_scroll_offset = state.help_scroll_offset.saturating_add(10);
             }
             KeyCode::PageUp => {
-                state.edit_scroll_offset = state.edit_scroll_offset.saturating_sub(10);
+                state.help_scroll_offset = state.help_scroll_offset.saturating_sub(10);
             }
             _ => {}
         },
