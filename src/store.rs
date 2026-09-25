@@ -3732,17 +3732,16 @@ impl TaskStore {
                     .unwrap_or(parts.last().unwrap())
                     .to_string();
 
-                // sorted_keys is sorted, so a key has children iff the immediately
-                // following key starts with "{key}:". O(log n) lookup instead of O(n) scan.
-                let has_children = sorted_keys
-                    .binary_search(key)
-                    .ok()
-                    .map(|idx| {
-                        idx + 1 < sorted_keys.len()
-                            && sorted_keys[idx + 1].starts_with(key)
-                            && sorted_keys[idx + 1].as_bytes().get(key.len()) == Some(&b':')
-                    })
-                    .unwrap_or(false);
+                // sorted_keys is sorted, so a key has children iff some key starts
+                // with "{key}:". A sibling that sorts between `key` and `key:`
+                // (e.g. "garden-bed" between "garden" and "garden:flowers") would
+                // defeat a next-key check, so binary-search the prefix instead.
+                let prefix = format!("{key}:");
+                let has_children = match sorted_keys.binary_search(&prefix) {
+                    Ok(idx) | Err(idx) => {
+                        idx < sorted_keys.len() && sorted_keys[idx].starts_with(&prefix)
+                    }
+                };
 
                 let alias_key_to_check = if is_location {
                     format!("@@{}", key)

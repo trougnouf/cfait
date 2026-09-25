@@ -1129,3 +1129,76 @@ fn test_undo_delete_task_preserves_children() {
         "c2 must be re-parented, not deleted"
     );
 }
+
+#[test]
+fn test_sidebar_has_children_with_interleaved_sibling() {
+    let mut store = make_store();
+
+    // "garden" has a child "garden:flowers", but the sibling "garden-bed"
+    // sorts between them ('-' 0x2D < ':' 0x3A), which defeats a
+    // next-key-only check for children.
+    let mut t1 = Task::new("Water the garden #garden", &HashMap::new(), None);
+    t1.uid = "1".to_string();
+    t1.calendar_href = "cal1".to_string();
+    store.add_task(t1);
+
+    let mut t2 = Task::new("Deadhead the roses #garden:flowers", &HashMap::new(), None);
+    t2.uid = "2".to_string();
+    t2.calendar_href = "cal1".to_string();
+    store.add_task(t2);
+
+    let mut t3 = Task::new("Mow the lawn #garden-bed", &HashMap::new(), None);
+    t3.uid = "3".to_string();
+    t3.calendar_href = "cal1".to_string();
+    store.add_task(t3);
+
+    let empty_set = HashSet::new();
+    let mut expanded = HashSet::new();
+    expanded.insert("garden".to_string());
+    let filter_res = store.filter(FilterOptions {
+        active_cal_href: None,
+        hidden_calendars: &empty_set,
+        selected_categories: &empty_set,
+        selected_locations: &empty_set,
+        match_all_categories: false,
+        search_term: "",
+        hide_completed_global: false,
+        hide_fully_completed_tags: false,
+        hide_aliases_in_sidebar: false,
+        cutoff_date: None,
+        min_duration: None,
+        max_duration: None,
+        include_unset_duration: true,
+        urgent_days: 1,
+        urgent_prio: 1,
+        default_priority: 5,
+        start_grace_period_days: 1,
+        sort_standard_by_priority: false,
+        sort_preset: SortPreset::default(),
+        expanded_done_groups: &empty_set,
+        expanded_tags: &expanded,
+        expanded_locations: &empty_set,
+        max_done_roots: usize::MAX,
+        max_done_subtasks: usize::MAX,
+        tag_aliases: &HashMap::new(),
+        search_collapsed_tasks: &HashSet::new(),
+        focused_task_uid: None,
+        paused_sort_behavior: PausedSortBehavior::default(),
+        sort_tiebreak_recent: false,
+    });
+
+    let by_key = |key: &str| {
+        filter_res
+            .categories
+            .iter()
+            .find(|c| c.full_key == key)
+            .unwrap_or_else(|| panic!("missing category {key}"))
+    };
+
+    assert!(
+        by_key("garden").has_children,
+        "garden must report has_children despite the interleaved sibling"
+    );
+    assert!(!by_key("garden:flowers").has_children);
+    assert!(!by_key("garden-bed").has_children);
+}
