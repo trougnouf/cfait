@@ -13,7 +13,6 @@ use crate::system::{AlarmMessage, SystemEvent};
 use crate::tui::action::AppEvent;
 use crate::tui::state::{AppState, InputMode};
 use crate::tui::view::draw;
-use chrono::NaiveDate;
 
 use anyhow::Result;
 use crossterm::{
@@ -423,58 +422,16 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
                         .unwrap_or_else(|_| chrono::NaiveTime::from_hms_opt(9, 0, 0).unwrap());
 
                         let mut current_ts = None;
-                        if type_key_with_colon == "implicit_due:" {
-                            if let Some(due) = &store_task.due {
-                                let dt = match due {
-                                    crate::model::DateType::Specific(t) => *t,
-                                    crate::model::DateType::AllDay(d) => d
-                                        .and_time(default_time)
-                                        .and_local_timezone(chrono::Local)
-                                        .unwrap()
-                                        .with_timezone(&chrono::Utc),
-                                    crate::model::DateType::Month(y, m) => {
-                                        let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
-                                        d.and_time(default_time)
-                                            .and_local_timezone(chrono::Local)
-                                            .unwrap()
-                                            .with_timezone(&chrono::Utc)
-                                    }
-                                    crate::model::DateType::Year(y) => {
-                                        let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
-                                        d.and_time(default_time)
-                                            .and_local_timezone(chrono::Local)
-                                            .unwrap()
-                                            .with_timezone(&chrono::Utc)
-                                    }
-                                };
-                                current_ts = Some(dt.to_rfc3339());
-                            }
+                        if type_key_with_colon == "implicit_due:"
+                            && let Some(due) = &store_task.due
+                        {
+                            current_ts =
+                                Some(due.to_utc_with_default_time(default_time).to_rfc3339());
                         } else if type_key_with_colon == "implicit_start:"
                             && let Some(start) = &store_task.dtstart
                         {
-                            let dt = match start {
-                                crate::model::DateType::Specific(t) => *t,
-                                crate::model::DateType::AllDay(d) => d
-                                    .and_time(default_time)
-                                    .and_local_timezone(chrono::Local)
-                                    .unwrap()
-                                    .with_timezone(&chrono::Utc),
-                                crate::model::DateType::Month(y, m) => {
-                                    let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
-                                    d.and_time(default_time)
-                                        .and_local_timezone(chrono::Local)
-                                        .unwrap()
-                                        .with_timezone(&chrono::Utc)
-                                }
-                                crate::model::DateType::Year(y) => {
-                                    let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
-                                    d.and_time(default_time)
-                                        .and_local_timezone(chrono::Local)
-                                        .unwrap()
-                                        .with_timezone(&chrono::Utc)
-                                }
-                            };
-                            current_ts = Some(dt.to_rfc3339());
+                            current_ts =
+                                Some(start.to_utc_with_default_time(default_time).to_rfc3339());
                         }
                         if current_ts.as_deref() == Some(expected_ts) {
                             keep = true;
