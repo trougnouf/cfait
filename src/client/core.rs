@@ -1648,10 +1648,22 @@ impl RustyClient {
         Ok(fetch_res.unwrap().unwrap())
     }
 
+    /// Fetch tasks for all calendars concurrently. Failed calendars fall back
+    /// to the on-disk cache so a slow or failed server doesn't silently drop
+    /// the calendar from the UI.
     pub async fn get_all_tasks(
         &self,
         calendars: &[CalendarListEntry],
     ) -> anyhow::Result<Vec<(String, Vec<Task>)>> {
+        Ok(self.get_all_tasks_reported(calendars).await?.0)
+    }
+
+    /// Like `get_all_tasks`, but also reports the hrefs whose fetch failed and
+    /// fell back to the on-disk cache.
+    pub async fn get_all_tasks_reported(
+        &self,
+        calendars: &[CalendarListEntry],
+    ) -> anyhow::Result<(Vec<(String, Vec<Task>)>, Vec<String>)> {
         let hrefs: Vec<String> = calendars.iter().map(|c| c.href.clone()).collect();
         let futures = hrefs.into_iter().map(|href| {
             let client = self.clone();
@@ -1678,6 +1690,7 @@ impl RustyClient {
 
         let mut stream = stream::iter(futures).buffer_unordered(4);
         let mut final_results = Vec::new();
+        let mut failed_hrefs = Vec::new();
 
         while let Some((href, tasks)) = stream.next().await {
             match tasks {
@@ -1685,6 +1698,7 @@ impl RustyClient {
                 // Fall back to what is already on disk so a slow or failed server
                 // doesn't silently drop the calendar from the UI.
                 None => {
+                    failed_hrefs.push(href.clone());
                     let fallback = if href.starts_with("local://") {
                         crate::storage::LocalStorage::load_for_href(self.ctx.as_ref(), &href)
                     } else {
@@ -1702,7 +1716,7 @@ impl RustyClient {
             }
         }
 
-        Ok(final_results)
+        Ok((final_results, failed_hrefs))
     }
 
     // Removed: create_task moved to TaskController.

@@ -744,6 +744,7 @@
     "sync_conflict_fetch_failed": "Conflit (412) sur '%{summary}' : impossible de récupérer la version du serveur (%{error}). Nouvelle tentative lors de la prochaine synchronisation.",
     "sync_conflict_resolved": "Conflit (412) sur '%{summary}' résolu via fusion à 3 voies.",
     "sync_error": "Erreur de synchro : %{error}",
+    "sync_partial_failure": "Synchronisation incomplète : impossible de récupérer %{count} calendrier(s) (%{hrefs}).",
     "sync_failed_retry": "Synchronisation échouée. Cliquez pour réessayer.",
     "sync_fatal_error_recovery": "Erreur fatale de synchronisation. Tâche déplacée vers 'Local (Récupération)'.",
     "sync_interval_label": "Intervalle de synchro :",

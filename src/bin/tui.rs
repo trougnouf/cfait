@@ -565,9 +565,33 @@ async fn main() -> Result<()> {
             )
             .await
             {
-                Ok((client, cals, _, _, _)) => {
-                    if let Err(e) = client.get_all_tasks(&cals).await {
-                        eprintln!("{}", rust_i18n::t!("sync_error", error = e.to_string()));
+                Ok((client, cals, _, _, warning)) => {
+                    let (_, failed) = match client.get_all_tasks_reported(&cals).await {
+                        Ok(r) => r,
+                        Err(e) => {
+                            eprintln!("{}", rust_i18n::t!("sync_error", error = e.to_string()));
+                            std::process::exit(1);
+                        }
+                    };
+                    // Local calendars are read straight from disk; only remote
+                    // failures mean the server didn't fully sync.
+                    let remote_failed: Vec<&str> = failed
+                        .iter()
+                        .filter(|h| !h.starts_with("local://"))
+                        .map(|h| h.as_str())
+                        .collect();
+                    if let Some(w) = &warning {
+                        eprintln!("{}", w);
+                    }
+                    if !remote_failed.is_empty() {
+                        eprintln!(
+                            "{}",
+                            rust_i18n::t!(
+                                "sync_partial_failure",
+                                count = remote_failed.len(),
+                                hrefs = remote_failed.join(", ")
+                            )
+                        );
                         std::process::exit(1);
                     }
                     println!("{}", rust_i18n::t!("sync_completed_successfully"));
