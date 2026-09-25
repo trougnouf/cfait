@@ -2709,6 +2709,15 @@ pub fn is_special_token_with_lex(word: &str, lex: &ParserLexicon) -> bool {
     false
 }
 
+/// Interval of an RRULE string, defaulting to 1 when absent.
+fn rrule_interval(rrule: &str) -> u32 {
+    rrule
+        .split(';')
+        .find_map(|part| part.strip_prefix("INTERVAL="))
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(1)
+}
+
 pub fn apply_smart_input(
     task: &mut Task,
     input: &str,
@@ -3578,7 +3587,11 @@ pub fn apply_smart_input(
         && let Some(mut rrule) = task.rrule.take()
     {
         if !blocked_weekdays.is_empty() {
-            if rrule.contains("FREQ=DAILY") {
+            // The DAILY->WEEKLY rewrite only preserves the schedule when the
+            // base frequency runs every day. With INTERVAL != 1 there is no
+            // equivalent WEEKLY form, so keep FREQ=DAILY and let BYDAY filter
+            // the occurrences (the prettifier shows such rules raw).
+            if rrule.contains("FREQ=DAILY") && rrule_interval(&rrule) == 1 {
                 rrule = rrule.replace("FREQ=DAILY", "FREQ=WEEKLY");
             }
             if !rrule.contains("BYDAY=") {

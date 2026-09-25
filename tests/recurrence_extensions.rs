@@ -194,6 +194,21 @@ fn test_except_with_weekday() {
 }
 
 #[test]
+fn test_except_weekday_with_interval() {
+    // "every 2 days except saturday" must keep its interval: converting
+    // DAILY to WEEKLY would silently turn it into every 2 weeks
+    let t = parse("Garden chores @every 2 days except saturday");
+
+    assert!(t.rrule.is_some());
+    let rrule = t.rrule.as_ref().unwrap();
+    assert!(rrule.contains("FREQ=DAILY"), "got: {rrule}");
+    assert!(rrule.contains("INTERVAL=2"), "got: {rrule}");
+    assert!(rrule.contains("BYDAY="), "got: {rrule}");
+    let byday_part = rrule.split("BYDAY=").nth(1).unwrap_or("");
+    assert!(!byday_part.contains("SA"));
+}
+
+#[test]
 fn test_except_invalid_date_falls_back_to_summary() {
     let t = parse("Task @daily except not-a-date");
 
