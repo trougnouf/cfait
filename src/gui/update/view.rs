@@ -76,8 +76,8 @@ fn flush_journal_save(app: &mut GuiApp) {
 }
 
 /// Load the daily-note content for `date` from `href` into the journal editor,
-/// leaving `journal_editing_uid` untouched (callers keep it `None` for the
-/// daily-note view).
+/// tracking the existing entry in `journal_editing_uid` (or clearing it when
+/// no entry exists yet).
 fn load_daily_note_into(app: &mut GuiApp, href: &str, date: chrono::NaiveDate) {
     if let Some(entry) = app.store.get_journal_entry(href, date) {
         let md = crate::model::extractor::serialize_task_tree(
@@ -87,8 +87,10 @@ fn load_daily_note_into(app: &mut GuiApp, href: &str, date: chrono::NaiveDate) {
             true,
         );
         app.journal_editor_content = iced::widget::text_editor::Content::with_text(&md);
+        app.journal_editing_uid = Some(entry.uid.clone());
     } else {
         app.journal_editor_content = iced::widget::text_editor::Content::new();
+        app.journal_editing_uid = None;
     }
 }
 
@@ -943,7 +945,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         !matches!(bound, Some(h) if app.collection_visible(&h))
                     };
                     if needs_fallback {
-                        app.journal_editing_uid = None;
                         app.journal_title_input.clear();
                         app.journal_date = chrono::Local::now().date_naive();
                         let today = app.journal_date;
@@ -960,45 +961,20 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::SelectJournalDate(date) => {
             flush_journal_save(app);
-            app.journal_editing_uid = None;
             app.journal_title_input.clear();
             app.journal_date = date;
             app.journal_date_input = date.format("%Y-%m-%d").to_string();
             let href = app.resolve_journal_href(date);
-
-            if let Some(entry) = app.store.get_journal_entry(&href, date) {
-                let md = crate::model::extractor::serialize_task_tree(
-                    &app.store,
-                    &entry.uid,
-                    &app.calendars,
-                    true,
-                );
-                app.journal_editor_content = iced::widget::text_editor::Content::with_text(&md);
-                app.journal_editing_uid = Some(entry.uid.clone());
-            } else {
-                app.journal_editor_content = iced::widget::text_editor::Content::new();
-            }
+            load_daily_note_into(app, &href, date);
             Task::none()
         }
         Message::SelectJournalCollection(href) => {
             flush_journal_save(app);
             app.journal_editing_href = Some(href.clone());
             app.active_cal_href = Some(href.clone());
-            app.journal_editing_uid = None;
             app.journal_title_input.clear();
             let date = app.journal_date;
-            if let Some(entry) = app.store.get_journal_entry(&href, date) {
-                let md = crate::model::extractor::serialize_task_tree(
-                    &app.store,
-                    &entry.uid,
-                    &app.calendars,
-                    true,
-                );
-                app.journal_editor_content = iced::widget::text_editor::Content::with_text(&md);
-                app.journal_editing_uid = Some(entry.uid.clone());
-            } else {
-                app.journal_editor_content = iced::widget::text_editor::Content::new();
-            }
+            load_daily_note_into(app, &href, date);
             Task::none()
         }
         Message::OpenJournalPage(uid) => {
@@ -1111,22 +1087,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             match chrono::NaiveDate::parse_from_str(app.journal_date_input.trim(), "%Y-%m-%d") {
                 Ok(parsed) => {
                     flush_journal_save(app);
-                    app.journal_editing_uid = None;
                     app.journal_date = parsed;
                     let href = app.resolve_journal_href(parsed);
-                    if let Some(entry) = app.store.get_journal_entry(&href, parsed) {
-                        let md = crate::model::extractor::serialize_task_tree(
-                            &app.store,
-                            &entry.uid,
-                            &app.calendars,
-                            true,
-                        );
-                        app.journal_editor_content =
-                            iced::widget::text_editor::Content::with_text(&md);
-                        app.journal_editing_uid = Some(entry.uid.clone());
-                    } else {
-                        app.journal_editor_content = iced::widget::text_editor::Content::new();
-                    }
+                    load_daily_note_into(app, &href, parsed);
                 }
                 Err(_) => {
                     app.error_msg = Some(rust_i18n::t!("error_invalid_date").to_string());
@@ -1208,7 +1171,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.search_value = iced::widget::text_editor::Content::new();
             }
             refresh_filtered_tasks(app);
-            app.sidebar_mode = SidebarMode::Calendars;
+            if app.show_calendars_tab {
+                app.sidebar_mode = SidebarMode::Calendars;
+            }
             Task::none()
         }
         Message::CategoryMatchModeChanged(val) => {
