@@ -1656,19 +1656,49 @@ impl RustyClient {
         let futures = hrefs.into_iter().map(|href| {
             let client = self.clone();
             async move {
-                (
-                    href.clone(),
-                    client.fetch_calendar_tasks_internal(&href, true).await,
+                // A timeout ensures one blackholed server can't hang the whole batch.
+                let fetch_res = tokio::time::timeout(
+                    std::time::Duration::from_secs(10),
+                    client.fetch_calendar_tasks_internal(&href, true),
                 )
+                .await;
+                match fetch_res {
+                    Ok(Ok(tasks)) => (href, Some(tasks)),
+                    Ok(Err(e)) => {
+                        log::warn!("Failed to fetch calendar {}: {}", href, e);
+                        (href, None)
+                    }
+                    Err(_) => {
+                        log::warn!("Timed out fetching calendar {}", href);
+                        (href, None)
+                    }
+                }
             }
         });
 
         let mut stream = stream::iter(futures).buffer_unordered(4);
         let mut final_results = Vec::new();
 
-        while let Some((href, res)) = stream.next().await {
-            if let Ok(tasks) = res {
-                final_results.push((href, tasks));
+        while let Some((href, tasks)) = stream.next().await {
+            match tasks {
+                Some(tasks) => final_results.push((href, tasks)),
+                // Fall back to what is already on disk so a slow or failed server
+                // doesn't silently drop the calendar from the UI.
+                None => {
+                    let fallback = if href.starts_with("local://") {
+                        crate::storage::LocalStorage::load_for_href(self.ctx.as_ref(), &href)
+                    } else {
+                        crate::cache::Cache::load(self.ctx.as_ref(), &href).map(|(t, _)| t)
+                    };
+                    if let Ok(mut tasks) = fallback {
+                        crate::journal::Journal::apply_to_tasks(
+                            self.ctx.as_ref(),
+                            &mut tasks,
+                            &href,
+                        );
+                        final_results.push((href, tasks));
+                    }
+                }
             }
         }
 

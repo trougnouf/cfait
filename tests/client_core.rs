@@ -254,3 +254,78 @@ async fn test_controller_move_local_to_remote() {
         other => panic!("Expected action to be Create(remote), got: {:?}", other),
     }
 }
+
+// --- GET_ALL_TASKS FALLBACK TESTS ---
+
+#[tokio::test]
+#[serial]
+async fn test_get_all_tasks_falls_back_to_cache_when_server_fails() {
+    let ctx = std::sync::Arc::new(cfait::context::TestContext::new());
+
+    // Seed the on-disk cache with a task for the remote calendar. A real
+    // cached task was fetched from the server, so it carries an etag; without
+    // one it would be treated as an unsynced "ghost" and filtered out.
+    let mut cached = Task::new("Water the tomatoes", &HashMap::new(), None);
+    cached.uid = "cached-1".to_string();
+    cached.calendar_href = "https://example.com/cal/".to_string();
+    cached.etag = "etag-1".to_string();
+    cfait::cache::Cache::save(
+        ctx.as_ref(),
+        "https://example.com/cal/",
+        std::slice::from_ref(&cached),
+        Some("tok-1".to_string()),
+    )
+    .unwrap();
+
+    // Seed a local calendar too; local fetches never hit the network.
+    let mut local = Task::new("Read a chapter", &HashMap::new(), None);
+    local.uid = "local-1".to_string();
+    local.calendar_href = "local://garden".to_string();
+    LocalStorage::save_for_href(ctx.as_ref(), "local://garden", std::slice::from_ref(&local))
+        .unwrap();
+
+    // A mock server that answers nothing: every request fails, so the remote
+    // fetch must error out and fall back to the cached tasks instead of
+    // silently dropping the calendar.
+    let server = mockito::Server::new_async().await;
+    let client = RustyClient::new(ctx.clone(), &server.url(), "u", "p", true, None).unwrap();
+
+    let calendars = vec![
+        CalendarListEntry {
+            name: "Garden".to_string(),
+            href: "local://garden".to_string(),
+            color: None,
+            supports_vjournal: None,
+        },
+        CalendarListEntry {
+            name: "Remote".to_string(),
+            href: "https://example.com/cal/".to_string(),
+            color: None,
+            supports_vjournal: None,
+        },
+    ];
+
+    let results = client.get_all_tasks(&calendars).await.unwrap();
+
+    let local_tasks = results
+        .iter()
+        .find(|(href, _)| href == "local://garden")
+        .map(|(_, t)| t.clone());
+    assert!(
+        local_tasks
+            .as_ref()
+            .is_some_and(|t| t.iter().any(|t| t.uid == "local-1")),
+        "Local calendar should be present with its task"
+    );
+
+    let remote_tasks = results
+        .iter()
+        .find(|(href, _)| href == "https://example.com/cal/")
+        .map(|(_, t)| t.clone());
+    assert!(
+        remote_tasks
+            .as_ref()
+            .is_some_and(|t| t.iter().any(|t| t.uid == "cached-1")),
+        "Failed remote calendar should fall back to its cached tasks"
+    );
+}
