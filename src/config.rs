@@ -1147,6 +1147,20 @@ impl Config {
             anyhow::anyhow!("Failed to read config file '{}': {}", path.display(), e)
         })?;
 
+        // An empty or whitespace-only config file is corrupt (a real config
+        // always has content). Return an error so the app can re-onboard and
+        // warn the user, rather than silently deserializing to all defaults and
+        // later overwriting the file with them.
+        if contents.trim().is_empty() {
+            log::warn!(
+                "Config file '{}' is empty or whitespace-only; treating it as missing.",
+                path.display()
+            );
+            return Err(anyhow::anyhow!(
+                "Config file is empty or contains only whitespace"
+            ));
+        }
+
         let mut config: Config = toml::from_str(&contents).map_err(|e| {
             anyhow::anyhow!("Failed to parse config file '{}': {}", path.display(), e)
         })?;
@@ -1234,7 +1248,10 @@ impl Config {
     }
 
     pub fn is_missing_config_error(err: &Error) -> bool {
-        if err.to_string().contains("Config file not found") {
+        // An empty/corrupt config is treated like a missing one so the app can
+        // re-onboard instead of aborting.
+        let msg = err.to_string();
+        if msg.contains("Config file not found") || msg.contains("Config file is empty") {
             return true;
         }
         if let Some(io_err) = err.downcast_ref::<std::io::Error>()
