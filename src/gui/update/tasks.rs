@@ -1621,14 +1621,13 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
         save_config(app);
     }
 
-    let trimmed = clean_input.trim();
-    let is_alias_only = !trimmed.contains(' ')
-        && (trimmed.contains(":=") || trimmed.to_lowercase().starts_with("loc:"));
+    // A pure alias/goal definition leaves only the key token behind
+    // (e.g. `#garden := #balcony, #green` -> `#garden`); skip task
+    // creation for it. Mirrors the mobile ALIAS_UPDATED early return.
+    let is_alias_only = crate::model::is_pure_alias_remainder(&clean_input, config_changed);
 
-    if (trimmed.is_empty() || is_alias_only)
-        && app.editing_uid.is_none()
-        && app.editing_tree_uid.is_none()
-    {
+    if is_alias_only && app.editing_uid.is_none() && app.editing_tree_uid.is_none() {
+        app.info_msg = Some(rust_i18n::t!("alias_updated").to_string());
         if !keep_editing {
             app.input_value = text_editor::Content::new();
             app.editor_maximized = false;

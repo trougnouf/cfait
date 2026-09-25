@@ -18,7 +18,8 @@ pub use item::{Alarm, AlarmTrigger, CalendarListEntry, DateType, RawProperty, Ta
 
 // Re-export specific parser helpers used across the codebase.
 pub use parser::{
-    expand_braces, extract_inline_aliases, extract_inline_goals, validate_alias_integrity,
+    expand_braces, extract_inline_aliases, extract_inline_goals, is_pure_alias_remainder,
+    validate_alias_integrity,
 };
 
 // Re-export extractor for markdown task extraction

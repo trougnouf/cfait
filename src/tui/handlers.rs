@@ -1658,9 +1658,11 @@ pub async fn handle_key_event(
                 }
 
                 let trimmed = clean_input.trim();
-                let is_alias_only = trimmed.is_empty()
-                    || (!trimmed.contains(' ')
-                        && (trimmed.contains(":=") || trimmed.to_lowercase().starts_with("loc:")));
+                // A pure alias/goal definition leaves only the key token behind
+                // (e.g. `#garden := #balcony, #green` -> `#garden`); skip task
+                // creation for it. Mirrors the mobile ALIAS_UPDATED early return.
+                let is_alias_only =
+                    crate::model::is_pure_alias_remainder(&clean_input, config_changed);
 
                 if trimmed.starts_with(':') && !trimmed.contains(' ') {
                     match trimmed.to_lowercase().as_str() {

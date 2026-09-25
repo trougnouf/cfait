@@ -609,6 +609,22 @@ pub fn extract_inline_aliases(input: &str) -> (String, HashMap<String, Vec<Strin
     (cleaned_words.join(" "), new_aliases)
 }
 
+/// Returns `true` when `clean_input` is the leftover of a pure alias/goal
+/// definition (see [`extract_inline_aliases`]): either empty, or a single key
+/// token (`#tag`, `@@loc`, `loc:x`) retained after extraction. Callers should
+/// skip task creation in that case, mirroring the mobile ALIAS_UPDATED early
+/// return. `config_changed` must reflect whether an alias or goal was actually
+/// extracted, so that a bare `#tag` without `:=` still creates a task.
+pub fn is_pure_alias_remainder(clean_input: &str, config_changed: bool) -> bool {
+    let trimmed = clean_input.trim();
+    trimmed.is_empty()
+        || (config_changed
+            && !trimmed.contains(' ')
+            && (trimmed.starts_with('#')
+                || trimmed.starts_with("@@")
+                || trimmed.to_lowercase().starts_with("loc:")))
+}
+
 pub fn extract_inline_goals(input: &str) -> (String, HashMap<String, crate::config::Goal>) {
     let parts = split_input_respecting_quotes(input);
     let merged = merge_assignment_tokens(&parts);
@@ -4265,4 +4281,78 @@ pub fn extract_referenced_media(
         rest = &after[end..];
     }
     target_media
+}
+
+#[cfg(test)]
+mod alias_extraction_tests {
+    use super::*;
+
+    fn run_pipeline(input: &str) -> (String, HashMap<String, Vec<String>>) {
+        let goals = extract_inline_goals(input);
+        let (clean, aliases) = extract_inline_aliases(&goals.0);
+        (clean, aliases)
+    }
+
+    #[test]
+    fn pure_tag_alias_leaves_only_key_token() {
+        // Documented syntax (SPECS.md): `#gardening := #home:outside, @@garden, !4`
+        let (clean, aliases) = run_pipeline("#garden := #balcony, #green");
+        assert_eq!(clean, "#garden");
+        assert_eq!(
+            aliases.get("garden"),
+            Some(&vec!["#balcony".to_string(), "#green".to_string()])
+        );
+        assert!(is_pure_alias_remainder(&clean, true));
+    }
+
+    #[test]
+    fn pure_goal_leaves_only_key_token() {
+        let (clean, _aliases) = run_pipeline("#read:book := goal:5/y");
+        assert_eq!(clean, "#read:book");
+        assert!(is_pure_alias_remainder(&clean, true));
+    }
+
+    #[test]
+    fn pure_location_alias_leaves_only_key_token() {
+        let (clean, aliases) = run_pipeline("loc:aldi := #groceries, loc:shops:supermarkets");
+        assert_eq!(clean, "loc:aldi");
+        assert_eq!(
+            aliases.get("@@aldi"),
+            Some(&vec![
+                "#groceries".to_string(),
+                "loc:shops:supermarkets".to_string()
+            ])
+        );
+        assert!(is_pure_alias_remainder(&clean, true));
+    }
+
+    #[test]
+    fn mixed_text_and_alias_is_not_pure() {
+        let (clean, aliases) = run_pipeline("water plants #garden := #balcony, #green");
+        assert_eq!(clean, "water plants #garden");
+        assert_eq!(aliases.len(), 1);
+        assert!(!is_pure_alias_remainder(&clean, true));
+    }
+
+    #[test]
+    fn bare_tag_without_alias_is_not_pure() {
+        // No `:=` in the input: nothing is extracted, so a bare tag must still
+        // create a task.
+        let (clean, aliases) = run_pipeline("feed the fish #garden");
+        assert_eq!(clean, "feed the fish #garden");
+        assert!(aliases.is_empty());
+        assert!(!is_pure_alias_remainder(&clean, false));
+        // Even a single bare tag token is not a pure remainder without a config change.
+        assert!(!is_pure_alias_remainder("#garden", false));
+    }
+
+    #[test]
+    fn space_separated_rhs_is_not_the_alias_syntax() {
+        // Values must be comma-separated; without commas only the first value
+        // joins the alias and the rest leak into the task.
+        let (clean, aliases) = run_pipeline("#garden := #balcony #green");
+        assert_eq!(clean, "#garden #green");
+        assert_eq!(aliases.get("garden"), Some(&vec!["#balcony".to_string()]));
+        assert!(!is_pure_alias_remainder(&clean, true));
+    }
 }
