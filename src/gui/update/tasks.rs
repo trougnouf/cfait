@@ -150,12 +150,55 @@ fn handle_gui_text_redo(app: &mut GuiApp) {
     }
 }
 
+/// Schedule the debounced journal save so pending editor text reaches the
+/// store (and disk) shortly after the last change.
+pub(crate) fn schedule_journal_save(app: &mut GuiApp) -> Task<Message> {
+    app.journal_debounce_version = app.journal_debounce_version.wrapping_add(1);
+    let version = app.journal_debounce_version;
+    Task::perform(
+        async move {
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            version
+        },
+        Message::SaveJournal,
+    )
+}
+
+fn handle_journal_text_undo(app: &mut GuiApp) -> Task<Message> {
+    if let Some(prev) = app
+        .journal_history
+        .pop_undo(app.journal_editor_content.text())
+    {
+        app.journal_editor_content = text_editor::Content::with_text(&prev);
+        app.journal_editor_content
+            .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
+        return schedule_journal_save(app);
+    }
+    Task::none()
+}
+
+fn handle_journal_text_redo(app: &mut GuiApp) -> Task<Message> {
+    if let Some(next) = app
+        .journal_history
+        .pop_redo(app.journal_editor_content.text())
+    {
+        app.journal_editor_content = text_editor::Content::with_text(&next);
+        app.journal_editor_content
+            .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
+        return schedule_journal_save(app);
+    }
+    Task::none()
+}
+
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {
         Message::Undo => {
             if app.active_focus == Focus::AddTaskInput {
                 handle_gui_text_undo(app);
                 return Task::none();
+            }
+            if app.active_focus == Focus::Journal {
+                return handle_journal_text_undo(app);
             }
 
             if let Some(record) = app.undo_history.pop_undo() {
@@ -196,6 +239,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if app.active_focus == Focus::AddTaskInput {
                 handle_gui_text_redo(app);
                 return Task::none();
+            }
+            if app.active_focus == Focus::Journal {
+                return handle_journal_text_redo(app);
             }
 
             if let Some(record) = app.undo_history.pop_redo() {
@@ -270,6 +316,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::ApplySuggestion(range, text) => {
             if app.sidebar_mode == SidebarMode::Journal {
                 let current = app.journal_editor_content.text();
+                app.journal_history.push(current.clone());
                 let mut new_text = current[..range.start].to_string();
                 new_text.push_str(&text);
                 if range.end < current.len() {
@@ -281,17 +328,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.journal_editor_content
                     .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
 
-                app.journal_debounce_version = app.journal_debounce_version.wrapping_add(1);
-                let version = app.journal_debounce_version;
+                app.active_focus = Focus::Journal;
+                if let Ok(mut focus) = ACTIVE_FOCUS.write() {
+                    *focus = Focus::Journal;
+                }
                 return Task::batch(vec![
                     iced::widget::operation::focus(iced::widget::Id::new("journal_editor")),
-                    Task::perform(
-                        async move {
-                            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                            version
-                        },
-                        Message::SaveJournal,
-                    ),
+                    schedule_journal_save(app),
                 ]);
             }
 

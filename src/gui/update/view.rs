@@ -79,6 +79,7 @@ fn flush_journal_save(app: &mut GuiApp) {
 /// tracking the existing entry in `journal_editing_uid` (or clearing it when
 /// no entry exists yet).
 fn load_daily_note_into(app: &mut GuiApp, href: &str, date: chrono::NaiveDate) {
+    app.journal_history.clear();
     if let Some(entry) = app.store.get_journal_entry(href, date) {
         let md = crate::model::extractor::serialize_task_tree(
             &app.store,
@@ -288,6 +289,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                             crate::model::parser::strip_quotes(path_segs.last().unwrap());
                         app.journal_editor_content =
                             iced::widget::text_editor::Content::with_text("");
+                        app.journal_history.clear();
                         app.editor_maximized = true;
 
                         refresh_filtered_tasks(app);
@@ -522,6 +524,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 }
                 crate::gui::state::Focus::AddTaskInput => {
                     iced::widget::operation::focus("main_input")
+                }
+                crate::gui::state::Focus::Journal => {
+                    iced::widget::operation::focus("journal_editor")
                 }
             }
         }
@@ -990,6 +995,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     true,
                 );
                 app.journal_editor_content = iced::widget::text_editor::Content::with_text(&md);
+                app.journal_history.clear();
                 app.editor_maximized = true;
             } else {
                 app.error_msg = Some(rust_i18n::t!("error_task_not_found").to_string());
@@ -1023,6 +1029,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.active_cal_href = Some(target_href);
             app.journal_editing_uid = Some(uid);
             app.journal_editor_content = iced::widget::text_editor::Content::with_text("");
+            app.journal_history.clear();
             app.editor_maximized = true;
 
             refresh_filtered_tasks(app);
@@ -1056,6 +1063,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.active_cal_href = Some(target_href);
             app.journal_editing_uid = Some(uid);
             app.journal_editor_content = iced::widget::text_editor::Content::with_text("");
+            app.journal_history.clear();
             app.editor_maximized = true;
 
             refresh_filtered_tasks(app);
@@ -1098,16 +1106,17 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::JournalContentChanged(action) => {
+            app.active_focus = Focus::Journal;
+            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
+                *focus = Focus::Journal;
+            }
+            let old_text = app.journal_editor_content.text();
             app.journal_editor_content.perform(action);
-            app.journal_debounce_version = app.journal_debounce_version.wrapping_add(1);
-            let version = app.journal_debounce_version;
-            Task::perform(
-                async move {
-                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                    version
-                },
-                Message::SaveJournal,
-            )
+            if old_text != app.journal_editor_content.text() {
+                app.journal_history.push(old_text);
+                return tasks::schedule_journal_save(app);
+            }
+            Task::none()
         }
         Message::SaveJournal(version) => {
             if version == app.journal_debounce_version {

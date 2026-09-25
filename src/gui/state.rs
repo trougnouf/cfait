@@ -42,6 +42,7 @@ pub enum Focus {
     Sidebar,
     SearchInput,
     AddTaskInput,
+    Journal,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -316,6 +317,7 @@ pub struct GuiApp {
 
     pub input_history: crate::model::session::TextHistory,
     pub desc_history: crate::model::session::TextHistory,
+    pub journal_history: crate::model::session::TextHistory,
     pub last_edited_field: u8, // 0 for main input, 1 for description
     pub editor_maximized: bool,
 }
@@ -809,6 +811,7 @@ impl Default for GuiApp {
 
             input_history: crate::model::session::TextHistory::default(),
             desc_history: crate::model::session::TextHistory::default(),
+            journal_history: crate::model::session::TextHistory::default(),
             last_edited_field: 0,
             editor_maximized: false,
         }
