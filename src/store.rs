@@ -3343,22 +3343,99 @@ impl TaskStore {
             .flat_map(|(_, map)| map.values())
             .collect();
 
-        // Pre-calculate effective ancestry states to avoid redundant O(depth) tree walks
-        let mut eff_blocked_map: HashMap<&str, bool> =
-            HashMap::with_capacity(all_allowed_refs.len());
-        let mut eff_future_map: HashMap<&str, bool> =
-            HashMap::with_capacity(all_allowed_refs.len());
+        // Pre-calculate effective ancestry states. A task's effective state is its
+        // own explicit state OR its parent's effective state, so a single forest
+        // traversal (parents before children) computes it for every task in O(N)
+        // instead of an O(depth) walk with a fresh visited-set per task. Only the
+        // ready/blocked modes consult these maps, so skip the work entirely otherwise.
+        let is_future_start = |t: &Task| -> bool {
+            t.dtstart
+                .as_ref()
+                .is_some_and(|s| s.to_start_comparison_time() > now)
+        };
 
-        for t in &all_allowed_refs {
-            eff_blocked_map.insert(
-                t.uid.as_str(),
-                check_is_effectively_blocked(t, &completed_uids),
-            );
-            eff_future_map.insert(t.uid.as_str(), check_is_effectively_future(t));
+        let mut eff_blocked_map: HashMap<&str, bool> = HashMap::new();
+        let mut eff_future_map: HashMap<&str, bool> = HashMap::new();
+        if is_ready_mode || is_blocked_mode {
+            let mut visited: HashSet<&str> = HashSet::new();
+
+            // Seed the roots: tasks with no parent, or whose parent is not in the store.
+            let mut queue: Vec<&str> = Vec::new();
+            for map in self.calendars.values() {
+                for t in map.values() {
+                    let uid = t.uid.as_str();
+                    let is_root = match t.parent_uid.as_deref() {
+                        Some(p) => !self.index.contains_key(p),
+                        None => true,
+                    };
+                    if is_root && visited.insert(uid) {
+                        eff_blocked_map.insert(uid, check_is_blocked_explicit(t, &completed_uids));
+                        eff_future_map.insert(uid, is_future_start(t));
+                        queue.push(uid);
+                    }
+                }
+            }
+
+            // Traverse children; a child inherits its parent's effective state.
+            let mut qi = 0;
+            while qi < queue.len() {
+                let parent_uid = queue[qi];
+                qi += 1;
+                if let Some(children) = self.children_index.get(parent_uid) {
+                    for child_uid in children {
+                        if let Some(child) = self.get_task_ref(child_uid)
+                            && visited.insert(child.uid.as_str())
+                        {
+                            let inherit_blocked =
+                                eff_blocked_map.get(parent_uid).copied().unwrap_or(false);
+                            let inherit_future =
+                                eff_future_map.get(parent_uid).copied().unwrap_or(false);
+                            eff_blocked_map.insert(
+                                child.uid.as_str(),
+                                check_is_blocked_explicit(child, &completed_uids)
+                                    || inherit_blocked,
+                            );
+                            eff_future_map.insert(
+                                child.uid.as_str(),
+                                is_future_start(child) || inherit_future,
+                            );
+                            queue.push(child.uid.as_str());
+                        }
+                    }
+                }
+            }
+
+            // Tasks in a parent cycle are unreachable from any root; fall back to the
+            // per-task walk for those (rare, defensive).
+            for map in self.calendars.values() {
+                for t in map.values() {
+                    let uid = t.uid.as_str();
+                    if !eff_blocked_map.contains_key(uid) {
+                        eff_blocked_map
+                            .insert(uid, check_is_effectively_blocked(t, &completed_uids));
+                    }
+                    if !eff_future_map.contains_key(uid) {
+                        eff_future_map.insert(uid, check_is_effectively_future(t));
+                    }
+                }
+            }
         }
 
         // Parse the search query once; run_pipeline is invoked up to 3 times below.
         let query = crate::model::matcher::Query::new(options.search_term);
+
+        // The text-search result for a task is independent of the category/location
+        // ignore flags, so compute it once per task and let every pipeline pass reuse
+        // it instead of re-running the (relatively costly) text match up to 3 times.
+        let search_active = !options.search_term.is_empty();
+        let search_ok: HashMap<&str, bool> = if search_active {
+            all_allowed_refs
+                .iter()
+                .map(|t| (t.uid.as_str(), query.matches(t, lex, self)))
+                .collect()
+        } else {
+            HashMap::new()
+        };
 
         // 3) Define the filtering pipeline as a reusable closure.
         // This allows us to calculate the final tasks, and recalculate aggregates ignoring specific filters for OR modes.
@@ -3474,8 +3551,8 @@ impl TaskStore {
                     return false;
                 }
 
-                // Search term matching
-                if !options.search_term.is_empty() && !query.matches(t, lex, self) {
+                // Search term matching (pre-computed once per task above)
+                if search_active && !search_ok.get(t.uid.as_str()).copied().unwrap_or(false) {
                     return false;
                 }
 
@@ -3573,12 +3650,21 @@ impl TaskStore {
             (filtered_refs, expanded)
         };
 
+        // When no search term, category or location filter is active, the
+        // category/location ignore flags have no effect (empty selections match
+        // everything and no expansion is needed), so every pipeline pass produces
+        // the identical result. Run it once and reuse instead of recomputing the
+        // same match sets and ancestry walks three times.
+        let plain_mode = options.search_term.is_empty()
+            && options.selected_categories.is_empty()
+            && options.selected_locations.is_empty();
+
         // Execution of pipelines:
         // The final task list applies ALL filters
         let (final_refs, direct_matches) = run_pipeline(false, false);
 
         // For tags: If OR mode, ignore current tag selection so user can pick multiple parallel tags
-        let tag_refs = if options.match_all_categories {
+        let tag_refs = if plain_mode || options.match_all_categories {
             final_refs.clone()
         } else {
             run_pipeline(true, false).0
@@ -3586,7 +3672,11 @@ impl TaskStore {
 
         // For locations: A task only has 1 location, so multiple locations is ALWAYS an OR operation.
         // We always ignore the location filter when computing location aggregates so other locations stay visible.
-        let loc_refs = run_pipeline(false, true).0;
+        let loc_refs = if plain_mode {
+            final_refs.clone()
+        } else {
+            run_pipeline(false, true).0
+        };
 
         // 4) Build category and location aggregates
         let mut cat_active_counts: HashMap<String, u32> = HashMap::new();
