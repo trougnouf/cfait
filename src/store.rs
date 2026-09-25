@@ -4516,11 +4516,20 @@ impl TaskStore {
                 primary_uid = Some(uid.clone());
                 potential_uids.push(uid.clone());
                 potential_uids.extend(self.get_descendant_uids(uid));
+                // StartTask propagates InProcess up the ancestor chain, so the
+                // ancestors must be snapshotted too; otherwise undo would turn
+                // their Update into a hard Delete.
+                potential_uids.extend(self.collect_ancestor_uids(uid));
             }
             AppIntent::DeleteTask { uid } => {
                 primary_uid = Some(uid.clone());
                 potential_uids.push(uid.clone());
                 potential_uids.extend(self.referring_uids(uid));
+                // cleanup_references promotes direct children to the root, so they
+                // are mutated; snapshot them or undo would hard-delete them.
+                if let Some(children) = self.children_index.get(uid) {
+                    potential_uids.extend(children.iter().cloned());
+                }
             }
             AppIntent::MoveTask { uid, .. } | AppIntent::RemoveParent { uid } => {
                 primary_uid = Some(uid.clone());

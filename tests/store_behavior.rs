@@ -998,3 +998,134 @@ fn test_insert_many_empty_is_noop() {
     assert!(store.get_task_ref("t1").is_some());
     assert_eq!(store.calendars.len(), 1);
 }
+
+#[test]
+fn test_undo_start_task_preserves_ancestors() {
+    let mut store = make_store();
+    let config = cfait::config::Config::default();
+
+    // A two-level tree: grandparent -> parent -> child.
+    let mut gp = Task::new("Water the roses", &HashMap::new(), None);
+    gp.uid = "gp".to_string();
+    gp.calendar_href = "cal1".to_string();
+    store.add_task(gp);
+
+    let mut p = Task::new("Prune the hedges", &HashMap::new(), None);
+    p.uid = "p".to_string();
+    p.calendar_href = "cal1".to_string();
+    p.parent_uid = Some("gp".to_string());
+    store.add_task(p);
+
+    let mut c = Task::new("Weed the bed", &HashMap::new(), None);
+    c.uid = "c".to_string();
+    c.calendar_href = "cal1".to_string();
+    c.parent_uid = Some("p".to_string());
+    store.add_task(c);
+
+    // Starting the timer on the leaf propagates InProcess up the ancestor chain.
+    let (_, reverse, _, _) = store.apply_task_intent(
+        &cfait::model::AppIntent::StartTask {
+            uid: "c".to_string(),
+        },
+        &config,
+    );
+    assert_eq!(
+        store.get_task_ref("c").unwrap().status,
+        TaskStatus::InProcess
+    );
+    assert_eq!(
+        store.get_task_ref("p").unwrap().status,
+        TaskStatus::InProcess
+    );
+    assert_eq!(
+        store.get_task_ref("gp").unwrap().status,
+        TaskStatus::InProcess
+    );
+
+    // Undo must restore all three, not hard-delete the ancestors.
+    store.apply_actions(&reverse);
+    assert_eq!(
+        store.get_task_ref("c").unwrap().status,
+        TaskStatus::NeedsAction
+    );
+    assert!(store.get_task_ref("c").unwrap().last_started_at.is_none());
+    assert!(
+        store.get_task_ref("p").is_some(),
+        "parent must survive undo"
+    );
+    assert_eq!(
+        store.get_task_ref("p").unwrap().status,
+        TaskStatus::NeedsAction
+    );
+    assert!(
+        store.get_task_ref("gp").is_some(),
+        "grandparent must survive undo"
+    );
+    assert_eq!(
+        store.get_task_ref("gp").unwrap().status,
+        TaskStatus::NeedsAction
+    );
+}
+
+#[test]
+fn test_undo_delete_task_preserves_children() {
+    let mut store = make_store();
+    // retention 0 => hard delete, no trash copy, so the reverse path is exercised
+    let config = cfait::config::Config {
+        trash_retention_days: 0,
+        ..Default::default()
+    };
+
+    let mut p = Task::new("Plan the garden", &HashMap::new(), None);
+    p.uid = "p".to_string();
+    p.calendar_href = "cal1".to_string();
+    store.add_task(p);
+
+    let mut c1 = Task::new("Sow the carrots", &HashMap::new(), None);
+    c1.uid = "c1".to_string();
+    c1.calendar_href = "cal1".to_string();
+    c1.parent_uid = Some("p".to_string());
+    store.add_task(c1);
+
+    let mut c2 = Task::new("Sow the beans", &HashMap::new(), None);
+    c2.uid = "c2".to_string();
+    c2.calendar_href = "cal1".to_string();
+    c2.parent_uid = Some("p".to_string());
+    store.add_task(c2);
+
+    // Deleting the parent promotes its children to the root.
+    let (_, reverse, _, _) = store.apply_task_intent(
+        &cfait::model::AppIntent::DeleteTask {
+            uid: "p".to_string(),
+        },
+        &config,
+    );
+    assert!(
+        store.get_task_ref("p").is_none(),
+        "parent should be deleted"
+    );
+    assert_eq!(
+        store.get_task_ref("c1").unwrap().parent_uid,
+        None,
+        "c1 should be promoted to root"
+    );
+    assert_eq!(
+        store.get_task_ref("c2").unwrap().parent_uid,
+        None,
+        "c2 should be promoted to root"
+    );
+
+    // Undo must restore the parent AND re-parent the children (not delete them).
+    store.apply_actions(&reverse);
+    assert!(store.get_task_ref("p").is_some(), "parent must be restored");
+    assert_eq!(
+        store.get_task_ref("c1").unwrap().parent_uid,
+        Some("p".to_string()),
+        "c1 must be re-parented, not deleted"
+    );
+    assert_eq!(
+        store.get_task_ref("c2").unwrap().parent_uid,
+        Some("p".to_string()),
+        "c2 must be re-parented, not deleted"
+    );
+}
