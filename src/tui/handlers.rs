@@ -1378,7 +1378,13 @@ pub async fn handle_key_event(
             && key.modifiers.contains(KeyModifiers::CONTROL)
         {
             let target_text = &state.input_buffer;
-            let cursor_pos = state.cursor_position;
+            // cursor_position is a char count; convert to a byte offset before
+            // slicing so multibyte text before the cursor can't panic.
+            let cursor_pos = target_text
+                .char_indices()
+                .map(|(i, _)| i)
+                .nth(state.cursor_position)
+                .unwrap_or(target_text.len());
             let line_start = target_text[..cursor_pos]
                 .rfind('\n')
                 .map(|i| i + 1)
@@ -1933,7 +1939,15 @@ pub async fn handle_key_event(
             // Enter inserts a newline
             KeyCode::Enter => {
                 state.enter_char('\n');
-                let text_up_to_cursor = &state.input_buffer[..state.cursor_position];
+                // cursor_position is a char count; convert to a byte offset
+                // before slicing so multibyte text can't panic.
+                let byte_idx = state
+                    .input_buffer
+                    .char_indices()
+                    .map(|(i, _)| i)
+                    .nth(state.cursor_position)
+                    .unwrap_or(state.input_buffer.len());
+                let text_up_to_cursor = &state.input_buffer[..byte_idx];
                 let lines: Vec<&str> = text_up_to_cursor.split('\n').collect();
                 if lines.len() >= 2 {
                     let prev_line = lines[lines.len() - 2];
