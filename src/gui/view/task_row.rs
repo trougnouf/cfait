@@ -1948,43 +1948,44 @@ pub fn view_task_row<'a>(
                         }
                     }
 
-                    if let Some(goal) = &task.goal {
-                        let progress = app
-                            .store
-                            .calculate_goal_progress(&format!("task:{}", task.uid), goal);
-                        let (cur_str, tar_str) =
-                            if goal.goal_type == crate::config::GoalType::Duration {
+                    if let Some(goal) = &effective_goal {
+                        // One store scan serves both the current progress and
+                        // the history heatmap (effective_goal is task.goal
+                        // when set).
+                        let (progress, history) = app.store.calculate_goal_progress_and_history(
+                            &format!("task:{}", task.uid),
+                            goal,
+                            7,
+                        );
+                        if task.goal.is_some() {
+                            let (cur_str, tar_str) = if goal.goal_type
+                                == crate::config::GoalType::Duration
+                            {
                                 crate::model::parser::format_goal_duration(progress, goal.target)
                             } else {
                                 (progress.to_string(), goal.target.to_string())
                             };
 
-                        details_col = details_col.push(
-                            text(format!(
-                                "- {}: {}",
-                                rust_i18n::t!("goal_target_label"),
-                                goal.format_target_display(&tar_str)
-                            ))
-                            .size(12)
-                            .color(Color::from_rgb(0.7, 0.7, 0.7)),
-                        );
-                        details_col = details_col.push(
-                            text(format!(
-                                "- {}: {}",
-                                rust_i18n::t!("goal_progress_label"),
-                                cur_str
-                            ))
-                            .size(12)
-                            .color(Color::from_rgb(0.7, 0.7, 0.7)),
-                        );
-                    }
+                            details_col = details_col.push(
+                                text(format!(
+                                    "- {}: {}",
+                                    rust_i18n::t!("goal_target_label"),
+                                    goal.format_target_display(&tar_str)
+                                ))
+                                .size(12)
+                                .color(Color::from_rgb(0.7, 0.7, 0.7)),
+                            );
+                            details_col = details_col.push(
+                                text(format!(
+                                    "- {}: {}",
+                                    rust_i18n::t!("goal_progress_label"),
+                                    cur_str
+                                ))
+                                .size(12)
+                                .color(Color::from_rgb(0.7, 0.7, 0.7)),
+                            );
+                        }
 
-                    if let Some(goal) = &effective_goal {
-                        let history = app.store.calculate_goal_history(
-                            &format!("task:{}", task.uid),
-                            goal,
-                            7,
-                        );
                         let mut heatmap_str = String::new();
                         for pct in history {
                             if pct >= 1.0 {

@@ -67,8 +67,7 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
 
     let mut goals_progress = std::collections::HashMap::new();
     for (key, goal) in &app.core_config.goals {
-        let prog = app.store.calculate_goal_progress(key, goal);
-        let history = app.store.calculate_goal_history(key, goal, 7);
+        let (prog, history) = app.store.calculate_goal_progress_and_history(key, goal, 7);
         goals_progress.insert(key.clone(), (prog, history));
     }
     app.cached_goals_progress = goals_progress;
@@ -91,12 +90,11 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
                     continue;
                 }
                 if let Some(goal) = &t.goal {
-                    let progress = app
-                        .store
-                        .calculate_goal_progress(&format!("task:{}", t.uid), goal);
-                    let history =
-                        app.store
-                            .calculate_goal_history(&format!("task:{}", t.uid), goal, 7);
+                    let (progress, history) = app.store.calculate_goal_progress_and_history(
+                        &format!("task:{}", t.uid),
+                        goal,
+                        7,
+                    );
                     task_goals.push((
                         t.uid.clone(),
                         t.summary.clone(),
