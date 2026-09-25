@@ -38,6 +38,7 @@ name = "cfait"
 [dependencies]
 # --- COMMON (Core Logic) ---
 chrono = { version = "0.4", features = ["serde"] }
+chrono-tz = "0.10"
 icalendar = "0.17"
 uuid = { version = "1.26", features = ["v4"] }
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros", "fs", "io-util"] }

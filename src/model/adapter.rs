@@ -10,9 +10,63 @@ It primarily contains:
 */
 
 use crate::model::item::{Alarm, AlarmTrigger, DateType, RawProperty, Task, TaskStatus};
-use chrono::{Datelike, NaiveDate, NaiveDateTime, TimeZone, Utc};
+use chrono::{DateTime, Datelike, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use icalendar::{Calendar, CalendarComponent, Component, Event, Todo, TodoStatus};
+use std::str::FromStr;
 use uuid::Uuid;
+
+/// Convert a floating (local) datetime to UTC in the given timezone, handling
+/// DST ambiguity and gaps the same way `safe_local_to_utc` does.
+fn tz_naive_to_utc(ndt: NaiveDateTime, tz: chrono_tz::Tz) -> Option<DateTime<Utc>> {
+    match ndt.and_local_timezone(tz) {
+        chrono::LocalResult::Single(dt) | chrono::LocalResult::Ambiguous(dt, _) => {
+            Some(dt.with_timezone(&Utc))
+        }
+        chrono::LocalResult::None => {
+            // Time falls in a DST gap. Advance 1 hour (usually valid), then
+            // subtract 1 hour in UTC. Same convention as safe_local_to_utc.
+            let shifted = ndt + chrono::Duration::hours(1);
+            match shifted.and_local_timezone(tz) {
+                chrono::LocalResult::Single(dt2) | chrono::LocalResult::Ambiguous(dt2, _) => {
+                    Some(dt2.with_timezone(&Utc) - chrono::Duration::hours(1))
+                }
+                chrono::LocalResult::None => None,
+            }
+        }
+    }
+}
+
+/// Read the (case-insensitive, optionally quoted) TZID parameter of a property.
+fn prop_tzid(prop: &icalendar::Property) -> Option<chrono_tz::Tz> {
+    prop.params()
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case("TZID"))
+        .and_then(|(_, v)| chrono_tz::Tz::from_str(v.value().trim_matches('"')).ok())
+}
+
+/// Convert a floating datetime UNTIL in an RRULE to UTC using the DTSTART
+/// timezone. Date-only and already-UTC UNTILs are left untouched.
+fn fix_floating_until(rrule: &str, tz: Option<chrono_tz::Tz>) -> String {
+    let Some(tz) = tz else {
+        return rrule.to_string();
+    };
+    rrule
+        .split(';')
+        .map(|part| {
+            if let Some(until_val) = part.strip_prefix("UNTIL=")
+                && until_val.contains('T')
+                && !until_val.ends_with('Z')
+                && let Ok(ndt) = NaiveDateTime::parse_from_str(until_val, "%Y%m%dT%H%M%S")
+                && let Some(utc) = tz_naive_to_utc(ndt, tz)
+            {
+                format!("UNTIL={}", utc.format("%Y%m%dT%H%M%SZ"))
+            } else {
+                part.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(";")
+}
 
 /// List of property keys we explicitly handle when mapping to/from ICS.
 const HANDLED_KEYS: &[&str] = &[
@@ -1144,6 +1198,12 @@ impl IcsAdapter {
                     NaiveDateTime::parse_from_str(val, "%Y%m%dT%H%M%SZ")
                         .ok()
                         .map(|d| DateType::Specific(Utc.from_utc_datetime(&d)))
+                } else if let Some(tz) = prop_tzid(prop) {
+                    // Floating datetime in a named zone: convert with DST handling
+                    NaiveDateTime::parse_from_str(val, "%Y%m%dT%H%M%S")
+                        .ok()
+                        .and_then(|d| tz_naive_to_utc(d, tz))
+                        .map(DateType::Specific)
                 } else {
                     NaiveDateTime::parse_from_str(val, "%Y%m%dT%H%M%S")
                         .ok()
@@ -1158,7 +1218,8 @@ impl IcsAdapter {
 
         let due = get_prop_ref("DUE").and_then(|p| parse_date_type(p, fuzzy_due));
         let dtstart = get_prop_ref("DTSTART").and_then(|p| parse_date_type(p, fuzzy_start));
-        let rrule = get_prop("RRULE");
+        let dtstart_tzid = get_prop_ref("DTSTART").and_then(prop_tzid);
+        let rrule = get_prop("RRULE").map(|rr| fix_floating_until(&rr, dtstart_tzid));
 
         let mut exdates = Vec::new();
         if let Some(multi_props) = get_multi_ref("EXDATE") {
@@ -1166,6 +1227,7 @@ impl IcsAdapter {
                 let is_date = prop.params().iter().any(|(k, v)| {
                     k.eq_ignore_ascii_case("VALUE") && v.value().eq_ignore_ascii_case("DATE")
                 });
+                let tz = prop_tzid(prop);
                 let val_str = prop.value();
                 for part in val_str.split(',') {
                     let part = part.trim();
@@ -1180,6 +1242,12 @@ impl IcsAdapter {
                     } else if part.ends_with('Z') {
                         if let Ok(dt) = NaiveDateTime::parse_from_str(part, "%Y%m%dT%H%M%SZ") {
                             exdates.push(DateType::Specific(Utc.from_utc_datetime(&dt)));
+                        }
+                    } else if let Some(tz) = tz
+                        && let Ok(dt) = NaiveDateTime::parse_from_str(part, "%Y%m%dT%H%M%S")
+                    {
+                        if let Some(utc) = tz_naive_to_utc(dt, tz) {
+                            exdates.push(DateType::Specific(utc));
                         }
                     } else if let Ok(dt) = NaiveDateTime::parse_from_str(part, "%Y%m%dT%H%M%S") {
                         exdates.push(DateType::Specific(crate::model::item::safe_local_to_utc(
