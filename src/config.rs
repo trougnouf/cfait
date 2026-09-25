@@ -1305,15 +1305,34 @@ impl Config {
                             err
                         );
                     }
-                } else if let Err(err) = entry.delete_credential() {
-                    // Delete credential if the user cleared the password.
-                    // Missing entries are fine; anything else is worth logging.
-                    if !matches!(err, keyring_core::Error::NoEntry) {
-                        log::warn!(
-                            "Failed to delete keyring credential for user '{}': {}",
-                            user_key,
-                            err
-                        );
+                } else {
+                    // The in-memory password is empty. Only remove the stored
+                    // credential if we can actually reach the keyring: if the
+                    // read fails (e.g. the keyring is locked), an empty password
+                    // most likely means the credential failed to load at
+                    // startup, not that the user cleared it — deleting it would
+                    // destroy a valid password. A successful read (or a
+                    // confirmed NoEntry) means the keyring is reachable, so an
+                    // empty password is a genuine clear.
+                    match entry.get_password() {
+                        Ok(_) | Err(keyring_core::Error::NoEntry) => {
+                            if let Err(err) = entry.delete_credential()
+                                && !matches!(err, keyring_core::Error::NoEntry)
+                            {
+                                log::warn!(
+                                    "Failed to delete keyring credential for user '{}': {}",
+                                    user_key,
+                                    err
+                                );
+                            }
+                        }
+                        Err(err) => {
+                            log::warn!(
+                                "Keyring unreadable for user '{}'; keeping stored credential: {}",
+                                user_key,
+                                err
+                            );
+                        }
                     }
                 }
             }
