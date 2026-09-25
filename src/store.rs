@@ -734,6 +734,26 @@ impl TaskStore {
     /// Replace or insert an entire calendar's tasks.
     /// This sets up the internal uid index and rebuilds relation indices for correctness.
     pub fn insert(&mut self, calendar_href: String, tasks: Vec<Task>) {
+        self.insert_one(calendar_href, tasks);
+        self.rebuild_relation_index();
+    }
+
+    /// Replace or insert an entire set of calendars' tasks, rebuilding the
+    /// relation indices only once at the end instead of once per calendar.
+    pub fn insert_many(&mut self, results: Vec<(String, Vec<Task>)>) {
+        if results.is_empty() {
+            return;
+        }
+        for (href, tasks) in results {
+            self.insert_one(href, tasks);
+        }
+        self.rebuild_relation_index();
+    }
+
+    /// Insert one calendar's tasks without rebuilding the relation indices.
+    /// Used by `insert` and `insert_many`; the caller is responsible for the
+    /// final `rebuild_relation_index` call.
+    fn insert_one(&mut self, calendar_href: String, tasks: Vec<Task>) {
         let tag_aliases = Config::tag_aliases(self.ctx.as_ref());
         let mut new_map = HashMap::new();
         let mut uids_to_add = Vec::new();
@@ -863,7 +883,6 @@ impl TaskStore {
         }
 
         self.calendars.insert(calendar_href, new_map);
-        self.rebuild_relation_index();
     }
 
     /// Add a single task into the store. If it already exists, it will be overwritten

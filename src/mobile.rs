@@ -2013,9 +2013,7 @@ impl CfaitMobile {
         // Now acquire the store lock and insert all loaded data
         let mut store = self.controller.store.blocking_lock();
         store.clear();
-        for (href, tasks) in loaded_calendars {
-            store.insert(href, tasks);
-        }
+        store.insert_many(loaded_calendars);
 
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let index = AlarmIndex::rebuild_from_tasks(
@@ -2352,15 +2350,17 @@ impl CfaitMobile {
             let cals = crate::cache::Cache::load_calendars(self.ctx.as_ref()).unwrap_or_default();
             match client.get_all_tasks(&cals).await {
                 Ok(results) => {
-                    let mut store = self.controller.store.lock().await;
+                    let mut store_data = Vec::with_capacity(results.len());
                     for (href, mut tasks) in results {
                         crate::journal::Journal::apply_to_tasks(
                             self.ctx.as_ref(),
                             &mut tasks,
                             &href,
                         );
-                        store.insert(href, tasks);
+                        store_data.push((href, tasks));
                     }
+                    let mut store = self.controller.store.lock().await;
+                    store.insert_many(store_data);
                     drop(store);
                     self.rebuild_alarm_index().await;
                     return Ok(rust_i18n::t!("status_connected").to_string());

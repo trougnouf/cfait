@@ -89,9 +89,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 // No user edits during the async load: safe to replace the store
                 // with fresh disk data (picks up other instances' changes & deletions)
                 app.store.clear();
-                for (href, tasks) in store_data {
-                    app.store.insert(href, tasks);
-                }
+                app.store.insert_many(store_data);
             } else {
                 // Edits happened during the load: skip the store update to avoid
                 // wiping in-memory changes. The next refresh will pick up disk changes.
@@ -128,9 +126,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 // No user edits during the async load: safe to replace the store
                 // with fresh disk data (picks up other instances' changes & deletions)
                 app.store.clear();
-                for (href, tasks) in store_data {
-                    app.store.insert(href, tasks);
-                }
+                app.store.insert_many(store_data);
             } else {
                 log::debug!(
                     "Skipping external reload store update: edit generation changed during load"
@@ -226,13 +222,14 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 // No user edits during the network fetch: safe to replace the store
                 app.store.clear();
 
+                let mut store_data = Vec::new();
                 for cal in &app.calendars {
                     if cal.href.starts_with("local://")
                         && let Ok(mut local_t) =
                             crate::storage::LocalStorage::load_for_href(app.ctx.as_ref(), &cal.href)
                     {
                         Journal::apply_to_tasks(app.ctx.as_ref(), &mut local_t, &cal.href);
-                        app.store.insert(cal.href.clone(), local_t);
+                        store_data.push((cal.href.clone(), local_t));
                     }
                 }
 
@@ -242,9 +239,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     }
                     if let Ok((mut cached_tasks, _)) = Cache::load(app.ctx.as_ref(), &cal.href) {
                         Journal::apply_to_tasks(app.ctx.as_ref(), &mut cached_tasks, &cal.href);
-                        app.store.insert(cal.href.clone(), cached_tasks);
+                        store_data.push((cal.href.clone(), cached_tasks));
                     }
                 }
+                app.store.insert_many(store_data);
             } else {
                 // Edits happened during the fetch: skip store clear to preserve them.
                 // Remote tasks arriving via RefreshedAll will merge via sequence protection.
@@ -401,10 +399,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::RefreshedAll(Ok(results)) => {
             if app.edit_generation == app.pending_refresh_generation {
+                let mut store_data = Vec::with_capacity(results.len());
                 for (href, mut tasks) in results {
                     Journal::apply_to_tasks(app.ctx.as_ref(), &mut tasks, &href);
-                    app.store.insert(href.clone(), tasks);
+                    store_data.push((href, tasks));
                 }
+                app.store.insert_many(store_data);
             }
 
             app.last_sync_failed = false;

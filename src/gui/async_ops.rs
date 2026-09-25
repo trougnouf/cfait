@@ -246,9 +246,7 @@ pub fn spawn_background_worker(
                                     // actions operate on current data.
                                     let mut s = controller.store.lock().await;
                                     s.clear();
-                                    for (href, list) in &tasks {
-                                        s.insert(href.clone(), list.clone());
-                                    }
+                                    s.insert_many(tasks.clone());
                                     drop(s);
                                     let _ = ui_tx
                                         .send(crate::gui::message::Message::ExternalReloaded(

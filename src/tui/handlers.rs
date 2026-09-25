@@ -1098,12 +1098,11 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
                 // Full replace: picks up external edits, deletions, and removed
                 // calendars. Skipped if the user edited during the async load.
                 state.store.clear();
-                for (href, tasks) in results {
-                    if !state.local_mode_enabled && href.starts_with("local://") {
-                        continue;
-                    }
-                    state.store.insert(href, tasks);
-                }
+                let filtered = results
+                    .into_iter()
+                    .filter(|(href, _)| state.local_mode_enabled || !href.starts_with("local://"))
+                    .collect::<Vec<_>>();
+                state.store.insert_many(filtered);
             }
             state.refresh_filtered_view();
             state.loading = false;
@@ -1155,12 +1154,11 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
         }
         AppEvent::TasksLoaded(results) => {
             if state.edit_generation == state.pending_refresh_generation {
-                for (href, tasks) in results {
-                    if !state.local_mode_enabled && href.starts_with("local://") {
-                        continue;
-                    }
-                    state.store.insert(href, tasks);
-                }
+                let filtered = results
+                    .into_iter()
+                    .filter(|(href, _)| state.local_mode_enabled || !href.starts_with("local://"))
+                    .collect::<Vec<_>>();
+                state.store.insert_many(filtered);
             }
             state.refresh_filtered_view();
             state.loading = false;

@@ -947,3 +947,54 @@ fn test_undo_delete_tasks_batch_preserves_referencing_tasks() {
         "b's relation should be restored"
     );
 }
+
+#[test]
+fn test_insert_many_matches_sequential_inserts() {
+    // Two calendars with related tasks. `insert_many` must produce the exact
+    // same store state (including all relation indices) as calling `insert`
+    // once per calendar.
+    let mut t1 = Task::new("Water the tomatoes", &HashMap::new(), None);
+    t1.uid = "t1".to_string();
+    t1.calendar_href = "cal1".to_string();
+
+    let mut t2 = Task::new("Deadhead the roses", &HashMap::new(), None);
+    t2.uid = "t2".to_string();
+    t2.calendar_href = "cal1".to_string();
+    t2.parent_uid = Some("t1".to_string());
+
+    let mut t3 = Task::new("Bake sourdough", &HashMap::new(), None);
+    t3.uid = "t3".to_string();
+    t3.calendar_href = "cal2".to_string();
+    t3.dependencies = vec!["t1".to_string()];
+    t3.related_to = vec!["t2".to_string()];
+
+    let mut a = make_store();
+    a.insert("cal1".to_string(), vec![t1.clone(), t2.clone()]);
+    a.insert("cal2".to_string(), vec![t3.clone()]);
+
+    let mut b = make_store();
+    b.insert_many(vec![
+        ("cal1".to_string(), vec![t1.clone(), t2.clone()]),
+        ("cal2".to_string(), vec![t3.clone()]),
+    ]);
+
+    assert_eq!(a.calendars, b.calendars);
+    assert_eq!(a.index, b.index);
+    assert_eq!(a.related_from_index, b.related_from_index);
+    assert_eq!(a.blocking_index, b.blocking_index);
+    assert_eq!(a.children_index, b.children_index);
+}
+
+#[test]
+fn test_insert_many_empty_is_noop() {
+    let mut store = make_store();
+    let mut t1 = Task::new("Read a chapter", &HashMap::new(), None);
+    t1.uid = "t1".to_string();
+    t1.calendar_href = "cal1".to_string();
+    store.insert("cal1".to_string(), vec![t1.clone()]);
+
+    store.insert_many(vec![]);
+
+    assert!(store.get_task_ref("t1").is_some());
+    assert_eq!(store.calendars.len(), 1);
+}

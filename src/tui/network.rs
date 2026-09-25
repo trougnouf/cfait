@@ -44,9 +44,7 @@ async fn merge_results_into_store(
     results: &[(String, Vec<crate::model::Task>)],
 ) {
     let mut s = store.lock().await;
-    for (href, tasks) in results {
-        s.insert(href.clone(), tasks.clone());
-    }
+    s.insert_many(results.to_vec());
 }
 
 pub async fn run_network_actor(
@@ -456,9 +454,7 @@ pub async fn run_network_actor(
                                 // task created externally — operate on current data.
                                 let mut s = store.lock().await;
                                 s.clear();
-                                for (href, tasks) in &cached_tasks {
-                                    s.insert(href.clone(), tasks.clone());
-                                }
+                                s.insert_many(cached_tasks.clone());
                                 drop(s);
                                 let _ = event_tx
                                     .send(AppEvent::FullStateReloaded(cached_tasks))
