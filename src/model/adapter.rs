@@ -652,18 +652,21 @@ impl IcsAdapter {
         href: String,
         calendar_href: String,
     ) -> Result<Task, String> {
-        // Helper to extract a property value from a raw component string
+        // Helper to extract a property value from a raw component string.
+        // Property names are case-insensitive per RFC 5545.
         fn extract_prop(raw: &str, prop_name: &str) -> Option<String> {
+            let name = prop_name.to_ascii_uppercase();
             for line in raw.lines() {
-                if let Some(rest) = line.strip_prefix(prop_name) {
+                let upper = line.to_ascii_uppercase();
+                if let Some(rest) = upper.strip_prefix(&name) {
                     // Handle both "PROP:value" and "PROP;PARAM=val:value" formats
                     // Make sure it's followed by either : or ; to avoid partial matches
                     if rest.starts_with(':') || rest.starts_with(';') {
-                        if let Some(idx) = line.find(':') {
-                            return Some(line[idx + 1..].to_string());
-                        } else {
-                            return Some(String::new());
-                        }
+                        return Some(
+                            line.find(':')
+                                .map(|idx| line[idx + 1..].to_string())
+                                .unwrap_or_default(),
+                        );
                     }
                 }
             }
@@ -737,7 +740,10 @@ impl IcsAdapter {
         for component in &calendar.components {
             match component {
                 CalendarComponent::Todo(t) => {
-                    if t.properties().contains_key("RECURRENCE-ID") {
+                    if t.properties()
+                        .keys()
+                        .any(|k| k.eq_ignore_ascii_case("RECURRENCE-ID"))
+                    {
                         raw_components.push(t.to_string());
                     } else if master_todo.is_none() && master_journal_raw.is_none() {
                         master_todo = Some(t);
@@ -965,9 +971,23 @@ impl IcsAdapter {
 
         let todo = master_todo.ok_or("No Master VTODO or VJOURNAL found in ICS".to_string())?;
 
-        let get_prop = |key: &str| -> Option<String> {
-            todo.properties().get(key).map(|p| p.value().to_string())
+        // Property and parameter names are case-insensitive per RFC 5545, so
+        // lookups compare case-insensitively to survive servers that emit
+        // lowercase keys.
+        let get_prop_ref = |key: &str| -> Option<&icalendar::Property> {
+            todo.properties()
+                .iter()
+                .find(|(k, _)| k.eq_ignore_ascii_case(key))
+                .map(|(_, p)| p)
         };
+        let get_multi_ref = |key: &str| -> Option<&Vec<icalendar::Property>> {
+            todo.multi_properties()
+                .iter()
+                .find(|(k, _)| k.eq_ignore_ascii_case(key))
+                .map(|(_, v)| v)
+        };
+        let get_prop =
+            |key: &str| -> Option<String> { get_prop_ref(key).map(|p| p.value().to_string()) };
 
         let summary = get_prop("SUMMARY")
             .map(|s| unescape_ics(&s))
@@ -1056,7 +1076,7 @@ impl IcsAdapter {
             .unwrap_or(false);
 
         let mut goal = None;
-        if let Some(prop) = todo.properties().get("X-CFAIT-GOAL")
+        if let Some(prop) = get_prop_ref("X-CFAIT-GOAL")
             && let Some((t_str, rest)) = prop.value().split_once(':')
             && let Some((target_str, interval_str)) = rest.split_once('/')
         {
@@ -1113,11 +1133,9 @@ impl IcsAdapter {
                 }
 
                 // Fallback to standard parsing
-                let is_date_param = prop
-                    .params()
-                    .get("VALUE")
-                    .map(|v| v.value() == "DATE")
-                    .unwrap_or(false);
+                let is_date_param = prop.params().iter().any(|(k, v)| {
+                    k.eq_ignore_ascii_case("VALUE") && v.value().eq_ignore_ascii_case("DATE")
+                });
                 if is_date_param || val.len() == 8 {
                     NaiveDate::parse_from_str(val, "%Y%m%d")
                         .ok()
@@ -1138,24 +1156,16 @@ impl IcsAdapter {
                 }
             };
 
-        let due = todo
-            .properties()
-            .get("DUE")
-            .and_then(|p| parse_date_type(p, fuzzy_due));
-        let dtstart = todo
-            .properties()
-            .get("DTSTART")
-            .and_then(|p| parse_date_type(p, fuzzy_start));
+        let due = get_prop_ref("DUE").and_then(|p| parse_date_type(p, fuzzy_due));
+        let dtstart = get_prop_ref("DTSTART").and_then(|p| parse_date_type(p, fuzzy_start));
         let rrule = get_prop("RRULE");
 
         let mut exdates = Vec::new();
-        if let Some(multi_props) = todo.multi_properties().get("EXDATE") {
+        if let Some(multi_props) = get_multi_ref("EXDATE") {
             for prop in multi_props {
-                let is_date = prop
-                    .params()
-                    .get("VALUE")
-                    .map(|v| v.value() == "DATE")
-                    .unwrap_or(false);
+                let is_date = prop.params().iter().any(|(k, v)| {
+                    k.eq_ignore_ascii_case("VALUE") && v.value().eq_ignore_ascii_case("DATE")
+                });
                 let val_str = prop.value();
                 for part in val_str.split(',') {
                     let part = part.trim();
@@ -1239,30 +1249,23 @@ impl IcsAdapter {
             if minutes > 0 { Some(minutes) } else { None }
         };
 
-        let mut estimated_duration = todo
-            .properties()
-            .get("X-ESTIMATED-DURATION")
-            .and_then(|p: &icalendar::Property| parse_dur(p.value()));
+        let mut estimated_duration =
+            get_prop_ref("X-ESTIMATED-DURATION").and_then(|p| parse_dur(p.value()));
 
         if estimated_duration.is_none() {
-            estimated_duration = todo
-                .properties()
-                .get("DURATION")
-                .and_then(|p: &icalendar::Property| parse_dur(p.value()));
+            estimated_duration = get_prop_ref("DURATION").and_then(|p| parse_dur(p.value()));
         }
 
-        let estimated_duration_max = todo
-            .properties()
-            .get("X-CFAIT-ESTIMATED-DURATION-MAX")
-            .and_then(|p: &icalendar::Property| parse_dur(p.value()));
+        let estimated_duration_max =
+            get_prop_ref("X-CFAIT-ESTIMATED-DURATION-MAX").and_then(|p| parse_dur(p.value()));
 
         let mut categories = Vec::new();
-        if let Some(multi_props) = todo.multi_properties().get("CATEGORIES") {
+        if let Some(multi_props) = get_multi_ref("CATEGORIES") {
             for prop in multi_props {
                 categories.extend(split_ics_list(prop.value()));
             }
         }
-        if let Some(prop) = todo.properties().get("CATEGORIES") {
+        if let Some(prop) = get_prop_ref("CATEGORIES") {
             categories.extend(split_ics_list(prop.value()));
         }
 
