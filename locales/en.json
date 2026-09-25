@@ -522,6 +522,7 @@
         "one": "Successfully imported 1 task from %{file}",
         "other": "Successfully imported %{count} tasks from %{file}"
     },
+    "import_partial": "Partial import: %{count} imported, %{failed} failed.",
     "include_unset": "Include unset",
     "increase_priority": "Increase priority",
     "jump_to_random_task": "Jump to random task",

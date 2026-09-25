@@ -350,23 +350,32 @@ async fn sync_background(
     let cfg_clone = config.clone();
     let sync_future = async move {
         // Pass an Arc<dyn AppContext> (clone) to the client helper which expects an Arc.
-        if let Ok((client, cals, _, active_href, _)) =
-            cfait::client::RustyClient::connect_with_fallback(
-                ctx_clone.clone(),
-                cfg_clone,
-                Some("CLI"),
-            )
-            .await
-        {
-            let mut cals_to_fetch = Vec::new();
-            for cal in cals {
-                // connect_with_fallback already fetched the active calendar.
-                if affected_cals.contains(&cal.href) && Some(&cal.href) != active_href.as_ref() {
-                    cals_to_fetch.push(cal);
-                }
+        let (client, cals, _, active_href, _) =
+            cfait::client::RustyClient::connect_with_fallback(ctx_clone, cfg_clone, Some("CLI"))
+                .await
+                .map_err(|e| e.to_string())?;
+        let mut cals_to_fetch = Vec::new();
+        for cal in cals {
+            // connect_with_fallback already fetched the active calendar.
+            if affected_cals.contains(&cal.href) && Some(&cal.href) != active_href.as_ref() {
+                cals_to_fetch.push(cal);
             }
-            if !cals_to_fetch.is_empty() {
-                let _ = client.get_all_tasks(&cals_to_fetch).await;
+        }
+        if !cals_to_fetch.is_empty() {
+            // get_all_tasks_reported falls back to the on-disk cache for failed
+            // calendars, so surface the failures instead of silently claiming
+            // the sync succeeded.
+            let (_, failed) = client
+                .get_all_tasks_reported(&cals_to_fetch)
+                .await
+                .map_err(|e| e.to_string())?;
+            if !failed.is_empty() {
+                return Err(rust_i18n::t!(
+                    "sync_partial_failure",
+                    count = failed.len(),
+                    hrefs = failed.join(", ")
+                )
+                .to_string());
             }
         }
         Ok(())
@@ -496,9 +505,12 @@ async fn main() -> Result<()> {
                 let client = Arc::new(tokio::sync::Mutex::new(None));
                 let controller = cfait::controller::TaskController::new(store, client, ctx.clone());
                 let mut count = 0;
+                let mut failed = 0;
                 for task in tasks {
                     if controller.create_task(task).await.is_ok() {
                         count += 1;
+                    } else {
+                        failed += 1;
                     }
                 }
                 if count == 0 {
@@ -508,9 +520,20 @@ async fn main() -> Result<()> {
                     );
                     std::process::exit(1);
                 }
+                if failed > 0 {
+                    eprintln!(
+                        "{}",
+                        rust_i18n::t!("import_partial", count = count, failed = failed)
+                    );
+                }
                 println!("{}", rust_i18n::t!("import_success", count = count));
                 // Best-effort background sync
-                let _ = maybe_sync(ctx.clone()).await;
+                if let Err(e) = maybe_sync(ctx.clone()).await {
+                    eprintln!(
+                        "{}",
+                        rust_i18n::t!("warning_background_sync_failed", error = e.to_string())
+                    );
+                }
             }
             return Ok(());
         }

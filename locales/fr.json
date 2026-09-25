@@ -467,6 +467,7 @@
         "one": "1 tâche importée avec succès depuis %{file}",
         "other": "%{count} tâches importées avec succès depuis %{file}"
     },
+    "import_partial": "Importation partielle : %{count} importées, %{failed} en échec.",
     "include_unset": "Inclure non défini",
     "increase_priority": "Augmenter la priorité",
     "interval_unit_days": "Jours",
