@@ -677,8 +677,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some(uid) = app.selected_uid.clone()
                 && let Some(idx) = app.find_task_index_by_uid(&uid)
                 && idx > 0
+                // The row above may be a group header (not a task); in that
+                // case there is no visible parent to demote into, so no-op.
+                && let Some(parent) = app.get_task_at_index(idx - 1)
             {
-                let parent_candidate_uid = app.get_task_at_index(idx - 1).unwrap().uid.clone();
+                let parent_candidate_uid = parent.uid.clone();
                 if parent_candidate_uid != uid {
                     app.yanked_uid = Some(parent_candidate_uid);
                     return handle(app, Message::MakeChild(uid));
