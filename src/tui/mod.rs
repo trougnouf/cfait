@@ -32,6 +32,23 @@ use std::{
 };
 use tokio::sync::mpsc;
 
+/// Restores the terminal (raw mode, alternate screen, mouse capture, cursor)
+/// when dropped, so a panic, early `?` return, or future cancellation can't
+/// leave the user's terminal in a broken state.
+struct TerminalGuard;
+
+impl Drop for TerminalGuard {
+    fn drop(&mut self) {
+        let _ = disable_raw_mode();
+        let _ = execute!(
+            io::stdout(),
+            LeaveAlternateScreen,
+            DisableMouseCapture,
+            crossterm::cursor::Show
+        );
+    }
+}
+
 pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
     // --- 1. PREAMBLE & CONFIG ---
     let args: Vec<String> = env::args().collect();
@@ -245,6 +262,8 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
 
     // --- 2. TERMINAL SETUP ---
     enable_raw_mode()?;
+    // Restores the terminal on any exit path (panic, early return, cancellation).
+    let _guard = TerminalGuard;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
@@ -527,12 +546,6 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
     }
 
     // --- 6. CLEANUP ---
-    disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
-    terminal.show_cursor()?;
+    // The terminal is restored by `_guard` dropping as we leave this scope.
     Ok(())
 }
