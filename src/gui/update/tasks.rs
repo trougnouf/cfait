@@ -20,7 +20,10 @@ use iced::widget::text_editor;
 /// missing), `OpenUrl` for URLs, or `None` when the caret is not on a link.
 fn description_caret_link_message(app: &GuiApp, line: &str, column: usize) -> Option<Message> {
     use crate::model::parser::{SyntaxType, strip_quotes, tokenize_smart_input};
-    let col = column.min(line.len());
+    // iced reports the caret column in chars, but token offsets are byte
+    // indices — convert so the lookup stays correct on multibyte text.
+    let col: usize = line.chars().take(column).map(|c| c.len_utf8()).sum();
+    let col = col.min(line.len());
     let tokens = tokenize_smart_input(line, false);
     let token = tokens.iter().find(|t| col >= t.start && col <= t.end)?;
     let raw = &line[token.start..token.end];
