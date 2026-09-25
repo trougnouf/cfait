@@ -2096,22 +2096,32 @@ pub fn parse_duration(val: &str) -> Option<u32> {
     parse_duration_with_lex(val, &lex_guard)
 }
 
+/// Minutes in `amt` of a canonical unit (`m`, `h`, `d`, `w`, `mo`, `y`),
+/// saturating on overflow so a huge input (e.g. `spent: 4000000d`) can't
+/// panic the parser.
+fn minutes_for(amt: u32, unit: &str) -> u32 {
+    let per_unit = match unit {
+        "m" => 1,
+        "h" => 60,
+        "d" => 1440,
+        "w" => 10_080,
+        "mo" => 43_200,
+        "y" => 525_600,
+        _ => 1,
+    };
+    amt.saturating_mul(per_unit)
+}
+
 pub fn parse_duration_with_lex(val: &str, lex: &ParserLexicon) -> Option<u32> {
     let lower = val.to_lowercase();
     let (amt_str, unit_str) = {
         let idx = lower.find(|c: char| !c.is_numeric())?;
         lower.split_at(idx)
     };
-    if let Ok(n) = amt_str.parse::<u32>() {
-        match lex.exact.get(unit_str) {
-            Some(ExactToken::Unit(LexiconUnit::Minutes)) => return Some(n),
-            Some(ExactToken::Unit(LexiconUnit::Hours)) => return Some(n * 60),
-            Some(ExactToken::Unit(LexiconUnit::Days)) => return Some(n * 24 * 60),
-            Some(ExactToken::Unit(LexiconUnit::Weeks)) => return Some(n * 7 * 24 * 60),
-            Some(ExactToken::Unit(LexiconUnit::Months)) => return Some(n * 30 * 24 * 60),
-            Some(ExactToken::Unit(LexiconUnit::Years)) => return Some(n * 365 * 24 * 60),
-            _ => {}
-        }
+    if let Ok(n) = amt_str.parse::<u32>()
+        && let Some(ExactToken::Unit(u)) = lex.exact.get(unit_str)
+    {
+        return Some(minutes_for(n, u.to_canonical()));
     }
     None
 }
@@ -3011,12 +3021,7 @@ pub fn apply_smart_input(
                 if let Some((amt, unit, extra)) =
                     parse_amount_and_unit_with_lex(next_str, next_next, false, lex)
                 {
-                    let mins = match unit.as_str() {
-                        "d" | "day" | "days" => amt * 1440,
-                        "w" | "week" | "weeks" => amt * 10080,
-                        "h" | "hour" | "hours" => amt * 60,
-                        _ => amt,
-                    };
+                    let mins = minutes_for(amt, &unit);
                     let now = Local::now();
                     let target = now + Duration::minutes(mins as i64);
                     pending_alarms.push(PendingAlarm::Absolute(target.with_timezone(&Utc)));
@@ -3135,12 +3140,7 @@ pub fn apply_smart_input(
                 if let Some((amt, unit, extra)) =
                     parse_amount_and_unit_with_lex(rem, next_word, false, lex)
                 {
-                    let mins = match unit.as_str() {
-                        "d" | "day" | "days" => amt * 1440,
-                        "w" | "week" | "weeks" => amt * 10080,
-                        "h" | "hour" | "hours" => amt * 60,
-                        _ => amt,
-                    };
+                    let mins = minutes_for(amt, &unit);
                     task.time_spent_seconds = (mins as u64) * 60;
                     consumed += extra;
                 } else if !is_bg {
@@ -3308,12 +3308,7 @@ pub fn apply_smart_input(
                 if let Some((amt, unit, extra)) =
                     parse_amount_and_unit_with_lex(&val, next_word, false, lex)
                 {
-                    let mins = match unit.as_str() {
-                        "d" | "day" | "days" => amt * 1440,
-                        "w" | "week" | "weeks" => amt * 10080,
-                        "h" | "hour" | "hours" => amt * 60,
-                        _ => amt,
-                    };
+                    let mins = minutes_for(amt, &unit);
                     task.estimated_duration = Some(mins);
                     task.estimated_duration_max = None;
                     consumed += extra;

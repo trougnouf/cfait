@@ -75,6 +75,34 @@ fn test_duration_units() {
 }
 
 #[test]
+fn test_duration_two_token_units() {
+    let aliases = HashMap::new();
+
+    // Two-token form: month and year used to fall through to minutes
+    let t1 = Task::new("Long read ~2 months", &aliases, None);
+    assert_eq!(t1.estimated_duration, Some(2 * 30 * 24 * 60));
+
+    let t2 = Task::new("Huge project ~1 year", &aliases, None);
+    assert_eq!(t2.estimated_duration, Some(365 * 24 * 60));
+
+    // Two-token spent: with months (documented form is spent:<amt> <unit>)
+    let t3 = Task::new("Garden overhaul spent:2 months", &aliases, None);
+    assert_eq!(t3.time_spent_seconds, (2 * 30 * 24 * 60) as u64 * 60);
+}
+
+#[test]
+fn test_duration_huge_amount_saturates() {
+    let aliases = HashMap::new();
+
+    // Must not panic on u32 overflow and should saturate instead
+    let t1 = Task::new("Marathon ~4000000d", &aliases, None);
+    assert_eq!(t1.estimated_duration, Some(u32::MAX));
+
+    let t2 = Task::new("Record time spent:4000000d", &aliases, None);
+    assert_eq!(t2.time_spent_seconds, u32::MAX as u64 * 60);
+}
+
+#[test]
 fn test_start_date_syntax() {
     let aliases = HashMap::new();
 
