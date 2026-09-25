@@ -134,20 +134,22 @@ pub async fn run_network_actor(
     // ------------------------------------------------------------------
     // 1. LOAD CACHE IMMEDIATELY
     // ------------------------------------------------------------------
-    if let Ok(mut cached_cals) = Cache::load_calendars(ctx.as_ref()) {
+    // Kept so a failed network fetch below can preserve the calendar list
+    // instead of wiping it with an empty one.
+    let mut cached_cals: Vec<crate::model::CalendarListEntry> = Vec::new();
+    if let Ok(mut cals) = Cache::load_calendars(ctx.as_ref()) {
         // Load local registry and merge
         if enable_local_mode && let Ok(locals) = LocalCalendarRegistry::load(ctx.as_ref()) {
             for loc in locals {
-                if !cached_cals.iter().any(|c| c.href == loc.href) {
-                    cached_cals.push(loc);
+                if !cals.iter().any(|c| c.href == loc.href) {
+                    cals.push(loc);
                 }
             }
         }
-        apply_local_mode_filter(&mut cached_cals, enable_local_mode);
+        apply_local_mode_filter(&mut cals, enable_local_mode);
+        cached_cals = cals.clone();
 
-        let _ = event_tx
-            .send(AppEvent::CalendarsLoaded(cached_cals.clone()))
-            .await;
+        let _ = event_tx.send(AppEvent::CalendarsLoaded(cals)).await;
 
         let mut cached_tasks = Vec::new();
         // Load tasks for all local calendars
@@ -215,7 +217,10 @@ pub async fn run_network_actor(
                         human: rust_i18n::t!("sync_warning", msg = err_str).to_string(),
                     })
                     .await;
-                vec![]
+                // Preserve the calendar list the UI already shows (loaded from
+                // the cache above) instead of wiping it with an empty list
+                // from a failed fetch.
+                cached_cals.clone()
             }
         }
     };
@@ -517,8 +522,11 @@ pub async fn run_network_actor(
                         let mut calendars = match client.get_calendars().await {
                             Ok((c, _)) => c,
                             Err(e) => {
+                                // A failed fetch must not wipe the UI's calendar
+                                // list with an empty one; report it and let the
+                                // user retry.
                                 let _ = event_tx.send(AppEvent::Error(e.to_string())).await;
-                                vec![]
+                                continue;
                             }
                         };
                         apply_local_mode_filter(&mut calendars, enable_local_mode);
