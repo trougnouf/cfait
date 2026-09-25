@@ -224,6 +224,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::OpenWikiLink(title, context_uid) => {
             let clean_title = title.trim_start_matches("[[").trim_end_matches("]]").trim();
+            if clean_title.is_empty() {
+                app.error_msg = Some(rust_i18n::t!("error_empty_wiki_link").to_string());
+                return Task::none();
+            }
 
             match app
                 .store
@@ -970,6 +974,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     true,
                 );
                 app.journal_editor_content = iced::widget::text_editor::Content::with_text(&md);
+                app.journal_editing_uid = Some(entry.uid.clone());
             } else {
                 app.journal_editor_content = iced::widget::text_editor::Content::new();
             }
@@ -990,6 +995,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     true,
                 );
                 app.journal_editor_content = iced::widget::text_editor::Content::with_text(&md);
+                app.journal_editing_uid = Some(entry.uid.clone());
             } else {
                 app.journal_editor_content = iced::widget::text_editor::Content::new();
             }
@@ -997,8 +1003,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::OpenJournalPage(uid) => {
             flush_journal_save(app);
-            app.journal_editing_uid = Some(uid.clone());
             if let Some(task) = app.store.get_task_ref(&uid) {
+                app.journal_editing_uid = Some(uid.clone());
                 app.active_cal_href = Some(task.calendar_href.clone());
                 app.journal_title_input = task.summary.clone();
                 let md = crate::model::extractor::serialize_task_tree(
@@ -1009,6 +1015,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 );
                 app.journal_editor_content = iced::widget::text_editor::Content::with_text(&md);
                 app.editor_maximized = true;
+            } else {
+                app.error_msg = Some(rust_i18n::t!("error_task_not_found").to_string());
             }
             Task::none()
         }
@@ -1100,24 +1108,28 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::JournalDateInputSubmit => {
-            if let Ok(parsed) =
-                chrono::NaiveDate::parse_from_str(app.journal_date_input.trim(), "%Y-%m-%d")
-            {
-                flush_journal_save(app);
-                app.journal_editing_uid = None;
-                app.journal_date = parsed;
-                let href = app.resolve_journal_href(parsed);
-                if let Some(entry) = app.store.get_journal_entry(&href, parsed) {
-                    let md = crate::model::extractor::serialize_task_tree(
-                        &app.store,
-                        &entry.uid,
-                        &app.calendars,
-                        true,
-                    );
-                    app.journal_editor_content = iced::widget::text_editor::Content::with_text(&md);
-                    app.journal_editing_uid = Some(entry.uid.clone());
-                } else {
-                    app.journal_editor_content = iced::widget::text_editor::Content::new();
+            match chrono::NaiveDate::parse_from_str(app.journal_date_input.trim(), "%Y-%m-%d") {
+                Ok(parsed) => {
+                    flush_journal_save(app);
+                    app.journal_editing_uid = None;
+                    app.journal_date = parsed;
+                    let href = app.resolve_journal_href(parsed);
+                    if let Some(entry) = app.store.get_journal_entry(&href, parsed) {
+                        let md = crate::model::extractor::serialize_task_tree(
+                            &app.store,
+                            &entry.uid,
+                            &app.calendars,
+                            true,
+                        );
+                        app.journal_editor_content =
+                            iced::widget::text_editor::Content::with_text(&md);
+                        app.journal_editing_uid = Some(entry.uid.clone());
+                    } else {
+                        app.journal_editor_content = iced::widget::text_editor::Content::new();
+                    }
+                }
+                Err(_) => {
+                    app.error_msg = Some(rust_i18n::t!("error_invalid_date").to_string());
                 }
             }
             Task::none()
