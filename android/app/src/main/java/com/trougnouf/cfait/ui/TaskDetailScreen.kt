@@ -117,7 +117,7 @@ fun TaskDetailScreen(
         }
 
     fun reload() {
-        scope.launch {
+        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
             // Use direct lookup instead of searching in the filtered view list.
             // This ensures completed/hidden tasks can still be opened and edited.
             task = api.getTaskByUid(uid)
@@ -903,7 +903,9 @@ fun TaskDetailScreen(
 
             LaunchedEffect(task) {
                 incomingRelated = if (task != null) {
-                    api.getTasksRelatedTo(task!!.uid)
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        api.getTasksRelatedTo(task!!.uid)
+                    }
                 } else {
                     emptyList()
                 }

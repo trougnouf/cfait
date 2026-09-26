@@ -208,15 +208,15 @@ fun SettingsScreen(
         }
     }
 
-    fun reload() {
-        val cfg = api.getConfig()
+    suspend fun reload() {
+        val cfg = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { api.getConfig() }
         url = cfg.url
         user = cfg.username
         pass = cfg.password
         insecure = cfg.allowInsecure
         hideCompleted = cfg.hideCompleted
         syncSettings = cfg.syncSettings
-        allCalendars = api.getCalendars()
+        allCalendars = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { api.getCalendars() }
         disabledSet = allCalendars.filter { it.isDisabled }.map { it.href }.toSet()
         autoRemind = cfg.autoReminders
         showOngoingNotifications = cfg.showOngoingNotifications
@@ -247,7 +247,9 @@ fun SettingsScreen(
                     inputStream?.close()
 
                     if (icsContent != null && importTargetHref != null) {
-                        val result = api.importLocalIcs(importTargetHref!!, icsContent)
+                        val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            api.importLocalIcs(importTargetHref!!, icsContent)
+                        }
                         setStatus(result)
                         reload()
                     } else {
@@ -860,29 +862,34 @@ fun SettingsScreen(
                                     }
                                 },
                                 onExport = {
-                                    try {
-                                        val icsContent = api.exportLocalIcs(cal.href)
-                                        val calId = if (cal.isLocal) {
-                                            cal.href.removePrefix("local://")
-                                        } else {
-                                            cal.href.trimEnd('/').substringAfterLast('/')
+                                    scope.launch {
+                                        try {
+                                            val icsContent = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                                api.exportLocalIcs(cal.href)
+                                            }
+                                            val calId = if (cal.isLocal) {
+                                                cal.href.removePrefix("local://")
+                                            } else {
+                                                cal.href.trimEnd('/').substringAfterLast('/')
+                                            }
+                                            val file = File(context.cacheDir, "cfait_${calId}.ics")
+                                            file.writeText(icsContent)
+                                            val uri = FileProvider.getUriForFile(
+                                                context,
+                                                "${context.packageName}.fileprovider",
+                                                file
+                                            )
+                                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                                type = "text/calendar"
+                                                putExtra(Intent.EXTRA_STREAM, uri)
+                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            }
+                                            val shareIntent = Intent.createChooser(intent, context.getString(R.string.export_calendar_title, cal.name))
+                                            context.startActivity(shareIntent)
+                                        } catch (e: Exception) {
+                                            if (e is kotlinx.coroutines.CancellationException) throw e
+                                            setStatus(context.getString(R.string.export_error, e.message ?: ""), true)
                                         }
-                                        val file = File(context.cacheDir, "cfait_${calId}.ics")
-                                        file.writeText(icsContent)
-                                        val uri = FileProvider.getUriForFile(
-                                            context,
-                                            "${context.packageName}.fileprovider",
-                                            file
-                                        )
-                                        val intent = Intent(Intent.ACTION_SEND).apply {
-                                            type = "text/calendar"
-                                            putExtra(Intent.EXTRA_STREAM, uri)
-                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                        }
-                                        val shareIntent = Intent.createChooser(intent, context.getString(R.string.export_calendar_title, cal.name))
-                                        context.startActivity(shareIntent)
-                                    } catch (e: Exception) {
-                                        setStatus(context.getString(R.string.export_error, e.message ?: ""), true)
                                     }
                                 },
                                 onImport = {

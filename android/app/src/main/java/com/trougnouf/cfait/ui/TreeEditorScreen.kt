@@ -104,7 +104,9 @@ fun TreeEditorScreen(
                             isSaving = true
                             scope.launch {
                                 try {
-                                    api.syncTaskTreeFromMarkdown(uid, markdownText.text)
+                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                        api.syncTaskTreeFromMarkdown(uid, markdownText.text)
+                                    }
                                     triggerBackgroundSync(context, api)
                                     onSaveComplete()
                                 } catch (e: Exception) {
