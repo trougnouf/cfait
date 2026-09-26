@@ -34,7 +34,6 @@ class NotificationActionWorker(
         const val ACTION_START = "START"
         const val ACTION_PAUSE = "PAUSE"
         const val ACTION_DONE = "DONE"
-        const val ACTION_CANCEL = "CANCEL"
         const val ACTION_DISMISS = "DISMISS"
         const val ACTION_DISMISS_ONGOING = "DISMISS_ONGOING"
 
@@ -91,13 +90,6 @@ class NotificationActionWorker(
 
                 ACTION_DONE -> {
                     api.toggleTask(taskUid)
-                    val notificationManager =
-                        context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                    notificationManager.cancel(taskUid.hashCode())
-                }
-
-                ACTION_CANCEL -> {
-                    api.setStatusCancelled(taskUid)
                     val notificationManager =
                         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                     notificationManager.cancel(taskUid.hashCode())

@@ -19,7 +19,6 @@ class CalendarSyncWorker(
         const val KEY_MODE = "mode"
         const val MODE_CREATE = "create" // Backfill
         const val MODE_DELETE = "delete" // Delete All
-        const val OUTPUT_COUNT = "count"
         const val OUTPUT_MESSAGE = "message"
 
         const val UNIQUE_WORK_NAME = "cfait_calendar_bulk_sync"
@@ -46,7 +45,6 @@ class CalendarSyncWorker(
             Log.d("CfaitCalSync", "Success: $message")
 
             val output = Data.Builder()
-                .putInt(OUTPUT_COUNT, count.toInt())
                 .putString(OUTPUT_MESSAGE, message)
                 .build()
 
