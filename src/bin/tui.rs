@@ -489,11 +489,7 @@ async fn main() -> Result<()> {
             if href.starts_with("local://") {
                 match LocalStorage::import_from_ics(ctx.as_ref(), &href, &ics_content) {
                     Ok(count) => {
-                        if count == 1 {
-                            println!("{}", rust_i18n::t!("import_success", count = 1));
-                        } else {
-                            println!("{}", rust_i18n::t!("import_success", count = count));
-                        }
+                        println!("{}", rust_i18n::t!("import_success", count = count));
                     }
                     Err(e) => {
                         eprintln!("{}", rust_i18n::t!("import_error", error = e.to_string()));

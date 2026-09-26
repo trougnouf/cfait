@@ -286,10 +286,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.store.remove(crate::storage::LOCAL_TRASH_HREF);
                 common::refresh_filtered_tasks(app);
             }
-            app.info_msg = Some(if count == 1 {
-                rust_i18n::t!("trash_emptied.one").to_string()
-            } else if count > 1 {
-                rust_i18n::t!("trash_emptied.other", count = count).to_string()
+            app.info_msg = Some(if count > 0 {
+                rust_i18n::t!("trash_emptied", count = count).to_string()
             } else {
                 rust_i18n::t!("trash_is_empty").to_string()
             });

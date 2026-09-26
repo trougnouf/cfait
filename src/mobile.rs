@@ -1436,12 +1436,7 @@ impl CfaitMobile {
             count
         };
 
-        let msg = if count == 1 {
-            rust_i18n::t!("import_success.one").to_string()
-        } else {
-            rust_i18n::t!("import_success.other", count = count).to_string()
-        };
-        Ok(msg)
+        Ok(rust_i18n::t!("import_success", count = count).to_string())
     }
 
     pub fn extract_list_prefix(&self, line: String) -> String {
@@ -3497,7 +3492,7 @@ impl CfaitMobile {
             .migrate_tasks(tasks, &target_href)
             .await
             .map_err(MobileError::from)?;
-        Ok(format!("Migrated {} tasks.", count))
+        Ok(rust_i18n::t!("migration_complete_moved", count = count).to_string())
     }
 
     pub async fn create_local_calendar(
