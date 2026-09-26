@@ -43,6 +43,10 @@ import com.trougnouf.cfait.core.MobileRelatedTask
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
+private val journalDatePattern = Regex("""^\d{4}-\d{2}-\d{2}$""")
+private val sessionDateFormatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd")
+private val sessionTimeFormatter = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TaskDetailScreen(
@@ -262,7 +266,7 @@ fun TaskDetailScreen(
         topBar = {
             TopAppBar(
                 title = { 
-                    if (task != null && task!!.isJournal && task!!.summary.matches(Regex("""^\\d{4}-\\d{2}-\\d{2}$"""))) {
+                    if (task != null && task!!.isJournal && task!!.summary.matches(journalDatePattern)) {
                         Text(
                             text = task!!.summary,
                             fontSize = 20.sp,
@@ -385,7 +389,7 @@ fun TaskDetailScreen(
                 .verticalScroll(scrollState)
         ) {
             val isJournal = task!!.isJournal
-            val isDateBasedJournal = isJournal && task!!.summary.matches(Regex("""^\\d{4}-\\d{2}-\\d{2}$"""))
+            val isDateBasedJournal = isJournal && task!!.summary.matches(journalDatePattern)
 
             if (!isDateBasedJournal) {
                 com.trougnouf.cfait.ui.CursorContextBanner(api, smartInput, uid, onNavigate = onNavigate) { smartInput = it }
@@ -815,12 +819,10 @@ fun TaskDetailScreen(
                             .atZone(java.time.ZoneId.systemDefault())
                         val endDt = java.time.Instant.ofEpochMilli(session.endMs)
                             .atZone(java.time.ZoneId.systemDefault())
-                        val formatterDate = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd")
-                        val formatterTime = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
                         val durMins = (session.endMs - session.startMs) / 60000
 
-                        val dateStr = startDt.format(formatterDate)
-                        val timeRange = "${startDt.format(formatterTime)}-${endDt.format(formatterTime)}"
+                        val dateStr = startDt.format(sessionDateFormatter)
+                        val timeRange = "${startDt.format(sessionTimeFormatter)}-${endDt.format(sessionTimeFormatter)}"
 
                         Text(
                             "$dateStr $timeRange",
@@ -839,9 +841,7 @@ fun TaskDetailScreen(
                             onClick = {
                                 val sDt = java.time.Instant.ofEpochMilli(session.startMs).atZone(java.time.ZoneId.systemDefault())
                                 val eDt = java.time.Instant.ofEpochMilli(session.endMs).atZone(java.time.ZoneId.systemDefault())
-                                val formatterDate = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd")
-                                val formatterTime = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
-                                editSessionInput = "${sDt.format(formatterDate)} ${sDt.format(formatterTime)}-${eDt.format(formatterTime)}"
+                                editSessionInput = "${sDt.format(sessionDateFormatter)} ${sDt.format(sessionTimeFormatter)}-${eDt.format(sessionTimeFormatter)}"
                                 editingSessionIdx = absoluteIdx
                             },
                             modifier = Modifier.size(24.dp)
@@ -1026,7 +1026,7 @@ fun DynamicTaskName(api: CfaitMobile, defaultName: String, uid: String) {
 
     LaunchedEffect(uid) {
         try {
-            val t = api.getTaskByUid(uid)
+            val t = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { api.getTaskByUid(uid) }
             if (t != null && t.isDone) {
                 val dateStr = t.completedDateIso?.let { formatIsoToLocal(it) }
                 displayName = if (dateStr != null) "${t.summary} (✓ $dateStr)" else "${t.summary} (✓)"
