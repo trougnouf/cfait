@@ -22,6 +22,8 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -34,6 +36,8 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
+import kotlin.math.abs
+import kotlinx.coroutines.delay
 
 /** Tree icons used for the collapse/expand toggle, picked deterministically per task or tag. */
 private val TREE_ICONS = listOf(NfIcons.TREE_FA, NfIcons.TREE_FAE, NfIcons.TREE_MD, NfIcons.PALM_TREE, NfIcons.PINE_TREE)
@@ -153,7 +157,7 @@ fun TaskRow(
                     lineHeight = 18.sp
                 )
                 val annotatedSummary = remember(task.task.summary, textColor, isStrikethrough, highlightRegex) {
-                    com.trougnouf.cfait.ui.parseInlineMarkdown(task.task.summary, textColor, isStrikethrough, highlightRegex, highlightColor)
+                    parseInlineMarkdown(task.task.summary, textColor, isStrikethrough, highlightRegex, highlightColor)
                 }
 
                 ClickableText(
@@ -175,7 +179,7 @@ fun TaskRow(
                 if (showInlineDescriptions && task.task.descriptionInline.isNotEmpty() && !expanded && !task.task.isCollapsed) {
                     val descColor = if (isDark) Color(0xFFAAAAAA) else Color(0xFF666666)
                     val descSpans = remember(task.task.descriptionInline, descColor, highlightRegex, highlightColor) {
-                        com.trougnouf.cfait.ui.parseInlineMarkdown(
+                        parseInlineMarkdown(
                             task.task.descriptionInline,
                             descColor,
                             false,
@@ -186,7 +190,7 @@ fun TaskRow(
                     ClickableText(
                         text = descSpans,
                         modifier = Modifier.padding(top = 2.dp, bottom = 2.dp),
-                        style = androidx.compose.ui.text.TextStyle(
+                        style = TextStyle(
                             fontSize = 12.sp,
                             lineHeight = 14.sp,
                             color = descColor
@@ -338,14 +342,14 @@ fun TaskRow(
                     }
 
                     if (task.task.lastStartedAt != null) {
-                        LaunchedEffect(task.task.lastStartedAt) {
+                        LaunchedEffect(task.task.lastStartedAt, task.task.timeSpentSeconds) {
+                            val start = task.task.lastStartedAt ?: return@LaunchedEffect
+                            val baseSeconds = task.task.timeSpentSeconds.toLong()
                             while (true) {
                                 val now = System.currentTimeMillis() / 1000
-                                val start = task.task.lastStartedAt!!
                                 val currentSession = if (now > start) now - start else 0
-                                val totalSeconds = task.task.timeSpentSeconds.toLong() + currentSession
-                                liveDurationMins = (totalSeconds / 60).toInt()
-                                kotlinx.coroutines.delay(60000)
+                                liveDurationMins = ((baseSeconds + currentSession) / 60).toInt()
+                                delay(60000)
                             }
                         }
                     }
@@ -466,7 +470,7 @@ fun TaskRow(
             }
 
             if (task.task.hasVisibleSubtasks || isCollapsed) {
-                val hash = kotlin.math.abs(task.task.uid.hashCode())
+                val hash = abs(task.task.uid.hashCode())
                 val iconChar = if (isCollapsed) {
                     NfIcons.FAMILY_TREE
                 } else {
@@ -494,7 +498,7 @@ fun TaskRow(
                 }
                 DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                     DropdownMenuItem(
-                        text = { Text(androidx.compose.ui.res.stringResource(R.string.edit)) },
+                        text = { Text(stringResource(R.string.edit)) },
                         onClick = { expanded = false; onClick(task.task.uid) },
                         leadingIcon = { NfIcon(NfIcons.EDIT, 16.sp) })
 
@@ -502,9 +506,9 @@ fun TaskRow(
                         DropdownMenuItem(
                             text = {
                                 Text(
-                                    if (task.task.statusString == "InProcess") androidx.compose.ui.res.stringResource(R.string.pause)
-                                    else if (task.task.isPaused) androidx.compose.ui.res.stringResource(R.string.menu_resume)
-                                    else androidx.compose.ui.res.stringResource(R.string.start)
+                                    if (task.task.statusString == "InProcess") stringResource(R.string.pause)
+                                    else if (task.task.isPaused) stringResource(R.string.menu_resume)
+                                    else stringResource(R.string.start)
                                 )
                             },
                             onClick = { expanded = false; onAction("playpause") },
@@ -513,58 +517,58 @@ fun TaskRow(
 
                         if (task.task.statusString == "InProcess" || task.task.isPaused) {
                             DropdownMenuItem(
-                                text = { Text(androidx.compose.ui.res.stringResource(R.string.stop_reset)) },
+                                text = { Text(stringResource(R.string.stop_reset)) },
                                 onClick = { expanded = false; onAction("stop") },
                                 leadingIcon = { NfIcon(NfIcons.DEBUG_STOP, 16.sp) })
                         }
                     }
 
                     DropdownMenuItem(
-                        text = { Text(androidx.compose.ui.res.stringResource(R.string.increase_priority)) },
+                        text = { Text(stringResource(R.string.increase_priority)) },
                         onClick = { expanded = false; onAction("prio_up") },
                         leadingIcon = { NfIcon(NfIcons.PRIORITY_UP, 16.sp) })
 
                     DropdownMenuItem(
-                        text = { Text(androidx.compose.ui.res.stringResource(R.string.menu_decrease_prio)) },
+                        text = { Text(stringResource(R.string.menu_decrease_prio)) },
                         onClick = { expanded = false; onAction("prio_down") },
                         leadingIcon = { NfIcon(NfIcons.PRIORITY_DOWN, 16.sp) })
 
                     if (yankedUid == null) {
                         DropdownMenuItem(
-                            text = { Text(androidx.compose.ui.res.stringResource(R.string.menu_yank)) },
+                            text = { Text(stringResource(R.string.menu_yank)) },
                             onClick = { expanded = false; onAction("yank") },
                             leadingIcon = { NfIcon(NfIcons.LINK, 16.sp) })
                     }
 
                     DropdownMenuItem(
-                        text = { Text(androidx.compose.ui.res.stringResource(R.string.focus_hide_others)) },
+                        text = { Text(stringResource(R.string.focus_hide_others)) },
                         onClick = { expanded = false; onAction("focus") },
                         leadingIcon = { NfIcon(NfIcons.FOCUS_FIELD, 16.sp) }
                     )
 
                     DropdownMenuItem(
-                        text = { Text(androidx.compose.ui.res.stringResource(R.string.action_toggle_pin)) },
+                        text = { Text(stringResource(R.string.action_toggle_pin)) },
                         onClick = { expanded = false; onAction("toggle_pin") },
                         leadingIcon = { NfIcon(NfIcons.THUMB_TACK, 16.sp) }
                     )
 
                     if (!task.task.isDone && task.task.statusString != "Cancelled" && !task.task.isNote) {
                         DropdownMenuItem(
-                            text = { Text(androidx.compose.ui.res.stringResource(R.string.help_metadata_log_time)) },
+                            text = { Text(stringResource(R.string.help_metadata_log_time)) },
                             onClick = { expanded = false; onAction("add_session") },
                             leadingIcon = { NfIcon(NfIcons.TIMER_PLUS, 16.sp) }
                         )
                     }
 
                     DropdownMenuItem(
-                        text = { Text(androidx.compose.ui.res.stringResource(R.string.create_subtask)) },
+                        text = { Text(stringResource(R.string.create_subtask)) },
                         onClick = { expanded = false; onAction("create_child") },
                         leadingIcon = { NfIcon(NfIcons.CHILD, 16.sp) }
                     )
 
                     if (task.task.parentUid != null) {
                         DropdownMenuItem(
-                            text = { Text(androidx.compose.ui.res.stringResource(R.string.promote_remove_parent)) },
+                            text = { Text(stringResource(R.string.promote_remove_parent)) },
                             onClick = { expanded = false; onAction("promote") },
                             leadingIcon = { NfIcon(NfIcons.ELEVATOR_UP, 16.sp) }
                         )
@@ -572,14 +576,14 @@ fun TaskRow(
 
                     if (task.task.isRecurring && !task.task.isRelativeRecurrence && !task.task.isDone && task.task.statusString != "Cancelled" && !task.task.isNote) {
                         DropdownMenuItem(
-                            text = { Text(androidx.compose.ui.res.stringResource(R.string.action_complete_and_shift)) },
+                            text = { Text(stringResource(R.string.action_complete_and_shift)) },
                             onClick = { expanded = false; onAction("complete_and_shift") },
                             leadingIcon = { NfIcon(NfIcons.REPEAT, 16.sp) }
                         )
                     }
 
-                    val duplicateLabel = if (task.task.hasSubtasks) androidx.compose.ui.res.stringResource(R.string.duplicate_task)
-                    else androidx.compose.ui.res.stringResource(R.string.duplicate_single_task)
+                    val duplicateLabel = if (task.task.hasSubtasks) stringResource(R.string.duplicate_task)
+                    else stringResource(R.string.duplicate_single_task)
 
                     DropdownMenuItem(
                         text = { Text(duplicateLabel) },
@@ -589,7 +593,7 @@ fun TaskRow(
 
                     if (task.task.hasSubtasks) {
                         DropdownMenuItem(
-                            text = { Text(androidx.compose.ui.res.stringResource(R.string.action_complete_tree)) },
+                            text = { Text(stringResource(R.string.action_complete_tree)) },
                             onClick = { expanded = false; onAction("complete_tree") },
                             leadingIcon = { NfIcon(NfIcons.LIST_CHECK, 16.sp) }
                         )
@@ -597,45 +601,45 @@ fun TaskRow(
 
                     if (enabledCalendarCount > 1) {
                         DropdownMenuItem(
-                            text = { Text(androidx.compose.ui.res.stringResource(R.string.menu_move)) },
+                            text = { Text(stringResource(R.string.menu_move)) },
                             onClick = { expanded = false; onAction("move") },
                             leadingIcon = { NfIcon(NfIcons.MOVE, 16.sp) })
                     }
 
                     if (task.task.statusString != "Cancelled") {
                         DropdownMenuItem(
-                            text = { Text(androidx.compose.ui.res.stringResource(R.string.cancel)) },
+                            text = { Text(stringResource(R.string.cancel)) },
                             onClick = { expanded = false; onAction("cancel") },
                             leadingIcon = { NfIcon(NfIcons.CROSS, 16.sp) })
                     }
 
                     if (task.task.geo != null) {
                         DropdownMenuItem(
-                            text = { Text(androidx.compose.ui.res.stringResource(R.string.menu_open_location)) },
+                            text = { Text(stringResource(R.string.menu_open_location)) },
                             onClick = { expanded = false; uriHandler.openUri("geo:${task.task.geo}") },
                             leadingIcon = { NfIcon(NfIcons.MAP_LOCATION_DOT, 16.sp) })
                     }
 
                     if (task.task.treeLocationCount.toInt() > 1) {
                         DropdownMenuItem(
-                            text = { Text(androidx.compose.ui.res.stringResource(R.string.action_open_locations)) },
+                            text = { Text(stringResource(R.string.action_open_locations)) },
                             onClick = { expanded = false; onAction("open_locations_gpx") },
                             leadingIcon = { NfIcon(NfIcons.MAP_MARKER_MULTIPLE, 16.sp) })
                     }
 
                     if (task.task.url != null) {
                         DropdownMenuItem(
-                            text = { Text(androidx.compose.ui.res.stringResource(R.string.menu_open_link)) },
+                            text = { Text(stringResource(R.string.menu_open_link)) },
                             onClick = { expanded = false; uriHandler.openUri(task.task.url!!) },
                             leadingIcon = { NfIcon(NfIcons.WEB_CHECK, 16.sp) })
                     }
 
-                    DropdownMenuItem(text = { Text(androidx.compose.ui.res.stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) },
+                    DropdownMenuItem(text = { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) },
                         onClick = { expanded = false; onAction("delete") },
                         leadingIcon = { NfIcon(NfIcons.DELETE, 16.sp, MaterialTheme.colorScheme.error) })
 
                     if (task.task.hasSubtasks) {
-                        DropdownMenuItem(text = { Text(androidx.compose.ui.res.stringResource(R.string.delete_task_tree), color = MaterialTheme.colorScheme.error) },
+                        DropdownMenuItem(text = { Text(stringResource(R.string.delete_task_tree), color = MaterialTheme.colorScheme.error) },
                             onClick = { expanded = false; onAction("delete_tree") },
                             leadingIcon = { NfIcon(NfIcons.DELETE, 16.sp, MaterialTheme.colorScheme.error) })
                     }
@@ -683,7 +687,7 @@ fun CompactTagRow(
 
         if (hasChildren && onToggleCollapse != null) {
             Spacer(Modifier.width(8.dp))
-            val hash = kotlin.math.abs(name.hashCode())
+            val hash = abs(name.hashCode())
             val iconChar = if (isExpanded) {
                 TREE_ICONS[hash % 5]
             } else {
