@@ -6,6 +6,7 @@ package com.trougnouf.cfait.ui
 import androidx.activity.compose.BackHandler
 import android.Manifest
 import android.content.pm.PackageManager
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -22,6 +23,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalContext
@@ -29,6 +31,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -40,8 +43,12 @@ import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.core.MobileCalendar
 import com.trougnouf.cfait.core.MobileTask
 import com.trougnouf.cfait.core.MobileRelatedTask
+import java.time.Instant
+import java.time.ZoneId
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private val journalDatePattern = Regex("""^\d{4}-\d{2}-\d{2}$""")
 private val sessionDateFormatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd")
@@ -62,8 +69,8 @@ fun TaskDetailScreen(
 ) {
     var task by remember { mutableStateOf<MobileTask?>(null) }
     val scope = rememberCoroutineScope()
-    var smartInput by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
-    var description by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
+    var smartInput by remember { mutableStateOf(TextFieldValue("")) }
+    var description by remember { mutableStateOf(TextFieldValue("")) }
     
     var smartUndoStack by remember { mutableStateOf(listOf<TextFieldValue>()) }
     var smartRedoStack by remember { mutableStateOf(listOf<TextFieldValue>()) }
@@ -121,17 +128,17 @@ fun TaskDetailScreen(
         }
 
     fun reload() {
-        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        scope.launch(Dispatchers.IO) {
             // Use direct lookup instead of searching in the filtered view list.
             // This ensures completed/hidden tasks can still be opened and edited.
             task = api.getTaskByUid(uid)
             task?.let {
-                val newSmart = androidx.compose.ui.text.input.TextFieldValue(it.smartString)
+                val newSmart = TextFieldValue(it.smartString)
                 smartInput = newSmart
                 smartUndoStack = listOf(newSmart)
                 smartRedoStack = emptyList()
 
-                val newDesc = androidx.compose.ui.text.input.TextFieldValue(it.description)
+                val newDesc = TextFieldValue(it.description)
                 description = newDesc
                 descUndoStack = listOf(newDesc)
                 descRedoStack = emptyList()
@@ -146,7 +153,7 @@ fun TaskDetailScreen(
     // Re-read task metadata (without touching the text fields) so sections
     // like geo, dependencies and sessions reflect the latest save.
     fun refreshTaskMeta() {
-        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        scope.launch(Dispatchers.IO) {
             task = api.getTaskByUid(uid)
         }
     }
@@ -392,7 +399,7 @@ fun TaskDetailScreen(
             val isDateBasedJournal = isJournal && task!!.summary.matches(journalDatePattern)
 
             if (!isDateBasedJournal) {
-                com.trougnouf.cfait.ui.CursorContextBanner(api, smartInput, uid, onNavigate = onNavigate) { smartInput = it }
+                CursorContextBanner(api, smartInput, uid, onNavigate = onNavigate) { smartInput = it }
                 OutlinedTextField(
                     value = smartInput,
                     onValueChange = { 
@@ -417,7 +424,7 @@ fun TaskDetailScreen(
                 Text(
                     stringResource(R.string.help_syntax_short),
                     style = MaterialTheme.typography.bodySmall,
-                    color = androidx.compose.ui.graphics.Color.Gray,
+                    color = Color.Gray,
                     modifier = Modifier.padding(start = 4.dp, bottom = 16.dp),
                 )
             } else {
@@ -451,7 +458,7 @@ fun TaskDetailScreen(
                             scope.launch {
                                 try {
                                     api.dispatch(AppIntent.RemoveParent(currentUid))
-                                    reload()
+                                    refreshTaskMeta()
                                     triggerBackgroundSync(context, api)
                                 } catch (e: Exception) {
                                     if (e is CancellationException) throw e
@@ -477,7 +484,7 @@ fun TaskDetailScreen(
                             .clickable { onNavigate(pUid) }
                             .padding(4.dp)
                     ) {
-                        NfIcon(NfIcons.ELEVATOR_UP, 12.sp, androidx.compose.ui.graphics.Color.Gray)
+                        NfIcon(NfIcons.ELEVATOR_UP, 12.sp, Color.Gray)
                         Spacer(Modifier.width(4.dp))
                         DynamicTaskName(api, stringResource(R.string.unknown_parent), pUid)
                     }
@@ -507,7 +514,7 @@ fun TaskDetailScreen(
                                 scope.launch {
                                     try {
                                         api.dispatch(AppIntent.RemoveDependency(currentUid, blockerUid))
-                                        reload()
+                                        refreshTaskMeta()
                                         triggerBackgroundSync(context, api)
                                     } catch (e: Exception) {
                                         if (e is CancellationException) throw e
@@ -533,7 +540,7 @@ fun TaskDetailScreen(
                                 .clickable { onNavigate(blockerUid) }
                                 .padding(4.dp)
                         ) {
-                            NfIcon(NfIcons.BLOCKED, 12.sp, androidx.compose.ui.graphics.Color.Gray)
+                            NfIcon(NfIcons.BLOCKED, 12.sp, Color.Gray)
                             Spacer(Modifier.width(4.dp))
                             DynamicTaskName(api, name, blockerUid)
                         }
@@ -566,7 +573,7 @@ fun TaskDetailScreen(
                                     try {
                                         // To unblock, remove this task.uid from the blocked task's dependencies
                                         api.dispatch(AppIntent.RemoveDependency(blockedUid, currentUid))
-                                        reload()
+                                        refreshTaskMeta()
                                         triggerBackgroundSync(context, api)
                                     } catch (e: Exception) {
                                         if (e is CancellationException) throw e
@@ -593,7 +600,7 @@ fun TaskDetailScreen(
                                 .padding(4.dp)
                         ) {
                             // Use Down Arrow to indicate successor flow
-                            NfIcon(NfIcons.HAND_STOP, 12.sp, androidx.compose.ui.graphics.Color.Gray)
+                            NfIcon(NfIcons.HAND_STOP, 12.sp, Color.Gray)
                             Spacer(Modifier.width(4.dp))
                             DynamicTaskName(api, name, blockedUid)
                         }
@@ -624,7 +631,7 @@ fun TaskDetailScreen(
                                 scope.launch {
                                     try {
                                         api.dispatch(AppIntent.RemoveRelatedTo(currentUid, relatedUid))
-                                        reload()
+                                        refreshTaskMeta()
                                         triggerBackgroundSync(context, api)
                                     } catch (e: Exception) {
                                         if (e is CancellationException) throw e
@@ -653,7 +660,7 @@ fun TaskDetailScreen(
                             NfIcon(
                                 getRandomRelatedIcon(task!!.uid, relatedUid),
                                 12.sp,
-                                androidx.compose.ui.graphics.Color.Gray
+                                Color.Gray
                             )
                             Spacer(Modifier.width(4.dp))
                             DynamicTaskName(api, name, relatedUid)
@@ -725,7 +732,7 @@ fun TaskDetailScreen(
                         value = sessionInput,
                         onValueChange = { sessionInput = it },
                         placeholder = {
-                            val example = remember { com.trougnouf.cfait.ui.randomSessionExample() }
+                            val example = remember { randomSessionExample() }
                             Text("${stringResource(R.string.eg)} $example", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
                         },
                         modifier = Modifier.weight(1f),
@@ -739,7 +746,7 @@ fun TaskDetailScreen(
                                         api.addSession(uid, sessionInput)
                                         sessionInput = ""
                                         showAddSession = false
-                                        reload()
+                                        refreshTaskMeta()
                                         triggerBackgroundSync(context, api)
                                     } catch (e: Exception) {
                                         if (e is CancellationException) throw e
@@ -754,10 +761,10 @@ fun TaskDetailScreen(
                                             // The time session was successfully saved locally, but the
                                             // subsequent network sync encountered an error.
                                             // We gracefully swallow it to keep the UX seamless.
-                                            android.util.Log.e("CfaitUI", "Sync delayed after session: $msg")
+                                            Log.e("CfaitUI", "Sync delayed after session: $msg")
                                             sessionInput = ""
                                             showAddSession = false
-                                            reload()
+                                            refreshTaskMeta()
                                         }
                                     }
                                 }
@@ -798,7 +805,7 @@ fun TaskDetailScreen(
                                         try {
                                             api.editSession(uid, absoluteIdx.toUInt(), editSessionInput)
                                             editingSessionIdx = null
-                                            reload()
+                                            refreshTaskMeta()
                                             triggerBackgroundSync(context, api)
                                         } catch (e: Exception) {
                                             if (e !is CancellationException) {
@@ -818,10 +825,10 @@ fun TaskDetailScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
                     ) {
-                        val startDt = java.time.Instant.ofEpochMilli(session.startMs)
-                            .atZone(java.time.ZoneId.systemDefault())
-                        val endDt = java.time.Instant.ofEpochMilli(session.endMs)
-                            .atZone(java.time.ZoneId.systemDefault())
+                        val startDt = Instant.ofEpochMilli(session.startMs)
+                            .atZone(ZoneId.systemDefault())
+                        val endDt = Instant.ofEpochMilli(session.endMs)
+                            .atZone(ZoneId.systemDefault())
                         val durMins = (session.endMs - session.startMs) / 60000
 
                         val dateStr = startDt.format(sessionDateFormatter)
@@ -834,7 +841,7 @@ fun TaskDetailScreen(
                         )
                         Spacer(Modifier.width(6.dp))
                         Text(
-                            "(${com.trougnouf.cfait.ui.formatDurationHuman(durMins)})",
+                            "(${formatDurationHuman(durMins)})",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                             modifier = Modifier.padding(end = 8.dp)
@@ -842,8 +849,8 @@ fun TaskDetailScreen(
 
                         IconButton(
                             onClick = {
-                                val sDt = java.time.Instant.ofEpochMilli(session.startMs).atZone(java.time.ZoneId.systemDefault())
-                                val eDt = java.time.Instant.ofEpochMilli(session.endMs).atZone(java.time.ZoneId.systemDefault())
+                                val sDt = Instant.ofEpochMilli(session.startMs).atZone(ZoneId.systemDefault())
+                                val eDt = Instant.ofEpochMilli(session.endMs).atZone(ZoneId.systemDefault())
                                 editSessionInput = "${sDt.format(sessionDateFormatter)} ${sDt.format(sessionTimeFormatter)}-${eDt.format(sessionTimeFormatter)}"
                                 editingSessionIdx = absoluteIdx
                             },
@@ -857,7 +864,7 @@ fun TaskDetailScreen(
                                 scope.launch {
                                     try {
                                         api.deleteSession(uid, absoluteIdx.toUInt())
-                                        reload()
+                                        refreshTaskMeta()
                                         triggerBackgroundSync(context, api)
                                     } catch (e: Exception) {
                                         if (e is CancellationException) throw e
@@ -887,7 +894,7 @@ fun TaskDetailScreen(
                     val toggleText = if (showAllSessions) {
                         stringResource(R.string.show_less)
                     } else {
-                        com.trougnouf.cfait.ui.resolvePluralMap(
+                        resolvePluralMap(
                             stringResource(R.string.show_older_sessions, count),
                             count
                         )
@@ -906,7 +913,7 @@ fun TaskDetailScreen(
 
             LaunchedEffect(task) {
                 incomingRelated = if (task != null) {
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    withContext(Dispatchers.IO) {
                         api.getTasksRelatedTo(task!!.uid)
                     }
                 } else {
@@ -933,7 +940,7 @@ fun TaskDetailScreen(
                                 scope.launch {
                                     try {
                                         api.dispatch(AppIntent.RemoveRelatedTo(relatedTask.uid, currentUid))
-                                        reload()
+                                        refreshTaskMeta()
                                         triggerBackgroundSync(context, api)
                                     } catch (e: Exception) {
                                         if (e is CancellationException) throw e
@@ -962,7 +969,7 @@ fun TaskDetailScreen(
                             NfIcon(
                                 getRandomRelatedIcon(task!!.uid, relatedTask.uid),
                                 12.sp,
-                                androidx.compose.ui.graphics.Color.Gray
+                                Color.Gray
                             )
                             Spacer(Modifier.width(4.dp))
                             DynamicTaskName(api, relatedTask.summary, relatedTask.uid)
@@ -972,7 +979,7 @@ fun TaskDetailScreen(
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
             }
 
-            com.trougnouf.cfait.ui.CursorContextBanner(api, description, uid, onNavigate = onNavigate) { description = it }
+            CursorContextBanner(api, description, uid, onNavigate = onNavigate) { description = it }
 
             OutlinedTextField(
                 value = description,
@@ -988,7 +995,7 @@ fun TaskDetailScreen(
                 },
                 label = { Text(stringResource(R.string.description_label)) },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 150.dp),
-                textStyle = TextStyle(textAlign = androidx.compose.ui.text.style.TextAlign.Start),
+                textStyle = TextStyle(textAlign = TextAlign.Start),
                 visualTransformation = remember(isDark) { MarkdownTransformation(isDark, api) },
                 keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = {
@@ -1025,11 +1032,11 @@ fun TaskDetailScreen(
 
 @Composable
 fun DynamicTaskName(api: CfaitMobile, defaultName: String, uid: String) {
-    var displayName by remember(uid) { mutableStateOf(defaultName) }
+    var displayName by remember(uid, defaultName) { mutableStateOf(defaultName) }
 
-    LaunchedEffect(uid) {
+    LaunchedEffect(uid, defaultName) {
         try {
-            val t = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { api.getTaskByUid(uid) }
+            val t = withContext(Dispatchers.IO) { api.getTaskByUid(uid) }
             if (t != null && t.isDone) {
                 val dateStr = t.completedDateIso?.let { formatIsoToLocal(it) }
                 displayName = if (dateStr != null) "${t.summary} (✓ $dateStr)" else "${t.summary} (✓)"
@@ -1042,7 +1049,7 @@ fun DynamicTaskName(api: CfaitMobile, defaultName: String, uid: String) {
     }
 
     val annotatedText = remember(displayName) {
-        com.trougnouf.cfait.ui.parseInlineMarkdown(displayName, androidx.compose.ui.graphics.Color.Unspecified, false)
+        parseInlineMarkdown(displayName, Color.Unspecified, false)
     }
     Text(annotatedText, fontSize = 14.sp)
 }
