@@ -26,7 +26,9 @@ import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.core.MobileFirstDayOfWeek
 import com.trougnouf.cfait.R
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -83,44 +85,47 @@ fun AdvancedSettingsScreen(
     var sessionsCountAsCompletions by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
 
-    fun reload() {
+    // getConfig/getCurrentDataDir do disk IO, so keep them off the main thread
+    suspend fun reload() {
         try {
-            val cfg = api.getConfig()
-            maxDoneRoots = cfg.maxDoneRoots.toString()
-            maxDoneSubtasks = cfg.maxDoneSubtasks.toString()
-            trashRetention = cfg.trashRetention.toString()
-            deleteEventsOnCompletion = cfg.deleteEventsOnCompletion
-            strikethroughCompleted = cfg.strikethroughCompleted
-            showInlineDescriptions = cfg.showInlineDescriptions
-            showQuickFilter = cfg.showQuickFilter
-            quickFilterTerm = cfg.quickFilterTerm
-            quickFilterIcon = cfg.quickFilterIcon
+            withContext(Dispatchers.IO) {
+                val cfg = api.getConfig()
+                maxDoneRoots = cfg.maxDoneRoots.toString()
+                maxDoneSubtasks = cfg.maxDoneSubtasks.toString()
+                trashRetention = cfg.trashRetention.toString()
+                deleteEventsOnCompletion = cfg.deleteEventsOnCompletion
+                strikethroughCompleted = cfg.strikethroughCompleted
+                showInlineDescriptions = cfg.showInlineDescriptions
+                showQuickFilter = cfg.showQuickFilter
+                quickFilterTerm = cfg.quickFilterTerm
+                quickFilterIcon = cfg.quickFilterIcon
 
-            tlsClientCertPath = cfg.tlsClientCertPath ?: ""
-            tlsClientKeyPath = cfg.tlsClientKeyPath ?: ""
-            @Suppress("DEPRECATION")
-            val extDir = context.externalMediaDirs.firstOrNull()?.absolutePath
-            useExternalStorage = (extDir != null && cfg.dataDir == extDir)
-            currentDataDirPath = try { api.getCurrentDataDir() } catch (_: Exception) { "" }
+                tlsClientCertPath = cfg.tlsClientCertPath ?: ""
+                tlsClientKeyPath = cfg.tlsClientKeyPath ?: ""
+                @Suppress("DEPRECATION")
+                val extDir = context.externalMediaDirs.firstOrNull()?.absolutePath
+                useExternalStorage = (extDir != null && cfg.dataDir == extDir)
+                currentDataDirPath = try { api.getCurrentDataDir() } catch (_: Exception) { "" }
 
-            sortStandardByPriority = cfg.sortStandardByPriority
-            pausedSortBehavior = cfg.pausedSortBehavior
-            sortTiebreakRecent = cfg.sortTiebreakRecent
-            sortPreset = cfg.sortPreset
-            sortDays = cfg.sortCutoffDays?.toString() ?: ""
-            urgentDays = cfg.urgentDays.toString()
-            urgentPrio = cfg.urgentPrio.toString()
-            defaultPriority = cfg.defaultPriority.toString()
-            startGracePeriodDays = cfg.startGracePeriodDays.toString()
-            firstDayOfWeek = cfg.firstDayOfWeek
-            showTaskGoalsInSidebar = cfg.showTaskGoalsInSidebar
-            showCalendarsTab = cfg.showCalendarsTab
-            showTagsTab = cfg.showTagsTab
-            showLocationsTab = cfg.showLocationsTab
-            showGoalsTab = cfg.showGoalsTab
-            showJournalTab = cfg.showJournalTab
-            defaultDurationGoalMins = cfg.defaultDurationGoalMins.toString()
-            sessionsCountAsCompletions = cfg.sessionsCountAsCompletions
+                sortStandardByPriority = cfg.sortStandardByPriority
+                pausedSortBehavior = cfg.pausedSortBehavior
+                sortTiebreakRecent = cfg.sortTiebreakRecent
+                sortPreset = cfg.sortPreset
+                sortDays = cfg.sortCutoffDays?.toString() ?: ""
+                urgentDays = cfg.urgentDays.toString()
+                urgentPrio = cfg.urgentPrio.toString()
+                defaultPriority = cfg.defaultPriority.toString()
+                startGracePeriodDays = cfg.startGracePeriodDays.toString()
+                firstDayOfWeek = cfg.firstDayOfWeek
+                showTaskGoalsInSidebar = cfg.showTaskGoalsInSidebar
+                showCalendarsTab = cfg.showCalendarsTab
+                showTagsTab = cfg.showTagsTab
+                showLocationsTab = cfg.showLocationsTab
+                showGoalsTab = cfg.showGoalsTab
+                showJournalTab = cfg.showJournalTab
+                defaultDurationGoalMins = cfg.defaultDurationGoalMins.toString()
+                sessionsCountAsCompletions = cfg.sessionsCountAsCompletions
+            }
         } catch (e: Exception) {
             // Ignore on load
         }
@@ -128,52 +133,55 @@ fun AdvancedSettingsScreen(
 
     LaunchedEffect(Unit) { reload() }
 
-    fun saveToDisk() {
+    // getConfig/saveConfig do disk IO, so keep them off the main thread
+    suspend fun saveToDisk() {
         try {
-            val cfg = api.getConfig()
-            // Ensure at least one sidebar tab is visible
-            val atLeastOneTab = showCalendarsTab || showTagsTab || showLocationsTab || showGoalsTab || showJournalTab
-            val finalShowCalendarsTab = if (!showCalendarsTab && !atLeastOneTab) true else showCalendarsTab
-            val finalShowTagsTab = if (!showTagsTab && !atLeastOneTab) true else showTagsTab
-            val finalShowLocationsTab = if (!showLocationsTab && !atLeastOneTab) true else showLocationsTab
-            val finalShowGoalsTab = if (!showGoalsTab && !atLeastOneTab) true else showGoalsTab
-            val finalShowJournalTab = if (!showJournalTab && !atLeastOneTab) true else showJournalTab
-            @Suppress("DEPRECATION")
-            val newCfg = cfg.copy(
-                maxDoneRoots = maxDoneRoots.toUIntOrNull() ?: 20u,
-                maxDoneSubtasks = maxDoneSubtasks.toUIntOrNull() ?: 5u,
-                trashRetention = trashRetention.toUIntOrNull() ?: 14u,
-                deleteEventsOnCompletion = deleteEventsOnCompletion,
-                strikethroughCompleted = strikethroughCompleted,
-                showInlineDescriptions = showInlineDescriptions,
-                showQuickFilter = showQuickFilter,
-                quickFilterTerm = quickFilterTerm,
-                quickFilterIcon = quickFilterIcon,
+            withContext(Dispatchers.IO) {
+                val cfg = api.getConfig()
+                // Ensure at least one sidebar tab is visible
+                val atLeastOneTab = showCalendarsTab || showTagsTab || showLocationsTab || showGoalsTab || showJournalTab
+                val finalShowCalendarsTab = if (!showCalendarsTab && !atLeastOneTab) true else showCalendarsTab
+                val finalShowTagsTab = if (!showTagsTab && !atLeastOneTab) true else showTagsTab
+                val finalShowLocationsTab = if (!showLocationsTab && !atLeastOneTab) true else showLocationsTab
+                val finalShowGoalsTab = if (!showGoalsTab && !atLeastOneTab) true else showGoalsTab
+                val finalShowJournalTab = if (!showJournalTab && !atLeastOneTab) true else showJournalTab
+                @Suppress("DEPRECATION")
+                val newCfg = cfg.copy(
+                    maxDoneRoots = maxDoneRoots.toUIntOrNull() ?: 20u,
+                    maxDoneSubtasks = maxDoneSubtasks.toUIntOrNull() ?: 5u,
+                    trashRetention = trashRetention.toUIntOrNull() ?: 14u,
+                    deleteEventsOnCompletion = deleteEventsOnCompletion,
+                    strikethroughCompleted = strikethroughCompleted,
+                    showInlineDescriptions = showInlineDescriptions,
+                    showQuickFilter = showQuickFilter,
+                    quickFilterTerm = quickFilterTerm,
+                    quickFilterIcon = quickFilterIcon,
 
-                tlsClientCertPath = tlsClientCertPath.takeIf { it.isNotBlank() },
-                tlsClientKeyPath = tlsClientKeyPath.takeIf { it.isNotBlank() },
-                dataDir = if (useExternalStorage) context.externalMediaDirs.firstOrNull()?.absolutePath else null,
+                    tlsClientCertPath = tlsClientCertPath.takeIf { it.isNotBlank() },
+                    tlsClientKeyPath = tlsClientKeyPath.takeIf { it.isNotBlank() },
+                    dataDir = if (useExternalStorage) context.externalMediaDirs.firstOrNull()?.absolutePath else null,
 
-                sortStandardByPriority = sortStandardByPriority,
-                pausedSortBehavior = pausedSortBehavior,
-                sortTiebreakRecent = sortTiebreakRecent,
-                sortPreset = sortPreset,
-                sortCutoffDays = sortDays.toUIntOrNull(),
-                urgentDays = urgentDays.toUIntOrNull() ?: 1u,
-                urgentPrio = urgentPrio.toUByteOrNull() ?: 1u,
-                defaultPriority = defaultPriority.toUByteOrNull() ?: 5u,
-                startGracePeriodDays = startGracePeriodDays.toUIntOrNull() ?: 1u,
-                firstDayOfWeek = firstDayOfWeek,
-                showTaskGoalsInSidebar = showTaskGoalsInSidebar,
-                showCalendarsTab = finalShowCalendarsTab,
-                showTagsTab = finalShowTagsTab,
-                showLocationsTab = finalShowLocationsTab,
-                showGoalsTab = finalShowGoalsTab,
-                showJournalTab = finalShowJournalTab,
-                defaultDurationGoalMins = defaultDurationGoalMins.toUIntOrNull() ?: 60u,
-                sessionsCountAsCompletions = sessionsCountAsCompletions
-            )
-            api.saveConfig(newCfg)
+                    sortStandardByPriority = sortStandardByPriority,
+                    pausedSortBehavior = pausedSortBehavior,
+                    sortTiebreakRecent = sortTiebreakRecent,
+                    sortPreset = sortPreset,
+                    sortCutoffDays = sortDays.toUIntOrNull(),
+                    urgentDays = urgentDays.toUIntOrNull() ?: 1u,
+                    urgentPrio = urgentPrio.toUByteOrNull() ?: 1u,
+                    defaultPriority = defaultPriority.toUByteOrNull() ?: 5u,
+                    startGracePeriodDays = startGracePeriodDays.toUIntOrNull() ?: 1u,
+                    firstDayOfWeek = firstDayOfWeek,
+                    showTaskGoalsInSidebar = showTaskGoalsInSidebar,
+                    showCalendarsTab = finalShowCalendarsTab,
+                    showTagsTab = finalShowTagsTab,
+                    showLocationsTab = finalShowLocationsTab,
+                    showGoalsTab = finalShowGoalsTab,
+                    showJournalTab = finalShowJournalTab,
+                    defaultDurationGoalMins = defaultDurationGoalMins.toUIntOrNull() ?: 60u,
+                    sessionsCountAsCompletions = sessionsCountAsCompletions
+                )
+                api.saveConfig(newCfg)
+            }
         } catch (e: Exception) {
             // Ignore save errors
         }
@@ -200,7 +208,7 @@ fun AdvancedSettingsScreen(
             val path = copyUriToFilesDir(uri, "tls_client_cert.pem")
             if (path != null) {
                 tlsClientCertPath = path
-                saveToDisk()
+                scope.launch { saveToDisk() }
             } else {
                 status = context.getString(R.string.tls_client_cert_none)
             }
@@ -214,16 +222,19 @@ fun AdvancedSettingsScreen(
             val path = copyUriToFilesDir(uri, "tls_client_key.pem")
             if (path != null) {
                 tlsClientKeyPath = path
-                saveToDisk()
+                scope.launch { saveToDisk() }
             } else {
                 status = context.getString(R.string.tls_client_key_none)
             }
         }
     }
 
-    val handleBack = {
-        saveToDisk()
-        onBack()
+    // Save in the same coroutine as the navigation so the write lands before the screen is disposed
+    val handleBack: () -> Unit = {
+        scope.launch {
+            saveToDisk()
+            onBack()
+        }
     }
 
     BackHandler { handleBack() }
@@ -246,18 +257,22 @@ fun AdvancedSettingsScreen(
                     showSwitchDialog = false
                     useExternalStorage = pendingExternalStorage
 
-                    try {
-                        saveToDisk()
+                    // Save before restarting so the new dataDir is persisted
+                    scope.launch {
+                        try {
+                            saveToDisk()
 
-                        val packageManager = context.packageManager
-                        val intent = packageManager.getLaunchIntentForPackage(context.packageName)
-                        val componentName = intent?.component
-                        val mainIntent = Intent.makeRestartActivityTask(componentName)
-                        context.startActivity(mainIntent)
-                        Runtime.getRuntime().exit(0)
-                    } catch (e: Exception) {
-                        useExternalStorage = !pendingExternalStorage
-                        status = context.getString(R.string.error_general, e.message ?: "")
+                            val packageManager = context.packageManager
+                            val intent = packageManager.getLaunchIntentForPackage(context.packageName)
+                            val componentName = intent?.component
+                            val mainIntent = Intent.makeRestartActivityTask(componentName)
+                            context.startActivity(mainIntent)
+                            Runtime.getRuntime().exit(0)
+                        } catch (e: Exception) {
+                            if (e is CancellationException) throw e
+                            useExternalStorage = !pendingExternalStorage
+                            status = context.getString(R.string.error_general, e.message ?: "")
+                        }
                     }
                 }) { Text(stringResource(R.string.switch_and_restart)) }
             },
@@ -449,7 +464,10 @@ fun AdvancedSettingsScreen(
                         MobileFirstDayOfWeek.MONDAY to stringResource(R.string.monday),
                         MobileFirstDayOfWeek.SUNDAY to stringResource(R.string.sunday)
                     ),
-                    onSelect = { firstDayOfWeek = it; saveToDisk() },
+                    onSelect = {
+                        firstDayOfWeek = it
+                        scope.launch { saveToDisk() }
+                    },
                     modifier = Modifier.width(240.dp)
                 )
             }
@@ -588,7 +606,10 @@ fun AdvancedSettingsScreen(
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
                 Switch(
                     checked = showCalendarsTab,
-                    onCheckedChange = { showCalendarsTab = it; saveToDisk() }
+                    onCheckedChange = {
+                        showCalendarsTab = it
+                        scope.launch { saveToDisk() }
+                    }
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.show_calendars_tab))
@@ -596,7 +617,10 @@ fun AdvancedSettingsScreen(
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
                 Switch(
                     checked = showTagsTab,
-                    onCheckedChange = { showTagsTab = it; saveToDisk() }
+                    onCheckedChange = {
+                        showTagsTab = it
+                        scope.launch { saveToDisk() }
+                    }
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.show_tags_tab))
@@ -604,7 +628,10 @@ fun AdvancedSettingsScreen(
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
                 Switch(
                     checked = showLocationsTab,
-                    onCheckedChange = { showLocationsTab = it; saveToDisk() }
+                    onCheckedChange = {
+                        showLocationsTab = it
+                        scope.launch { saveToDisk() }
+                    }
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.show_locations_tab))
@@ -612,7 +639,10 @@ fun AdvancedSettingsScreen(
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
                 Switch(
                     checked = showGoalsTab,
-                    onCheckedChange = { showGoalsTab = it; saveToDisk() }
+                    onCheckedChange = {
+                        showGoalsTab = it
+                        scope.launch { saveToDisk() }
+                    }
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.show_goals_tab))
@@ -620,7 +650,10 @@ fun AdvancedSettingsScreen(
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
                 Switch(
                     checked = showJournalTab,
-                    onCheckedChange = { showJournalTab = it; saveToDisk() }
+                    onCheckedChange = {
+                        showJournalTab = it
+                        scope.launch { saveToDisk() }
+                    }
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.show_journal_tab))
@@ -786,7 +819,10 @@ fun AdvancedSettingsScreen(
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 16.dp)) {
                 Switch(
                     checked = showTaskGoalsInSidebar,
-                    onCheckedChange = { showTaskGoalsInSidebar = it; saveToDisk() }
+                    onCheckedChange = {
+                        showTaskGoalsInSidebar = it
+                        scope.launch { saveToDisk() }
+                    }
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.show_task_goals_in_sidebar))
@@ -808,7 +844,10 @@ fun AdvancedSettingsScreen(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Switch(
                     checked = sessionsCountAsCompletions,
-                    onCheckedChange = { sessionsCountAsCompletions = it; saveToDisk() }
+                    onCheckedChange = {
+                        sessionsCountAsCompletions = it
+                        scope.launch { saveToDisk() }
+                    }
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.sessions_count_as_completions))
@@ -836,14 +875,13 @@ fun AdvancedSettingsScreen(
                         try {
                             debugIsError = false
                             debugStatus = exportExporting
-                            val zipPath = api.createDebugExport()
-                            val sourceFile = File(zipPath)
-                            val destFile = File(context.cacheDir, "cfait_debug_export.zip")
-
-                            sourceFile.inputStream().use { input ->
-                                destFile.outputStream().use { output ->
-                                    input.copyTo(output)
-                                }
+                            // createDebugExport and the file copy are disk IO
+                            val destFile = withContext(Dispatchers.IO) {
+                                val zipPath = api.createDebugExport()
+                                val sourceFile = File(zipPath)
+                                val dest = File(context.cacheDir, "cfait_debug_export.zip")
+                                sourceFile.copyTo(dest, overwrite = true)
+                                dest
                             }
 
                             val uri = FileProvider.getUriForFile(
