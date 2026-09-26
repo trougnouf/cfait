@@ -2,7 +2,7 @@
 //! Robustness tests for the ICS adapter: malformed input, RFC 5545
 //! case-insensitivity, TZID handling, and sibling-component isolation.
 
-use cfait::model::{AlarmTrigger, DateType, Task};
+use cfait::model::{Alarm, AlarmTrigger, DateType, Task};
 use chrono::{DateTime, NaiveDate, Utc};
 
 fn utc(y: i32, mo: u32, d: u32, h: u32, mi: u32) -> DateTime<Utc> {
@@ -248,5 +248,137 @@ fn journal_lowercase_properties_parse() {
         Some(DateType::AllDay(
             NaiveDate::from_ymd_opt(2026, 9, 20).unwrap()
         ))
+    );
+}
+
+/// The icalendar crate already unescapes Text properties (SUMMARY,
+/// DESCRIPTION, LOCATION) when parsing, so the adapter must not unescape
+/// them a second time: literal backslash sequences such as `\n` in a
+/// recipe note or `C:\new` in a path would be corrupted on every round trip.
+#[test]
+fn vtodo_text_with_literal_backslashes_roundtrips() {
+    let mut t = Task::new(
+        "Water the tomatoes",
+        &std::collections::HashMap::new(),
+        None,
+    );
+    t.summary = "Soak the beans \\n overnight".to_string();
+    t.description = "recipe: 2 cups flour, 1 tsp salt\\nrest 10 min".to_string();
+    t.locations = vec!["greenhouse, row C:\\new".to_string()];
+    let ics = t.to_ics();
+    let parsed = Task::from_ics(&ics, "e".into(), "h".into(), "c".into()).unwrap();
+    assert_eq!(parsed.summary, t.summary);
+    assert_eq!(parsed.description, t.description);
+    assert_eq!(parsed.locations, t.locations);
+}
+
+/// A category containing a literal comma is escaped as `\,` on the wire;
+/// once the crate unescapes it, splitting the value again would tear the
+/// category in two.
+#[test]
+fn category_with_literal_comma_roundtrips() {
+    let mut t = Task::new("Weed the beds", &std::collections::HashMap::new(), None);
+    t.categories = vec!["garden, front bed".to_string()];
+    let ics = t.to_ics();
+    let parsed = Task::from_ics(&ics, "e".into(), "h".into(), "c".into()).unwrap();
+    assert_eq!(parsed.categories, vec!["garden, front bed".to_string()]);
+}
+
+/// Alarm DESCRIPTION is read from raw lines (not crate properties), so it
+/// still needs unescaping — and to_ics escapes it, so round trips must be
+/// lossless for commas and newlines.
+#[test]
+fn alarm_description_with_newline_and_comma_roundtrips() {
+    let mut t = Task::new("Check the oven", &std::collections::HashMap::new(), None);
+    let mut alarm = Alarm::new_relative(5);
+    alarm.description = Some("Preheat to 180C, then\ncheck the crust\\nsmell".to_string());
+    t.alarms = vec![alarm];
+    let ics = t.to_ics();
+    let parsed = Task::from_ics(&ics, "e".into(), "h".into(), "c".into()).unwrap();
+    assert_eq!(parsed.alarms.len(), 1);
+    assert_eq!(
+        parsed.alarms[0].description,
+        Some("Preheat to 180C, then\ncheck the crust\\nsmell".to_string())
+    );
+}
+
+/// URL is a URI type: it is never escaped in ICS, so a literal backslash
+/// sequence in the URL must survive the round trip untouched.
+#[test]
+fn vtodo_url_with_backslash_sequence_survives() {
+    let mut t = Task::new("Read the recipe", &std::collections::HashMap::new(), None);
+    t.url = Some("https://example.com/recipe\\nrev2".to_string());
+    let ics = t.to_ics();
+    let parsed = Task::from_ics(&ics, "e".into(), "h".into(), "c".into()).unwrap();
+    assert_eq!(
+        parsed.url,
+        Some("https://example.com/recipe\\nrev2".to_string())
+    );
+}
+
+/// Same for the VJOURNAL path, which reads the raw URL value.
+#[test]
+fn journal_url_with_backslash_sequence_survives() {
+    let t = parse(
+        "BEGIN:VJOURNAL\r\n\
+            UID:j1\r\n\
+            SUMMARY:Reading log\r\n\
+            URL:https://example.com/notes\\n2026\r\n\
+            END:VJOURNAL",
+    );
+    assert_eq!(t.url, Some("https://example.com/notes\\n2026".to_string()));
+}
+
+/// The VJOURNAL path reads raw text, so its unescaping must keep working.
+#[test]
+fn journal_text_properties_unescape() {
+    let t = parse(
+        "BEGIN:VJOURNAL\r\n\
+            UID:j1\r\n\
+            SUMMARY:Morning pages\\nsecond line\r\n\
+            DESCRIPTION:notes\\, with comma\r\n\
+            LOCATION:desk, window seat\r\n\
+            CATEGORIES:reading\\, fiction\r\n\
+            END:VJOURNAL",
+    );
+    assert_eq!(t.summary, "Morning pages\nsecond line");
+    assert_eq!(t.description, "notes, with comma");
+    assert_eq!(t.locations, vec!["desk, window seat".to_string()]);
+    assert_eq!(t.categories, vec!["reading, fiction".to_string()]);
+}
+
+/// A sibling override that precedes the master must not contribute its
+/// CATEGORIES to the master task.
+#[test]
+fn categories_from_override_do_not_leak_into_master() {
+    let body = "BEGIN:VTODO\r\n\
+        UID:master\r\n\
+        SUMMARY:Weekly reading\r\n\
+        RECURRENCE-ID:20260921T090000Z\r\n\
+        CATEGORIES:override-cat\r\n\
+        END:VTODO\r\n\
+        BEGIN:VTODO\r\n\
+        UID:master\r\n\
+        SUMMARY:Weekly reading\r\n\
+        CATEGORIES:master-cat\r\n\
+        END:VTODO";
+    let t = parse(body);
+    assert_eq!(t.categories, vec!["master-cat".to_string()]);
+}
+
+/// Multiple CATEGORIES lines on the master all merge into one list.
+#[test]
+fn multiple_categories_lines_merge() {
+    let t = parse(
+        "BEGIN:VTODO\r\n\
+            UID:u\r\n\
+            SUMMARY:Read a chapter\r\n\
+            CATEGORIES:gardening\r\n\
+            CATEGORIES:reading\r\n\
+            END:VTODO",
+    );
+    assert_eq!(
+        t.categories,
+        vec!["gardening".to_string(), "reading".to_string()]
     );
 }

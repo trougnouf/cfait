@@ -296,7 +296,18 @@ impl IcsAdapter {
                 append_folded(&format!("RELATED-TO;RELTYPE=SIBLING:{}", rel));
             }
             if !task.locations.is_empty() {
-                append_folded(&format!("LOCATION:{}", task.locations.join(" | ")));
+                let escaped_locations = task
+                    .locations
+                    .iter()
+                    .map(|l: &String| {
+                        l.replace('\\', "\\\\")
+                            .replace(',', "\\,")
+                            .replace(';', "\\;")
+                            .replace('\n', "\\n")
+                    })
+                    .collect::<Vec<String>>()
+                    .join(" | ");
+                append_folded(&format!("LOCATION:{}", escaped_locations));
             }
             if let Some(u) = &task.url {
                 append_folded(&format!("URL:{}", u));
@@ -931,15 +942,12 @@ impl IcsAdapter {
                 })
                 .unwrap_or_default();
 
+            // URL is a URI type: it is never escaped in ICS, so use it as-is.
             let url = extract_prop(&unfolded, "URL").map(|s| {
-                let unescaped = unescape_ics(&s);
-                if !unescaped.is_empty()
-                    && !unescaped.contains("://")
-                    && !unescaped.starts_with("mailto:")
-                {
-                    format!("https://{}", unescaped)
+                if !s.is_empty() && !s.contains("://") && !s.starts_with("mailto:") {
+                    format!("https://{}", s)
                 } else {
-                    unescaped
+                    s
                 }
             });
 
@@ -1043,17 +1051,16 @@ impl IcsAdapter {
         let get_prop =
             |key: &str| -> Option<String> { get_prop_ref(key).map(|p| p.value().to_string()) };
 
-        let summary = get_prop("SUMMARY")
-            .map(|s| unescape_ics(&s))
-            .unwrap_or_default();
+        // The crate already unescapes Text properties on parse, so values
+        // arrive in their final form; unescaping again would corrupt
+        // literal backslash sequences (e.g. `\n` in a recipe note).
+        let summary = get_prop("SUMMARY").unwrap_or_default();
         let uid = get_prop("UID").unwrap_or_else(|| {
             // UID is REQUIRED per RFC 5545; fall back deterministically so a
             // malformed object can't shadow other tasks in the same calendar
             format!("cfait-nouid-{}-{}", href, summary)
         });
-        let description = get_prop("DESCRIPTION")
-            .map(|s| unescape_ics(&s))
-            .unwrap_or_default();
+        let description = get_prop("DESCRIPTION").unwrap_or_default();
         let (description, inline_media) = {
             let mut media = std::collections::HashMap::new();
             let stripped = crate::model::parser::strip_data_uris(&description, &mut media);
@@ -1082,22 +1089,18 @@ impl IcsAdapter {
 
         let locations = get_prop("LOCATION")
             .map(|s| {
-                unescape_ics(&s)
-                    .split('|')
+                s.split('|')
                     .map(|l| l.trim().to_string())
                     .filter(|l| !l.is_empty())
                     .collect::<Vec<String>>()
             })
             .unwrap_or_default();
+        // URL is a URI type: it is never escaped in ICS, so use it as-is.
         let url = get_prop("URL").map(|s| {
-            let unescaped = unescape_ics(&s);
-            if !unescaped.is_empty()
-                && !unescaped.contains("://")
-                && !unescaped.starts_with("mailto:")
-            {
-                format!("https://{}", unescaped)
+            if !s.is_empty() && !s.contains("://") && !s.starts_with("mailto:") {
+                format!("https://{}", s)
             } else {
-                unescaped
+                s
             }
         });
         let geo = get_prop("GEO").map(|s| s.replace(';', ","));
@@ -1327,14 +1330,32 @@ impl IcsAdapter {
         let estimated_duration_max =
             get_prop_ref("X-CFAIT-ESTIMATED-DURATION-MAX").and_then(|p| parse_dur(p.value()));
 
+        // CATEGORIES is read from the master VTODO's raw lines: the crate
+        // unescapes Text properties on parse, so a literal comma inside a
+        // category would be indistinguishable from the list separator.
+        let unfolded = icalendar::parser::unfold(raw_ics);
         let mut categories = Vec::new();
-        if let Some(multi_props) = get_multi_ref("CATEGORIES") {
-            for prop in multi_props {
-                categories.extend(split_ics_list(prop.value()));
+        {
+            let mut in_vtodo = false;
+            let mut block_is_override = false;
+            for line in unfolded.lines() {
+                let lu = line.trim().to_ascii_uppercase();
+                if lu == "BEGIN:VTODO" {
+                    in_vtodo = true;
+                    block_is_override = false;
+                } else if lu == "END:VTODO" {
+                    in_vtodo = false;
+                    if !block_is_override {
+                        break; // first non-override block is the master
+                    }
+                } else if in_vtodo && !block_is_override {
+                    if lu.starts_with("RECURRENCE-ID") {
+                        block_is_override = true;
+                    } else if let Some(val) = extract_prop(line, "CATEGORIES") {
+                        categories.extend(split_ics_list(&val));
+                    }
+                }
             }
-        }
-        if let Some(prop) = get_prop_ref("CATEGORIES") {
-            categories.extend(split_ics_list(prop.value()));
         }
 
         // MIGRATION: Convert legacy `#blocked` tags into the native property
@@ -1362,7 +1383,6 @@ impl IcsAdapter {
         // regardless of how icalendar crate groups X- properties.
         let mut manual_sessions = Vec::new();
 
-        let unfolded = icalendar::parser::unfold(raw_ics);
         let mut in_vtodo = false;
         let mut in_valarm = false;
         let mut current_is_override = false;
@@ -1544,7 +1564,9 @@ impl IcsAdapter {
                         match k_upper.as_str() {
                             "UID" => alarm.uid = val.trim().to_string(),
                             "ACTION" => alarm.action = val.trim().to_string(),
-                            "DESCRIPTION" => alarm.description = Some(val.trim().to_string()),
+                            // Raw line, so it still carries ICS escapes
+                            // (to_ics writes them); unescape to match.
+                            "DESCRIPTION" => alarm.description = Some(unescape_ics(val.trim())),
                             "TRIGGER" => {
                                 if val.contains('T') && !val.contains('P') {
                                     if let Ok(dt) =
