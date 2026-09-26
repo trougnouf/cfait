@@ -17,6 +17,7 @@ use crate::tui::action::SidebarMode;
 use crate::tui::state::{AppState, Focus, InputMode};
 
 use rust_i18n::t;
+use std::collections::HashSet;
 
 use ratatui::{
     Frame,
@@ -913,22 +914,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             )
         };
 
-        let mut visible_cals = Vec::new();
-        for c in &state.calendars {
-            let supports = if c.href.starts_with("local://") {
-                true
-            } else {
-                c.supports_vjournal.unwrap_or(false)
-            };
-            if !state.hidden_calendars.contains(&c.href)
-                && !state.disabled_calendars.contains(&c.href)
-                && c.href != crate::storage::LOCAL_TRASH_HREF
-                && c.href != "local://recovery"
-                && supports
-            {
-                visible_cals.push(c);
-            }
-        }
+        let visible_cals = state.visible_journal_calendars();
 
         let mut cal_spans = Vec::new();
         cal_spans.push(Span::styled(
@@ -969,21 +955,9 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
         // Append Activity Context
         if state.journal_editing_uid.is_none() {
-            let visible_cals_set = state
-                .calendars
-                .iter()
-                .filter(|c| {
-                    let supports = if c.href.starts_with("local://") {
-                        true
-                    } else {
-                        c.supports_vjournal.unwrap_or(false)
-                    };
-                    !state.hidden_calendars.contains(&c.href)
-                        && !state.disabled_calendars.contains(&c.href)
-                        && c.href != crate::storage::LOCAL_TRASH_HREF
-                        && c.href != "local://recovery"
-                        && supports
-                })
+            let visible_cals_set: HashSet<String> = state
+                .visible_journal_calendars()
+                .into_iter()
                 .map(|c| c.href.clone())
                 .collect();
             let day_ctx = state

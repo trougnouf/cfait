@@ -768,6 +768,26 @@ impl AppState {
         new_cursor_pos.clamp(0, self.input_buffer.chars().count())
     }
 
+    /// Journal-capable calendars that are currently visible (not hidden,
+    /// disabled, or reserved for trash/recovery).
+    pub fn visible_journal_calendars(&self) -> Vec<&CalendarListEntry> {
+        self.calendars
+            .iter()
+            .filter(|c| {
+                let supports = if c.href.starts_with("local://") {
+                    true
+                } else {
+                    c.supports_vjournal.unwrap_or(false)
+                };
+                !self.hidden_calendars.contains(&c.href)
+                    && !self.disabled_calendars.contains(&c.href)
+                    && c.href != crate::storage::LOCAL_TRASH_HREF
+                    && c.href != "local://recovery"
+                    && supports
+            })
+            .collect()
+    }
+
     // --- HELPER FOR SIDEBAR LENGTH ---
     fn get_sidebar_len(&self) -> usize {
         match self.sidebar_mode {

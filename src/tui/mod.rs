@@ -11,7 +11,7 @@ use crate::config;
 use crate::context::AppContext;
 use crate::system::{AlarmMessage, SystemEvent};
 use crate::tui::action::AppEvent;
-use crate::tui::state::{AppState, InputMode};
+use crate::tui::state::AppState;
 use crate::tui::view::draw;
 
 use anyhow::Result;
@@ -490,11 +490,6 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
                             break;
                         }
                         let _ = action_tx.send(action).await;
-                    }
-                    if matches!(app_state.mode, InputMode::Normal)
-                        && key.code == crossterm::event::KeyCode::Char('q')
-                    {
-                        // Double check redundant safety break if handler returned None
                     }
                 }
                 // A resize changes the buffer size; force a full clean redraw

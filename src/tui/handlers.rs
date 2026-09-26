@@ -337,6 +337,41 @@ fn open_relationship_browser(state: &mut AppState) -> bool {
     }
 }
 
+/// Writes the tree's waypoints as a GPX file in the cache dir and opens it,
+/// setting the status message accordingly.
+fn open_tree_locations_gpx(state: &mut AppState, uid: &str) {
+    let waypoints = state.store.get_tree_waypoints(uid);
+    let mut gpx_string = String::from(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<gpx version=\"1.1\" creator=\"Cfait\" xmlns=\"http://www.topografix.com/GPX/1/1\">\n",
+    );
+    for (name, geo) in waypoints {
+        let parts: Vec<&str> = geo.split(',').collect();
+        if parts.len() >= 2 {
+            let escaped_name = name
+                .replace('&', "&amp;")
+                .replace('<', "&lt;")
+                .replace('>', "&gt;");
+            gpx_string.push_str(&format!(
+                "  <wpt lat=\"{}\" lon=\"{}\"><name>{}</name></wpt>\n",
+                parts[0].trim(),
+                parts[1].trim(),
+                escaped_name
+            ));
+        }
+    }
+    gpx_string.push_str("</gpx>");
+
+    if let Ok(cache_dir) = state.ctx.get_cache_dir() {
+        let path = cache_dir.join(format!("locations_{}.gpx", uuid::Uuid::new_v4()));
+        if std::fs::write(&path, gpx_string).is_ok() {
+            crate::system::open_url(&path.to_string_lossy());
+            state.message = rust_i18n::t!("action_open_locations").to_string();
+        } else {
+            state.message = rust_i18n::t!("error_write_gpx").to_string();
+        }
+    }
+}
+
 async fn execute_task_action(
     state: &mut AppState,
     action: crate::config::TaskAction,
@@ -362,36 +397,7 @@ async fn execute_task_action(
             }
         }
         OpenLocations => {
-            let waypoints = state.store.get_tree_waypoints(&uid);
-            let mut gpx_string = String::from(
-                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<gpx version=\"1.1\" creator=\"Cfait\" xmlns=\"http://www.topografix.com/GPX/1/1\">\n",
-            );
-            for (name, geo) in waypoints {
-                let parts: Vec<&str> = geo.split(',').collect();
-                if parts.len() >= 2 {
-                    let escaped_name = name
-                        .replace('&', "&amp;")
-                        .replace('<', "&lt;")
-                        .replace('>', "&gt;");
-                    gpx_string.push_str(&format!(
-                        "  <wpt lat=\"{}\" lon=\"{}\"><name>{}</name></wpt>\n",
-                        parts[0].trim(),
-                        parts[1].trim(),
-                        escaped_name
-                    ));
-                }
-            }
-            gpx_string.push_str("</gpx>");
-
-            if let Ok(cache_dir) = state.ctx.get_cache_dir() {
-                let path = cache_dir.join(format!("locations_{}.gpx", uuid::Uuid::new_v4()));
-                if std::fs::write(&path, gpx_string).is_ok() {
-                    crate::system::open_url(&path.to_string_lossy());
-                    state.message = rust_i18n::t!("action_open_locations").to_string();
-                } else {
-                    state.message = rust_i18n::t!("error_write_gpx").to_string();
-                }
-            }
+            open_tree_locations_gpx(state, &uid);
         }
         ToggleDetails => {
             state.mode = InputMode::ViewingDetails;
@@ -1083,6 +1089,72 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
         state.mode = InputMode::Normal;
         state.reset_input();
         state.editing_uid = None;
+    }
+}
+
+/// Opens the journal entry (or the task attached to it) in the external
+/// editor. If the text changed, loads it into the buffer and saves;
+/// otherwise loads the original text into the buffer for in-TUI editing.
+fn edit_journal_in_external_editor(state: &mut AppState, action_tx: &Sender<Action>) {
+    let target_href = state
+        .active_cal_href
+        .clone()
+        .filter(|href| state.local_mode_enabled || !href.starts_with("local://"))
+        .or_else(|| {
+            state
+                .get_filtered_calendars()
+                .first()
+                .map(|c| c.href.clone())
+        })
+        .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
+
+    let (desc, is_daily) = if let Some(uid) = &state.journal_editing_uid
+        && let Some(t) = state.store.get_task_ref(uid)
+    {
+        (t.description.clone(), false)
+    } else {
+        // Stale pointer (the task disappeared, e.g. after a reload
+        // or undo): fall back to the daily entry and clear it.
+        state.journal_editing_uid = None;
+        let entry = state
+            .store
+            .get_journal_entry(&target_href, state.journal_date);
+        (
+            entry.map(|e| e.description.clone()).unwrap_or_default(),
+            true,
+        )
+    };
+
+    match run_external_editor(&desc, state.ctx.as_ref()) {
+        Ok(Some(new_desc)) => {
+            if new_desc != desc {
+                state.input_buffer = new_desc;
+                if !is_daily {
+                    state.editing_uid = state.journal_editing_uid.clone();
+                }
+                state.mode = InputMode::EditingDescription;
+                save_description(state, action_tx);
+            }
+            state.needs_redraw = true;
+        }
+        Ok(None) => {
+            state.input_buffer = desc;
+            state.cursor_position = state.input_buffer.chars().count();
+            if !is_daily {
+                state.editing_uid = state.journal_editing_uid.clone();
+            }
+            state.mode = InputMode::EditingDescription;
+        }
+        Err(e) => {
+            state.message = e;
+            state.input_buffer = desc;
+            state.cursor_position = state.input_buffer.chars().count();
+            if !is_daily {
+                state.editing_uid = state.journal_editing_uid.clone();
+            }
+            state.mode = InputMode::EditingDescription;
+            state.needs_redraw = true;
+        }
     }
 }
 
@@ -3004,22 +3076,7 @@ pub async fn handle_key_event(
             }
             KeyCode::Char('[') => {
                 if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
-                    let mut visible_cals = Vec::new();
-                    for c in &state.calendars {
-                        let supports = if c.href.starts_with("local://") {
-                            true
-                        } else {
-                            c.supports_vjournal.unwrap_or(false)
-                        };
-                        if !state.hidden_calendars.contains(&c.href)
-                            && !state.disabled_calendars.contains(&c.href)
-                            && c.href != crate::storage::LOCAL_TRASH_HREF
-                            && c.href != "local://recovery"
-                            && supports
-                        {
-                            visible_cals.push(c);
-                        }
-                    }
+                    let visible_cals = state.visible_journal_calendars();
                     if !visible_cals.is_empty() {
                         let current_idx = visible_cals
                             .iter()
@@ -3038,22 +3095,7 @@ pub async fn handle_key_event(
             }
             KeyCode::Char(']') => {
                 if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
-                    let mut visible_cals = Vec::new();
-                    for c in &state.calendars {
-                        let supports = if c.href.starts_with("local://") {
-                            true
-                        } else {
-                            c.supports_vjournal.unwrap_or(false)
-                        };
-                        if !state.hidden_calendars.contains(&c.href)
-                            && !state.disabled_calendars.contains(&c.href)
-                            && c.href != crate::storage::LOCAL_TRASH_HREF
-                            && c.href != "local://recovery"
-                            && supports
-                        {
-                            visible_cals.push(c);
-                        }
-                    }
+                    let visible_cals = state.visible_journal_calendars();
                     if !visible_cals.is_empty() {
                         let current_idx = visible_cals
                             .iter()
@@ -3108,37 +3150,7 @@ pub async fn handle_key_event(
                     let count = task.tree_location_count;
 
                     if count > 1 {
-                        let waypoints = state.store.get_tree_waypoints(&uid);
-                        let mut gpx_string = String::from(
-                            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<gpx version=\"1.1\" creator=\"Cfait\" xmlns=\"http://www.topografix.com/GPX/1/1\">\n",
-                        );
-                        for (name, geo) in waypoints {
-                            let parts: Vec<&str> = geo.split(',').collect();
-                            if parts.len() >= 2 {
-                                let escaped_name = name
-                                    .replace('&', "&amp;")
-                                    .replace('<', "&lt;")
-                                    .replace('>', "&gt;");
-                                gpx_string.push_str(&format!(
-                                    "  <wpt lat=\"{}\" lon=\"{}\"><name>{}</name></wpt>\n",
-                                    parts[0].trim(),
-                                    parts[1].trim(),
-                                    escaped_name
-                                ));
-                            }
-                        }
-                        gpx_string.push_str("</gpx>");
-
-                        if let Ok(cache_dir) = state.ctx.get_cache_dir() {
-                            let path =
-                                cache_dir.join(format!("locations_{}.gpx", uuid::Uuid::new_v4()));
-                            if std::fs::write(&path, gpx_string).is_ok() {
-                                crate::system::open_url(&path.to_string_lossy());
-                                state.message = rust_i18n::t!("action_open_locations").to_string();
-                            } else {
-                                state.message = rust_i18n::t!("error_write_gpx").to_string();
-                            }
-                        }
+                        open_tree_locations_gpx(state, &uid);
                     } else if let Some(_geo) = &task.geo {
                         crate::system::open_url(&format!("geo:{}", _geo));
                         state.message = rust_i18n::t!("open_coordinates").to_string();
@@ -3725,69 +3737,8 @@ pub async fn handle_key_event(
             }
             KeyCode::Enter => {
                 if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
-                    let target_href = state
-                        .active_cal_href
-                        .clone()
-                        .filter(|href| state.local_mode_enabled || !href.starts_with("local://"))
-                        .or_else(|| {
-                            state
-                                .get_filtered_calendars()
-                                .first()
-                                .map(|c| c.href.clone())
-                        })
-                        .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
-
-                    let (desc, is_daily) = if let Some(uid) = &state.journal_editing_uid
-                        && let Some(t) = state.store.get_task_ref(uid)
-                    {
-                        (t.description.clone(), false)
-                    } else {
-                        // Stale pointer (the task disappeared, e.g. after a reload
-                        // or undo): fall back to the daily entry and clear it.
-                        state.journal_editing_uid = None;
-                        let entry = state
-                            .store
-                            .get_journal_entry(&target_href, state.journal_date);
-                        (
-                            entry.map(|e| e.description.clone()).unwrap_or_default(),
-                            true,
-                        )
-                    };
-
-                    match run_external_editor(&desc, state.ctx.as_ref()) {
-                        Ok(Some(new_desc)) => {
-                            if new_desc != desc {
-                                state.input_buffer = new_desc;
-                                if !is_daily {
-                                    state.editing_uid = state.journal_editing_uid.clone();
-                                }
-                                state.mode = InputMode::EditingDescription;
-                                save_description(state, action_tx);
-                            }
-                            state.needs_redraw = true;
-                            return None;
-                        }
-                        Ok(None) => {
-                            state.input_buffer = desc;
-                            state.cursor_position = state.input_buffer.chars().count();
-                            if !is_daily {
-                                state.editing_uid = state.journal_editing_uid.clone();
-                            }
-                            state.mode = InputMode::EditingDescription;
-                            return None;
-                        }
-                        Err(e) => {
-                            state.message = e;
-                            state.input_buffer = desc;
-                            state.cursor_position = state.input_buffer.chars().count();
-                            if !is_daily {
-                                state.editing_uid = state.journal_editing_uid.clone();
-                            }
-                            state.mode = InputMode::EditingDescription;
-                            state.needs_redraw = true;
-                            return None;
-                        }
-                    }
+                    edit_journal_in_external_editor(state, action_tx);
+                    return None;
                 }
 
                 // If the main list has focus, handle expand/collapse control items first.
@@ -3929,69 +3880,8 @@ pub async fn handle_key_event(
             }
             KeyCode::Char('a') => {
                 if state.sidebar_mode == SidebarMode::Journal {
-                    let target_href = state
-                        .active_cal_href
-                        .clone()
-                        .filter(|href| state.local_mode_enabled || !href.starts_with("local://"))
-                        .or_else(|| {
-                            state
-                                .get_filtered_calendars()
-                                .first()
-                                .map(|c| c.href.clone())
-                        })
-                        .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
-
-                    let (desc, is_daily) = if let Some(uid) = &state.journal_editing_uid
-                        && let Some(t) = state.store.get_task_ref(uid)
-                    {
-                        (t.description.clone(), false)
-                    } else {
-                        // Stale pointer (the task disappeared, e.g. after a reload
-                        // or undo): fall back to the daily entry and clear it.
-                        state.journal_editing_uid = None;
-                        let entry = state
-                            .store
-                            .get_journal_entry(&target_href, state.journal_date);
-                        (
-                            entry.map(|e| e.description.clone()).unwrap_or_default(),
-                            true,
-                        )
-                    };
-
-                    match run_external_editor(&desc, state.ctx.as_ref()) {
-                        Ok(Some(new_desc)) => {
-                            if new_desc != desc {
-                                state.input_buffer = new_desc;
-                                if !is_daily {
-                                    state.editing_uid = state.journal_editing_uid.clone();
-                                }
-                                state.mode = InputMode::EditingDescription;
-                                save_description(state, action_tx);
-                            }
-                            state.needs_redraw = true;
-                            return None;
-                        }
-                        Ok(None) => {
-                            state.input_buffer = desc;
-                            state.cursor_position = state.input_buffer.chars().count();
-                            if !is_daily {
-                                state.editing_uid = state.journal_editing_uid.clone();
-                            }
-                            state.mode = InputMode::EditingDescription;
-                            return None;
-                        }
-                        Err(e) => {
-                            state.message = e;
-                            state.input_buffer = desc;
-                            state.cursor_position = state.input_buffer.chars().count();
-                            if !is_daily {
-                                state.editing_uid = state.journal_editing_uid.clone();
-                            }
-                            state.mode = InputMode::EditingDescription;
-                            state.needs_redraw = true;
-                            return None;
-                        }
-                    }
+                    edit_journal_in_external_editor(state, action_tx);
+                    return None;
                 }
 
                 state.mode = InputMode::Creating;
@@ -4062,69 +3952,8 @@ pub async fn handle_key_event(
                 } else if state.sidebar_mode == SidebarMode::Journal
                     && state.active_focus == Focus::Main
                 {
-                    let target_href = state
-                        .active_cal_href
-                        .clone()
-                        .filter(|href| state.local_mode_enabled || !href.starts_with("local://"))
-                        .or_else(|| {
-                            state
-                                .get_filtered_calendars()
-                                .first()
-                                .map(|c| c.href.clone())
-                        })
-                        .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
-
-                    let (desc, is_daily) = if let Some(uid) = &state.journal_editing_uid
-                        && let Some(t) = state.store.get_task_ref(uid)
-                    {
-                        (t.description.clone(), false)
-                    } else {
-                        // Stale pointer (the task disappeared, e.g. after a reload
-                        // or undo): fall back to the daily entry and clear it.
-                        state.journal_editing_uid = None;
-                        let entry = state
-                            .store
-                            .get_journal_entry(&target_href, state.journal_date);
-                        (
-                            entry.map(|e| e.description.clone()).unwrap_or_default(),
-                            true,
-                        )
-                    };
-
-                    match run_external_editor(&desc, state.ctx.as_ref()) {
-                        Ok(Some(new_desc)) => {
-                            if new_desc != desc {
-                                state.input_buffer = new_desc;
-                                if !is_daily {
-                                    state.editing_uid = state.journal_editing_uid.clone();
-                                }
-                                state.mode = InputMode::EditingDescription;
-                                save_description(state, action_tx);
-                            }
-                            state.needs_redraw = true;
-                            return None;
-                        }
-                        Ok(None) => {
-                            state.input_buffer = desc;
-                            state.cursor_position = state.input_buffer.chars().count();
-                            if !is_daily {
-                                state.editing_uid = state.journal_editing_uid.clone();
-                            }
-                            state.mode = InputMode::EditingDescription; // Reuse the desc editor for Journal
-                            return None;
-                        }
-                        Err(e) => {
-                            state.message = e;
-                            state.input_buffer = desc;
-                            state.cursor_position = state.input_buffer.chars().count();
-                            if !is_daily {
-                                state.editing_uid = state.journal_editing_uid.clone();
-                            }
-                            state.mode = InputMode::EditingDescription;
-                            state.needs_redraw = true;
-                            return None;
-                        }
-                    }
+                    edit_journal_in_external_editor(state, action_tx);
+                    return None;
                 } else if let Some(t) = state.get_selected_task() {
                     let smart_string = t.to_smart_string();
                     let uid = t.uid.clone();

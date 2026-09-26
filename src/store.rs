@@ -899,8 +899,6 @@ impl TaskStore {
 
     /// Add a single task into the store. If it already exists, it will be overwritten
     /// in the calendar map and indices are rebuilt to reflect the new relationships.
-    /// Add a single task into the store. If it already exists, it will be overwritten
-    /// in the calendar map and indices are rebuilt to reflect the new relationships.
     pub fn add_task(&mut self, mut task: Task) {
         let tag_aliases = Config::tag_aliases(self.ctx.as_ref());
         task.extract_transient_metadata(&tag_aliases);
