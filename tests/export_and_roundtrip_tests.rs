@@ -127,6 +127,22 @@ fn test_export_task_with_relative_recurrence() {
     assert!(smart.contains("@after 1w"));
 }
 
+#[test]
+fn test_import_folded_alarm_description() {
+    // RFC 5545 requires folding lines over 75 octets; a compliant server or
+    // client may fold a long alarm DESCRIPTION, which must be reassembled.
+    let ics = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Other//Client//EN\r\nBEGIN:VTODO\r\nUID:folded-alarm-uid\r\nSUMMARY:Water the tomatoes\r\nDTSTAMP:20260924T120000Z\r\nBEGIN:VALARM\r\nUID:alarm-1\r\nACTION:DISPLAY\r\nDESCRIPTION:Water the tomatoes before the long hot afternoon comes and \r\n the soil dries out in the raised bed\r\nTRIGGER:-PT10M\r\nEND:VALARM\r\nEND:VTODO\r\nEND:VCALENDAR";
+
+    let parsed = Task::from_ics(ics, "etag".into(), "href".into(), "cal".into()).unwrap();
+    assert_eq!(parsed.alarms.len(), 1);
+    assert_eq!(
+        parsed.alarms[0].description.as_deref(),
+        Some(
+            "Water the tomatoes before the long hot afternoon comes and the soil dries out in the raised bed"
+        )
+    );
+}
+
 // ==================== VJOURNAL Export/Import Tests ====================
 
 #[test]

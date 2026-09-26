@@ -1501,23 +1501,26 @@ impl IcsAdapter {
         let mut master_is_override = false;
         let mut current_alarm_lines: Vec<String> = Vec::new();
 
-        for line in raw_ics.lines() {
+        // Iterate the unfolded copy so line-folded alarm properties (RFC 5545
+        // folds lines over 75 octets) are reassembled before parsing.
+        for line in unfolded.lines() {
             let trim = line.trim();
+            let trim_upper = trim.to_uppercase();
             // Track the enclosing component so alarms from sibling overrides
             // or companion VEVENTs don't leak into the master task
-            if trim == "BEGIN:VTODO" || trim == "BEGIN:VJOURNAL" {
+            if trim_upper == "BEGIN:VTODO" || trim_upper == "BEGIN:VJOURNAL" {
                 in_master = true;
                 master_is_override = false;
-            } else if trim == "END:VTODO" || trim == "END:VJOURNAL" {
+            } else if trim_upper == "END:VTODO" || trim_upper == "END:VJOURNAL" {
                 in_master = false;
-            } else if in_master && trim.to_uppercase().starts_with("RECURRENCE-ID") {
+            } else if in_master && trim_upper.starts_with("RECURRENCE-ID") {
                 master_is_override = true;
             }
-            if trim == "BEGIN:VALARM" {
+            if trim_upper == "BEGIN:VALARM" {
                 in_alarm = in_master && !master_is_override;
                 continue;
             }
-            if trim == "END:VALARM" {
+            if trim_upper == "END:VALARM" {
                 let was_collecting = in_alarm;
                 in_alarm = false;
                 if !was_collecting {
