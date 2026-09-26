@@ -1,9 +1,9 @@
 {
+    "about_author": "от Benoit Brummer (Trougnouf)",
     "about_chat": "Чат: %{url}",
     "about_license": "Лицензия GPL-3.0",
     "about_repository": "Репозиторий: %{url}",
     "about_title": "Cfait",
-    "about_author": "от Benoit Brummer (Trougnouf)",
     "about_version": "Версия %{version} (%{commit})",
     "action_bar_position": "Расположение кнопок действий",
     "action_bar_position_explain": "Переместить часто используемые кнопки (поиск, синхронизация, настройки) вниз экрана для удобства работы одной рукой.",
