@@ -963,12 +963,16 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::KeyboardDeleteTaskTree => {
-            if let Some(uid) = app.selected_uid.clone() {
-                return handle(app, Message::DeleteTaskTree(uid));
+            // In journal mode the main list is hidden, so `selected_uid` is stale.
+            // Only the visible page being edited may be deleted; otherwise the
+            // hotkey would yank an unrelated task from the previous view.
+            if app.sidebar_mode == SidebarMode::Journal {
+                if let Some(uid) = app.journal_editing_uid.clone() {
+                    return handle(app, Message::DeleteTaskTree(uid));
+                }
+                return Task::none();
             }
-            if app.sidebar_mode == SidebarMode::Journal
-                && let Some(uid) = app.journal_editing_uid.clone()
-            {
+            if let Some(uid) = app.selected_uid.clone() {
                 return handle(app, Message::DeleteTaskTree(uid));
             }
             Task::none()
