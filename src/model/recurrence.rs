@@ -259,6 +259,7 @@ impl RecurrenceEngine {
             let href = task.href.clone();
             let etag = task.etag.clone();
             let calendar_href = task.calendar_href.clone();
+            let sequence = task.sequence;
             let created_at = task
                 .unmapped_properties
                 .iter()
@@ -282,7 +283,10 @@ impl RecurrenceEngine {
                 });
             }
 
-            task.sequence += 1;
+            // Increment from the original sequence so the recycled task stays
+            // "newer" than every previous version (stale-read protection,
+            // cross-calendar dedup, and sync conflict keys all compare it).
+            task.sequence = sequence + 1;
             return true;
         }
         false

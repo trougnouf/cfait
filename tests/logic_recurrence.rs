@@ -180,6 +180,24 @@ fn test_recurrence_preserves_time() {
 }
 
 #[test]
+fn test_advance_increments_sequence_instead_of_resetting() {
+    // Regression: advance used to reset SEQUENCE to 1, making a recycled task
+    // look older than its previous versions and losing stale-read protection
+    // (store.rs), cross-calendar dedup, and sync conflict resolution.
+    let mut t = create_task_due_in_days(-1, "FREQ=DAILY");
+    let original_uid = t.uid.clone();
+    t.sequence = 5;
+
+    let advanced = t.advance_recurrence();
+    assert!(advanced);
+    assert_eq!(
+        t.sequence, 6,
+        "sequence must increment from the original value"
+    );
+    assert_eq!(t.uid, original_uid, "recycling preserves the UID");
+}
+
+#[test]
 fn test_cancel_single_occurrence_daily() {
     // Create a task with daily recurrence due yesterday
     let t = create_task_due_in_days(-1, "FREQ=DAILY");
