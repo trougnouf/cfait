@@ -323,21 +323,15 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
     let refresh_interval =
         std::time::Duration::from_secs(cfg.auto_refresh_interval_mins as u64 * 60);
 
+    // The frame is only rebuilt when state actually changes, with a 1Hz
+    // fallback so time-based displays (durations, "due today") stay fresh
+    // while idle.
+    let mut dirty = true;
+    let mut last_draw = std::time::Instant::now();
+
     loop {
-        if app_state.needs_redraw {
-            // Drawing a full-screen Clear widget forces Ratatui to completely wipe
-            // its internal previous-frame buffer, guaranteeing a 100% fresh redraw
-            // on the next call to terminal.draw().
-            let _ = terminal.draw(|f| {
-                f.render_widget(ratatui::widgets::Clear, f.area());
-            });
-            app_state.needs_redraw = false;
-        }
-
-        terminal.draw(|f| draw(f, &mut app_state))?;
-
         // A. Network Events
-        if let Ok(event) = event_rx.try_recv() {
+        while let Ok(event) = event_rx.try_recv() {
             // Check for Sync Complete Status (use stable key emitted by network actor)
             let enable_alarms =
                 matches!(event, AppEvent::Status { key: ref k, .. } if k == "ready");
@@ -376,11 +370,12 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
                     });
                 }
             }
+            dirty = true;
         }
 
         // B. Alarm Signals
         // Check if the alarm actor sent a "Fire" message
-        if let Ok(msg) = gui_alarm_rx.try_recv() {
+        while let Ok(msg) = gui_alarm_rx.try_recv() {
             match msg {
                 AlarmMessage::Fire(t_uid, a_uid) => {
                     // Find the task in the store to display details
@@ -397,6 +392,7 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
                     let _ = action_tx.try_send(crate::tui::action::Action::Refresh);
                 }
             }
+            dirty = true;
         }
 
         // Prune obsolete active alarm
@@ -460,6 +456,7 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
                     app_state.mode = crate::tui::state::InputMode::Normal;
                     app_state.reset_input();
                 }
+                dirty = true;
             }
         }
 
@@ -499,8 +496,30 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
                         // Double check redundant safety break if handler returned None
                     }
                 }
+                // A resize changes the buffer size; force a full clean redraw
+                // so the new dimensions take effect without stale artifacts.
+                Event::Resize { .. } => {
+                    app_state.needs_redraw = true;
+                }
                 _ => {}
             }
+            dirty = true;
+        }
+
+        if dirty || app_state.needs_redraw || last_draw.elapsed() >= Duration::from_secs(1) {
+            if app_state.needs_redraw {
+                // Drawing a full-screen Clear widget forces Ratatui to completely wipe
+                // its internal previous-frame buffer, guaranteeing a 100% fresh redraw
+                // on the next call to terminal.draw().
+                let _ = terminal.draw(|f| {
+                    f.render_widget(ratatui::widgets::Clear, f.area());
+                });
+                app_state.needs_redraw = false;
+            }
+
+            terminal.draw(|f| draw(f, &mut app_state))?;
+            last_draw = std::time::Instant::now();
+            dirty = false;
         }
     }
 
