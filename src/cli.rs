@@ -35,10 +35,17 @@ pub fn print_help(binary_name: &str) {
     }
     println!();
 
-    // Helper to align commands and descriptions uniformly without tabs
+    // Helper to align commands and descriptions uniformly without tabs.
+    // Multi-line descriptions wrap under the description column.
     let print_cmd = |cmd: &str, desc: String| {
+        let mut lines = desc.split('\n');
         // Pads the command column to exactly 43 characters
-        println!("    {cmd:43} {desc}");
+        if let Some(first) = lines.next() {
+            println!("    {cmd:43} {first}");
+        }
+        for line in lines {
+            println!("    {:43} {}", "", line);
+        }
     };
 
     println!("{}", rust_i18n::t!("cli_options_heading"));
@@ -73,18 +80,10 @@ pub fn print_help(binary_name: &str) {
             rust_i18n::t!("cli_desc_sync").to_string(),
         );
 
-        let daemon_cmd = format!("{binary_name} daemon");
-        let daemon_desc = rust_i18n::t!("cli_desc_daemon").to_string();
-        let mut lines = daemon_desc.split('\n');
-
-        // Print first line with the command
-        if let Some(first) = lines.next() {
-            print_cmd(&daemon_cmd, first.to_string());
-        }
-        // Print subsequent lines perfectly aligned under the description column
-        for line in lines {
-            println!("    {:43} {}", "", line);
-        }
+        print_cmd(
+            &format!("{binary_name} daemon"),
+            rust_i18n::t!("cli_desc_daemon").to_string(),
+        );
         println!();
 
         println!("{}", rust_i18n::t!("cli_import_command"));
@@ -153,7 +152,10 @@ pub fn print_help(binary_name: &str) {
             rust_i18n::t!("cli_desc_append").to_string(),
         );
         print_cmd(
-            &format!("{} list [--all] [--json] [-c <id>] [-p <uid>]", binary_name),
+            &format!(
+                "{} list [<query>] [--all] [--json] [-c <id>] [-p <uid>]",
+                binary_name
+            ),
             rust_i18n::t!("cli_desc_list").to_string(),
         );
         print_cmd(
@@ -179,6 +181,10 @@ pub fn print_help(binary_name: &str) {
         print_cmd(
             &format!("{} toggle <uid>", binary_name),
             rust_i18n::t!("cli_desc_toggle").to_string(),
+        );
+        print_cmd(
+            &format!("{} done <uid>", binary_name),
+            rust_i18n::t!("cli_desc_done").to_string(),
         );
         print_cmd(
             &format!("{} move <uid> <collection> [--tree]", binary_name),

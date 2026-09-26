@@ -769,15 +769,51 @@ async fn main() -> Result<()> {
                 let _ = config.save_with_credentials(ctx.as_ref());
             }
 
+            let mut temp_store = build_store_cli(&ctx).await;
+
+            // Apply new aliases retroactively so existing tasks pick up the
+            // expanded tags/locations/priority immediately. Mirrors the TUI.
+            let mut alias_updates_persisted = false;
+            if !new_aliases.is_empty() {
+                let store = Arc::new(tokio::sync::Mutex::new(TaskStore::new(ctx.clone())));
+                let client = Arc::new(tokio::sync::Mutex::new(None));
+                let controller = cfait::controller::TaskController::new(store, client, ctx.clone());
+                for (key, values) in &new_aliases {
+                    for t in temp_store.apply_alias_retroactively(key, values) {
+                        controller
+                            .persist_changes(vec![cfait::journal::Action::Update(t)])
+                            .await
+                            .map_err(|e| anyhow::anyhow!(e))?;
+                        alias_updates_persisted = true;
+                    }
+                }
+            }
+
             // A pure alias/goal definition leaves only the key token behind
             // (e.g. `#garden := #balcony, #green` -> `#garden`); don't create
             // a task for it. Mirrors the mobile ALIAS_UPDATED early return.
             if cfait::model::is_pure_alias_remainder(&clean_input, config_changed) {
                 println!("{}", rust_i18n::t!("goal_or_alias_updated"));
+                if alias_updates_persisted {
+                    let (effective_no_wait, is_auto) = get_sync_strategy(no_wait, wait, &ctx);
+                    if !effective_no_wait {
+                        if let Err(e) = maybe_sync(ctx.clone()).await {
+                            eprintln!(
+                                "{}",
+                                rust_i18n::t!(
+                                    "warning_background_sync_failed",
+                                    error = e.to_string()
+                                )
+                            );
+                        }
+                    } else if is_auto {
+                        println!("{}", rust_i18n::t!("cli_action_queued_auto"));
+                    } else {
+                        println!("{}", rust_i18n::t!("cli_action_queued"));
+                    }
+                }
                 return Ok(());
             }
-
-            let temp_store = build_store_cli(&ctx).await;
             let full_parent_uid = if let Some(partial) = parent_uid_arg {
                 match resolve_uid(&temp_store, &partial) {
                     Some(uid) => Some(uid),
@@ -1501,11 +1537,9 @@ async fn main() -> Result<()> {
                 }
             }
 
-            let query = if command == "search" {
-                query_parts.join(" ")
-            } else {
-                String::new()
-            };
+            // Both `list` and `search` accept an optional positional query that
+            // filters the output; a bare `cfait list` still shows everything.
+            let query = query_parts.join(" ");
 
             let config =
                 cfait::config::Config::load_with_credentials(ctx.as_ref()).unwrap_or_default();
@@ -1752,7 +1786,7 @@ async fn main() -> Result<()> {
             }
             return Ok(());
         }
-        "start" | "pause" | "toggle" | "done" | "complete" => {
+        "start" | "pause" | "toggle" | "done" => {
             let store = build_store_cli(&ctx).await;
             let mut partial_uid = String::new();
             let mut no_wait = false;
@@ -1811,7 +1845,7 @@ async fn main() -> Result<()> {
                         .map_err(|e| anyhow::anyhow!(e))?;
                     println!("{}", rust_i18n::t!("task_paused", uid = partial_uid));
                 }
-                _ => {
+                "toggle" => {
                     let mut store_lock = controller.store.lock().await;
                     let intent = cfait::model::AppIntent::ToggleTask {
                         uid: full_uid.clone(),
@@ -1824,6 +1858,30 @@ async fn main() -> Result<()> {
                         .map_err(|e| anyhow::anyhow!(e))?;
                     println!("{}", rust_i18n::t!("task_toggled", uid = partial_uid));
                 }
+                "done" => {
+                    // Idempotent: completing an already-closed task is a no-op
+                    // instead of re-opening it (the old toggle behavior).
+                    let mut store_lock = controller.store.lock().await;
+                    let already_done = store_lock
+                        .get_task_ref(&full_uid)
+                        .is_some_and(|t| t.status.is_done());
+                    if already_done {
+                        drop(store_lock);
+                        println!("{}", rust_i18n::t!("task_already_done", uid = partial_uid));
+                        return Ok(());
+                    }
+                    let intent = cfait::model::AppIntent::ToggleTask {
+                        uid: full_uid.clone(),
+                    };
+                    let (forward, _, _, _) = store_lock.apply_task_intent(&intent, &config);
+                    drop(store_lock);
+                    controller
+                        .persist_changes(forward)
+                        .await
+                        .map_err(|e| anyhow::anyhow!(e))?;
+                    println!("{}", rust_i18n::t!("task_done", uid = partial_uid));
+                }
+                _ => unreachable!("command is one of start/pause/toggle/done"),
             }
 
             let (effective_no_wait, is_auto) = get_sync_strategy(no_wait, wait, &ctx);

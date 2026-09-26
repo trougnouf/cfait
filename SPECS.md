@@ -330,15 +330,15 @@ Used for headless automation, scripting, and piping. Operates directly on the `T
 
 *Global flags:* Most mutation commands accept `-n` / `--no-wait` (queue to journal and exit without syncing) and `-w` / `--wait` (block until network sync completes).
 
-*   `cfait add` (alias: `create`) `<task...>`: Smart input task creation. Flags: `-c <href>`, `--desc <text>`, `-p <uid>` (set parent), `-n`, `-w`.
+*   `cfait add` (alias: `create`) `<task...>`: Smart input task creation. Inline alias definitions (`#key := #a, @@loc`) are saved and applied retroactively to existing tasks. Flags: `-c <href>`, `--desc <text>`, `-p <uid>` (set parent), `-n`, `-w`.
 *   `cfait append <uid> <task...>`: Appends smart syntax tokens (tags, dates, deps, etc.) or text to an existing task. Flags: `--desc <text>` (appends to existing description), `-n`, `-w`.
 *   `cfait edit <uid> [--tree]`: Opens an external editor (`$VISUAL`/`$EDITOR`) to edit the task's properties. Pass `--tree` to edit the entire task tree as a single Markdown document.
 *   `cfait replace <uid> <task...>`: Replaces the entire task summary and metadata. To safely add tags or dates without losing the title, use `append`. Flags: `--clear-due`, `--clear-start`, `--clear-tags`, `--clear-loc`, `--clear-deps`, `-p <uid>`, `--clear-parent`, `--desc <text>`, `--file <path>` (replaces from markdown file), `--tree` (when used with `--file`, replaces entire tree), `-n`, `-w`.
-*   `cfait list [--all] [--json] [-c <id>] [-p <uid>]`: Outputs task tree (use `-p` to focus on a specific sub-tree).
+*   `cfait list [<query>] [--all] [--json] [-c <id>] [-p <uid>]`: Outputs task tree; an optional positional query filters the output (use `-p` to focus on a specific sub-tree).
 *   `cfait search <query> [--all] [--json] [-c <id>] [-p <uid>]`: Searches and outputs tasks within a specific sub-tree.
 *   `cfait view` (alias: `show`) `<uid> [--json]`: Outputs detailed task info.
 *   `cfait tree <uid>`: Views the task tree starting at `<uid>` serialized into markdown format (same format used by the `Ctrl+E` editor).
-*   `cfait start|pause|toggle|done|complete <uid>`: State mutation commands.
+*   `cfait start|pause|toggle|done <uid>`: State mutation commands. `done` is idempotent (an already-done task stays done); `toggle` flips the status.
 *   `cfait move` (alias: `mv`) `<uid> <collection> [--tree]`: Moves a task to a different collection.
 *   `cfait delete` (alias: `rm`) `<uid>`: Moves task to trash.
 *   `cfait export [--collection <id>]`: Dumps collection (local or remote) as standard ICS to stdout, including VTODO and VJOURNAL components. The collection `id` can be a local collection name, a full HREF, or a remote collection name.
