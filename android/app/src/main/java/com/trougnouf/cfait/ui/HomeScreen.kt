@@ -297,27 +297,35 @@ fun HomeScreen(
     var expandedLocations by remember { mutableStateOf<Set<String>>(emptySet()) }
     var hasInitializedExpansions by rememberSaveable { mutableStateOf(false) }
 
+    val snackbarHostState = remember { SnackbarHostState() }
+    var showUndoSnackbar by remember { mutableStateOf(true) }
+
+    // Load config-driven UI state in a single pass. getConfig() touches the OS
+    // keyring, so keep it off the per-refresh getViewTasks path.
     LaunchedEffect(Unit) {
-        if (!hasInitializedExpansions) {
-            try {
-                val cfg = api.getConfig()
+        try {
+            val cfg = api.getConfig()
+            if (!hasInitializedExpansions) {
                 expandedTags = cfg.expandedTags.toSet()
                 expandedLocations = cfg.expandedLocations.toSet()
                 expandedGroups = cfg.expandedDoneGroups.toSet()
                 hasInitializedExpansions = true
-            } catch (e: Exception) {
-                // Ignore
             }
+            showUndoSnackbar = cfg.showUndoSnackbar
+        } catch (e: Exception) {
+            // Ignore
         }
     }
 
-    val snackbarHostState = remember { SnackbarHostState() }
-    var showUndoSnackbar by remember { mutableStateOf(true) }
-
-    LaunchedEffect(Unit) {
+    // Tag aliases only change when the user edits settings, which bumps
+    // refreshTick. Cache them so every task refresh doesn't re-read the keyring.
+    var tagAliases by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
+    LaunchedEffect(refreshTick) {
         try {
-            showUndoSnackbar = api.getConfig().showUndoSnackbar
-        } catch (e: Exception) {}
+            tagAliases = api.getConfig().tagAliases
+        } catch (e: Exception) {
+            // Ignore
+        }
     }
 
     var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -469,7 +477,7 @@ fun HomeScreen(
                 val newViewData = api.getViewTasks(options)
                 // Only apply the result if no newer fetch has started since.
                 if (gen == updateTaskGen.get()) {
-                    onUpdateViewData(newViewData, api.getConfig().tagAliases)
+                    onUpdateViewData(newViewData, tagAliases)
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
@@ -749,7 +757,7 @@ fun HomeScreen(
                             respectTreeCollapse = false
                         )
                         val newViewData = api.getViewTasks(options)
-                        onUpdateViewData(newViewData, api.getConfig().tagAliases)
+                        onUpdateViewData(newViewData, tagAliases)
                     } catch (e: Exception) {
                         if (e !is CancellationException) {
                             // Ignored
