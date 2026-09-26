@@ -1,8 +1,31 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Regression tests for input parsing bugs.
-use cfait::model::{AlarmTrigger, Task};
+use cfait::model::parser::parse_smart_date;
+use cfait::model::{AlarmTrigger, DateType, Task};
 use chrono::{Local, Timelike};
 use std::collections::HashMap;
+
+#[test]
+fn test_smart_date_month_parsing() {
+    // Valid YYYY-MM month token
+    assert_eq!(
+        parse_smart_date("2024-01"),
+        Some(DateType::Month(2024, 1)),
+        "YYYY-MM should parse as a month"
+    );
+    // 7-byte tokens with a multibyte char used to panic (byte slice on a
+    // char boundary); they must simply not parse as a month.
+    assert_eq!(
+        parse_smart_date("202é-1"),
+        None,
+        "garbled month must not panic"
+    );
+    assert_eq!(
+        parse_smart_date("é202-1"),
+        None,
+        "garbled month must not panic"
+    );
+}
 
 #[test]
 fn test_mixed_text_and_reminder_syntax() {

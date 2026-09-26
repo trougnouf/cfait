@@ -2298,7 +2298,7 @@ pub fn parse_smart_date_with_lex(val: &str, lex: &ParserLexicon) -> Option<DateT
         return Some(DateType::AllDay(date));
     }
 
-    if val.len() == 7 && val.chars().nth(4) == Some('-') {
+    if val.len() == 7 && val.is_ascii() && val.as_bytes()[4] == b'-' {
         let y = val[0..4].parse::<i32>().ok();
         let m = val[5..7].parse::<u32>().ok();
         if let (Some(year), Some(month)) = (y, m)
