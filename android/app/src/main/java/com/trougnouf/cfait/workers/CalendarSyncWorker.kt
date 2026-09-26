@@ -55,7 +55,7 @@ class CalendarSyncWorker(
 
             Result.success(output)
         } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) throw e
+            if (e is CancellationException) throw e
             Log.e("CfaitCalSync", "Failed to sync calendar events", e)
             val output = Data.Builder()
                 .putString(OUTPUT_MESSAGE, "Error: ${e.message}")

@@ -30,7 +30,7 @@ class BootWorker(
             NotificationHelper.updateOngoingNotifications(context, api)
             Result.success()
         } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) throw e
+            if (e is CancellationException) throw e
             Log.e("CfaitBootWorker", "Error", e)
             Result.retry()
         }

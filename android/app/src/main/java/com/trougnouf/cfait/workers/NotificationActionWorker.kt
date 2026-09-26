@@ -15,6 +15,7 @@ import com.trougnouf.cfait.MainActivity
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.receivers.NotificationActionReceiver
 import com.trougnouf.cfait.util.AlarmScheduler
+import com.trougnouf.cfait.util.NotificationHelper
 import kotlinx.coroutines.CancellationException
 
 class NotificationActionWorker(
@@ -83,7 +84,7 @@ class NotificationActionWorker(
                     // 3. Fetch fresh task data to get accurate time tracking info
                     val task = api.getTaskByUid(taskUid)
                     if (task != null) {
-                        com.trougnouf.cfait.util.NotificationHelper.showActiveTaskNotification(context, task, alarmUid)
+                        NotificationHelper.showActiveTaskNotification(context, task, alarmUid)
                     }
                 }
 
@@ -136,7 +137,7 @@ class NotificationActionWorker(
 
             Result.success()
         } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) throw e
+            if (e is CancellationException) throw e
             Log.e("CfaitNotificationAction", "Error", e)
             Result.retry()
         }

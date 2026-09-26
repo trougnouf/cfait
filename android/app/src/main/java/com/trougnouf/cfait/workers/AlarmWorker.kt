@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Bundle
 import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
@@ -84,7 +85,7 @@ class AlarmWorker(
             AlarmScheduler.scheduleNextAlarm(context, api)
             Result.success()
         } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) throw e
+            if (e is CancellationException) throw e
             Log.e("CfaitAlarmWorker", "Error", e)
             Result.retry()
         }
@@ -192,7 +193,7 @@ class AlarmWorker(
             .addAction(customSnoozeAction)
             .addAction(R.drawable.ic_launcher_foreground, context.getString(R.string.start), startPending)
             .addAction(R.drawable.ic_launcher_foreground, context.getString(R.string.done), donePending)
-            .addExtras(android.os.Bundle().apply {
+            .addExtras(Bundle().apply {
                 putString("cfait_task_uid", taskUid)
                 putString("cfait_alarm_uid", alarmUid)
                 putString("cfait_notif_type", "alarm")

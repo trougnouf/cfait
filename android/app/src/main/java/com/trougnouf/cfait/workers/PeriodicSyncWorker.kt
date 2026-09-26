@@ -52,7 +52,7 @@ class PeriodicSyncWorker(
 
             Result.success()
         } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) throw e
+            if (e is CancellationException) throw e
             Log.e("CfaitPeriodicSync", "Sync failed", e)
 
             val intent = Intent(NotificationActionWorker.BROADCAST_REFRESH)
