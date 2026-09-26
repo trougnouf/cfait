@@ -536,7 +536,6 @@ object NfIcons {
 
     // RANDOM_ICONS
     val DICE_D20 = get(0xeef5)
-    val DICE_D20_DUP = get(0xeef5) // duplicate was present in Rust list
     val DICE_D6 = get(0xeef6)
     val DICE_MULTIPLE = get(0xf1156)
     val AUTO_FIX = get(0xf0068)

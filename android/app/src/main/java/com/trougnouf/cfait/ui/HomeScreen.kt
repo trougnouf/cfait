@@ -182,13 +182,6 @@ fun HomeScreen(
     val goalIcon = rememberSaveable { NfIcons.GOAL_ICONS.random() }
     var showDeleteAllDialog by rememberSaveable { mutableStateOf(false) }
 
-    var showCalendarsTab by remember { mutableStateOf(showCalendarsTab) }
-    var showTagsTab by remember { mutableStateOf(showTagsTab) }
-    var showLocationsTab by remember { mutableStateOf(showLocationsTab) }
-    var showGoalsTab by remember { mutableStateOf(showGoalsTab) }
-    var showJournalTab by remember { mutableStateOf(showJournalTab) }
-    var firstDayOfWeek by remember { mutableStateOf(firstDayOfWeek) }
-
     val enabledCals = remember(calendars) {
         val filtered = calendars.filter { !it.isDisabled }
         filtered.filter { !it.isLocal } + filtered.filter { it.isLocal }
@@ -391,7 +384,7 @@ fun HomeScreen(
 
     val randomIcons = remember {
         listOf(
-            NfIcons.DICE_D20, NfIcons.DICE_D20_DUP, NfIcons.DICE_D6, NfIcons.DICE_MULTIPLE,
+            NfIcons.DICE_D20, NfIcons.DICE_D6, NfIcons.DICE_MULTIPLE,
             NfIcons.AUTO_FIX, NfIcons.CRYSTAL_BALL, NfIcons.ATOM, NfIcons.CAT,
             NfIcons.CAT_MD, NfIcons.UNICORN, NfIcons.UNICORN_VARIANT, NfIcons.RAINBOW,
             NfIcons.FRUIT_CHERRIES, NfIcons.FRUIT_PINEAPPLE, NfIcons.FRUIT_PEAR, NfIcons.DOG,
@@ -444,7 +437,9 @@ fun HomeScreen(
     val updateTaskGen = remember { java.util.concurrent.atomic.AtomicInteger(0) }
     fun updateTaskList() {
         val gen = updateTaskGen.incrementAndGet()
-        scope.launch {
+        // The first poll of the UniFFI future runs the whole Rust body
+        // synchronously, so keep it off the main thread.
+        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 val options = MobileFilterOptions(
                     filterTags = filterTags.toList(),
@@ -656,6 +651,11 @@ fun HomeScreen(
                     newTaskText = androidx.compose.ui.text.input.TextFieldValue("")
                     return
                 }
+                else -> {
+                    // Keep the text so the user can fix the typo.
+                    Toast.makeText(context, context.getString(R.string.error_unknown_command, text), Toast.LENGTH_SHORT).show()
+                    return
+                }
             }
         }
 
@@ -674,7 +674,8 @@ fun HomeScreen(
         } else {
             val currentChildUid = creatingChildUid
 
-            scope.launch {
+            // Task creation does synchronous FFI writes; keep it off the main thread.
+            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 activeOpCount++
                 try {
                     // FIX: Ensure the backend knows the correct target immediately,
@@ -737,7 +738,7 @@ fun HomeScreen(
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
                     lastSyncFailed = true
-                    Toast.makeText(context, e.message ?: "Failed to save task", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, context.getString(R.string.error_general, e.message ?: ""), Toast.LENGTH_LONG).show()
                 } finally {
                     checkSyncStatus()
                     activeOpCount--
@@ -849,7 +850,7 @@ fun HomeScreen(
                         )
                     )
                 } catch (e: Exception) {
-                    Toast.makeText(context, e.message, Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.error_general, e.message ?: ""), Toast.LENGTH_SHORT).show()
                 }
             }
             return
@@ -1307,7 +1308,7 @@ fun HomeScreen(
                             triggerBackgroundSync(context, api)
                         } catch (e: Exception) {
                             if (e is CancellationException) throw e
-                            Toast.makeText(context, e.message, Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, context.getString(R.string.error_general, e.message ?: ""), Toast.LENGTH_SHORT).show()
                         }
                     }
                 }) { Text(stringResource(R.string.add)) }
@@ -1340,7 +1341,16 @@ fun HomeScreen(
                             Text("- ${t.task.summary}", maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         if (tasksToDelete.size > 10) {
-                            item { Text("...and ${tasksToDelete.size - 10} more", color = Color.Gray) }
+                            val moreCount = tasksToDelete.size - 10
+                            item {
+                                Text(
+                                    com.trougnouf.cfait.ui.resolvePluralMap(
+                                        stringResource(R.string.and_more, moreCount),
+                                        moreCount
+                                    ),
+                                    color = Color.Gray
+                                )
+                            }
                         }
                     }
                 }
@@ -2453,8 +2463,9 @@ fun HomeScreen(
                         }
                         TextField(
                             value = searchQuery, onValueChange = {
+                                // The LaunchedEffect(searchQuery, ...) below re-fetches;
+                                // calling updateTaskList() here too would double the work.
                                 searchQuery = it
-                                updateTaskList()
                             },
                             placeholder = { Text(stringResource(R.string.search_placeholder), fontSize = 14.sp) },
                             singleLine = true, textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),

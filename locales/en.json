@@ -25,6 +25,10 @@
     "add": "Add",
     "add_description_tooltip": "Add Description & Subtasks (Ctrl+N)",
     "add_task_to_target": "Add task to %{target}",
+    "and_more": {
+        "one": "... and 1 more",
+        "other": "... and %{count} more"
+    },
     "advanced_settings_button": "More settings",
     "alarm_due_now": "Due now",
     "alarm_task_starting": "Task starting",
@@ -68,6 +72,14 @@
     },
     "calendar_events_reversible_note": "This is fully reversible. Simply toggle 'Create calendar events' off and back on to recreate them.",
     "calendar_integration": "Calendar integration",
+    "calendar_sync_created": {
+        "one": "Created 1 calendar event",
+        "other": "Created %{count} calendar events"
+    },
+    "calendar_sync_deleted": {
+        "one": "Deleted 1 calendar event",
+        "other": "Deleted %{count} calendar events"
+    },
     "calendars": "Collections",
     "cancel": "Cancel",
     "cancel_task": "Cancel task",
@@ -292,6 +304,7 @@
     "expand_completed_tasks": "Expand completed tasks",
     "collapse_completed_tasks": "Collapse completed tasks",
     "export": "Export",
+    "export_calendar_title": "Export %{name}",
     "export_cancelled": "Export cancelled",
     "export_debug_share_title": "Export debug data",
     "export_debug_status_exporting": "Exporting data…",
@@ -502,6 +515,12 @@
     "hide_aliases_in_sidebar": "Hide shorthand aliases in the sidebar",
     "hide_aliases_in_sidebar_tooltip": "If enabled, alias keys without subtags are hidden from the sidebar, so you only see their destination folders.",
     "sort_collections_by_size": "Sort collections by size (most tasks first)",
+    "sort_paused_none": "Off (treat as unstarted)",
+    "sort_paused_tiebreak": "Tie-breaker (within rank/date)",
+    "sort_paused_top": "Top of list (above unstarted)",
+    "sort_preset_ongoing_urgent_due": "Ongoing > Urgent > Due Soon",
+    "sort_preset_urgent_due_ongoing": "Urgent > Due Soon > Ongoing",
+    "sort_preset_urgent_ongoing_due": "Urgent > Ongoing > Due Soon",
     "implicit_goal_duration": "Implicit goal duration (mins) for completions",
     "implicit_goal_duration_explain": "When checking off a task without tracking time, this many minutes are added to duration goals (unless task has an estimate).",
     "sessions_count_as_completions": "Time sessions count as goal completions",

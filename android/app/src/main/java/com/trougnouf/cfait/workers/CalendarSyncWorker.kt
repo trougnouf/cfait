@@ -8,6 +8,8 @@ import androidx.work.CoroutineWorker
 import androidx.work.Data
 import androidx.work.WorkerParameters
 import com.trougnouf.cfait.CfaitApplication
+import com.trougnouf.cfait.R
+import com.trougnouf.cfait.ui.resolvePluralMap
 import kotlinx.coroutines.CancellationException
 
 class CalendarSyncWorker(
@@ -39,8 +41,9 @@ class CalendarSyncWorker(
                 else -> return Result.failure()
             }
 
-            val actionName = if (mode == MODE_CREATE) "Created" else "Deleted"
-            val message = "$actionName $count calendar event${if (count == 1u) "" else "s"}"
+            val countInt = count.toInt()
+            val resId = if (mode == MODE_CREATE) R.string.calendar_sync_created else R.string.calendar_sync_deleted
+            val message = resolvePluralMap(applicationContext.getString(resId, countInt), countInt)
 
             Log.d("CfaitCalSync", "Success: $message")
 

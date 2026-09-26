@@ -18,6 +18,10 @@
     "add": "Ajouter",
     "add_description_tooltip": "Ajouter Description & Sous-tâches (Ctrl+N)",
     "add_task_to_target": "Ajouter une tâche à %{target}",
+    "and_more": {
+        "one": "... et 1 de plus",
+        "other": "... et %{count} de plus"
+    },
     "advanced_settings_button": "Plus de paramètres",
     "alarm_due_now": "Échéance maintenant",
     "alarm_task_starting": "Tâche en cours",
@@ -60,6 +64,14 @@
     },
     "calendar_events_reversible_note": "Ceci est entièrement réversible. Il suffit de désactiver puis réactiver 'Créer des événements pour les tâches' pour les recréer.",
     "calendar_integration": "Intégration du calendrier",
+    "calendar_sync_created": {
+        "one": "1 événement de calendrier créé",
+        "other": "%{count} événements de calendrier créés"
+    },
+    "calendar_sync_deleted": {
+        "one": "1 événement de calendrier supprimé",
+        "other": "%{count} événements de calendrier supprimés"
+    },
     "calendars": "Collections",
     "cancel": "Annuler",
     "cancel_task": "Annuler la tâche",
@@ -280,6 +292,7 @@
     "expand_completed_tasks": "Déplier les tâches terminées",
     "expand_tree_with_key": "Déplier l'arbre (z)",
     "export": "Exporter",
+    "export_calendar_title": "Exporter %{name}",
     "export_cancelled": "Exportation annulée",
     "export_debug_share_title": "Exporter les données de débogage",
     "export_debug_status_exporting": "Exportation en cours…",
@@ -716,6 +729,12 @@
     "snooze_hint": "Reporter (ex. 15m, 1h)",
     "snooze_presets": "Préréglages de rappel",
     "sort_collections_by_size": "Trier les collections par taille (plus de tâches en premier)",
+    "sort_paused_none": "Désactivé (traité comme non démarrée)",
+    "sort_paused_tiebreak": "Critère de départage (dans le rang/la date)",
+    "sort_paused_top": "Haut de liste (au-dessus des non démarrées)",
+    "sort_preset_ongoing_urgent_due": "En cours > Urgent > Échéance proche",
+    "sort_preset_urgent_due_ongoing": "Urgent > Échéance proche > En cours",
+    "sort_preset_urgent_ongoing_due": "Urgent > En cours > Échéance proche",
     "sort_standard_by_date": "Tâches régulières triées par date",
     "sort_standard_by_priority": "Tâches régulières triées par priorité",
     "sort_standard_by_priority_explain": "N'affecte que les tâches hors des catégories urgentes, à échéance proche et en cours. Les tâches en cours se placent toujours au-dessus des tâches ordinaires, indépendamment de ce réglage.",

@@ -74,7 +74,15 @@ fun SettingsScreen(
     var hideCompleted by remember { mutableStateOf(false) }
     var syncSettings by remember { mutableStateOf(true) }
     var status by remember { mutableStateOf("") }
-    
+    var statusIsError by remember { mutableStateOf(false) }
+
+    // Set the shared status message together with its error-ness, so the UI
+    // never has to guess from (locale-dependent) string prefixes.
+    fun setStatus(msg: String, isError: Boolean = false) {
+        status = msg
+        statusIsError = isError
+    }
+
     var allCalendars by remember { mutableStateOf<List<MobileCalendar>>(emptyList()) }
     var disabledSet by remember { mutableStateOf<Set<String>>(emptySet()) }
     var autoRemind by remember { mutableStateOf(true) }
@@ -240,14 +248,14 @@ fun SettingsScreen(
 
                     if (icsContent != null && importTargetHref != null) {
                         val result = api.importLocalIcs(importTargetHref!!, icsContent)
-                        status = result
+                        setStatus(result)
                         reload()
                     } else {
-                        status = context.getString(R.string.error_could_not_read_file)
+                        setStatus(context.getString(R.string.error_could_not_read_file), true)
                     }
                 } catch (e: Exception) {
                     if (e is kotlinx.coroutines.CancellationException) throw e
-                    status = context.getString(R.string.import_error, e.message ?: "")
+                    setStatus(context.getString(R.string.import_error, e.message ?: ""), true)
                 }
             }
         }
@@ -286,14 +294,14 @@ fun SettingsScreen(
 
     fun saveAndConnect() {
         scope.launch {
-            status = context.getString(R.string.connecting)
+            setStatus(context.getString(R.string.connecting))
             try {
                 saveToDisk()
-                status = api.connect(url, user, pass, insecure)
+                setStatus(api.connect(url, user, pass, insecure))
                 reload()
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                status = context.getString(R.string.connection_failed, e.message ?: "")
+                setStatus(context.getString(R.string.connection_failed, e.message ?: ""), true)
             }
         }
     }
@@ -411,7 +419,7 @@ fun SettingsScreen(
                 if (status.isNotEmpty()) {
                     Text(
                         status,
-                        color = if (status.startsWith("Connection failed")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                        color = if (statusIsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(top = 8.dp),
                     )
                 }
@@ -706,7 +714,7 @@ fun SettingsScreen(
                                     android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
                                 context.startActivity(intent)
                             } catch (e: Exception) {
-                                status = context.getString(R.string.cannot_open_battery_settings)
+                                setStatus(context.getString(R.string.cannot_open_battery_settings), true)
                             }
                         },
                         modifier = Modifier
@@ -830,11 +838,11 @@ fun SettingsScreen(
                                                 api.updateRemoteCalendar(cal.href, name, color)
                                                 com.trougnouf.cfait.ui.triggerBackgroundSync(context, api)
                                             }
-                                            status = context.getString(R.string.collection_updated)
+                                            setStatus(context.getString(R.string.collection_updated))
                                             reload()
                                         } catch (e: Exception) {
                                             if (e is kotlinx.coroutines.CancellationException) throw e
-                                            status = context.getString(R.string.error_general, e.message ?: "")
+                                            setStatus(context.getString(R.string.error_general, e.message ?: ""), true)
                                         }
                                     }
                                 },
@@ -846,7 +854,7 @@ fun SettingsScreen(
                                                 reload()
                                             } catch (e: Exception) {
                                                 if (e is kotlinx.coroutines.CancellationException) throw e
-                                                status = context.getString(R.string.error_general, e.message ?: "")
+                                                setStatus(context.getString(R.string.error_general, e.message ?: ""), true)
                                             }
                                         }
                                     }
@@ -871,10 +879,10 @@ fun SettingsScreen(
                                             putExtra(Intent.EXTRA_STREAM, uri)
                                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                         }
-                                        val shareIntent = Intent.createChooser(intent, "Export ${cal.name}")
+                                        val shareIntent = Intent.createChooser(intent, context.getString(R.string.export_calendar_title, cal.name))
                                         context.startActivity(shareIntent)
                                     } catch (e: Exception) {
-                                        status = context.getString(R.string.export_error, e.message ?: "")
+                                        setStatus(context.getString(R.string.export_error, e.message ?: ""), true)
                                     }
                                 },
                                 onImport = {
@@ -915,7 +923,7 @@ fun SettingsScreen(
                                     reload()
                                 } catch (e: Exception) {
                                     if (e is kotlinx.coroutines.CancellationException) throw e
-                                    status = context.getString(R.string.error_general, e.message ?: "")
+                                    setStatus(context.getString(R.string.error_general, e.message ?: ""), true)
                                 }
                             }
                         },
@@ -935,12 +943,12 @@ fun SettingsScreen(
                             scope.launch {
                                 try {
                                     api.createRemoteCalendar(context.getString(R.string.new_calendar_name), null)
-                                    status = context.getString(R.string.collection_created)
+                                    setStatus(context.getString(R.string.collection_created))
                                     reload()
                                     com.trougnouf.cfait.ui.triggerBackgroundSync(context, api)
                                 } catch (e: Exception) {
                                     if (e is kotlinx.coroutines.CancellationException) throw e
-                                    status = context.getString(R.string.error_general, e.message ?: "")
+                                    setStatus(context.getString(R.string.error_general, e.message ?: ""), true)
                                 }
                             }
                         },
@@ -1009,11 +1017,14 @@ fun SettingsScreen(
                                     newAliasKey = ""
                                     newAliasTags = ""
                                     reload()
-                                    if (status.startsWith("Error")) status = ""
+                                    if (statusIsError) {
+                                        status = ""
+                                        statusIsError = false
+                                    }
                                     com.trougnouf.cfait.ui.triggerBackgroundSync(context, api)
                                 } catch (e: Exception) {
                                     if (e is kotlinx.coroutines.CancellationException) throw e
-                                    status = context.getString(R.string.error_adding_alias, e.message ?: "")
+                                    setStatus(context.getString(R.string.error_adding_alias, e.message ?: ""), true)
                                 }
                             }
                         }

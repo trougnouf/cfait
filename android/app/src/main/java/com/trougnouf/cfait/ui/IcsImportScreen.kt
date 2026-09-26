@@ -2,6 +2,7 @@
 // Screen for selecting which calendar to import ICS file into.
 package com.trougnouf.cfait.ui
 
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -387,10 +388,10 @@ fun JournalMainView(
                                             triggerBackgroundSync(context, api)
                                         } catch (e: Exception) {
                                             if (e is CancellationException) throw e
-                                            android.widget.Toast.makeText(
+                                            Toast.makeText(
                                                 context,
-                                                "Error: ${e.message}",
-                                                android.widget.Toast.LENGTH_SHORT
+                                                context.getString(R.string.error_general, e.message ?: ""),
+                                                Toast.LENGTH_SHORT
                                             ).show()
                                         }
                                     }

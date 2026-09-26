@@ -256,7 +256,7 @@ fun AdvancedSettingsScreen(
                         Runtime.getRuntime().exit(0)
                     } catch (e: Exception) {
                         useExternalStorage = !pendingExternalStorage
-                        status = "Error: ${e.message}"
+                        status = context.getString(R.string.error_general, e.message ?: "")
                     }
                 }) { Text(stringResource(R.string.switch_and_restart)) }
             },
@@ -431,9 +431,9 @@ fun AdvancedSettingsScreen(
                     label = "",
                     selected = pausedSortBehavior,
                     options = listOf(
-                        "tiebreak" to "Tie-breaker (within rank/date)",
-                        "top" to "Top of list (above unstarted)",
-                        "none" to "Off (treat as unstarted)"
+                        "tiebreak" to stringResource(R.string.sort_paused_tiebreak),
+                        "top" to stringResource(R.string.sort_paused_top),
+                        "none" to stringResource(R.string.sort_paused_none)
                     ),
                     onSelect = { pausedSortBehavior = it },
                     modifier = Modifier.width(240.dp)
@@ -459,9 +459,9 @@ fun AdvancedSettingsScreen(
                     label = "",
                     selected = sortPreset,
                     options = listOf(
-                        "Urgent > Ongoing > Due Soon" to "Urgent > Ongoing > Due Soon",
-                        "Urgent > Due Soon > Ongoing" to "Urgent > Due Soon > Ongoing",
-                        "Ongoing > Urgent > Due Soon" to "Ongoing > Urgent > Due Soon"
+                        "Urgent > Ongoing > Due Soon" to stringResource(R.string.sort_preset_urgent_ongoing_due),
+                        "Urgent > Due Soon > Ongoing" to stringResource(R.string.sort_preset_urgent_due_ongoing),
+                        "Ongoing > Urgent > Due Soon" to stringResource(R.string.sort_preset_ongoing_urgent_due)
                     ),
                     onSelect = { sortPreset = it },
                     modifier = Modifier.width(240.dp)

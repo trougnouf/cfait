@@ -3,6 +3,7 @@ package com.trougnouf.cfait.ui
 
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -222,10 +223,10 @@ fun DonationRow(icon: String, name: String, value: String, isCopy: Boolean = fal
                     context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                 val clip = android.content.ClipData.newPlainText("Donation Address", value)
                 clipboard.setPrimaryClip(clip)
-                android.widget.Toast.makeText(
+                Toast.makeText(
                     context,
                     context.getString(R.string.copied_to_clipboard),
-                    android.widget.Toast.LENGTH_SHORT
+                    Toast.LENGTH_SHORT
                 ).show()
             } else {
                 onClick()

@@ -205,7 +205,6 @@ pub const TIMER_SETTINGS: char = '\u{f1924}'; // nf-md-timer_settings_outline
 // Random Dice Icons
 pub const RANDOM_ICONS: &[char] = &[
     '\u{eef5}',  // nf-fa-dice_d20
-    '\u{eef5}',  // nf-fa-dice_d20
     '\u{eef6}',  // nf-md-dice_6
     '\u{f1156}', // nf-md-dice_multiple_outline
     '\u{f0068}', // nf-md-auto_fix

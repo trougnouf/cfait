@@ -108,7 +108,7 @@ fun TreeEditorScreen(
                                     triggerBackgroundSync(context, api)
                                     onSaveComplete()
                                 } catch (e: Exception) {
-                                    Toast.makeText(context, e.message, Toast.LENGTH_LONG).show()
+                                    Toast.makeText(context, context.getString(R.string.error_general, e.message ?: ""), Toast.LENGTH_LONG).show()
                                     isSaving = false
                                 }
                             }
