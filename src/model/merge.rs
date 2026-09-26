@@ -302,10 +302,22 @@ pub fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task>
                         Some(s_val)
                     }
                 }
-                (Some(l_val), Some(_), None) => Some(l_val),
+                (Some(l_val), Some(b_val), None) => {
+                    if l_val == b_val {
+                        None // Server deleted it, local left it unchanged
+                    } else {
+                        return None; /* Modified locally, deleted on server */
+                    }
+                }
                 (Some(l_val), None, Some(_)) => Some(l_val),
                 (Some(l_val), None, None) => Some(l_val),
-                (None, Some(_), Some(s_val)) => Some(s_val),
+                (None, Some(b_val), Some(s_val)) => {
+                    if s_val == b_val {
+                        None // Local deleted it, server left it unchanged
+                    } else {
+                        return None; /* Deleted locally, modified on server */
+                    }
+                }
                 (None, Some(_), None) => None,
                 (None, None, Some(s_val)) => Some(s_val),
                 (None, None, None) => None,
@@ -325,7 +337,16 @@ pub fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::RawProperty;
     use std::collections::HashMap;
+
+    fn prop(key: &str, value: &str) -> RawProperty {
+        RawProperty {
+            key: key.to_string(),
+            value: value.to_string(),
+            params: vec![],
+        }
+    }
 
     #[test]
     fn test_three_way_merge_preserves_new_fields() {
@@ -351,6 +372,70 @@ mod tests {
             merged.locations,
             vec!["New Loc".to_string()],
             "Failed to keep local's location change"
+        );
+    }
+
+    #[test]
+    fn test_three_way_merge_server_deletion_of_unmapped_property_not_resurrected() {
+        let mut base = Task::new("Base Task", &HashMap::new(), None);
+        base.unmapped_properties = vec![prop("X-OLD", "stale")];
+
+        // Local adds a new property, server deletes the old one
+        let mut local = base.clone();
+        local.unmapped_properties = vec![prop("X-OLD", "stale"), prop("X-NEW", "fresh")];
+        let mut server = base.clone();
+        server.unmapped_properties = vec![];
+
+        let merged = three_way_merge(&base, &local, &server).expect("Should merge successfully");
+        assert_eq!(
+            merged.unmapped_properties,
+            vec![prop("X-NEW", "fresh")],
+            "Server's deletion of an unchanged property must not be resurrected"
+        );
+    }
+
+    #[test]
+    fn test_three_way_merge_local_deletion_of_unmapped_property_not_resurrected() {
+        let mut base = Task::new("Base Task", &HashMap::new(), None);
+        base.unmapped_properties = vec![prop("X-OLD", "stale")];
+
+        // Local deletes the old property, server adds a new one
+        let mut local = base.clone();
+        local.unmapped_properties = vec![];
+        let mut server = base.clone();
+        server.unmapped_properties = vec![prop("X-OLD", "stale"), prop("X-NEW", "fresh")];
+
+        let merged = three_way_merge(&base, &local, &server).expect("Should merge successfully");
+        assert_eq!(
+            merged.unmapped_properties,
+            vec![prop("X-NEW", "fresh")],
+            "Local's deletion of an unchanged property must not be resurrected"
+        );
+    }
+
+    #[test]
+    fn test_three_way_merge_modify_delete_unmapped_property_is_hard_conflict() {
+        let mut base = Task::new("Base Task", &HashMap::new(), None);
+        base.unmapped_properties = vec![prop("X-OLD", "original")];
+
+        // Local modified it, server deleted it
+        let mut local = base.clone();
+        local.unmapped_properties = vec![prop("X-OLD", "tweaked")];
+        let mut server = base.clone();
+        server.unmapped_properties = vec![];
+        assert!(
+            three_way_merge(&base, &local, &server).is_none(),
+            "Modify locally + delete on server is a hard conflict"
+        );
+
+        // Local deleted it, server modified it
+        let mut local2 = base.clone();
+        local2.unmapped_properties = vec![];
+        let mut server2 = base.clone();
+        server2.unmapped_properties = vec![prop("X-OLD", "tweaked")];
+        assert!(
+            three_way_merge(&base, &local2, &server2).is_none(),
+            "Delete locally + modify on server is a hard conflict"
         );
     }
 }
