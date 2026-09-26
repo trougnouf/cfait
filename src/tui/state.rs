@@ -516,6 +516,19 @@ impl AppState {
         task_goals.sort_by(|a, b| a.1.cmp(&b.1));
         self.cached_task_goals = task_goals;
 
+        // The sidebar shrank (e.g. a calendar was hidden); clamp the selection
+        // so the highlight does not vanish past the end of the list.
+        let sidebar_len = self.get_sidebar_len();
+        if let Some(current) = self.cal_state.selected()
+            && current >= sidebar_len
+        {
+            self.cal_state.select(if sidebar_len == 0 {
+                None
+            } else {
+                Some(sidebar_len - 1)
+            });
+        }
+
         self.search_highlight_regex = if !search_term.trim().is_empty() {
             let terms = crate::model::matcher::extract_highlight_terms(search_term);
             if terms.is_empty() {
@@ -762,7 +775,7 @@ impl AppState {
             SidebarMode::Categories => self.cached_categories.len(),
             SidebarMode::Locations => self.cached_locations.len(),
             SidebarMode::Journal => self.cached_journal_pages.len(),
-            SidebarMode::Goals => self.goals.len(),
+            SidebarMode::Goals => self.goals.len() + self.cached_task_goals.len(),
         }
     }
 
@@ -915,7 +928,7 @@ impl AppState {
                 let len = self.get_sidebar_len();
                 if len > 0 {
                     let current = self.cal_state.selected().unwrap_or(0);
-                    let i = current.saturating_sub(step);
+                    let i = current.saturating_sub(step).min(len - 1);
                     self.cal_state.select(Some(i));
 
                     if self.sidebar_mode == SidebarMode::Journal

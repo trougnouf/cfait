@@ -316,6 +316,7 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
         network_config,
         action_rx,
         event_tx,
+        action_tx.clone(),
     ));
 
     // --- 5. UI LOOP ---
@@ -437,14 +438,14 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
                 {
                     if store_alarm.acknowledged.is_some() {
                         keep = false;
+                    } else if let Some(active_alarm) =
+                        active_task.alarms.iter().find(|a| a.uid == *a_uid)
+                    {
+                        keep = store_alarm.trigger == active_alarm.trigger;
                     } else {
-                        keep = store_alarm.trigger
-                            == active_task
-                                .alarms
-                                .iter()
-                                .find(|a| a.uid == *a_uid)
-                                .unwrap()
-                                .trigger;
+                        // The fired alarm no longer exists in the task snapshot;
+                        // prune it instead of panicking on a stale uid.
+                        keep = false;
                     }
                 } else {
                     keep = false;

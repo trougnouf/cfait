@@ -2657,8 +2657,15 @@ pub async fn handle_key_event(
                     .collect();
                 if let Some(idx) = select_weighted_random_index(&real_tasks, state.default_priority)
                 {
-                    state.list_state.select(Some(idx));
-                    state.message = rust_i18n::t!("jumped_to_task").to_string();
+                    // real_tasks drops the group control rows interleaved in
+                    // state.tasks, so map the chosen uid back to its full-list position.
+                    let target_uid = &real_tasks[idx].uid;
+                    if let Some(pos) = state.tasks.iter().position(
+                        |item| matches!(item, TaskListItem::Task(t) if &t.uid == target_uid),
+                    ) {
+                        state.list_state.select(Some(pos));
+                        state.message = rust_i18n::t!("jumped_to_task").to_string();
+                    }
                 }
             }
 

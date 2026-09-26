@@ -104,6 +104,7 @@ pub async fn run_network_actor(
     config: NetworkActorConfig,
     mut action_rx: Receiver<Action>,
     event_tx: Sender<AppEvent>,
+    action_tx: Sender<Action>,
 ) {
     let NetworkActorConfig {
         url,
@@ -592,27 +593,17 @@ pub async fn run_network_actor(
                         if let Ok(local_tasks) = LocalStorage::load_for_href(ctx.as_ref(), &source_href) {
                             match client.migrate_tasks(local_tasks, &target_href).await {
                                 Ok(count) => {
-                                    let human = if count == 1 {
-                                        rust_i18n::t!("migration_complete_moved.one").to_string()
-                                    } else {
-                                        rust_i18n::t!("migration_complete_moved.other", count = count)
-                                            .to_string()
-                                    };
                                     let _ = event_tx
                                         .send(AppEvent::Status {
                                             key: "migration_complete".to_string(),
-                                            human,
+                                            human: rust_i18n::t!("migration_complete_moved", count = count)
+                                                .to_string(),
                                         })
                                         .await;
 
-                                    // Trigger refresh to show moved tasks
-                                    let _ = event_tx
-                                        .send(AppEvent::Status {
-                                            key: "refreshing".to_string(),
-                                            human: rust_i18n::t!("refreshing").to_string(),
-                                        })
-                                        .await;
-                                    // (Existing refresh logic usually follows here or user presses 'r')
+                                    // Trigger a real refresh so the moved tasks
+                                    // appear without the user pressing 'r'.
+                                    let _ = action_tx.send(Action::Refresh).await;
                                 }
                                 Err(e) => {
                                     let _ = event_tx.send(AppEvent::Error(e.to_string())).await;

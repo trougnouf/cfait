@@ -56,8 +56,9 @@ async fn test_tui_toggle_task_does_not_revert_status() {
         default_cal: None,
     };
 
+    let actor_action_tx = action_tx.clone();
     let actor_handle = tokio::spawn(async move {
-        run_network_actor(ctx.clone(), config, action_rx, event_tx).await;
+        run_network_actor(ctx.clone(), config, action_rx, event_tx, actor_action_tx).await;
     });
 
     // Wait for initial events

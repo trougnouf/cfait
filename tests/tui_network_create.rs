@@ -212,8 +212,9 @@ END:VCALENDAR</cal:calendar-data>
         default_cal: None,
     };
 
+    let actor_action_tx = action_tx.clone();
     let actor_handle = tokio::spawn(async move {
-        run_network_actor(ctx.clone(), config, action_rx, event_tx).await;
+        run_network_actor(ctx.clone(), config, action_rx, event_tx, actor_action_tx).await;
     });
 
     loop {
