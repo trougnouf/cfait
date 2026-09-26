@@ -68,10 +68,11 @@ fun IcsImportScreen(
     // Parse ICS content to count tasks
     LaunchedEffect(icsContent) {
         try {
-            // Count VTODO and VJOURNAL entries
-            val vtodoCount = icsContent.split("BEGIN:VTODO").size - 1
-            val vjournalCount = icsContent.split("BEGIN:VJOURNAL").size - 1
-            taskCount = vtodoCount + vjournalCount
+            // Count VTODO and VJOURNAL entries off the main thread
+            val count = withContext(Dispatchers.IO) {
+                countOccurrences(icsContent, "BEGIN:VTODO") + countOccurrences(icsContent, "BEGIN:VJOURNAL")
+            }
+            taskCount = count
         } catch (e: Exception) {
             errorMessage = context.getString(R.string.import_failed_to_parse, e.message ?: "")
         }
@@ -714,4 +715,14 @@ fun JournalMainView(
             }
         }
     }
+}
+
+private fun countOccurrences(haystack: String, needle: String): Int {
+    var count = 0
+    var index = haystack.indexOf(needle)
+    while (index != -1) {
+        count++
+        index = haystack.indexOf(needle, index + needle.length)
+    }
+    return count
 }
