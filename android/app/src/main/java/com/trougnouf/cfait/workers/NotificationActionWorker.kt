@@ -97,7 +97,11 @@ class NotificationActionWorker(
                 }
 
                 ACTION_DONE -> {
-                    api.toggleTask(taskUid)
+                    // toggleTask inverts state; only complete if not already done
+                    val task = api.getTaskByUid(taskUid)
+                    if (task == null || !task.isDone) {
+                        api.toggleTask(taskUid)
+                    }
                     val notificationManager =
                         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                     notificationManager.cancel(taskUid.hashCode())
