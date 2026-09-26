@@ -278,33 +278,37 @@ fun SettingsScreen(
 
     LaunchedEffect(Unit) { reload() }
 
-    fun saveToDisk() {
-        // Use the current backend config for defaults when UI input is empty
-        val cfg = api.getConfig()
-        val sShort = cfg.snoozeShort
-        val aRefresh = api.parseDurationString(autoRefresh) ?: 30u
+    // getConfig/saveConfig do disk IO, so keep them off the main thread:
+    // checkboxes call this directly on every toggle.
+    suspend fun saveToDisk() {
+        withContext(Dispatchers.IO) {
+            // Use the current backend config for defaults when UI input is empty
+            val cfg = api.getConfig()
+            val sShort = cfg.snoozeShort
+            val aRefresh = api.parseDurationString(autoRefresh) ?: 30u
 
-        val newCfg = cfg.copy(
-            url = url,
-            username = user,
-            password = pass,
-            allowInsecure = insecure,
-            hideCompleted = hideCompleted,
-            syncSettings = syncSettings,
-            disabledCalendars = disabledSet.toList(),
-            autoReminders = autoRemind,
-            showOngoingNotifications = showOngoingNotifications,
-            defaultReminderTime = defTime,
-            snoozeShort = sShort,
-            createEventsForTasks = createEventsForTasks,
-            deleteEventsOnCompletion = deleteEventsOnCompletion,
-            autoRefreshInterval = aRefresh,
-            tagAliases = aliases,
-            goals = goals,
-            sortCollectionsBySize = sortCollectionsBySize,
-            firstDayOfWeek = firstDayOfWeek
-        )
-        api.saveConfig(newCfg)
+            val newCfg = cfg.copy(
+                url = url,
+                username = user,
+                password = pass,
+                allowInsecure = insecure,
+                hideCompleted = hideCompleted,
+                syncSettings = syncSettings,
+                disabledCalendars = disabledSet.toList(),
+                autoReminders = autoRemind,
+                showOngoingNotifications = showOngoingNotifications,
+                defaultReminderTime = defTime,
+                snoozeShort = sShort,
+                createEventsForTasks = createEventsForTasks,
+                deleteEventsOnCompletion = deleteEventsOnCompletion,
+                autoRefreshInterval = aRefresh,
+                tagAliases = aliases,
+                goals = goals,
+                sortCollectionsBySize = sortCollectionsBySize,
+                firstDayOfWeek = firstDayOfWeek
+            )
+            api.saveConfig(newCfg)
+        }
     }
 
     fun saveAndConnect() {
@@ -423,7 +427,7 @@ fun SettingsScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = syncSettings, onCheckedChange = {
                         syncSettings = it
-                        saveToDisk()
+                        scope.launch { saveToDisk() }
                     })
                     Text(stringResource(R.string.sync_settings))
                 }
@@ -650,7 +654,7 @@ fun SettingsScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = hideCompleted, onCheckedChange = {
                         hideCompleted = it
-                        saveToDisk()
+                        scope.launch { saveToDisk() }
                     })
                     Text(stringResource(R.string.hide_completed_and_canceled_tasks))
                 }
@@ -673,7 +677,10 @@ fun SettingsScreen(
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                     Switch(
                         checked = showOngoingNotifications,
-                        onCheckedChange = { showOngoingNotifications = it; saveToDisk() }
+                        onCheckedChange = {
+                            showOngoingNotifications = it
+                            scope.launch { saveToDisk() }
+                        }
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.show_ongoing_notifications_label))
@@ -779,8 +786,10 @@ fun SettingsScreen(
                 Button(
                     onClick = {
                         createEventsForTasks = false
-                        saveToDisk()
-                        onDeleteEvents()
+                        scope.launch {
+                            saveToDisk()
+                            onDeleteEvents()
+                        }
                     },
                     modifier = Modifier.padding(top = 8.dp),
                     enabled = !isCalendarBusy
@@ -820,7 +829,10 @@ fun SettingsScreen(
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
                     Checkbox(
                         checked = sortCollectionsBySize,
-                        onCheckedChange = { sortCollectionsBySize = it; saveToDisk() }
+                        onCheckedChange = {
+                            sortCollectionsBySize = it
+                            scope.launch { saveToDisk() }
+                        }
                     )
                     Text(stringResource(R.string.sort_collections_by_size))
                 }
@@ -842,7 +854,7 @@ fun SettingsScreen(
                                     val newSet = disabledSet.toMutableSet()
                                     if (enabled) newSet.remove(cal.href) else newSet.add(cal.href)
                                     disabledSet = newSet
-                                    saveToDisk()
+                                    scope.launch { saveToDisk() }
                                 },
                                 onUpdate = { name, color ->
                                     scope.launch {
@@ -912,7 +924,7 @@ fun SettingsScreen(
                                 onMoveUp = {
                                     scope.launch {
                                         try {
-                                            api.moveCalendar(cal.href, -1)
+                                            withContext(Dispatchers.IO) { api.moveCalendar(cal.href, -1) }
                                             reload()
                                         } catch (e: Exception) {}
                                     }
@@ -920,7 +932,7 @@ fun SettingsScreen(
                                 onMoveDown = {
                                     scope.launch {
                                         try {
-                                            api.moveCalendar(cal.href, 1)
+                                            withContext(Dispatchers.IO) { api.moveCalendar(cal.href, 1) }
                                             reload()
                                         } catch (e: Exception) {}
                                     }
@@ -1005,9 +1017,14 @@ fun SettingsScreen(
                         Text(aliases[key]?.joinToString(", ") ?: "", modifier = Modifier.weight(1f))
                         IconButton(onClick = {
                             scope.launch {
-                                api.removeAlias(key)
-                                reload()
-                                triggerBackgroundSync(context, api)
+                                try {
+                                    withContext(Dispatchers.IO) { api.removeAlias(key) }
+                                    reload()
+                                    triggerBackgroundSync(context, api)
+                                } catch (e: Exception) {
+                                    if (e is CancellationException) throw e
+                                    setStatus(context.getString(R.string.error_general, e.message ?: ""), true)
+                                }
                             }
                         }) { NfIcon(NfIcons.CROSS, 16.sp, MaterialTheme.colorScheme.error) }
                     }
@@ -1106,7 +1123,7 @@ fun SettingsScreen(
                             val newGoals = goals.toMutableMap()
                             newGoals.remove(key)
                             goals = newGoals
-                            saveToDisk()
+                            scope.launch { saveToDisk() }
                         }) { NfIcon(NfIcons.CROSS, 16.sp, MaterialTheme.colorScheme.error) }
                     }
                 }
@@ -1182,7 +1199,7 @@ fun SettingsScreen(
                                         goalInputKey = ""
                                         goalInputTarget = ""
                                         goalInputAmount = "1"
-                                        saveToDisk()
+                                        scope.launch { saveToDisk() }
                                     }
                                 }
                             }) { NfIcon(NfIcons.CHECK, 20.sp, MaterialTheme.colorScheme.primary) }
@@ -1214,7 +1231,7 @@ fun SettingsScreen(
                                         goalInputKey = ""
                                         goalInputTarget = ""
                                         goalInputAmount = "1"
-                                        saveToDisk()
+                                        scope.launch { saveToDisk() }
                                     }
                                 }
                             }) { NfIcon(NfIcons.ADD) }
