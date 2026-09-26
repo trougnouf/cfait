@@ -82,14 +82,15 @@ pub fn subscription(app: &GuiApp) -> Subscription<Message> {
         );
     }
 
-    // Tick every minute if there is an active task running, so the timer updates visually
-    let has_running_tasks = app.tasks.iter().any(|item| {
-        if let crate::store::TaskListItem::Task(t) = item {
-            t.last_started_at.is_some()
-        } else {
-            false
-        }
-    });
+    // Tick every minute if any task is running, so the timer updates visually.
+    // Scan the whole store (not the filtered list): a visible parent may
+    // aggregate session time from a running child that is hidden by filters.
+    let has_running_tasks = app
+        .store
+        .calendars
+        .values()
+        .flat_map(|m| m.values())
+        .any(|t| t.last_started_at.is_some());
     if has_running_tasks {
         subs.push(iced::time::every(std::time::Duration::from_secs(60)).map(|_| Message::Tick));
     }
