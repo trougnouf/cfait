@@ -69,6 +69,21 @@ import com.trougnouf.cfait.workers.NotificationActionWorker
 import com.trougnouf.cfait.widget.updateAllTaskListWidgets
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import android.content.res.Configuration
+import android.util.Log
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import com.trougnouf.cfait.core.CfaitMobile
+import com.trougnouf.cfait.core.MobileFirstDayOfWeek
+import com.trougnouf.cfait.core.MobileGoal
+import com.trougnouf.cfait.core.MobileViewData
+import com.trougnouf.cfait.ui.TreeEditorScreen
+import com.trougnouf.cfait.ui.triggerBackgroundSync
+import java.util.Locale
+import kotlin.math.max
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     // Tracks the intent driving the UI so onNewIntent can update the
@@ -80,8 +95,8 @@ class MainActivity : ComponentActivity() {
         val savedLang = prefs.getString("language", null)
 
         if (savedLang != null && savedLang != "auto" && Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            val locale = java.util.Locale.forLanguageTag(savedLang.replace("_", "-"))
-            val config = android.content.res.Configuration(newBase.resources.configuration)
+            val locale = Locale.forLanguageTag(savedLang.replace("_", "-"))
+            val config = Configuration(newBase.resources.configuration)
             config.setLocale(locale)
             super.attachBaseContext(newBase.createConfigurationContext(config))
         } else {
@@ -124,8 +139,8 @@ class MainActivity : ComponentActivity() {
                     "amoled" -> {
                         val base = if (dynamicAvailable) dynamicDarkColorScheme(context) else darkColorScheme()
                         base.copy(
-                            background = androidx.compose.ui.graphics.Color.Black,
-                            surface = androidx.compose.ui.graphics.Color.Black
+                            background = Color.Black,
+                            surface = Color.Black
                         )
                     }
                     "dynamic_light" -> if (dynamicAvailable) dynamicLightColorScheme(context) else lightColorScheme()
@@ -142,13 +157,13 @@ class MainActivity : ComponentActivity() {
             }
 
             MaterialTheme(colorScheme = colorScheme) {
-                val currentDensity = androidx.compose.ui.platform.LocalDensity.current
-                val customDensity = androidx.compose.ui.unit.Density(
+                val currentDensity = LocalDensity.current
+                val customDensity = Density(
                     density = currentDensity.density,
                     fontScale = currentDensity.fontScale * fontScale
                 )
-                androidx.compose.runtime.CompositionLocalProvider(
-                    androidx.compose.ui.platform.LocalDensity provides customDensity
+                CompositionLocalProvider(
+                    LocalDensity provides customDensity
                 ) {
                     CfaitNavHost(
                         api = api,
@@ -195,7 +210,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun CfaitNavHost(
-    api: com.trougnouf.cfait.core.CfaitMobile,
+    api: CfaitMobile,
     intent: State<Intent?> = mutableStateOf(null),
     currentTheme: String,
     onThemeChange: (String) -> Unit,
@@ -216,7 +231,7 @@ fun CfaitNavHost(
     // Data State
     var calendars by remember { mutableStateOf<List<MobileCalendar>>(emptyList()) }
     val listStates = remember { mutableStateMapOf<String, LazyListState>() }
-    var goals by remember { mutableStateOf<Map<String, com.trougnouf.cfait.core.MobileGoal>>(emptyMap()) }
+    var goals by remember { mutableStateOf<Map<String, MobileGoal>>(emptyMap()) }
     var defaultDurationGoalMins by remember { mutableIntStateOf(60) }
     var sessionsCountAsCompletions by remember { mutableStateOf(false) }
     var showCalendarsTab by remember { mutableStateOf(true) }
@@ -224,8 +239,8 @@ fun CfaitNavHost(
     var showLocationsTab by remember { mutableStateOf(true) }
     var showGoalsTab by remember { mutableStateOf(true) }
     var showJournalTab by remember { mutableStateOf(true) }
-    var firstDayOfWeek by remember { mutableStateOf(com.trougnouf.cfait.core.MobileFirstDayOfWeek.MONDAY) }
-    var viewData by remember { mutableStateOf<com.trougnouf.cfait.core.MobileViewData?>(null) }
+    var firstDayOfWeek by remember { mutableStateOf(MobileFirstDayOfWeek.MONDAY) }
+    var viewData by remember { mutableStateOf<MobileViewData?>(null) }
     var aliases by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
     var defaultCalHref by remember { mutableStateOf<String?>(null) }
     var hasUnsynced by remember { mutableStateOf(false) }
@@ -273,11 +288,11 @@ fun CfaitNavHost(
                 // Do not show a toast for periodic/background sync failures to avoid alarming the user.
                 // Log the failure for diagnostics instead.
                 val msg = currentWorkInfo.outputData.getString(CalendarSyncWorker.OUTPUT_MESSAGE) ?: "Unknown error"
-                android.util.Log.w("CfaitMain", "Periodic calendar sync failed: $msg")
+                Log.w("CfaitMain", "Periodic calendar sync failed: $msg")
             }
         } catch (e: Exception) {
             if (e is CancellationException) throw e
-            android.util.Log.e("CfaitMain", "Error handling WorkManager state change", e)
+            Log.e("CfaitMain", "Error handling WorkManager state change", e)
         }
     }
 
@@ -310,7 +325,7 @@ fun CfaitNavHost(
             }
         } catch (e: Exception) {
             if (e is CancellationException) throw e
-            android.util.Log.e("CfaitMain", "Error observing migration worker", e)
+            Log.e("CfaitMain", "Error observing migration worker", e)
         }
     }
     // --------------------------------
@@ -337,8 +352,8 @@ fun CfaitNavHost(
     }
 
     fun refreshLists() {
-        android.util.Log.d("CfaitMain", "refreshLists() called")
-        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        Log.d("CfaitMain", "refreshLists() called")
+        scope.launch(Dispatchers.IO) {
             try {
                 refreshTick = System.currentTimeMillis()
                 val config = api.getConfig()
@@ -371,7 +386,7 @@ fun CfaitNavHost(
                 // Dynamically update Background Sync Worker based on config
                 val interval = config.autoRefreshInterval
                 if (interval > 0u) {
-                    val mins = kotlin.math.max(15L, interval.toLong()) // Android enforces a 15 min minimum
+                    val mins = max(15L, interval.toLong()) // Android enforces a 15 min minimum
                     val request = PeriodicWorkRequestBuilder<PeriodicSyncWorker>(mins, TimeUnit.MINUTES)
                         .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
                         .build()
@@ -387,7 +402,7 @@ fun CfaitNavHost(
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                android.util.Log.e("CfaitMain", "Exception in refreshLists", e)
+                Log.e("CfaitMain", "Exception in refreshLists", e)
             }
         }
     }
@@ -396,7 +411,7 @@ fun CfaitNavHost(
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 if (intent?.action == NotificationActionWorker.BROADCAST_REFRESH) {
-                    android.util.Log.d("CfaitMain", "Received REFRESH_UI broadcast")
+                    Log.d("CfaitMain", "Received REFRESH_UI broadcast")
 
                     val syncError = intent.getStringExtra(NotificationActionWorker.KEY_SYNC_ERROR)
                     if (syncError != null) {
@@ -427,7 +442,7 @@ fun CfaitNavHost(
 
     fun fastStart() {
         refreshLists()
-        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        scope.launch(Dispatchers.IO) {
             isLoading = true
             try {
                 api.sync()
@@ -441,7 +456,7 @@ fun CfaitNavHost(
                 )
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                android.util.Log.e("CfaitMain", "fastStart failed", e)
+                Log.e("CfaitMain", "fastStart failed", e)
                 lastSyncFailed = true
                 val syncError = e.message ?: ""
                 val authErrorStr = context.getString(R.string.error_auth_failed)
@@ -454,7 +469,7 @@ fun CfaitNavHost(
     }
 
     fun saveTaskInBackground(uid: String, smart: String, desc: String) {
-        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        scope.launch(Dispatchers.IO) {
             try {
                 val current = api.getTaskByUid(uid)
                 // Skip the FFI round-trips (and their journal writes) when
@@ -466,7 +481,7 @@ fun CfaitNavHost(
                 if (descChanged) api.updateTaskDescription(uid, desc)
                 if (smartChanged || descChanged) {
                     refreshLists()
-                    com.trougnouf.cfait.ui.triggerBackgroundSync(context, api)
+                    triggerBackgroundSync(context, api)
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e // IGNORE CANCELLATION (don't show to user)
@@ -562,14 +577,14 @@ fun CfaitNavHost(
                 val uri: Uri? = it.data
                 uri?.let { fileUri ->
                     // Calendar exports can be large; read the file off the main thread
-                    scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    scope.launch(Dispatchers.IO) {
                         try {
                             val inputStream = context.contentResolver.openInputStream(fileUri)
                             val icsContent = inputStream?.bufferedReader()?.use { reader -> reader.readText() }
 
                             if (icsContent != null) {
                                 icsContentToImport = icsContent
-                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                withContext(Dispatchers.Main) {
                                     navController.navigate("ics_import")
                                 }
                             } else {
@@ -667,7 +682,7 @@ fun CfaitNavHost(
                     },
                     refreshTick = refreshTick,
                     onNavigate = { targetUid ->
-                        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                        scope.launch(Dispatchers.IO) {
                             try {
                                 api.revealTask(targetUid)
                             } catch (e: Exception) {
@@ -686,7 +701,7 @@ fun CfaitNavHost(
         composable("edit_tree/{uid}") { backStackEntry ->
             val uid = backStackEntry.arguments?.getString("uid")
             if (uid != null) {
-                com.trougnouf.cfait.ui.TreeEditorScreen(
+                TreeEditorScreen(
                     api = api,
                     uid = uid,
                     onBack = { navController.popBackStack() },
@@ -745,7 +760,7 @@ fun CfaitNavHost(
                     icsContent = content,
                     calendars = calendars,
                     onImportComplete = { calendarHref ->
-                        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                        scope.launch(Dispatchers.IO) {
                             try {
                                 val result = api.importLocalIcs(calendarHref, content)
                                 Toast.makeText(context, result, Toast.LENGTH_LONG).show()
@@ -754,7 +769,7 @@ fun CfaitNavHost(
                                 navController.navigate("home") {
                                     popUpTo("home") { inclusive = false }
                                 }
-                                com.trougnouf.cfait.ui.triggerBackgroundSync(context, api)
+                                triggerBackgroundSync(context, api)
                             } catch (e: Exception) {
                                 if (e is CancellationException) throw e
                                 Toast.makeText(
