@@ -37,7 +37,7 @@ class CalendarSyncWorker(
             val count = when (mode) {
                 MODE_CREATE -> api.createMissingCalendarEvents()
                 MODE_DELETE -> api.deleteAllCalendarEvents()
-                else -> 0u
+                else -> return Result.failure()
             }
 
             val actionName = if (mode == MODE_CREATE) "Created" else "Deleted"
