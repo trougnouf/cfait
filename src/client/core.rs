@@ -64,20 +64,29 @@ pub const APPLE_COLOR: PropertyName =
 
 use crate::client::FollowRedirectLayer;
 use crate::client::FollowRedirectService;
+use crate::client::TimeoutService;
 use crate::client::auth::DynamicAuthService;
 use tower_http::decompression::DecompressionLayer;
 
-// Concrete HttpsClient type used throughout the crate. This is a FollowRedirect
-// wrapper around the DynamicAuthService -> UserAgentService -> Decompression -> hyper Client.
-pub(crate) type HttpsClient = FollowRedirectService<
-    DynamicAuthService<
-        UserAgentService<
-            tower_http::decompression::Decompression<
-                Client<
-                    hyper_rustls::HttpsConnector<
-                        hyper_util::client::legacy::connect::HttpConnector,
+// Backstop timeout for a single logical HTTP request (including all redirect
+// hops). Without it a hung server can stall a request forever, which would
+// also hold the cross-process sync lock indefinitely.
+const HTTP_REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+
+// Concrete HttpsClient type used throughout the crate. This is a TimeoutService
+// wrapper around the FollowRedirect -> DynamicAuthService -> UserAgentService ->
+// Decompression -> hyper Client stack.
+pub(crate) type HttpsClient = TimeoutService<
+    FollowRedirectService<
+        DynamicAuthService<
+            UserAgentService<
+                tower_http::decompression::Decompression<
+                    Client<
+                        hyper_rustls::HttpsConnector<
+                            hyper_util::client::legacy::connect::HttpConnector,
+                        >,
+                        String,
                     >,
-                    String,
                 >,
             >,
         >,
@@ -312,8 +321,9 @@ impl RustyClient {
         let auth_client =
             DynamicAuthLayer::new(user.to_string(), pass.to_string()).layer(ua_client);
         let redirect_client = FollowRedirectLayer::new(10).layer(auth_client);
+        let timeout_client = TimeoutService::new(redirect_client, HTTP_REQUEST_TIMEOUT);
 
-        let webdav = WebDavClient::new(uri, redirect_client.clone());
+        let webdav = WebDavClient::new(uri, timeout_client);
         let caldav = CalDavClient::new(webdav);
 
         Ok(Self {
@@ -418,7 +428,7 @@ impl RustyClient {
                     specific_warning = Some(rust_i18n::t!("error_auth_failed").to_string());
                 } else if error_msg.contains("NotFound") || error_msg.contains("404") {
                     specific_warning = Some(rust_i18n::t!("error_404_not_found").to_string());
-                } else if error_msg.contains("Timeout") {
+                } else if error_msg.contains("Timeout") || error_msg.contains("timed out") {
                     specific_warning = Some(rust_i18n::t!("error_timeout").to_string());
                 }
 
