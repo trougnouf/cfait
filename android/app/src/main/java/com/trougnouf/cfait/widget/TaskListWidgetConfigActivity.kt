@@ -255,7 +255,7 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
                         Button(
                             onClick = {
                                 val max = maxTasks.toIntOrNull()?.coerceIn(1, 20) ?: 8
-                                val bgColor = bgColors[bgColorIndex].first
+                                val bgColor = bgColors.getOrElse(bgColorIndex) { bgColors.first() }.first
                                 val bgColorArgb = (bgColor.copy(alpha = bgOpacity)).toArgb()
                                 prefs.edit()
                                     .putString(KEY_SEARCH_QUERY + s, searchQuery.ifBlank { "is:ready" })

@@ -82,7 +82,7 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
 
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val api = (applicationContext as CfaitApplication).api
-        val calendars = api.getCalendars().filter { !it.isDisabled }
+        val calendars = try { api.getCalendars().filter { !it.isDisabled } } catch (_: Exception) { emptyList() }
         val s = "_$appWidgetId"
 
         val textColors = listOf(
@@ -277,7 +277,7 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
                                         } ?: 0xFFFFFFFF.toInt()
                                     }
                                     hasCustomColor -> customColor
-                                    else -> textColors[textColorIndex].first.toArgb()
+                                    else -> textColors.getOrElse(textColorIndex) { textColors.first() }.first.toArgb()
                                 }
 
                                 val editor = prefs.edit()
