@@ -35,6 +35,7 @@ class ToggleTreeCollapseActionCallback : ActionCallback {
             triggerBackgroundSync(context, app.api)
         } catch (e: Exception) {
             android.util.Log.w("CfaitWidget", "Failed to toggle tree collapse for $uid", e)
+            com.trougnouf.cfait.util.NotificationHelper.showWidgetErrorNotification(context)
             return
         }
 

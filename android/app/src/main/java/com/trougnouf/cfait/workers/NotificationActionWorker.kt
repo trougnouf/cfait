@@ -40,6 +40,7 @@ class NotificationActionWorker(
 
         const val BROADCAST_REFRESH = "com.trougnouf.cfait.REFRESH_UI"
         const val CHANNEL_ALARMS = "CFAIT_ALARMS"
+        const val CHANNEL_STATUS = "CFAIT_STATUS"
     }
 
     override suspend fun doWork(): Result {

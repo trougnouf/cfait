@@ -458,7 +458,7 @@ fun CfaitNavHost(
                 if (e is CancellationException) throw e // IGNORE CANCELLATION (don't show to user)
                 Toast.makeText(
                     context,
-                    context.getString(R.string.background_sync_failed, e.message ?: ""),
+                    context.getString(R.string.save_failed, e.message ?: ""),
                     Toast.LENGTH_LONG
                 ).show()
                 refreshLists()

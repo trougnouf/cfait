@@ -40,6 +40,7 @@ class ToggleTaskActionCallback : ActionCallback {
             triggerBackgroundSync(context, app.api)
         } catch (e: Exception) {
             android.util.Log.w("CfaitWidget", "Failed to toggle task $uid", e)
+            com.trougnouf.cfait.util.NotificationHelper.showWidgetErrorNotification(context)
             return
         }
 

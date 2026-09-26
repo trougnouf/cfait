@@ -8,6 +8,7 @@ import android.app.NotificationManager
 import android.os.Build
 import android.util.Log
 import com.trougnouf.cfait.core.CfaitMobile
+import com.trougnouf.cfait.workers.NotificationActionWorker
 import kotlinx.coroutines.CompletableDeferred
 import kotlin.concurrent.thread
 
@@ -85,13 +86,24 @@ class CfaitApplication : Application() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name = "Task Reminders"
-            val importance = NotificationManager.IMPORTANCE_HIGH
-            val channel = NotificationChannel("CFAIT_ALARMS", name, importance).apply {
+            val notificationManager = getSystemService(NotificationManager::class.java)
+            val alarmChannel = NotificationChannel(
+                NotificationActionWorker.CHANNEL_ALARMS,
+                "Task Reminders",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
                 description = "Notifications for task reminders and alarms"
             }
-            val notificationManager = getSystemService(NotificationManager::class.java)
-            notificationManager?.createNotificationChannel(channel)
+            val statusChannel = NotificationChannel(
+                NotificationActionWorker.CHANNEL_STATUS,
+                "Status",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "Notifications for background operation results"
+                setSound(null, null)
+            }
+            notificationManager?.createNotificationChannel(alarmChannel)
+            notificationManager?.createNotificationChannel(statusChannel)
         }
     }
 }

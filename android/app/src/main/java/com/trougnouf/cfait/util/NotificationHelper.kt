@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import com.trougnouf.cfait.MainActivity
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.CfaitMobile
@@ -134,5 +135,33 @@ object NotificationHelper {
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(notificationId, notification)
+    }
+
+    /**
+     * Widgets cannot show toasts, so failed in-widget actions surface here as a
+     * quiet, dismissible notification on the status channel.
+     */
+    fun showWidgetErrorNotification(context: Context) {
+        try {
+            val notificationId = "widget_error".hashCode()
+            val tapIntent = Intent(context, MainActivity::class.java)
+            val tapPending = PendingIntent.getActivity(
+                context,
+                notificationId,
+                tapIntent,
+                PendingIntent.FLAG_IMMUTABLE
+            )
+            val notification = NotificationCompat.Builder(context, NotificationActionWorker.CHANNEL_STATUS)
+                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setContentTitle(context.getString(R.string.app_name))
+                .setContentText(context.getString(R.string.widget_action_failed))
+                .setOnlyAlertOnce(true)
+                .setAutoCancel(true)
+                .setContentIntent(tapPending)
+                .build()
+            NotificationManagerCompat.from(context).notify(notificationId, notification)
+        } catch (e: SecurityException) {
+            // Notification permission was revoked; nothing to do.
+        }
     }
 }
