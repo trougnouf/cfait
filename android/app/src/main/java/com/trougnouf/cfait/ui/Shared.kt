@@ -6,14 +6,19 @@ package com.trougnouf.cfait.ui
 import android.content.Context
 import android.app.Activity
 import android.content.ContextWrapper
+import android.content.Intent
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Looper
+import android.util.LruCache
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -35,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
@@ -45,10 +51,14 @@ import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.Immutable
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.CfaitMobile
+import com.trougnouf.cfait.core.MobileResolvedDependency
+import com.trougnouf.cfait.core.MobileSuggestion
+import com.trougnouf.cfait.core.MobileSyntaxToken
 import com.trougnouf.cfait.core.MobileSyntaxType
 import com.trougnouf.cfait.core.MobileTaskSummary
 import com.trougnouf.cfait.workers.NotificationActionWorker
@@ -71,7 +81,9 @@ import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlin.coroutines.resume
+import kotlin.math.abs
 
 val NerdFont = FontFamily(Font(R.font.symbols_nerd_font))
 
@@ -79,10 +91,10 @@ val NerdFont = FontFamily(Font(R.font.symbols_nerd_font))
 data class StableTaskSummary(val task: MobileTaskSummary)
 
 fun appendHighlighted(
-    builder: androidx.compose.ui.text.AnnotatedString.Builder,
+    builder: AnnotatedString.Builder,
     text: String,
     highlightRegex: Regex?,
-    highlightColor: androidx.compose.ui.graphics.Color
+    highlightColor: Color
 ) {
     if (highlightRegex == null) {
         builder.append(text)
@@ -93,7 +105,7 @@ fun appendHighlighted(
         if (matchResult.range.first > lastMatchEnd) {
             builder.append(text.substring(lastMatchEnd, matchResult.range.first))
         }
-        builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = highlightColor, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, background = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.2f)))
+        builder.pushStyle(SpanStyle(color = highlightColor, fontWeight = FontWeight.Bold, background = Color.Black.copy(alpha = 0.2f)))
         builder.append(matchResult.value)
         builder.pop()
         lastMatchEnd = matchResult.range.last + 1
@@ -105,17 +117,17 @@ fun appendHighlighted(
 
 fun parseInlineMarkdown(
     textStr: String, 
-    baseColor: androidx.compose.ui.graphics.Color, 
+    baseColor: Color, 
     isStrikethrough: Boolean,
     highlightRegex: Regex? = null,
-    highlightColor: androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color.Unspecified
-): androidx.compose.ui.text.AnnotatedString {
-    val builder = androidx.compose.ui.text.AnnotatedString.Builder()
-    val baseDecoration = if (isStrikethrough) androidx.compose.ui.text.style.TextDecoration.LineThrough else null
+    highlightColor: Color = Color.Unspecified
+): AnnotatedString {
+    val builder = AnnotatedString.Builder()
+    val baseDecoration = if (isStrikethrough) TextDecoration.LineThrough else null
 
     // FAST PATH: Skip expensive parsing if no markdown trigger characters are present.
     if (!textStr.contains('[') && !textStr.contains('*') && !textStr.contains('_') && !textStr.contains('~') && !textStr.contains('`') && !textStr.contains("http")) {
-        builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = baseColor, textDecoration = baseDecoration))
+        builder.pushStyle(SpanStyle(color = baseColor, textDecoration = baseDecoration))
         appendHighlighted(builder, textStr, highlightRegex, highlightColor)
         builder.pop()
         return builder.toAnnotatedString()
@@ -251,7 +263,7 @@ fun parseInlineMarkdown(
 
             if (absStart > currentIdx) {
                 val chunk = textStr.substring(currentIdx, absStart)
-                builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = baseColor, textDecoration = baseDecoration))
+                builder.pushStyle(SpanStyle(color = baseColor, textDecoration = baseDecoration))
                 appendHighlighted(builder, chunk, highlightRegex, highlightColor)
                 builder.pop()
             }
@@ -262,22 +274,22 @@ fun parseInlineMarkdown(
             when (marker) {
                 "<!-- uid:" -> {}
                 "**", "__" -> {
-                    builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = baseColor, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, textDecoration = baseDecoration))
+                    builder.pushStyle(SpanStyle(color = baseColor, fontWeight = FontWeight.Bold, textDecoration = baseDecoration))
                     appendHighlighted(builder, innerChunk, highlightRegex, highlightColor)
                     builder.pop()
                 }
                 "*", "_" -> {
-                    builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = baseColor, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, textDecoration = baseDecoration))
+                    builder.pushStyle(SpanStyle(color = baseColor, fontStyle = FontStyle.Italic, textDecoration = baseDecoration))
                     appendHighlighted(builder, innerChunk, highlightRegex, highlightColor)
                     builder.pop()
                 }
                 "~~" -> {
-                    builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = baseColor, textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough))
+                    builder.pushStyle(SpanStyle(color = baseColor, textDecoration = TextDecoration.LineThrough))
                     appendHighlighted(builder, innerChunk, highlightRegex, highlightColor)
                     builder.pop()
                 }
                 "`" -> {
-                    builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = androidx.compose.ui.graphics.Color(0xFFCC9966), fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, textDecoration = baseDecoration))
+                    builder.pushStyle(SpanStyle(color = Color(0xFFCC9966), fontFamily = FontFamily.Monospace, textDecoration = baseDecoration))
                     appendHighlighted(builder, innerChunk, highlightRegex, highlightColor)
                     builder.pop()
                 }
@@ -286,7 +298,7 @@ fun parseInlineMarkdown(
                     val display = chunk.substring(1, mid)
                     val url = chunk.substring(mid + 2, chunk.length - 1)
                     builder.pushStringAnnotation("url_link", url)
-                    builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = androidx.compose.ui.graphics.Color(0xFF33B5E5), textDecoration = baseDecoration))
+                    builder.pushStyle(SpanStyle(color = Color(0xFF33B5E5), textDecoration = baseDecoration))
                     appendHighlighted(builder, display, highlightRegex, highlightColor)
                     builder.pop()
                     builder.pop()
@@ -296,14 +308,14 @@ fun parseInlineMarkdown(
                     val display = if (split != -1) innerChunk.substring(split + 1) else innerChunk
                     val target = if (split != -1) innerChunk.substring(0, split) else innerChunk
                     builder.pushStringAnnotation("wiki_link", target)
-                    builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = androidx.compose.ui.graphics.Color(0xFF33B5E5), textDecoration = baseDecoration))
+                    builder.pushStyle(SpanStyle(color = Color(0xFF33B5E5), textDecoration = baseDecoration))
                     appendHighlighted(builder, display, highlightRegex, highlightColor)
                     builder.pop()
                     builder.pop()
                 }
                 "http" -> {
                     builder.pushStringAnnotation("url_link", chunk)
-                    builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = androidx.compose.ui.graphics.Color(0xFF33B5E5), textDecoration = baseDecoration))
+                    builder.pushStyle(SpanStyle(color = Color(0xFF33B5E5), textDecoration = baseDecoration))
                     appendHighlighted(builder, chunk, highlightRegex, highlightColor)
                     builder.pop()
                     builder.pop()
@@ -316,7 +328,7 @@ fun parseInlineMarkdown(
     }
 
     if (currentIdx < textStr.length) {
-        builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = baseColor, textDecoration = baseDecoration))
+        builder.pushStyle(SpanStyle(color = baseColor, textDecoration = baseDecoration))
         appendHighlighted(builder, textStr.substring(currentIdx), highlightRegex, highlightColor)
         builder.pop()
     }
@@ -376,7 +388,7 @@ suspend fun fetchCurrentLocation(context: Context): Location? {
     return withTimeoutOrNull(5000) {
         suspendCancellableCoroutine<Location?> { cont ->
             try {
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     locationManager.getCurrentLocation(
                         LocationManager.NETWORK_PROVIDER,
                         null,
@@ -724,7 +736,7 @@ fun HeatmapRow(history: List<Float>) {
 
 fun getTagColor(tag: String, isDark: Boolean): Color {
     val hash = tag.hashCode()
-    val h = (kotlin.math.abs(hash) % 360).toFloat()
+    val h = (abs(hash) % 360).toFloat()
 
     // Dynamic Saturation and Value based on theme
     val s = if (isDark) 0.6f else 0.9f // Lower saturation in dark mode for better legibility
@@ -816,12 +828,12 @@ fun formatPairedDuration(spentMins: Int, targetMins: Int): Pair<String, String> 
     val (cStr, tStr) = if (targetMins > 0 && targetMins % 1440 == 0) {
         val t = targetMins / 1440
         val c = spentMins.toFloat() / 1440f
-        val formattedC = "%.1fd".format(java.util.Locale.US, c).replace(".0d", "d")
+        val formattedC = "%.1fd".format(Locale.US, c).replace(".0d", "d")
         Pair(formattedC, "${t}d")
     } else if (targetMins > 0 && targetMins % 60 == 0) {
         val t = targetMins / 60
         val c = spentMins.toFloat() / 60f
-        val formattedC = "%.1fh".format(java.util.Locale.US, c).replace(".0h", "h")
+        val formattedC = "%.1fh".format(Locale.US, c).replace(".0h", "h")
         Pair(formattedC, "${t}h")
     } else {
         Pair("${spentMins}m", "${targetMins}m")
@@ -838,7 +850,7 @@ fun formatPairedDuration(spentMins: Int, targetMins: Int): Pair<String, String> 
     }
 }
 
-private val timeFormatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+private val timeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 
 
 
@@ -903,7 +915,7 @@ private val mdNumberedCheckboxPattern = Regex("""^\d+\.\s*\[""")
 private val mdNumberedListItemPattern = Regex("""^\d+\.\s""")
 
 class MarkdownTransformation(val isDark: Boolean, val api: CfaitMobile? = null) : VisualTransformation {
-    private val lineCache = android.util.LruCache<String, List<AnnotatedString.Range<SpanStyle>>>(1000)
+    private val lineCache = LruCache<String, List<AnnotatedString.Range<SpanStyle>>>(1000)
     private var lastRaw: String? = null
     private var lastTransformed: TransformedText? = null
 
@@ -923,17 +935,17 @@ class MarkdownTransformation(val isDark: Boolean, val api: CfaitMobile? = null) 
         val tableColor = Color(0xFF4DB6AC) // Teal
 
         val inlinePatterns = listOf(
-            Pair(mdUidCommentPattern, SpanStyle(color = dimColor, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)),
+            Pair(mdUidCommentPattern, SpanStyle(color = dimColor, fontStyle = FontStyle.Italic)),
             Pair(mdWikiLinkPattern, SpanStyle(color = linkColor, fontWeight = FontWeight.Bold)),
             Pair(mdMarkdownLinkPattern, SpanStyle(color = linkColor, fontWeight = FontWeight.Bold)),
             Pair(mdUrlPattern, SpanStyle(color = linkColor, fontWeight = FontWeight.Bold)),
             Pair(mdMailtoPattern, SpanStyle(color = linkColor, fontWeight = FontWeight.Bold)),
             Pair(mdBoldStarPattern, SpanStyle(fontWeight = FontWeight.Bold)),
             Pair(mdBoldUnderlinePattern, SpanStyle(fontWeight = FontWeight.Bold)),
-            Pair(mdStrikethroughPattern, SpanStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough)),
-            Pair(mdItalicStarPattern, SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)),
-            Pair(mdItalicUnderlinePattern, SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)),
-            Pair(mdInlineCodePattern, SpanStyle(color = codeColor, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace))
+            Pair(mdStrikethroughPattern, SpanStyle(textDecoration = TextDecoration.LineThrough)),
+            Pair(mdItalicStarPattern, SpanStyle(fontStyle = FontStyle.Italic)),
+            Pair(mdItalicUnderlinePattern, SpanStyle(fontStyle = FontStyle.Italic)),
+            Pair(mdInlineCodePattern, SpanStyle(color = codeColor, fontFamily = FontFamily.Monospace))
         )
 
         var lineStart = 0
@@ -956,16 +968,16 @@ class MarkdownTransformation(val isDark: Boolean, val api: CfaitMobile? = null) 
             var afterMarker = 0
 
             if (trimmed.startsWith("```")) {
-                newStyles.add(AnnotatedString.Range(SpanStyle(color = codeColor, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace), 0, line.length))
+                newStyles.add(AnnotatedString.Range(SpanStyle(color = codeColor, fontFamily = FontFamily.Monospace), 0, line.length))
                 afterMarker = line.length
             } else if (trimmed.startsWith("#")) {
                 newStyles.add(AnnotatedString.Range(SpanStyle(color = headerColor, fontWeight = FontWeight.Bold), 0, line.length))
                 afterMarker = line.length
             } else if (trimmed.startsWith("> ")) {
-                newStyles.add(AnnotatedString.Range(SpanStyle(color = quoteColor, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic), 0, line.length))
+                newStyles.add(AnnotatedString.Range(SpanStyle(color = quoteColor, fontStyle = FontStyle.Italic), 0, line.length))
                 afterMarker = line.length
             } else if (trimmed.startsWith("|") && trimmed.substring(1).contains("|")) {
-                newStyles.add(AnnotatedString.Range(SpanStyle(color = tableColor, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace), 0, line.length))
+                newStyles.add(AnnotatedString.Range(SpanStyle(color = tableColor, fontFamily = FontFamily.Monospace), 0, line.length))
                 afterMarker = line.length
             } else if (trimmed.startsWith("- [") || trimmed.startsWith("* [") || trimmed.startsWith("+ [") || mdNumberedCheckboxPattern.containsMatchIn(trimmed)) {
                 val cbStart = line.indexOf('[')
@@ -1105,9 +1117,9 @@ fun CursorContextBanner(
     val cursor = textFieldValue.selection.start
     val text = textFieldValue.text
 
-    var suggestions by remember { mutableStateOf<List<com.trougnouf.cfait.core.MobileSuggestion>>(emptyList()) }
-    var activeToken by remember { mutableStateOf<com.trougnouf.cfait.core.MobileSyntaxToken?>(null) }
-    var resolvedDep by remember { mutableStateOf<com.trougnouf.cfait.core.MobileResolvedDependency?>(null) }
+    var suggestions by remember { mutableStateOf<List<MobileSuggestion>>(emptyList()) }
+    var activeToken by remember { mutableStateOf<MobileSyntaxToken?>(null) }
+    var resolvedDep by remember { mutableStateOf<MobileResolvedDependency?>(null) }
     var rawWord by remember { mutableStateOf("") }
 
     LaunchedEffect(text, cursor) {
@@ -1116,9 +1128,9 @@ fun CursorContextBanner(
         val currentLine = text.substring(lineStart, lineEnd)
         val localCursor = cursor - lineStart
 
-        suggestions = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        suggestions = withContext(Dispatchers.IO) {
             api.suggest(currentLine, localCursor).map { s ->
-                com.trougnouf.cfait.core.MobileSuggestion(
+                MobileSuggestion(
                     replacement = s.replacement,
                     display = s.display,
                     description = s.description,
@@ -1136,13 +1148,13 @@ fun CursorContextBanner(
             val currentLine = text.substring(lineStart, lineEnd)
             val localCursor = cursor - lineStart
 
-            val tokens = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val tokens = withContext(Dispatchers.IO) {
                 api.parseSmartString(currentLine, false)
             }
             val token = tokens.find { localCursor >= it.start && localCursor <= it.end &&
-                (it.kind == com.trougnouf.cfait.core.MobileSyntaxType.DEPENDENCY ||
-                 it.kind == com.trougnouf.cfait.core.MobileSyntaxType.RELATION ||
-                 it.kind == com.trougnouf.cfait.core.MobileSyntaxType.WIKI_LINK)
+                (it.kind == MobileSyntaxType.DEPENDENCY ||
+                 it.kind == MobileSyntaxType.RELATION ||
+                 it.kind == MobileSyntaxType.WIKI_LINK)
             }
 
             if (token != null) {
@@ -1150,7 +1162,7 @@ fun CursorContextBanner(
                 if (token != activeToken || word != rawWord) {
                     activeToken = token
                     rawWord = word
-                    resolvedDep = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    resolvedDep = withContext(Dispatchers.IO) {
                         api.getTokenContext(word, token.kind, contextUid)
                     }
                 }
@@ -1167,12 +1179,12 @@ fun CursorContextBanner(
     // A [[wiki link]] that resolves to an existing task opens it (mirroring the
     // desktop ctrl+o); partial links fall through to autocomplete instead.
     val isFoundWiki = activeToken != null && resolvedDep != null &&
-        activeToken!!.kind == com.trougnouf.cfait.core.MobileSyntaxType.WIKI_LINK &&
+        activeToken!!.kind == MobileSyntaxType.WIKI_LINK &&
         resolvedDep!!.isFound
 
     if (isFoundWiki || (suggestions.isEmpty() && activeToken != null && resolvedDep != null)) {
-        val isDep = activeToken!!.kind == com.trougnouf.cfait.core.MobileSyntaxType.DEPENDENCY
-        val isWiki = activeToken!!.kind == com.trougnouf.cfait.core.MobileSyntaxType.WIKI_LINK
+        val isDep = activeToken!!.kind == MobileSyntaxType.DEPENDENCY
+        val isWiki = activeToken!!.kind == MobileSyntaxType.WIKI_LINK
         val iconChar = if (!resolvedDep!!.isFound && isWiki) NfIcons.NEW_FILE else if (!resolvedDep!!.isFound) NfIcons.SYNC_ALERT else if (isDep) NfIcons.BLOCKED else NfIcons.LINK
         val color = if (!resolvedDep!!.isFound && isWiki) Color(0xFF4FC3F7) else if (!resolvedDep!!.isFound) Color(0xFFE53935) else if (isDep) Color(0xFFFF9800) else Color(0xFF42A5F5)
         val scope = rememberCoroutineScope()
@@ -1217,7 +1229,7 @@ fun CursorContextBanner(
             }
         }
     } else if (suggestions.isNotEmpty()) {
-        androidx.compose.foundation.lazy.LazyRow(
+        LazyRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(Color.Black.copy(alpha = 0.2f), RoundedCornerShape(6.dp))
@@ -1244,10 +1256,10 @@ fun CursorContextBanner(
                         val replacementText = s.replacement + if (globalEnd < text.length) "" else " "
                         val newText = text.substring(0, globalStart) + replacementText + if (globalEnd < text.length) text.substring(globalEnd) else ""
                         val newCursor = globalStart + replacementText.length
-                        onTextChange(androidx.compose.ui.text.input.TextFieldValue(text = newText, selection = androidx.compose.ui.text.TextRange(newCursor)))
+                        onTextChange(TextFieldValue(text = newText, selection = TextRange(newCursor)))
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Text(s.display, color = color, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     if (s.description.isNotEmpty()) {
@@ -1270,7 +1282,7 @@ fun triggerBackgroundSync(context: Context, api: CfaitMobile) {
             // Ignore network failures silently, the red sync icon will remain
             errorMsg = e.message
         } finally {
-            val intent = android.content.Intent(NotificationActionWorker.BROADCAST_REFRESH)
+            val intent = Intent(NotificationActionWorker.BROADCAST_REFRESH)
             intent.putExtra(NotificationActionWorker.KEY_SYNC_ERROR, errorMsg)
             intent.setPackage(context.packageName)
             context.sendBroadcast(intent)
