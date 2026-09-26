@@ -11,6 +11,13 @@ import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.workers.NotificationActionWorker
 import kotlinx.coroutines.CompletableDeferred
 import kotlin.concurrent.thread
+import android.content.Context
+import com.trougnouf.cfait.core.initTokioRuntime
+import java.io.File
+import java.io.PrintWriter
+import java.io.StringWriter
+import java.util.Date
+import java.util.Locale
 
 class CfaitApplication : Application() {
     lateinit var api: CfaitMobile
@@ -21,7 +28,7 @@ class CfaitApplication : Application() {
     val dataLoaded = CompletableDeferred<Unit>()
 
     // Declare the external function
-    private external fun initNdkContext(context: android.content.Context)
+    private external fun initNdkContext(context: Context)
 
     companion object {
         init {
@@ -37,10 +44,10 @@ class CfaitApplication : Application() {
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, exception ->
             try {
-                val crashFile = java.io.File(cacheDir, "android_crash.txt")
-                crashFile.appendText("\n--- CRASH at ${java.util.Date()} ---\n")
-                val sw = java.io.StringWriter()
-                exception.printStackTrace(java.io.PrintWriter(sw))
+                val crashFile = File(cacheDir, "android_crash.txt")
+                crashFile.appendText("\n--- CRASH at ${Date()} ---\n")
+                val sw = StringWriter()
+                exception.printStackTrace(PrintWriter(sw))
                 crashFile.appendText(sw.toString())
             } catch (e: Exception) {
                 // Ignore errors during crash handling
@@ -52,7 +59,7 @@ class CfaitApplication : Application() {
         initNdkContext(this)
 
         // 2. Now perform the rest of the initialization
-        com.trougnouf.cfait.core.initTokioRuntime()
+        initTokioRuntime()
         api = CfaitMobile(filesDir.absolutePath)
 
         // Create notification channel once at app startup (Android O+)
@@ -73,14 +80,14 @@ class CfaitApplication : Application() {
 
         // Detect saved language preference or fall back to Android system language,
         // then propagate it to the Rust backend so rust_i18n is initialized correctly.
-        val prefs = getSharedPreferences("cfait_prefs", android.content.Context.MODE_PRIVATE)
+        val prefs = getSharedPreferences("cfait_prefs", Context.MODE_PRIVATE)
         val savedLang = prefs.getString("language", null)
 
         if (savedLang != null && savedLang != "auto") {
             api.setLocale(savedLang)
         } else {
             // Detect Android system language (e.g., en-US -> en_US)
-            api.setLocale(java.util.Locale.getDefault().toLanguageTag().replace("-", "_"))
+            api.setLocale(Locale.getDefault().toLanguageTag().replace("-", "_"))
         }
     }
 
