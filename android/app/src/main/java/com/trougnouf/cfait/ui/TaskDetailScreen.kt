@@ -233,7 +233,7 @@ fun TaskDetailScreen(
                                 scope.launch {
                                     try {
                                         val intent = if (moveTree) AppIntent.MoveTaskTree(uid, cal.href) else AppIntent.MoveTask(uid, cal.href)
-                                        api.dispatch(intent)
+                                        withContext(Dispatchers.IO) { api.dispatch(intent) }
                                         showMoveDialog = false
                                         onBack()
                                         triggerBackgroundSync(context, api)
@@ -455,7 +455,7 @@ fun TaskDetailScreen(
                     IconButton(
                         onClick = {
                             val currentUid = task?.uid ?: return@IconButton
-                            scope.launch {
+                            scope.launch(Dispatchers.IO) {
                                 try {
                                     api.dispatch(AppIntent.RemoveParent(currentUid))
                                     refreshTaskMeta()
@@ -511,7 +511,7 @@ fun TaskDetailScreen(
                         IconButton(
                             onClick = {
                                 val currentUid = task?.uid ?: return@IconButton
-                                scope.launch {
+                                scope.launch(Dispatchers.IO) {
                                     try {
                                         api.dispatch(AppIntent.RemoveDependency(currentUid, blockerUid))
                                         refreshTaskMeta()
@@ -569,7 +569,7 @@ fun TaskDetailScreen(
                         IconButton(
                             onClick = {
                                 val currentUid = task?.uid ?: return@IconButton
-                                scope.launch {
+                                scope.launch(Dispatchers.IO) {
                                     try {
                                         // To unblock, remove this task.uid from the blocked task's dependencies
                                         api.dispatch(AppIntent.RemoveDependency(blockedUid, currentUid))
@@ -628,7 +628,7 @@ fun TaskDetailScreen(
                         IconButton(
                             onClick = {
                                 val currentUid = task?.uid ?: return@IconButton
-                                scope.launch {
+                                scope.launch(Dispatchers.IO) {
                                     try {
                                         api.dispatch(AppIntent.RemoveRelatedTo(currentUid, relatedUid))
                                         refreshTaskMeta()
@@ -741,7 +741,7 @@ fun TaskDetailScreen(
                     IconButton(
                         onClick = {
                             if (sessionInput.isNotBlank()) {
-                                scope.launch {
+                                scope.launch(Dispatchers.IO) {
                                     try {
                                         api.addSession(uid, sessionInput)
                                         sessionInput = ""
@@ -801,7 +801,7 @@ fun TaskDetailScreen(
                         IconButton(
                             onClick = {
                                 if (editSessionInput.isNotBlank()) {
-                                    scope.launch {
+                                    scope.launch(Dispatchers.IO) {
                                         try {
                                             api.editSession(uid, absoluteIdx.toUInt(), editSessionInput)
                                             editingSessionIdx = null
@@ -861,7 +861,7 @@ fun TaskDetailScreen(
 
                         IconButton(
                             onClick = {
-                                scope.launch {
+                                scope.launch(Dispatchers.IO) {
                                     try {
                                         api.deleteSession(uid, absoluteIdx.toUInt())
                                         refreshTaskMeta()
@@ -937,7 +937,7 @@ fun TaskDetailScreen(
                         IconButton(
                             onClick = {
                                 val currentUid = task?.uid ?: return@IconButton
-                                scope.launch {
+                                scope.launch(Dispatchers.IO) {
                                     try {
                                         api.dispatch(AppIntent.RemoveRelatedTo(relatedTask.uid, currentUid))
                                         refreshTaskMeta()

@@ -255,9 +255,12 @@ fun SettingsScreen(
         uri?.let {
             scope.launch {
                 try {
-                    val inputStream = context.contentResolver.openInputStream(uri)
-                    val icsContent = inputStream?.bufferedReader()?.use { it.readText() }
-                    inputStream?.close()
+                    val icsContent = withContext(Dispatchers.IO) {
+                        val inputStream = context.contentResolver.openInputStream(uri)
+                        val content = inputStream?.bufferedReader()?.use { it.readText() }
+                        inputStream?.close()
+                        content
+                    }
 
                     if (icsContent != null && importTargetHref != null) {
                         val result = withContext(Dispatchers.IO) {
@@ -312,7 +315,7 @@ fun SettingsScreen(
     }
 
     fun saveAndConnect() {
-        scope.launch {
+        scope.launch(Dispatchers.IO) {
             setStatus(context.getString(R.string.connecting))
             try {
                 saveToDisk()
@@ -588,7 +591,9 @@ fun SettingsScreen(
                                             // Update Rust backend
                                             val sysLocale =
                                                 Locale.getDefault().toLanguageTag().replace("-", "_")
-                                            api.setLocale(code ?: sysLocale)
+                                            scope.launch(Dispatchers.IO) {
+                                                api.setLocale(code ?: sysLocale)
+                                            }
 
                                             // Update Android UI (Native API 33+ or AppCompat API < 33)
                                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -875,7 +880,7 @@ fun SettingsScreen(
                                 },
                                 onDelete = {
                                     if (cal.isLocal) {
-                                        scope.launch {
+                                        scope.launch(Dispatchers.IO) {
                                             try {
                                                 api.deleteLocalCalendar(cal.href)
                                                 reload()
@@ -889,21 +894,21 @@ fun SettingsScreen(
                                 onExport = {
                                     scope.launch {
                                         try {
-                                            val icsContent = withContext(Dispatchers.IO) {
-                                                api.exportLocalIcs(cal.href)
+                                            val uri = withContext(Dispatchers.IO) {
+                                                val icsContent = api.exportLocalIcs(cal.href)
+                                                val calId = if (cal.isLocal) {
+                                                    cal.href.removePrefix("local://")
+                                                } else {
+                                                    cal.href.trimEnd('/').substringAfterLast('/')
+                                                }
+                                                val file = File(context.cacheDir, "cfait_${calId}.ics")
+                                                file.writeText(icsContent)
+                                                FileProvider.getUriForFile(
+                                                    context,
+                                                    "${context.packageName}.fileprovider",
+                                                    file
+                                                )
                                             }
-                                            val calId = if (cal.isLocal) {
-                                                cal.href.removePrefix("local://")
-                                            } else {
-                                                cal.href.trimEnd('/').substringAfterLast('/')
-                                            }
-                                            val file = File(context.cacheDir, "cfait_${calId}.ics")
-                                            file.writeText(icsContent)
-                                            val uri = FileProvider.getUriForFile(
-                                                context,
-                                                "${context.packageName}.fileprovider",
-                                                file
-                                            )
                                             val intent = Intent(Intent.ACTION_SEND).apply {
                                                 type = "text/calendar"
                                                 putExtra(Intent.EXTRA_STREAM, uri)
@@ -949,7 +954,7 @@ fun SettingsScreen(
                 ) {
                     Button(
                         onClick = {
-                            scope.launch {
+                            scope.launch(Dispatchers.IO) {
                                 try {
                                     api.createLocalCalendar(context.getString(R.string.new_calendar_name), null)
                                     reload()
@@ -972,7 +977,7 @@ fun SettingsScreen(
 
                     Button(
                         onClick = {
-                            scope.launch {
+                            scope.launch(Dispatchers.IO) {
                                 try {
                                     api.createRemoteCalendar(context.getString(R.string.new_calendar_name), null)
                                     setStatus(context.getString(R.string.collection_created))
@@ -1048,7 +1053,7 @@ fun SettingsScreen(
                     IconButton(onClick = {
                         if (newAliasKey.isNotBlank() && newAliasTags.isNotBlank()) {
                             val tags = newAliasTags.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-                            scope.launch {
+                            scope.launch(Dispatchers.IO) {
                                 try {
                                     api.addAlias(newAliasKey.trimStart('#'), tags)
                                     newAliasKey = ""
