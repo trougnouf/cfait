@@ -48,6 +48,14 @@ import com.trougnouf.cfait.MainActivity
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.MobileFilterOptions
 import com.trougnouf.cfait.core.MobileTaskSummary
+import android.os.Bundle
+import android.util.Log
+import androidx.compose.runtime.Composable
+import androidx.glance.LocalContext
+import androidx.glance.appwidget.AppWidgetId
+import androidx.glance.appwidget.GlanceAppWidgetManager
+import com.trougnouf.cfait.core.MobileViewData
+import kotlinx.coroutines.withTimeoutOrNull
 
 private val FocusTaskUidKey = ActionParameters.Key<String>(EXTRA_FOCUS_TASK_UID)
 
@@ -76,15 +84,15 @@ private fun stripMarkdown(text: String): String {
 }
 
 suspend fun updateAllTaskListWidgets(context: Context) {
-    val manager = androidx.glance.appwidget.GlanceAppWidgetManager(context)
-    val appWidgetManager = android.appwidget.AppWidgetManager.getInstance(context)
-    val componentName = android.content.ComponentName(context, TaskListWidgetReceiver::class.java)
+    val manager = GlanceAppWidgetManager(context)
+    val appWidgetManager = AppWidgetManager.getInstance(context)
+    val componentName = ComponentName(context, TaskListWidgetReceiver::class.java)
     appWidgetManager.getAppWidgetIds(componentName).forEach { id ->
         try {
             val glanceId = manager.getGlanceIdBy(id)
             TaskListWidget().update(context, glanceId)
         } catch (e: Exception) {
-            android.util.Log.e("CfaitWidget", "Failed to update TaskList widget $id", e)
+            Log.e("CfaitWidget", "Failed to update TaskList widget $id", e)
         }
     }
 }
@@ -97,12 +105,12 @@ class TaskListWidget : GlanceAppWidget() {
         val app = context.applicationContext as CfaitApplication
         // Wait (with a timeout) for the background cache load so a
         // cold-process widget render doesn't show an empty store.
-        kotlinx.coroutines.withTimeoutOrNull(10_000) { app.dataLoaded.await() }
+        withTimeoutOrNull(10_000) { app.dataLoaded.await() }
         val api = app.api
         val calendars = try { api.getCalendars() } catch (_: Exception) { emptyList() }
 
         val prefs = context.getSharedPreferences(TaskListWidgetConfigActivity.PREFS_NAME, Context.MODE_PRIVATE)
-        val suffix = if (id is androidx.glance.appwidget.AppWidgetId) "_${id.appWidgetId}" else ""
+        val suffix = if (id is AppWidgetId) "_${id.appWidgetId}" else ""
 
         provideContent {
             // Read the refresh tick from Glance state. When the state
@@ -147,7 +155,7 @@ class TaskListWidget : GlanceAppWidget() {
 
             // Hold the loaded data in state, keyed to refreshTick so it
             // reloads whenever the state changes.
-            var viewData by remember { mutableStateOf<com.trougnouf.cfait.core.MobileViewData?>(null) }
+            var viewData by remember { mutableStateOf<MobileViewData?>(null) }
             var calColorMap by remember { mutableStateOf<Map<String, Color>>(emptyMap()) }
 
             LaunchedEffect(refreshTick) {
@@ -167,7 +175,7 @@ class TaskListWidget : GlanceAppWidget() {
                         )
                     )
                 } catch (e: Exception) {
-                    android.util.Log.w("CfaitWidget", "Failed to load widget data", e)
+                    Log.w("CfaitWidget", "Failed to load widget data", e)
                     null
                 }
                 calColorMap = calendars.associate { c ->
@@ -285,7 +293,7 @@ class TaskListWidget : GlanceAppWidget() {
     }
 
     override suspend fun onDelete(context: Context, glanceId: GlanceId) {
-        if (glanceId is androidx.glance.appwidget.AppWidgetId) {
+        if (glanceId is AppWidgetId) {
             val s = "_${glanceId.appWidgetId}"
             context.getSharedPreferences(TaskListWidgetConfigActivity.PREFS_NAME, Context.MODE_PRIVATE)
                 .edit()
@@ -303,7 +311,7 @@ class TaskListWidget : GlanceAppWidget() {
     }
 }
 
-@androidx.compose.runtime.Composable
+@Composable
 private fun TaskRow(task: MobileTaskSummary, textColor: Color, calColor: Color) {
     val indent = (task.depth.toInt() * 12).dp
     val displaySummary = stripMarkdown(task.summary)
@@ -371,7 +379,7 @@ private fun TaskRow(task: MobileTaskSummary, textColor: Color, calColor: Color) 
                 )
             )
             if (task.dueDateIso != null && task.isDueToday) {
-                val context = androidx.glance.LocalContext.current
+                val context = LocalContext.current
                 Text(
                     text = context.getString(R.string.widget_due_today),
                     style = TextStyle(
@@ -392,7 +400,7 @@ class TaskListWidgetReceiver : GlanceAppWidgetReceiver() {
         val ownComponent = ComponentName(context.packageName, javaClass.name)
         val isOwn = info?.provider == ownComponent
         if (!isOwn) {
-            android.util.Log.w("CfaitWidget", "ListReceiver ignoring id=$appWidgetId provider=${info?.provider} (expected $ownComponent)")
+            Log.w("CfaitWidget", "ListReceiver ignoring id=$appWidgetId provider=${info?.provider} (expected $ownComponent)")
         }
         return isOwn
     }
@@ -410,7 +418,7 @@ class TaskListWidgetReceiver : GlanceAppWidgetReceiver() {
         context: Context,
         appWidgetManager: AppWidgetManager,
         appWidgetId: Int,
-        newOptions: android.os.Bundle
+        newOptions: Bundle
     ) {
         if (isOwnId(context, appWidgetId)) {
             super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
