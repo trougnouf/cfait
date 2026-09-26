@@ -228,7 +228,9 @@ class TaskListWidget : GlanceAppWidget() {
                             if (vd != null) {
                                 val tasks = vd.tasks
                                 val dueToday = tasks.count { it.isDueToday && !it.isDone }
-                                val ongoing = tasks.count { it.isPaused }
+                                // "Active" means the timer is currently running (InProcess),
+                                // not merely started-and-paused.
+                                val ongoing = tasks.count { it.statusString == "InProcess" }
                                 if (dueToday > 0) {
                                     Text(
                                         text = "$dueToday $strDueToday",
