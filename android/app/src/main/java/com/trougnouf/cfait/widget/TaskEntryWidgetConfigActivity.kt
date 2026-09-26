@@ -169,19 +169,20 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
                             }
                         }
 
-                        if (mode != 2) {
-                            Text(stringResource(R.string.widget_collection), style = MaterialTheme.typography.labelLarge)
-                            Row(
-                                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                calendars.forEach { cal ->
-                                    FilterChip(
-                                        selected = cal.href == selectedCalHref,
-                                        onClick = { selectedCalHref = cal.href },
-                                        label = { Text(cal.name) }
-                                    )
-                                }
+                        // The collection is shown in every mode: the widget always
+                        // passes the selected calendar href, which picks the initial
+                        // tab and write target in all three modes.
+                        Text(stringResource(R.string.widget_collection), style = MaterialTheme.typography.labelLarge)
+                        Row(
+                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            calendars.forEach { cal ->
+                                FilterChip(
+                                    selected = cal.href == selectedCalHref,
+                                    onClick = { selectedCalHref = cal.href },
+                                    label = { Text(cal.name) }
+                                )
                             }
                         }
 
@@ -259,7 +260,7 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
                                     }
                             )
                             // Collection color swatch
-                            if (mode != 2 && !selectedCalHref.isNullOrEmpty()) {
+                            if (!selectedCalHref.isNullOrEmpty()) {
                                 val calColor = calendars.firstOrNull { it.href == selectedCalHref }?.color
                                     ?.let { hex ->
                                         try { Color(android.graphics.Color.parseColor(hex)) } catch (_: Exception) { null }

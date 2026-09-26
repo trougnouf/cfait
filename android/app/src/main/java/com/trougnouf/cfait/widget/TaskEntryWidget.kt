@@ -42,7 +42,7 @@ const val EXTRA_QUICK_ADD = "quick_add"
 /** Intent extra asking MainActivity to open the journal tab for today. */
 const val EXTRA_JOURNAL_TODAY = "journal_today"
 
-/** Intent extra with the calendar href for journal/search modes. */
+/** Intent extra with the calendar href (passed in every mode). */
 const val EXTRA_CALENDAR_HREF = "widget_calendar_href"
 
 /** Intent extra asking MainActivity to open with a preset search query. */
