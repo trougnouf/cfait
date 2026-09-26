@@ -65,6 +65,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    // Tracks the intent driving the UI so onNewIntent can update the
+    // composition in place instead of recreating the whole activity.
+    private val currentIntent = mutableStateOf<Intent?>(null)
+
     override fun attachBaseContext(newBase: Context) {
         val prefs = newBase.getSharedPreferences("cfait_prefs", Context.MODE_PRIVATE)
         val savedLang = prefs.getString("language", null)
@@ -93,6 +97,7 @@ class MainActivity : ComponentActivity() {
         val savedTabAutoHide = sharedPrefs.getBoolean("tab_auto_hide", true)
         val savedFontScale = sharedPrefs.getFloat("font_scale", 1.0f)
 
+        currentIntent.value = intent
         setContent {
             // Lift theme state to root so SettingsScreen can update it
             var currentTheme by remember { mutableStateOf(savedTheme) }
@@ -141,7 +146,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     CfaitNavHost(
                         api = api,
-                        intent = intent,
+                        intent = currentIntent,
                         currentTheme = currentTheme,
                         onThemeChange = { newTheme ->
                             currentTheme = newTheme
@@ -176,14 +181,16 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        recreate()
+        // Update the composition in place; a full recreate would re-run the
+        // fastStart sync for every notification or widget tap.
+        currentIntent.value = intent
     }
 }
 
 @Composable
 fun CfaitNavHost(
     api: com.trougnouf.cfait.core.CfaitMobile,
-    intent: Intent? = null,
+    intent: State<Intent?> = mutableStateOf(null),
     currentTheme: String,
     onThemeChange: (String) -> Unit,
     tabPosition: String,
@@ -198,6 +205,7 @@ fun CfaitNavHost(
     val navController = rememberNavController()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val currentIntent by intent
 
     // Data State
     var calendars by remember { mutableStateOf<List<MobileCalendar>>(emptyList()) }
@@ -499,8 +507,8 @@ fun CfaitNavHost(
 
     LaunchedEffect("fastStart") { fastStart() }
 
-    LaunchedEffect(intent) {
-        intent?.let {
+    LaunchedEffect(currentIntent) {
+        currentIntent?.let {
             val focusUid = it.getStringExtra("focus_task_uid")
             if (focusUid != null) {
                 autoScrollUid = focusUid
