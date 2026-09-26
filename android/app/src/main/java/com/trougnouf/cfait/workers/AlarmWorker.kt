@@ -44,7 +44,6 @@ class AlarmWorker(
                 context.sendBroadcast(intent)
             }
 
-            val config = api.getConfig()
             val firing = api.getFiringAlarms()
 
             if (firing.isNotEmpty()) {

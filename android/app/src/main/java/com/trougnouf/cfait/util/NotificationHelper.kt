@@ -31,10 +31,11 @@ object NotificationHelper {
 
         // Cleanup dismissed flags for tasks no longer ongoing
         val ongoingUids = ongoingTasks.map { task -> task.uid }.toSet()
-        for (key in prefs.all.keys) {
-            if (!ongoingUids.contains(key)) {
-                prefs.edit().remove(key).apply()
-            }
+        val stale = prefs.all.keys.filter { !ongoingUids.contains(it) }
+        if (stale.isNotEmpty()) {
+            val editor = prefs.edit()
+            stale.forEach { editor.remove(it) }
+            editor.apply()
         }
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -43,11 +44,14 @@ object NotificationHelper {
             return // Obsolete notifications are cleaned up by AlarmScheduler
         }
 
+        val activeIds = notificationManager.activeNotifications.map { it.id }.toSet()
         ongoingTasks.forEach { task ->
             // Check if user explicitly swiped this notification away
-            if (!prefs.getBoolean(task.uid, false)) {
-                showActiveTaskNotification(context, task)
-            }
+            if (prefs.getBoolean(task.uid, false)) return@forEach
+            // The chronometer keeps running on its own; re-posting the same
+            // notification would only collapse an expanded one and spam the tray.
+            if (activeIds.contains(task.uid.hashCode())) return@forEach
+            showActiveTaskNotification(context, task)
         }
     }
 

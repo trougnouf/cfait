@@ -55,15 +55,22 @@ private val FocusTaskUidKey = ActionParameters.Key<String>("focus_task_uid")
 /** State key used to force widget recomposition after in-widget actions or config changes. */
 internal val RefreshTickKey = longPreferencesKey("refresh_tick")
 
+private val boldDoubleStar = Regex("""\*\*(.+?)\*\*""")
+private val boldDoubleUnder = Regex("""__(.+?)__""")
+private val strikeTilde = Regex("""~~(.+?)~~""")
+private val italicStar = Regex("""\*(.+?)\*""")
+private val italicUnder = Regex("""_(.+?)_""")
+private val inlineCode = Regex("""`(.+?)`""")
+
 /** Strip inline markdown markers (bold, italic, code, strikethrough) for plain display. */
 private fun stripMarkdown(text: String): String {
     return text
-        .replace(Regex("""\*\*(.+?)\*\*"""), "$1")
-        .replace(Regex("""__(.+?)__"""), "$1")
-        .replace(Regex("""~~(.+?)~~"""), "$1")
-        .replace(Regex("""\*(.+?)\*"""), "$1")
-        .replace(Regex("""_(.+?)_"""), "$1")
-        .replace(Regex("""`(.+?)`"""), "$1")
+        .replace(boldDoubleStar, "$1")
+        .replace(boldDoubleUnder, "$1")
+        .replace(strikeTilde, "$1")
+        .replace(italicStar, "$1")
+        .replace(italicUnder, "$1")
+        .replace(inlineCode, "$1")
 }
 
 suspend fun updateAllTaskListWidgets(context: Context) {
@@ -90,6 +97,7 @@ class TaskListWidget : GlanceAppWidget() {
         // cold-process widget render doesn't show an empty store.
         kotlinx.coroutines.withTimeoutOrNull(10_000) { app.dataLoaded.await() }
         val api = app.api
+        val calendars = try { api.getCalendars() } catch (_: Exception) { emptyList() }
 
         val prefs = context.getSharedPreferences(TaskListWidgetConfigActivity.PREFS_NAME, Context.MODE_PRIVATE)
         val suffix = if (id is androidx.glance.appwidget.AppWidgetId) "_${id.appWidgetId}" else ""
@@ -112,7 +120,7 @@ class TaskListWidget : GlanceAppWidget() {
 
             var baseQuery = searchQuery
             if (calHref.isNotEmpty()) {
-                val cal = try { api.getCalendars().firstOrNull { it.href == calHref } } catch (_: Exception) { null }
+                val cal = calendars.firstOrNull { it.href == calHref }
                 if (cal != null) {
                     val quoted = if (cal.name.contains(" ")) "\"${cal.name}\"" else cal.name
                     baseQuery = "$baseQuery col:$quoted"
@@ -160,13 +168,11 @@ class TaskListWidget : GlanceAppWidget() {
                     android.util.Log.w("CfaitWidget", "Failed to load widget data", e)
                     null
                 }
-                calColorMap = try {
-                    api.getCalendars().associate { c ->
-                        c.href to (c.color?.let { hex ->
-                            try { Color(android.graphics.Color.parseColor(hex)) } catch (_: Exception) { Color.Gray }
-                        } ?: Color.Gray)
-                    }
-                } catch (_: Exception) { emptyMap() }
+                calColorMap = calendars.associate { c ->
+                    c.href to (c.color?.let { hex ->
+                        try { Color(android.graphics.Color.parseColor(hex)) } catch (_: Exception) { Color.Gray }
+                    } ?: Color.Gray)
+                }
             }
 
             val strDueToday = context.getString(R.string.widget_due_today)

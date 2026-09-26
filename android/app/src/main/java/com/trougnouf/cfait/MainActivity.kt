@@ -320,7 +320,12 @@ fun CfaitNavHost(
                     Manifest.permission.POST_NOTIFICATIONS
                 ) != PackageManager.PERMISSION_GRANTED
             ) {
-                launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                // Only prompt once; the user can still grant it in system settings.
+                val uiPrefs = context.getSharedPreferences("cfait_ui_prefs", Context.MODE_PRIVATE)
+                if (!uiPrefs.getBoolean("notif_perm_prompted", false)) {
+                    uiPrefs.edit().putBoolean("notif_perm_prompted", true).apply()
+                    launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
             }
         }
     }
@@ -545,7 +550,6 @@ fun CfaitNavHost(
                     try {
                         val inputStream = context.contentResolver.openInputStream(fileUri)
                         val icsContent = inputStream?.bufferedReader()?.use { reader -> reader.readText() }
-                        inputStream?.close()
 
                         if (icsContent != null) {
                             icsContentToImport = icsContent
@@ -635,7 +639,6 @@ fun CfaitNavHost(
                         saveTaskInBackground(uid, smart, desc)
                         autoScrollUid = uid
                         navController.popBackStack()
-                        refreshLists()
                     },
                     onNavigate = { targetUid ->
                         scope.launch(kotlinx.coroutines.Dispatchers.IO) {

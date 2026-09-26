@@ -35,11 +35,27 @@ class NotificationActionReceiver : BroadcastReceiver() {
 
         Log.d("CfaitNotificationAction", "Received action: $action for alarm: $alarmUid")
 
-        // Immediately dismiss the notification to provide instant user feedback.
-        // Use a try-catch in case the notification permission was revoked.
+        // Immediately dismiss the relevant notification(s) to provide instant
+        // user feedback. Use a try-catch in case the permission was revoked.
         try {
-            val notificationId = (taskUid + "_alarm").hashCode()
-            NotificationManagerCompat.from(context).cancel(notificationId)
+            val manager = NotificationManagerCompat.from(context)
+            when (action) {
+                // Completing or starting the task makes both notifications stale
+                NotificationActionWorker.ACTION_DONE,
+                NotificationActionWorker.ACTION_START -> {
+                    manager.cancel((taskUid + "_alarm").hashCode())
+                    manager.cancel(taskUid.hashCode())
+                }
+                // Actions on the ongoing "in progress" notification
+                NotificationActionWorker.ACTION_PAUSE,
+                NotificationActionWorker.ACTION_DISMISS_ONGOING -> {
+                    manager.cancel(taskUid.hashCode())
+                }
+                // Snooze and alarm dismiss leave the ongoing timer untouched
+                else -> {
+                    manager.cancel((taskUid + "_alarm").hashCode())
+                }
+            }
         } catch (e: SecurityException) {
             Log.w("CfaitNotificationAction", "Could not cancel notification due to SecurityException", e)
         }
