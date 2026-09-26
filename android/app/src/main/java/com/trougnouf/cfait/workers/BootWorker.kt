@@ -22,6 +22,8 @@ class BootWorker(
 
             // Use Singleton
             val app = context.applicationContext as CfaitApplication
+            // Wait for the background cache load before touching the store
+            app.dataLoaded.await()
             val api = app.api
 
             AlarmScheduler.scheduleNextAlarm(context, api)

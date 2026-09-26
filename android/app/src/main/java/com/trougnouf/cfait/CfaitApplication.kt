@@ -6,11 +6,18 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
+import android.util.Log
 import com.trougnouf.cfait.core.CfaitMobile
+import kotlinx.coroutines.CompletableDeferred
+import kotlin.concurrent.thread
 
 class CfaitApplication : Application() {
     lateinit var api: CfaitMobile
         private set
+
+    // Completed once the background cache load finishes (success or failure),
+    // so background workers can wait for it instead of racing an empty store.
+    val dataLoaded = CompletableDeferred<Unit>()
 
     // Declare the external function
     private external fun initNdkContext(context: android.content.Context)
@@ -51,8 +58,17 @@ class CfaitApplication : Application() {
         // This avoids redundant IPC overhead on every alarm fire
         createNotificationChannel()
 
-        // Preload data into memory immediately so UI is ready faster
-        api.loadFromCache()
+        // Preload data into memory on a background thread so the FFI call
+        // never blocks the main thread; waiters await dataLoaded.
+        thread {
+            try {
+                api.loadFromCache()
+            } catch (e: Throwable) {
+                Log.e("CfaitApp", "Failed to load cache", e)
+            } finally {
+                dataLoaded.complete(Unit)
+            }
+        }
 
         // Detect saved language preference or fall back to Android system language,
         // then propagate it to the Rust backend so rust_i18n is initialized correctly.

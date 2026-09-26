@@ -408,7 +408,7 @@ fun CfaitNavHost(
 
     fun fastStart() {
         refreshLists()
-        scope.launch {
+        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
             isLoading = true
             try {
                 api.sync()
@@ -435,7 +435,7 @@ fun CfaitNavHost(
     }
 
     fun saveTaskInBackground(uid: String, smart: String, desc: String) {
-        scope.launch {
+        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 api.updateTaskSmart(uid, smart)
                 api.updateTaskDescription(uid, desc)
@@ -630,7 +630,7 @@ fun CfaitNavHost(
                         refreshLists()
                     },
                     onNavigate = { targetUid ->
-                        scope.launch {
+                        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                             try {
                                 api.revealTask(targetUid)
                             } catch (e: Exception) {
@@ -708,7 +708,7 @@ fun CfaitNavHost(
                     icsContent = content,
                     calendars = calendars,
                     onImportComplete = { calendarHref ->
-                        scope.launch {
+                        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                             try {
                                 val result = api.importLocalIcs(calendarHref, content)
                                 Toast.makeText(context, result, Toast.LENGTH_LONG).show()

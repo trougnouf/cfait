@@ -86,6 +86,9 @@ class TaskListWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val app = context.applicationContext as CfaitApplication
+        // Wait (with a timeout) for the background cache load so a
+        // cold-process widget render doesn't show an empty store.
+        kotlinx.coroutines.withTimeoutOrNull(10_000) { app.dataLoaded.await() }
         val api = app.api
 
         val prefs = context.getSharedPreferences(TaskListWidgetConfigActivity.PREFS_NAME, Context.MODE_PRIVATE)
