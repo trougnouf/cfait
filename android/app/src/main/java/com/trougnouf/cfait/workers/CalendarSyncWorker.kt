@@ -32,6 +32,8 @@ class CalendarSyncWorker(
         Log.d("CfaitCalSync", "Starting bulk calendar operation: $mode")
 
         val app = applicationContext as CfaitApplication
+        // Wait for the background cache load before touching the store
+        app.dataLoaded.await()
         val api = app.api
 
         return try {

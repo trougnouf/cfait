@@ -49,8 +49,7 @@ import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.MobileFilterOptions
 import com.trougnouf.cfait.core.MobileTaskSummary
 
-/** Intent extra key for deep-linking to a specific task from the widget. */
-private val FocusTaskUidKey = ActionParameters.Key<String>("focus_task_uid")
+private val FocusTaskUidKey = ActionParameters.Key<String>(EXTRA_FOCUS_TASK_UID)
 
 /** State key used to force widget recomposition after in-widget actions or config changes. */
 internal val RefreshTickKey = longPreferencesKey("refresh_tick")

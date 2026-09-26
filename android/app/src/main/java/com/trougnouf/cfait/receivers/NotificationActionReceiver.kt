@@ -24,8 +24,8 @@ import com.trougnouf.cfait.workers.NotificationActionWorker
  */
 class NotificationActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val taskUid = intent.getStringExtra("T_UID")
-        val alarmUid = intent.getStringExtra("A_UID")
+        val taskUid = intent.getStringExtra(NotificationActionWorker.EXTRA_TASK_UID)
+        val alarmUid = intent.getStringExtra(NotificationActionWorker.EXTRA_ALARM_UID)
         val action = intent.action
 
         if (taskUid == null || alarmUid == null || action == null) {
@@ -62,7 +62,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
 
         // Check for RemoteInput (Custom Snooze)
         val remoteInput = RemoteInput.getResultsFromIntent(intent)
-        val customInput = remoteInput?.getCharSequence("snooze_custom_duration")?.toString()
+        val customInput = remoteInput?.getCharSequence(NotificationActionWorker.EXTRA_SNOOZE_INPUT)?.toString()
 
         // Prepare input data for the worker, passing along the specific action.
         val dataBuilder = Data.Builder()

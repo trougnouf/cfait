@@ -30,6 +30,8 @@ class PeriodicSyncWorker(
             Log.d("CfaitPeriodicSync", "Running background sync")
 
             val app = context.applicationContext as CfaitApplication
+            // Wait for the background cache load before touching the store
+            app.dataLoaded.await()
             val api = app.api
 
             // Perform sync with backend / local store
@@ -44,7 +46,7 @@ class PeriodicSyncWorker(
             updateAllTaskListWidgets(context)
 
             // Notify UI to refresh if open
-            val intent = Intent("com.trougnouf.cfait.REFRESH_UI")
+            val intent = Intent(NotificationActionWorker.BROADCAST_REFRESH)
             intent.setPackage(context.packageName)
             context.sendBroadcast(intent)
 
@@ -52,12 +54,12 @@ class PeriodicSyncWorker(
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("CfaitPeriodicSync", "Sync failed", e)
-            
-            val intent = Intent("com.trougnouf.cfait.REFRESH_UI")
-            intent.putExtra("sync_error", e.message)
+
+            val intent = Intent(NotificationActionWorker.BROADCAST_REFRESH)
+            intent.putExtra(NotificationActionWorker.KEY_SYNC_ERROR, e.message)
             intent.setPackage(context.packageName)
             context.sendBroadcast(intent)
-            
+
             Result.retry()
         }
     }

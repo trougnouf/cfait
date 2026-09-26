@@ -39,7 +39,7 @@ object AlarmScheduler {
             Log.w("CfaitAlarm", "Alarm time is in the past - firing immediately (delay: $delaySeconds seconds)")
             val workRequest = OneTimeWorkRequestBuilder<AlarmWorker>().build()
             WorkManager.getInstance(context).enqueueUniqueWork(
-                "cfait_alarm_processing",
+                AlarmWorker.UNIQUE_WORK_NAME,
                 ExistingWorkPolicy.REPLACE,
                 workRequest
             )
@@ -68,13 +68,11 @@ object AlarmScheduler {
             } else {
                 alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerMs, pendingIntent)
             }
-            Log.i("CfaitAlarm", "✓ Successfully scheduled alarm for $triggerMs (in $delaySeconds seconds)")
+            Log.i("CfaitAlarm", "Scheduled alarm for $triggerMs (in $delaySeconds seconds)")
         } catch (e: SecurityException) {
-            Log.e("CfaitAlarm", "✗ SecurityException while scheduling alarm", e)
-            e.printStackTrace()
+            Log.e("CfaitAlarm", "SecurityException while scheduling alarm", e)
         } catch (e: Exception) {
-            Log.e("CfaitAlarm", "✗ Unexpected exception while scheduling alarm", e)
-            e.printStackTrace()
+            Log.e("CfaitAlarm", "Unexpected exception while scheduling alarm", e)
         }
     }
 

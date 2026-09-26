@@ -45,6 +45,9 @@ const val EXTRA_CALENDAR_HREF = "widget_calendar_href"
 /** Intent extra asking MainActivity to open with a preset search query. */
 const val EXTRA_PRESET_SEARCH = "preset_search"
 
+/** Intent extra asking MainActivity to scroll to and focus a specific task. */
+const val EXTRA_FOCUS_TASK_UID = "focus_task_uid"
+
 private val QuickAddKey = ActionParameters.Key<String>(EXTRA_QUICK_ADD)
 private val JournalTodayKey = ActionParameters.Key<String>(EXTRA_JOURNAL_TODAY)
 private val CalendarHrefKey = ActionParameters.Key<String>(EXTRA_CALENDAR_HREF)

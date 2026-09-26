@@ -6,7 +6,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
@@ -29,6 +28,11 @@ class NotificationActionWorker(
         const val KEY_ALARM_UID = "alarm_uid"
         const val KEY_CUSTOM_INPUT = "custom_input"
 
+        // Intent extras passed from notification actions to the receiver
+        const val EXTRA_TASK_UID = "T_UID"
+        const val EXTRA_ALARM_UID = "A_UID"
+        const val EXTRA_SNOOZE_INPUT = "snooze_custom_duration"
+
         // Actions
         const val ACTION_SNOOZE_CUSTOM = "SNOOZE_CUSTOM"
         const val ACTION_START = "START"
@@ -38,6 +42,7 @@ class NotificationActionWorker(
         const val ACTION_DISMISS_ONGOING = "DISMISS_ONGOING"
 
         const val BROADCAST_REFRESH = "com.trougnouf.cfait.REFRESH_UI"
+        const val KEY_SYNC_ERROR = "sync_error"
         const val CHANNEL_ALARMS = "CFAIT_ALARMS"
         const val CHANNEL_STATUS = "CFAIT_STATUS"
     }
@@ -57,6 +62,8 @@ class NotificationActionWorker(
             Log.d("CfaitNotificationAction", "Processing action: $action for task: $taskUid")
 
             val app = context.applicationContext as CfaitApplication
+            // Wait for the background cache load before touching the store
+            app.dataLoaded.await()
             val api = app.api
 
             when (action) {
@@ -112,21 +119,18 @@ class NotificationActionWorker(
             }
 
             var syncErrorMsg: String? = null
-            try { 
-                api.syncJournal() 
+            try {
+                api.syncJournal()
             } catch (e: Exception) {
                 syncErrorMsg = e.message
             }
 
             // Refresh UI and Scheduler
             AlarmScheduler.scheduleNextAlarm(context, api)
-            AlarmScheduler.cleanupObsoleteNotifications(
-                context,
-                api
-            ) // <- Add cleanup pass to prune stale notifications
-            
+            AlarmScheduler.cleanupObsoleteNotifications(context, api)
+
             val intent = Intent(BROADCAST_REFRESH)
-            intent.putExtra("sync_error", syncErrorMsg)
+            intent.putExtra(KEY_SYNC_ERROR, syncErrorMsg)
             intent.setPackage(context.packageName)
             context.sendBroadcast(intent)
 

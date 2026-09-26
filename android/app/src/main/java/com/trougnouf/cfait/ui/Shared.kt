@@ -51,6 +51,7 @@ import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.core.MobileSyntaxType
 import com.trougnouf.cfait.core.MobileTaskSummary
+import com.trougnouf.cfait.workers.NotificationActionWorker
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.foundation.border
@@ -1269,8 +1270,8 @@ fun triggerBackgroundSync(context: Context, api: CfaitMobile) {
             // Ignore network failures silently, the red sync icon will remain
             errorMsg = e.message
         } finally {
-            val intent = android.content.Intent("com.trougnouf.cfait.REFRESH_UI")
-            intent.putExtra("sync_error", errorMsg)
+            val intent = android.content.Intent(NotificationActionWorker.BROADCAST_REFRESH)
+            intent.putExtra(NotificationActionWorker.KEY_SYNC_ERROR, errorMsg)
             intent.setPackage(context.packageName)
             context.sendBroadcast(intent)
         }

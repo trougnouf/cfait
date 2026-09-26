@@ -56,10 +56,16 @@ import com.trougnouf.cfait.ui.AdvancedSettingsScreen
 import com.trougnouf.cfait.ui.TaskDetailScreen
 import com.trougnouf.cfait.util.AlarmScheduler
 import com.trougnouf.cfait.util.NotificationHelper
+import com.trougnouf.cfait.widget.EXTRA_CALENDAR_HREF
+import com.trougnouf.cfait.widget.EXTRA_FOCUS_TASK_UID
+import com.trougnouf.cfait.widget.EXTRA_JOURNAL_TODAY
+import com.trougnouf.cfait.widget.EXTRA_PRESET_SEARCH
+import com.trougnouf.cfait.widget.EXTRA_QUICK_ADD
 import com.trougnouf.cfait.widget.TaskListWidget
 import com.trougnouf.cfait.workers.AlarmWorker
 import com.trougnouf.cfait.workers.CalendarMigrationWorker
 import com.trougnouf.cfait.workers.CalendarSyncWorker
+import com.trougnouf.cfait.workers.NotificationActionWorker
 import com.trougnouf.cfait.widget.updateAllTaskListWidgets
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -289,7 +295,7 @@ fun CfaitNavHost(
                 Toast.makeText(context, msg ?: context.getString(R.string.migration_complete), Toast.LENGTH_LONG).show()
 
                 // Force refresh UI
-                val intent = Intent("com.trougnouf.cfait.REFRESH_UI")
+                val intent = Intent(NotificationActionWorker.BROADCAST_REFRESH)
                 intent.setPackage(context.packageName)
                 context.sendBroadcast(intent)
 
@@ -389,10 +395,10 @@ fun CfaitNavHost(
     DisposableEffect(Unit) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
-                if (intent?.action == "com.trougnouf.cfait.REFRESH_UI") {
+                if (intent?.action == NotificationActionWorker.BROADCAST_REFRESH) {
                     android.util.Log.d("CfaitMain", "Received REFRESH_UI broadcast")
-                    
-                    val syncError = intent.getStringExtra("sync_error")
+
+                    val syncError = intent.getStringExtra(NotificationActionWorker.KEY_SYNC_ERROR)
                     if (syncError != null) {
                         lastSyncFailed = true
                         val authErrorStr = context?.getString(R.string.error_auth_failed) ?: "Authentication failed"
@@ -408,7 +414,7 @@ fun CfaitNavHost(
                 }
             }
         }
-        val filter = IntentFilter("com.trougnouf.cfait.REFRESH_UI")
+        val filter = IntentFilter(NotificationActionWorker.BROADCAST_REFRESH)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {
@@ -522,60 +528,65 @@ fun CfaitNavHost(
 
     LaunchedEffect(currentIntent) {
         currentIntent?.let {
-            val focusUid = it.getStringExtra("focus_task_uid")
+            val focusUid = it.getStringExtra(EXTRA_FOCUS_TASK_UID)
             if (focusUid != null) {
                 autoScrollUid = focusUid
-                it.removeExtra("focus_task_uid")
+                it.removeExtra(EXTRA_FOCUS_TASK_UID)
             }
 
-            if (it.getStringExtra("quick_add") != null) {
+            if (it.getStringExtra(EXTRA_QUICK_ADD) != null) {
                 focusNewTask = true
-                quickAddCalHref = it.getStringExtra("widget_calendar_href")
+                quickAddCalHref = it.getStringExtra(EXTRA_CALENDAR_HREF)
                 journalTodayHref = null
                 presetSearch = null
-                it.removeExtra("quick_add")
-                it.removeExtra("widget_calendar_href")
+                it.removeExtra(EXTRA_QUICK_ADD)
+                it.removeExtra(EXTRA_CALENDAR_HREF)
             }
 
-            val journalToday = it.getStringExtra("journal_today")
+            val journalToday = it.getStringExtra(EXTRA_JOURNAL_TODAY)
             if (journalToday != null) {
-                journalTodayHref = it.getStringExtra("widget_calendar_href") ?: ""
-                it.removeExtra("journal_today")
-                it.removeExtra("widget_calendar_href")
+                journalTodayHref = it.getStringExtra(EXTRA_CALENDAR_HREF) ?: ""
+                it.removeExtra(EXTRA_JOURNAL_TODAY)
+                it.removeExtra(EXTRA_CALENDAR_HREF)
             }
 
-            val presetSearchQuery = it.getStringExtra("preset_search")
+            val presetSearchQuery = it.getStringExtra(EXTRA_PRESET_SEARCH)
             if (presetSearchQuery != null) {
-                val calHref = it.getStringExtra("widget_calendar_href")
+                val calHref = it.getStringExtra(EXTRA_CALENDAR_HREF)
                 presetSearch = presetSearchQuery to calHref
-                it.removeExtra("preset_search")
-                it.removeExtra("widget_calendar_href")
+                it.removeExtra(EXTRA_PRESET_SEARCH)
+                it.removeExtra(EXTRA_CALENDAR_HREF)
             }
 
             if (it.action == Intent.ACTION_VIEW) {
                 val uri: Uri? = it.data
                 uri?.let { fileUri ->
-                    try {
-                        val inputStream = context.contentResolver.openInputStream(fileUri)
-                        val icsContent = inputStream?.bufferedReader()?.use { reader -> reader.readText() }
+                    // Calendar exports can be large; read the file off the main thread
+                    scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                        try {
+                            val inputStream = context.contentResolver.openInputStream(fileUri)
+                            val icsContent = inputStream?.bufferedReader()?.use { reader -> reader.readText() }
 
-                        if (icsContent != null) {
-                            icsContentToImport = icsContent
-                            navController.navigate("ics_import")
-                        } else {
+                            if (icsContent != null) {
+                                icsContentToImport = icsContent
+                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                    navController.navigate("ics_import")
+                                }
+                            } else {
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.failed_to_read_ics_file),
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        } catch (e: Exception) {
+                            if (e is CancellationException) throw e
                             Toast.makeText(
                                 context,
-                                context.getString(R.string.failed_to_read_ics_file),
+                                context.getString(R.string.error_opening_file, e.message ?: ""),
                                 Toast.LENGTH_LONG
                             ).show()
                         }
-                    } catch (e: Exception) {
-                        if (e is CancellationException) throw e
-                        Toast.makeText(
-                            context,
-                            context.getString(R.string.error_opening_file, e.message ?: ""),
-                            Toast.LENGTH_LONG
-                        ).show()
                     }
                 }
             }

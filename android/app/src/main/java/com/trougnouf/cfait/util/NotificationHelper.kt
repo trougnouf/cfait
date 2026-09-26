@@ -6,7 +6,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.trougnouf.cfait.MainActivity
@@ -14,6 +13,7 @@ import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.core.MobileTask
 import com.trougnouf.cfait.receivers.NotificationActionReceiver
+import com.trougnouf.cfait.widget.EXTRA_FOCUS_TASK_UID
 import com.trougnouf.cfait.workers.NotificationActionWorker
 
 object NotificationHelper {
@@ -72,8 +72,8 @@ object NotificationHelper {
         // Pause Action
         val pauseIntent = Intent(context, NotificationActionReceiver::class.java).apply {
             this.action = NotificationActionWorker.ACTION_PAUSE
-            putExtra("T_UID", task.uid)
-            putExtra("A_UID", originalAlarmUid ?: "")
+            putExtra(NotificationActionWorker.EXTRA_TASK_UID, task.uid)
+            putExtra(NotificationActionWorker.EXTRA_ALARM_UID, originalAlarmUid ?: "")
         }
         val pausePending = PendingIntent.getBroadcast(
             context,
@@ -85,8 +85,8 @@ object NotificationHelper {
         // Done Action
         val doneIntent = Intent(context, NotificationActionReceiver::class.java).apply {
             this.action = NotificationActionWorker.ACTION_DONE
-            putExtra("T_UID", task.uid)
-            putExtra("A_UID", originalAlarmUid ?: "")
+            putExtra(NotificationActionWorker.EXTRA_TASK_UID, task.uid)
+            putExtra(NotificationActionWorker.EXTRA_ALARM_UID, originalAlarmUid ?: "")
         }
         val donePending = PendingIntent.getBroadcast(
             context,
@@ -98,8 +98,8 @@ object NotificationHelper {
         // Dismiss Action (swiping away)
         val dismissIntent = Intent(context, NotificationActionReceiver::class.java).apply {
             this.action = NotificationActionWorker.ACTION_DISMISS_ONGOING
-            putExtra("T_UID", task.uid)
-            putExtra("A_UID", originalAlarmUid ?: "")
+            putExtra(NotificationActionWorker.EXTRA_TASK_UID, task.uid)
+            putExtra(NotificationActionWorker.EXTRA_ALARM_UID, originalAlarmUid ?: "")
         }
         val dismissPending = PendingIntent.getBroadcast(
             context,
@@ -110,7 +110,7 @@ object NotificationHelper {
 
         // Tap opens app
         val tapIntent = Intent(context, MainActivity::class.java).apply {
-            putExtra("focus_task_uid", task.uid)
+            putExtra(EXTRA_FOCUS_TASK_UID, task.uid)
         }
         val tapPending =
             PendingIntent.getActivity(context, task.uid.hashCode(), tapIntent, PendingIntent.FLAG_IMMUTABLE)

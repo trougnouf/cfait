@@ -21,7 +21,7 @@ class AlarmReceiver : BroadcastReceiver() {
 
         // Enqueue the work
         WorkManager.getInstance(context).enqueueUniqueWork(
-            "cfait_alarm_processing",
+            AlarmWorker.UNIQUE_WORK_NAME,
             ExistingWorkPolicy.REPLACE,
             workRequest
         )
