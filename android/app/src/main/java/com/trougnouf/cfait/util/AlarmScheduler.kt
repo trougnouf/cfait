@@ -8,8 +8,12 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.util.Log
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.receivers.AlarmReceiver
+import com.trougnouf.cfait.workers.AlarmWorker
 
 object AlarmScheduler {
     fun scheduleNextAlarm(context: Context, api: CfaitMobile) {
@@ -29,9 +33,16 @@ object AlarmScheduler {
         Log.d("CfaitAlarm", "Trigger time: $triggerMs ms, Current time: $now ms")
         Log.d("CfaitAlarm", "Delay: $delaySeconds seconds from now")
 
-        // Don't schedule in the past
+        // An alarm whose time has already passed is still firing (Rust keeps
+        // it in the firing window), so run the worker now instead of dropping it.
         if (triggerMs <= now) {
-            Log.w("CfaitAlarm", "Alarm time is in the past - not scheduling (delay: $delaySeconds seconds)")
+            Log.w("CfaitAlarm", "Alarm time is in the past - firing immediately (delay: $delaySeconds seconds)")
+            val workRequest = OneTimeWorkRequestBuilder<AlarmWorker>().build()
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                "cfait_alarm_processing",
+                ExistingWorkPolicy.REPLACE,
+                workRequest
+            )
             return
         }
 
