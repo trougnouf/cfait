@@ -3,6 +3,7 @@
 package com.trougnouf.cfait.util
 
 import android.app.AlarmManager
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -79,7 +80,7 @@ object AlarmScheduler {
     suspend fun cleanupObsoleteNotifications(context: Context, api: CfaitMobile) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val notificationManager =
-                context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             try {
                 val activeNotifications = notificationManager.activeNotifications
                 for (statusBarNotif in activeNotifications) {

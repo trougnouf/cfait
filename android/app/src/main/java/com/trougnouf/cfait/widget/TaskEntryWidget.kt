@@ -4,6 +4,8 @@ package com.trougnouf.cfait.widget
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
+import android.os.Bundle
+import android.util.Log
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -18,6 +20,7 @@ import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionParametersOf
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
+import androidx.glance.appwidget.AppWidgetId
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.provideContent
@@ -83,7 +86,7 @@ class TaskEntryWidget : GlanceAppWidget() {
             TaskEntryWidgetConfigActivity.PREFS_NAME,
             Context.MODE_PRIVATE
         )
-        val suffix = if (id is androidx.glance.appwidget.AppWidgetId) "_${id.appWidgetId}" else ""
+        val suffix = if (id is AppWidgetId) "_${id.appWidgetId}" else ""
 
         provideContent {
             // Reading the refresh tick from Glance state forces recomposition
@@ -124,7 +127,7 @@ class TaskEntryWidget : GlanceAppWidget() {
                     contentAlignment = Alignment.BottomCenter
                 ) {
                     Image(
-                        provider = ImageProvider(com.trougnouf.cfait.R.drawable.ic_launcher_foreground),
+                        provider = ImageProvider(R.drawable.ic_launcher_foreground),
                         contentDescription = label,
                         modifier = GlanceModifier.fillMaxSize().padding(bottom = 10.dp),
                     )
@@ -141,7 +144,7 @@ class TaskEntryWidget : GlanceAppWidget() {
     }
 
     override suspend fun onDelete(context: Context, glanceId: GlanceId) {
-        if (glanceId is androidx.glance.appwidget.AppWidgetId) {
+        if (glanceId is AppWidgetId) {
             val s = "_${glanceId.appWidgetId}"
             context.getSharedPreferences(TaskEntryWidgetConfigActivity.PREFS_NAME, Context.MODE_PRIVATE)
                 .edit()
@@ -166,7 +169,7 @@ class TaskEntryWidgetReceiver : GlanceAppWidgetReceiver() {
         val ownComponent = ComponentName(context.packageName, javaClass.name)
         val isOwn = info?.provider == ownComponent
         if (!isOwn) {
-            android.util.Log.w("CfaitWidget", "EntryReceiver ignoring id=$appWidgetId provider=${info?.provider} (expected $ownComponent)")
+            Log.w("CfaitWidget", "EntryReceiver ignoring id=$appWidgetId provider=${info?.provider} (expected $ownComponent)")
         }
         return isOwn
     }
@@ -184,7 +187,7 @@ class TaskEntryWidgetReceiver : GlanceAppWidgetReceiver() {
         context: Context,
         appWidgetManager: AppWidgetManager,
         appWidgetId: Int,
-        newOptions: android.os.Bundle
+        newOptions: Bundle
     ) {
         if (isOwnId(context, appWidgetId)) {
             super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)

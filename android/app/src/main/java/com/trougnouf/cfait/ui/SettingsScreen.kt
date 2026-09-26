@@ -7,12 +7,18 @@
 
 package com.trougnouf.cfait.ui
 
+import android.app.LocaleManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.LocaleList
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -39,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.FileProvider
+import androidx.core.os.LocaleListCompat
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.core.MobileCalendar
@@ -173,7 +180,7 @@ fun SettingsScreen(
 
     // Load persisted choice when reloading settings
     LaunchedEffect(Unit) {
-        val prefs = context.getSharedPreferences("cfait_prefs", android.content.Context.MODE_PRIVATE)
+        val prefs = context.getSharedPreferences("cfait_prefs", Context.MODE_PRIVATE)
         val savedLang = prefs.getString("language", null)
         selectedLanguage = if (savedLang == "auto") null else savedLang
     }
@@ -567,7 +574,7 @@ fun SettingsScreen(
                                         onClick = {
                                             val prefs = context.getSharedPreferences(
                                                 "cfait_prefs",
-                                                android.content.Context.MODE_PRIVATE
+                                                Context.MODE_PRIVATE
                                             )
                                             val saveVal = code ?: "auto"
                                             prefs.edit().putString("language", saveVal).apply()
@@ -582,18 +589,18 @@ fun SettingsScreen(
                                             // Update Android UI (Native API 33+ or AppCompat API < 33)
                                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                                 val localeManager =
-                                                    context.getSystemService(android.app.LocaleManager::class.java)
+                                                    context.getSystemService(LocaleManager::class.java)
                                                 localeManager.applicationLocales = if (code != null) {
-                                                    android.os.LocaleList.forLanguageTags(code.replace("_", "-"))
+                                                    LocaleList.forLanguageTags(code.replace("_", "-"))
                                                 } else {
-                                                    android.os.LocaleList.getEmptyLocaleList()
+                                                    LocaleList.getEmptyLocaleList()
                                                 }
                                             } else {
-                                                androidx.appcompat.app.AppCompatDelegate.setApplicationLocales(
-                                                    if (code != null) androidx.core.os.LocaleListCompat.forLanguageTags(
+                                                AppCompatDelegate.setApplicationLocales(
+                                                    if (code != null) LocaleListCompat.forLanguageTags(
                                                         code.replace("_", "-")
                                                     )
-                                                    else androidx.core.os.LocaleListCompat.getEmptyLocaleList()
+                                                    else LocaleListCompat.getEmptyLocaleList()
                                                 )
                                                 // Force recreate for ComponentActivity on older APIs
                                                 context.findActivity()?.recreate()
@@ -710,7 +717,7 @@ fun SettingsScreen(
 
                 // Battery Optimization Warning
                 val powerManager =
-                    context.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
+                    context.getSystemService(Context.POWER_SERVICE) as? PowerManager
                 val isIgnoringBatteryOptimizations =
                     powerManager?.isIgnoringBatteryOptimizations(context.packageName) ?: true
 
@@ -719,7 +726,7 @@ fun SettingsScreen(
                         onClick = {
                             try {
                                 val intent =
-                                    android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                                    Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
                                 context.startActivity(intent)
                             } catch (e: Exception) {
                                 setStatus(context.getString(R.string.cannot_open_battery_settings), true)

@@ -2,12 +2,16 @@
 // File: ./android/app/src/main/java/com/trougnouf/cfait/util/NotificationHelper.kt
 package com.trougnouf.cfait.util
 
+import android.Manifest
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Bundle
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import com.trougnouf.cfait.MainActivity
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.CfaitMobile
@@ -18,10 +22,10 @@ import com.trougnouf.cfait.workers.NotificationActionWorker
 
 object NotificationHelper {
     fun updateOngoingNotifications(context: Context, api: CfaitMobile) {
-        if (androidx.core.content.ContextCompat.checkSelfPermission(
+        if (ContextCompat.checkSelfPermission(
                 context,
-                android.Manifest.permission.POST_NOTIFICATIONS
-            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
         ) {
             return
         }
@@ -127,7 +131,7 @@ object NotificationHelper {
             .setContentIntent(tapPending)
             .addAction(R.drawable.ic_launcher_foreground, context.getString(R.string.pause), pausePending)
             .addAction(R.drawable.ic_launcher_foreground, context.getString(R.string.done), donePending)
-            .addExtras(android.os.Bundle().apply {
+            .addExtras(Bundle().apply {
                 putString("cfait_task_uid", task.uid)
                 putString("cfait_notif_type", "ongoing")
             })
