@@ -1,9 +1,9 @@
 {
+    "about_author": "door Benoit Brummer (Trougnouf)",
     "about_chat": "Chat: %{url}",
     "about_license": "GPL-3.0 licentie",
     "about_repository": "Repository: %{url}",
     "about_title": "Cfait",
-    "about_author": "door Benoit Brummer (Trougnouf)",
     "about_version": "Versie %{version} (%{commit})",
     "action_bar_position": "Positie van actieknoppen",
     "action_bar_position_explain": "Verplaats veelgebruikte knoppen (zoeken, synchronisatie, instellingen) naar onderen voor gemakkelijker bereik met één hand.",
