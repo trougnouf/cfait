@@ -10,8 +10,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.MobileTaskSummary
 
 /**
@@ -52,7 +54,7 @@ fun VirtualTaskRow(task: MobileTaskSummary, onClick: () -> Unit) {
             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
         )
         Text(
-            text = if (isExpand) androidx.compose.ui.res.stringResource(com.trougnouf.cfait.R.string.expand_completed_tasks) else androidx.compose.ui.res.stringResource(com.trougnouf.cfait.R.string.collapse_completed_tasks),
+            text = if (isExpand) stringResource(R.string.expand_completed_tasks) else stringResource(R.string.collapse_completed_tasks),
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
             modifier = Modifier.padding(start = 8.dp)

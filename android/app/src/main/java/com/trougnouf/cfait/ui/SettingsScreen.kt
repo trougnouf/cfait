@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// File: ./android/app/src/main/java/com/trougnouf/cfait/ui/SettingsScreen.kt
 /*
  * Settings screen for the Android client (Compose).
  * This variant moves Trash Retention to the Advanced Settings screen,
@@ -14,12 +13,14 @@ import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.material3.Slider
@@ -27,12 +28,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
@@ -40,13 +42,17 @@ import androidx.core.content.FileProvider
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.core.MobileCalendar
+import com.trougnouf.cfait.core.MobileFirstDayOfWeek
 import com.trougnouf.cfait.core.MobileGoalType
 import com.trougnouf.cfait.core.MobileIntervalUnit
 import com.trougnouf.cfait.core.MobileGoal
 import com.trougnouf.cfait.core.MobileInterval
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.Locale
 
 /* busyMessages moved into the composable so strings can be resolved with stringResource()
    (must be inside a @Composable function). */
@@ -106,7 +112,7 @@ fun SettingsScreen(
 
     // State maintained purely for saving without overwriting backend values
     var deleteEventsOnCompletion by remember { mutableStateOf(false) }
-    var firstDayOfWeek by remember { mutableStateOf(com.trougnouf.cfait.core.MobileFirstDayOfWeek.MONDAY) }
+    var firstDayOfWeek by remember { mutableStateOf(MobileFirstDayOfWeek.MONDAY) }
 
     var themeExpanded by remember { mutableStateOf(false) }
     // Use localized labels for theme options so they appear translated on Android.
@@ -185,7 +191,7 @@ fun SettingsScreen(
         for (code in locales) {
             // Android/Java Locale parser expects BCP-47 tags with hyphens, not underscores
             val bcp47Code = code.replace("_", "-")
-            val loc = java.util.Locale.forLanguageTag(bcp47Code)
+            val loc = Locale.forLanguageTag(bcp47Code)
             val nativeName = loc.getDisplayName(loc)
             val capitalized = nativeName.replaceFirstChar {
                 if (it.isLowerCase()) it.titlecase(loc) else it.toString()
@@ -209,14 +215,14 @@ fun SettingsScreen(
     }
 
     suspend fun reload() {
-        val cfg = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { api.getConfig() }
+        val cfg = withContext(Dispatchers.IO) { api.getConfig() }
         url = cfg.url
         user = cfg.username
         pass = cfg.password
         insecure = cfg.allowInsecure
         hideCompleted = cfg.hideCompleted
         syncSettings = cfg.syncSettings
-        allCalendars = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { api.getCalendars() }
+        allCalendars = withContext(Dispatchers.IO) { api.getCalendars() }
         disabledSet = allCalendars.filter { it.isDisabled }.map { it.href }.toSet()
         autoRemind = cfg.autoReminders
         showOngoingNotifications = cfg.showOngoingNotifications
@@ -247,7 +253,7 @@ fun SettingsScreen(
                     inputStream?.close()
 
                     if (icsContent != null && importTargetHref != null) {
-                        val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        val result = withContext(Dispatchers.IO) {
                             api.importLocalIcs(importTargetHref!!, icsContent)
                         }
                         setStatus(result)
@@ -256,7 +262,7 @@ fun SettingsScreen(
                         setStatus(context.getString(R.string.error_could_not_read_file), true)
                     }
                 } catch (e: Exception) {
-                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    if (e is CancellationException) throw e
                     setStatus(context.getString(R.string.import_error, e.message ?: ""), true)
                 }
             }
@@ -302,7 +308,7 @@ fun SettingsScreen(
                 setStatus(api.connect(url, user, pass, insecure))
                 reload()
             } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
+                if (e is CancellationException) throw e
                 setStatus(context.getString(R.string.connection_failed, e.message ?: ""), true)
             }
         }
@@ -356,7 +362,7 @@ fun SettingsScreen(
                 OutlinedTextField(
                     value = url,
                     onValueChange = { url = it },
-                    label = { Text(androidx.compose.ui.res.stringResource(R.string.caldav_url)) },
+                    label = { Text(stringResource(R.string.caldav_url)) },
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Uri,
@@ -369,7 +375,7 @@ fun SettingsScreen(
                 OutlinedTextField(
                     value = user,
                     onValueChange = { user = it },
-                    label = { Text(androidx.compose.ui.res.stringResource(R.string.username)) },
+                    label = { Text(stringResource(R.string.username)) },
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(
                         autoCorrect = false,
@@ -381,9 +387,9 @@ fun SettingsScreen(
                 OutlinedTextField(
                     value = pass,
                     onValueChange = { pass = it },
-                    label = { Text(androidx.compose.ui.res.stringResource(R.string.password)) },
+                    label = { Text(stringResource(R.string.password)) },
                     visualTransformation = if (passwordVisible) {
-                        androidx.compose.ui.text.input.VisualTransformation.None
+                        VisualTransformation.None
                     } else {
                         PasswordVisualTransformation()
                     },
@@ -405,19 +411,19 @@ fun SettingsScreen(
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = insecure, onCheckedChange = { insecure = it })
-                    Text(androidx.compose.ui.res.stringResource(R.string.allow_insecure_ssl))
+                    Text(stringResource(R.string.allow_insecure_ssl))
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = syncSettings, onCheckedChange = {
                         syncSettings = it
                         saveToDisk()
                     })
-                    Text(androidx.compose.ui.res.stringResource(R.string.sync_settings))
+                    Text(stringResource(R.string.sync_settings))
                 }
                 Button(
                     onClick = { saveAndConnect() },
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
-                ) { Text(androidx.compose.ui.res.stringResource(R.string.save_and_connect)) }
+                ) { Text(stringResource(R.string.save_and_connect)) }
                 if (status.isNotEmpty()) {
                     Text(
                         status,
@@ -570,7 +576,7 @@ fun SettingsScreen(
 
                                             // Update Rust backend
                                             val sysLocale =
-                                                java.util.Locale.getDefault().toLanguageTag().replace("-", "_")
+                                                Locale.getDefault().toLanguageTag().replace("-", "_")
                                             api.setLocale(code ?: sysLocale)
 
                                             // Update Android UI (Native API 33+ or AppCompat API < 33)
@@ -639,15 +645,15 @@ fun SettingsScreen(
                         hideCompleted = it
                         saveToDisk()
                     })
-                    Text(androidx.compose.ui.res.stringResource(R.string.hide_completed_and_canceled_tasks))
+                    Text(stringResource(R.string.hide_completed_and_canceled_tasks))
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = autoRemind, onCheckedChange = { autoRemind = it })
-                    Text(androidx.compose.ui.res.stringResource(R.string.auto_remind_on_due_start_label))
+                    Text(stringResource(R.string.auto_remind_on_due_start_label))
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                     Text(
-                        androidx.compose.ui.res.stringResource(R.string.default_time_label),
+                        stringResource(R.string.default_time_label),
                         modifier = Modifier.weight(1f)
                     )
                     OutlinedTextField(
@@ -685,7 +691,7 @@ fun SettingsScreen(
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        androidx.compose.ui.res.stringResource(R.string.sync_interval_label),
+                        stringResource(R.string.sync_interval_label),
                         modifier = Modifier.weight(1f)
                     )
                     OutlinedTextField(
@@ -698,7 +704,7 @@ fun SettingsScreen(
                 Text(
                     stringResource(R.string.android_sync_note),
                     fontSize = 12.sp,
-                    color = androidx.compose.ui.graphics.Color.Gray,
+                    color = Color.Gray,
                     modifier = Modifier.padding(start = 4.dp, top = 4.dp, bottom = 8.dp)
                 )
 
@@ -727,12 +733,12 @@ fun SettingsScreen(
                             contentColor = MaterialTheme.colorScheme.onTertiaryContainer
                         )
                     ) {
-                        Text(androidx.compose.ui.res.stringResource(R.string.disable_battery_optimizations))
+                        Text(stringResource(R.string.disable_battery_optimizations))
                     }
                     Text(
                         stringResource(R.string.battery_optimization_explain),
                         fontSize = 12.sp,
-                        color = androidx.compose.ui.graphics.Color.Gray,
+                        color = Color.Gray,
                         modifier = Modifier.padding(start = 4.dp, top = 4.dp)
                     )
                 }
@@ -754,12 +760,12 @@ fun SettingsScreen(
                         onCheckedChange = { createEventsForTasks = it },
                         enabled = !isCalendarBusy
                     )
-                    Text(androidx.compose.ui.res.stringResource(R.string.create_calendar_events_for_tasks_with_dates))
+                    Text(stringResource(R.string.create_calendar_events_for_tasks_with_dates))
                 }
                 Text(
                     stringResource(R.string.create_calendar_events_note),
                     fontSize = 12.sp,
-                    color = androidx.compose.ui.graphics.Color.Gray,
+                    color = Color.Gray,
                     modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
                 )
 
@@ -783,14 +789,14 @@ fun SettingsScreen(
                             Text("$currentBusyMessage...")
                         }
                     } else {
-                        Text(androidx.compose.ui.res.stringResource(R.string.delete_all_calendar_events))
+                        Text(stringResource(R.string.delete_all_calendar_events))
                     }
                 }
 
                 Text(
                     stringResource(R.string.calendar_events_reversible_note),
                     fontSize = 12.sp,
-                    color = androidx.compose.ui.graphics.Color.Gray,
+                    color = Color.Gray,
                     modifier = Modifier.padding(start = 4.dp, top = 4.dp)
                 )
             }
@@ -838,12 +844,12 @@ fun SettingsScreen(
                                                 api.updateLocalCalendar(cal.href, name, color)
                                             } else {
                                                 api.updateRemoteCalendar(cal.href, name, color)
-                                                com.trougnouf.cfait.ui.triggerBackgroundSync(context, api)
+                                                triggerBackgroundSync(context, api)
                                             }
                                             setStatus(context.getString(R.string.collection_updated))
                                             reload()
                                         } catch (e: Exception) {
-                                            if (e is kotlinx.coroutines.CancellationException) throw e
+                                            if (e is CancellationException) throw e
                                             setStatus(context.getString(R.string.error_general, e.message ?: ""), true)
                                         }
                                     }
@@ -855,7 +861,7 @@ fun SettingsScreen(
                                                 api.deleteLocalCalendar(cal.href)
                                                 reload()
                                             } catch (e: Exception) {
-                                                if (e is kotlinx.coroutines.CancellationException) throw e
+                                                if (e is CancellationException) throw e
                                                 setStatus(context.getString(R.string.error_general, e.message ?: ""), true)
                                             }
                                         }
@@ -864,7 +870,7 @@ fun SettingsScreen(
                                 onExport = {
                                     scope.launch {
                                         try {
-                                            val icsContent = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                            val icsContent = withContext(Dispatchers.IO) {
                                                 api.exportLocalIcs(cal.href)
                                             }
                                             val calId = if (cal.isLocal) {
@@ -887,7 +893,7 @@ fun SettingsScreen(
                                             val shareIntent = Intent.createChooser(intent, context.getString(R.string.export_calendar_title, cal.name))
                                             context.startActivity(shareIntent)
                                         } catch (e: Exception) {
-                                            if (e is kotlinx.coroutines.CancellationException) throw e
+                                            if (e is CancellationException) throw e
                                             setStatus(context.getString(R.string.export_error, e.message ?: ""), true)
                                         }
                                     }
@@ -929,7 +935,7 @@ fun SettingsScreen(
                                     api.createLocalCalendar(context.getString(R.string.new_calendar_name), null)
                                     reload()
                                 } catch (e: Exception) {
-                                    if (e is kotlinx.coroutines.CancellationException) throw e
+                                    if (e is CancellationException) throw e
                                     setStatus(context.getString(R.string.error_general, e.message ?: ""), true)
                                 }
                             }
@@ -952,9 +958,9 @@ fun SettingsScreen(
                                     api.createRemoteCalendar(context.getString(R.string.new_calendar_name), null)
                                     setStatus(context.getString(R.string.collection_created))
                                     reload()
-                                    com.trougnouf.cfait.ui.triggerBackgroundSync(context, api)
+                                    triggerBackgroundSync(context, api)
                                 } catch (e: Exception) {
-                                    if (e is kotlinx.coroutines.CancellationException) throw e
+                                    if (e is CancellationException) throw e
                                     setStatus(context.getString(R.string.error_general, e.message ?: ""), true)
                                 }
                             }
@@ -994,7 +1000,7 @@ fun SettingsScreen(
                             scope.launch {
                                 api.removeAlias(key)
                                 reload()
-                                com.trougnouf.cfait.ui.triggerBackgroundSync(context, api)
+                                triggerBackgroundSync(context, api)
                             }
                         }) { NfIcon(NfIcons.CROSS, 16.sp, MaterialTheme.colorScheme.error) }
                     }
@@ -1028,9 +1034,9 @@ fun SettingsScreen(
                                         status = ""
                                         statusIsError = false
                                     }
-                                    com.trougnouf.cfait.ui.triggerBackgroundSync(context, api)
+                                    triggerBackgroundSync(context, api)
                                 } catch (e: Exception) {
-                                    if (e is kotlinx.coroutines.CancellationException) throw e
+                                    if (e is CancellationException) throw e
                                     setStatus(context.getString(R.string.error_adding_alias, e.message ?: ""), true)
                                 }
                             }
@@ -1214,7 +1220,7 @@ fun SettingsScreen(
             item {
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
                 Button(onClick = onAdvanced, modifier = Modifier.fillMaxWidth()) {
-                    Text(androidx.compose.ui.res.stringResource(R.string.advanced_settings_button))
+                    Text(stringResource(R.string.advanced_settings_button))
                 }
                 Spacer(Modifier.height(32.dp))
             }
@@ -1289,7 +1295,7 @@ fun CollectionEditor(
                     onValueChange = { name = it },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
-                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp)
+                    textStyle = TextStyle(fontSize = 14.sp)
                 )
 
                 if (isLocal) {
@@ -1300,8 +1306,8 @@ fun CollectionEditor(
                 Box(
                     modifier = Modifier
                         .size(24.dp)
-                        .background(colorVal, androidx.compose.foundation.shape.CircleShape)
-                        .border(1.dp, MaterialTheme.colorScheme.outline, androidx.compose.foundation.shape.CircleShape)
+                        .background(colorVal, CircleShape)
+                        .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
                         .clickable { showColorPicker = !showColorPicker }
                 )
 
@@ -1341,7 +1347,7 @@ fun CollectionEditor(
                 }
             }
 
-            androidx.compose.animation.AnimatedVisibility(visible = showColorPicker) {
+            AnimatedVisibility(visible = showColorPicker) {
                 Column {
                     Spacer(modifier = Modifier.height(12.dp))
                     ColorPickerRow(
@@ -1384,11 +1390,11 @@ fun ColorPickerRow(
             Box(
                 modifier = Modifier
                     .size(32.dp)
-                    .background(colorVal, androidx.compose.foundation.shape.CircleShape)
+                    .background(colorVal, CircleShape)
                     .border(
                         width = if (isSelected) 2.dp else 1.dp,
                         color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                        shape = androidx.compose.foundation.shape.CircleShape
+                        shape = CircleShape
                     )
                     .clickable { onColorSelected(hex) },
                 contentAlignment = Alignment.Center

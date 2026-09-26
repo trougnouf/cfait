@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// File: ./android/app/src/main/java/com/trougnouf/cfait/ui/TreeEditorScreen.kt
 package com.trougnouf.cfait.ui
 
 import android.content.ClipData
@@ -8,12 +7,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
@@ -21,7 +22,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.CfaitMobile
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,7 +38,7 @@ fun TreeEditorScreen(
     val context = LocalContext.current
     val clipboard = LocalClipboard.current
 
-    var markdownText by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
+    var markdownText by remember { mutableStateOf(TextFieldValue("")) }
     var undoStack by remember { mutableStateOf(listOf<TextFieldValue>()) }
     var redoStack by remember { mutableStateOf(listOf<TextFieldValue>()) }
 
@@ -44,14 +47,14 @@ fun TreeEditorScreen(
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
 
     LaunchedEffect(uid) {
-        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        scope.launch(Dispatchers.IO) {
             try {
-                val initVal = androidx.compose.ui.text.input.TextFieldValue(api.getTaskTreeMarkdown(uid))
+                val initVal = TextFieldValue(api.getTaskTreeMarkdown(uid))
                 markdownText = initVal
                 undoStack = listOf(initVal)
                 redoStack = emptyList()
             } catch (e: Exception) {
-                markdownText = androidx.compose.ui.text.input.TextFieldValue(context.getString(R.string.error_general, e.message ?: ""))
+                markdownText = TextFieldValue(context.getString(R.string.error_general, e.message ?: ""))
             } finally {
                 isLoading = false
             }
@@ -76,7 +79,7 @@ fun TreeEditorScreen(
                             }
                         }) { NfIcon(NfIcons.UNDO, 20.sp) }
                     }
-                    
+
                     if (redoStack.isNotEmpty()) {
                         IconButton(onClick = {
                             if (redoStack.isNotEmpty()) {
@@ -104,7 +107,7 @@ fun TreeEditorScreen(
                             isSaving = true
                             scope.launch {
                                 try {
-                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    withContext(Dispatchers.IO) {
                                         api.syncTaskTreeFromMarkdown(uid, markdownText.text)
                                     }
                                     triggerBackgroundSync(context, api)
@@ -128,7 +131,7 @@ fun TreeEditorScreen(
         }
     ) { padding ->
         if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = androidx.compose.ui.Alignment.Center) {
+            Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
         } else {
@@ -151,16 +154,16 @@ fun TreeEditorScreen(
                         markdownText = finalValue
                     },
                     modifier = Modifier.weight(1f).fillMaxWidth(),
-                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp),
+                    textStyle = TextStyle(fontSize = 14.sp),
                     visualTransformation = remember(isDark) {
-                        com.trougnouf.cfait.ui.MarkdownTransformation(isDark, api)
+                        MarkdownTransformation(isDark, api)
                     },
                     keyboardOptions = KeyboardOptions.Default.copy(
                         keyboardType = KeyboardType.Text,
                         imeAction = ImeAction.None
                     )
                 )
-                com.trougnouf.cfait.ui.CursorContextBanner(api, markdownText, uid, onNavigate = null) { markdownText = it }
+                CursorContextBanner(api, markdownText, uid, onNavigate = null) { markdownText = it }
             }
         }
     }

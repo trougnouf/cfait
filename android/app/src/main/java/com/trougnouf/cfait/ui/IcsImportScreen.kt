@@ -3,6 +3,7 @@
 package com.trougnouf.cfait.ui
 
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -24,15 +25,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.withStyle
+import com.trougnouf.cfait.core.AppIntent
 import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.core.MobileCalendar
 import com.trougnouf.cfait.core.MobileRelatedTask
@@ -45,12 +46,14 @@ import com.trougnouf.cfait.ui.NfIcon
 import com.trougnouf.cfait.ui.NfIcons
 import com.trougnouf.cfait.ui.triggerBackgroundSync
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun IcsImportScreen(
@@ -123,7 +126,7 @@ fun IcsImportScreen(
                 val currentTaskCount = taskCount
                 if (currentTaskCount != null) {
                     Text(
-                        com.trougnouf.cfait.ui.resolvePluralMap(
+                        resolvePluralMap(
                             stringResource(R.string.found_tasks_to_import, currentTaskCount),
                             currentTaskCount
                         ),
@@ -176,7 +179,7 @@ fun IcsImportScreen(
                 onClick = onCancel,
                 modifier = Modifier.weight(1f)
             ) {
-                Text(androidx.compose.ui.res.stringResource(R.string.cancel))
+                Text(stringResource(R.string.cancel))
             }
             Button(
                 onClick = {
@@ -192,7 +195,7 @@ fun IcsImportScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     NfIcon(NfIcons.IMPORT, 16.sp, MaterialTheme.colorScheme.onPrimary)
-                    Text(androidx.compose.ui.res.stringResource(R.string.import_action))
+                    Text(stringResource(R.string.import_action))
                 }
             }
         }
@@ -217,7 +220,7 @@ fun CalendarSelectionItem(
             }
         ),
         border = if (isSelected) {
-            androidx.compose.foundation.BorderStroke(
+            BorderStroke(
                 2.dp,
                 MaterialTheme.colorScheme.secondary
             )
@@ -259,7 +262,7 @@ fun JournalMainView(
     href: String,
     calendars: List<MobileCalendar>,
     onCollectionSelect: (String) -> Unit,
-    viewData: com.trougnouf.cfait.core.MobileViewData?,
+    viewData: MobileViewData?,
     journalDateStr: String,
     journalWikiUid: String?,
     journalWikiTitle: String,
@@ -270,7 +273,7 @@ fun JournalMainView(
     onDataChanged: () -> Unit,
     onToggleCollapse: ((String) -> Unit)? = null
 ) {
-    var text by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
+    var text by remember { mutableStateOf(TextFieldValue("")) }
     var initialText by remember { mutableStateOf("") }
     var titleInput by remember(journalWikiTitle) { mutableStateOf(journalWikiTitle) }
     var initialTitle by remember { mutableStateOf("") }
@@ -278,8 +281,8 @@ fun JournalMainView(
     var isLoading by remember { mutableStateOf(true) }
     var isSaving by remember { mutableStateOf(false) }
 
-    var undoStack by remember { mutableStateOf(listOf<androidx.compose.ui.text.input.TextFieldValue>()) }
-    var redoStack by remember { mutableStateOf(listOf<androidx.compose.ui.text.input.TextFieldValue>()) }
+    var undoStack by remember { mutableStateOf(listOf<TextFieldValue>()) }
+    var redoStack by remember { mutableStateOf(listOf<TextFieldValue>()) }
     var showMoveDialog by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
@@ -295,7 +298,7 @@ fun JournalMainView(
 
     LaunchedEffect(href, journalDateStr, journalWikiUid) {
         isLoading = true
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        withContext(Dispatchers.IO) {
             val targetUid = if (journalWikiUid != null) {
                 journalWikiUid
             } else {
@@ -307,8 +310,8 @@ fun JournalMainView(
             } else {
                 ""
             }
-            val tfv = androidx.compose.ui.text.input.TextFieldValue(content)
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+            val tfv = TextFieldValue(content)
+            withContext(Dispatchers.Main) {
                 uid = targetUid
                 text = tfv
                 initialText = content
@@ -325,7 +328,7 @@ fun JournalMainView(
         if (text.text == initialText && titleInput == initialTitle) return
         isSaving = true
         try {
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            withContext(Dispatchers.IO) {
                 val targetUid = if (uid != null) uid!! else {
                     if (journalWikiUid != null) {
                         api.createWikiPage(titleInput, href, null)
@@ -342,7 +345,7 @@ fun JournalMainView(
                 }
                 
                 api.syncTaskTreeFromMarkdown(targetUid, text.text)
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                withContext(Dispatchers.Main) {
                     uid = targetUid
                     initialText = text.text
                     initialTitle = titleInput
@@ -363,7 +366,7 @@ fun JournalMainView(
     LaunchedEffect(text.text, titleInput) {
         if (isLoading || isSaving) return@LaunchedEffect
         if (text.text == initialText && titleInput == initialTitle) return@LaunchedEffect
-        kotlinx.coroutines.delay(1000)
+        delay(1000)
         saveContent()
     }
 
@@ -383,7 +386,7 @@ fun JournalMainView(
                                 TextButton(onClick = {
                                     scope.launch {
                                         try {
-                                            api.dispatch(com.trougnouf.cfait.core.AppIntent.MoveTaskTree(targetUid, cal.href))
+                                            api.dispatch(AppIntent.MoveTaskTree(targetUid, cal.href))
                                             showMoveDialog = false
                                             onDataChanged()
                                             triggerBackgroundSync(context, api)
@@ -430,14 +433,14 @@ fun JournalMainView(
                         focusedIndicatorColor = Color.Transparent,
                         unfocusedIndicatorColor = Color.Transparent
                     ),
-                    textStyle = androidx.compose.ui.text.TextStyle(fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    textStyle = TextStyle(fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 )
             } else {
                 IconButton(onClick = {
-                    val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
-                    val c = java.util.Calendar.getInstance()
-                    c.time = sdf.parse(journalDateStr) ?: java.util.Date()
-                    c.add(java.util.Calendar.DAY_OF_MONTH, -1)
+                    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                    val c = Calendar.getInstance()
+                    c.time = sdf.parse(journalDateStr) ?: Date()
+                    c.add(Calendar.DAY_OF_MONTH, -1)
                     onDateChange(sdf.format(c.time))
                 }, modifier = Modifier.size(40.dp)) { NfIcon(NfIcons.ARROW_LEFT, 20.sp) }
 
@@ -449,10 +452,10 @@ fun JournalMainView(
                 )
 
                 IconButton(onClick = {
-                    val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
-                    val c = java.util.Calendar.getInstance()
-                    c.time = sdf.parse(journalDateStr) ?: java.util.Date()
-                    c.add(java.util.Calendar.DAY_OF_MONTH, 1)
+                    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                    val c = Calendar.getInstance()
+                    c.time = sdf.parse(journalDateStr) ?: Date()
+                    c.add(Calendar.DAY_OF_MONTH, 1)
                     onDateChange(sdf.format(c.time))
                 }, modifier = Modifier.size(40.dp)) { NfIcon(NfIcons.ARROW_RIGHT, 20.sp) }
             }
@@ -467,10 +470,10 @@ fun JournalMainView(
                 ) {
                     if (journalWikiUid != null) {
                         IconButton(onClick = {
-                            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                            scope.launch(Dispatchers.IO) {
                                 try {
-                                    api.dispatch(com.trougnouf.cfait.core.AppIntent.DeleteTaskTree(journalWikiUid))
-                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                    api.dispatch(AppIntent.DeleteTaskTree(journalWikiUid))
+                                    withContext(Dispatchers.Main) {
                                         onDataChanged()
                                         onCloseWikiPage()
                                     }
@@ -482,7 +485,7 @@ fun JournalMainView(
                         IconButton(onClick = {
                             scope.launch {
                                 flushSave()
-                                val newUid = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                val newUid = withContext(Dispatchers.IO) {
                                     api.createWikiPage("", href, journalWikiUid)
                                 }
                                 onOpenWikiPage(newUid, "")
@@ -499,10 +502,10 @@ fun JournalMainView(
                         IconButton(onClick = {
                             scope.launch {
                                 flushSave()
-                                val parentUid = uid ?: kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                val parentUid = uid ?: withContext(Dispatchers.IO) {
                                     api.getOrCreateDailyNote(journalDateStr, href)
                                 }
-                                val newUid = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                val newUid = withContext(Dispatchers.IO) {
                                     api.createWikiPage("", href, parentUid)
                                 }
                                 onOpenWikiPage(newUid, "")
@@ -513,12 +516,12 @@ fun JournalMainView(
 
                         if (uid != null) {
                             IconButton(onClick = {
-                                scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                scope.launch(Dispatchers.IO) {
                                     try {
-                                        api.dispatch(com.trougnouf.cfait.core.AppIntent.DeleteTaskTree(uid!!))
-                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                        api.dispatch(AppIntent.DeleteTaskTree(uid!!))
+                                        withContext(Dispatchers.Main) {
                                             onDataChanged()
-                                            text = androidx.compose.ui.text.input.TextFieldValue("")
+                                            text = TextFieldValue("")
                                             initialText = ""
                                             uid = null
                                         }
@@ -569,14 +572,14 @@ fun JournalMainView(
             var calHasEntry by remember { mutableStateOf(mapOf<String, Boolean>()) }
 
             LaunchedEffect(journalDateStr, activeCals) {
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                withContext(Dispatchers.IO) {
                     val map = mutableMapOf<String, Boolean>()
                     for (c in activeCals) {
                         if (api.getDailyNoteUid(journalDateStr, c.href) != null) {
                             map[c.href] = true
                         }
                     }
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    withContext(Dispatchers.Main) {
                         calHasEntry = map
                     }
                 }
@@ -584,7 +587,7 @@ fun JournalMainView(
 
             val sortedCals = activeCals.sortedByDescending { calHasEntry[it.href] == true }
 
-            androidx.compose.foundation.lazy.LazyRow(
+            LazyRow(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -594,7 +597,7 @@ fun JournalMainView(
                     val marker = if (hasEntry) " 📝" else ""
                     val calColorStr = cal.color
                     val calColor = if (calColorStr != null) {
-                        com.trougnouf.cfait.ui.parseHexColor(calColorStr)
+                        parseHexColor(calColorStr)
                     } else {
                         MaterialTheme.colorScheme.primary
                     }
@@ -640,7 +643,7 @@ fun JournalMainView(
                 modifier = Modifier.weight(1f).fillMaxWidth().padding(8.dp),
                 placeholder = { Text(stringResource(R.string.notes_placeholder)) },
                 visualTransformation = remember(isDark) { MarkdownTransformation(isDark, api) },
-                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp),
+                textStyle = TextStyle(fontSize = 15.sp),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
@@ -655,7 +658,7 @@ fun JournalMainView(
             val ctxData = viewData.journalContext
             if (ctxData.totalTrackedMins > 0u || ctxData.dueTasks.isNotEmpty() || ctxData.startedTasks.isNotEmpty() || ctxData.ongoingTasks.isNotEmpty() || ctxData.completedTasks.isNotEmpty()) {
                 HorizontalDivider()
-                androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxWidth().heightIn(max = 200.dp).padding(8.dp)) {
+                LazyColumn(Modifier.fillMaxWidth().heightIn(max = 200.dp).padding(8.dp)) {
                     item {
                         Text(stringResource(R.string.journal_activity), fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 4.dp))
                     }
@@ -669,7 +672,7 @@ fun JournalMainView(
                         }
                     }
 
-                    val renderList = @Composable { titleRes: Int, icon: String, iconColor: Color, items: List<com.trougnouf.cfait.core.MobileRelatedTask> ->
+                    val renderList = @Composable { titleRes: Int, icon: String, iconColor: Color, items: List<MobileRelatedTask> ->
                         if (items.isNotEmpty()) {
                             Column(Modifier.padding(top = 4.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -677,23 +680,23 @@ fun JournalMainView(
                                     Spacer(Modifier.width(4.dp))
                                     Text(stringResource(titleRes) + ":", fontSize = 12.sp, color = Color.Gray)
                                 }
-                                val styledText = androidx.compose.ui.text.buildAnnotatedString {
+                                val styledText = buildAnnotatedString {
                                     items.forEachIndexed { index, task ->
                                         pushStringAnnotation("UID", task.uid)
-                                        withStyle(androidx.compose.ui.text.SpanStyle(color = Color(0xFF2196F3))) {
+                                        withStyle(SpanStyle(color = Color(0xFF2196F3))) {
                                             append(task.summary)
                                         }
                                         pop()
                                         if (index < items.size - 1) {
-                                            withStyle(androidx.compose.ui.text.SpanStyle(color = Color.Gray)) {
+                                            withStyle(SpanStyle(color = Color.Gray)) {
                                                 append(", ")
                                             }
                                         }
                                     }
                                 }
-                                androidx.compose.foundation.text.ClickableText(
+                                ClickableText(
                                     text = styledText,
-                                    style = androidx.compose.ui.text.TextStyle(fontSize = 13.sp),
+                                    style = TextStyle(fontSize = 13.sp),
                                     onClick = { offset ->
                                         styledText.getStringAnnotations("UID", offset, offset).firstOrNull()?.let {
                                             onTaskClick(it.item)

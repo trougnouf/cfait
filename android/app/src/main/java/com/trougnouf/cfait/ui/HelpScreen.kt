@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.trougnouf.cfait.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -19,7 +22,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -30,6 +32,7 @@ import com.trougnouf.cfait.BuildConfig
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.core.HelpTab
+import com.trougnouf.cfait.core.MobileHelpItem
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -123,7 +126,7 @@ fun HelpScreen(api: CfaitMobile, onBack: () -> Unit) {
 }
 
 @Composable
-fun HelpRow(item: com.trougnouf.cfait.core.MobileHelpItem) {
+fun HelpRow(item: MobileHelpItem) {
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Box(
             modifier = Modifier
@@ -219,9 +222,8 @@ fun DonationRow(icon: String, name: String, value: String, isCopy: Boolean = fal
     Row(
         modifier = Modifier.fillMaxWidth().clickable {
             if (isCopy) {
-                val clipboard =
-                    context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                val clip = android.content.ClipData.newPlainText("Donation Address", value)
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                val clip = ClipData.newPlainText("Donation Address", value)
                 clipboard.setPrimaryClip(clip)
                 Toast.makeText(
                     context,

@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// File: ./android/app/src/main/java/com/trougnouf/cfait/ui/AdvancedSettingsScreen.kt
 package com.trougnouf.cfait.ui
 
 import android.content.Intent
@@ -15,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.FileProvider
 import com.trougnouf.cfait.core.CfaitMobile
+import com.trougnouf.cfait.core.MobileFirstDayOfWeek
 import com.trougnouf.cfait.R
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -71,7 +72,7 @@ fun AdvancedSettingsScreen(
     var urgentPrio by remember { mutableStateOf("1") }
     var defaultPriority by remember { mutableStateOf("5") }
     var startGracePeriodDays by remember { mutableStateOf("1") }
-    var firstDayOfWeek by remember { mutableStateOf(com.trougnouf.cfait.core.MobileFirstDayOfWeek.MONDAY) }
+    var firstDayOfWeek by remember { mutableStateOf(MobileFirstDayOfWeek.MONDAY) }
     var showTaskGoalsInSidebar by remember { mutableStateOf(true) }
     var showCalendarsTab by remember { mutableStateOf(true) }
     var showTagsTab by remember { mutableStateOf(true) }
@@ -445,8 +446,8 @@ fun AdvancedSettingsScreen(
                     label = "",
                     selected = firstDayOfWeek,
                     options = listOf(
-                        com.trougnouf.cfait.core.MobileFirstDayOfWeek.MONDAY to stringResource(R.string.monday),
-                        com.trougnouf.cfait.core.MobileFirstDayOfWeek.SUNDAY to stringResource(R.string.sunday)
+                        MobileFirstDayOfWeek.MONDAY to stringResource(R.string.monday),
+                        MobileFirstDayOfWeek.SUNDAY to stringResource(R.string.sunday)
                     ),
                     onSelect = { firstDayOfWeek = it; saveToDisk() },
                     modifier = Modifier.width(240.dp)
@@ -470,7 +471,7 @@ fun AdvancedSettingsScreen(
             Text(
                 stringResource(R.string.settings_sort_preset_explain),
                 fontSize = 12.sp,
-                color = androidx.compose.ui.graphics.Color.Gray,
+                color = Color.Gray,
                 modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
             )
 
@@ -510,7 +511,7 @@ fun AdvancedSettingsScreen(
             Text(
                 stringResource(R.string.settings_urgent_explain),
                 fontSize = 12.sp,
-                color = androidx.compose.ui.graphics.Color.Gray,
+                color = Color.Gray,
                 modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
             )
 
@@ -532,7 +533,7 @@ fun AdvancedSettingsScreen(
             Text(
                 stringResource(R.string.settings_cutoff_explain),
                 fontSize = 12.sp,
-                color = androidx.compose.ui.graphics.Color.Gray,
+                color = Color.Gray,
                 modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
             )
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
@@ -548,7 +549,7 @@ fun AdvancedSettingsScreen(
             Text(
                 stringResource(R.string.settings_start_grace_explain),
                 fontSize = 12.sp,
-                color = androidx.compose.ui.graphics.Color.Gray,
+                color = Color.Gray,
                 modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
             )
 
@@ -570,7 +571,7 @@ fun AdvancedSettingsScreen(
             Text(
                 stringResource(R.string.settings_default_prio_explain),
                 fontSize = 12.sp,
-                color = androidx.compose.ui.graphics.Color.Gray,
+                color = Color.Gray,
                 modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
             )
 
@@ -862,7 +863,7 @@ fun AdvancedSettingsScreen(
                             debugIsError = false
                             debugStatus = exportReady
                         } catch (e: Exception) {
-                            if (e is kotlinx.coroutines.CancellationException) throw e
+                            if (e is CancellationException) throw e
                             debugIsError = true
                             debugStatus = try {
                                 String.format(exportFailedTemplate, e.message ?: e.toString())
