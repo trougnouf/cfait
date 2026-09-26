@@ -507,8 +507,13 @@ impl RustyClient {
 
         let mut move_res = self.execute_move(task, new_cal, false).await;
 
+        // Retry with Overwrite: T when the destination is already occupied.
+        // RFC 4918 servers answer that with 409 Conflict; some (non-standard)
+        // servers answer 412. Without the retry, the Create+Delete fallback
+        // below re-PUTs to the same occupied destination and can spawn a
+        // spurious "Conflict Copy".
         if let Err(ref e) = move_res
-            && (e.contains("412") || e.contains("PreconditionFailed"))
+            && (e.contains("412") || e.contains("409") || e.contains("PreconditionFailed"))
         {
             move_res = self.execute_move(task, new_cal, true).await;
         }
