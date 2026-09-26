@@ -77,6 +77,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import android.content.Intent
 import androidx.core.content.FileProvider
 import androidx.compose.ui.text.TextStyle
@@ -316,7 +317,7 @@ fun HomeScreen(
     // keyring, so keep it off the per-refresh getViewTasks path.
     LaunchedEffect(Unit) {
         try {
-            val cfg = api.getConfig()
+            val cfg = withContext(Dispatchers.IO) { api.getConfig() }
             if (!hasInitializedExpansions) {
                 expandedTags = cfg.expandedTags.toSet()
                 expandedLocations = cfg.expandedLocations.toSet()
@@ -334,7 +335,7 @@ fun HomeScreen(
     var tagAliases by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
     LaunchedEffect(refreshTick) {
         try {
-            tagAliases = api.getConfig().tagAliases
+            tagAliases = withContext(Dispatchers.IO) { api.getConfig() }.tagAliases
         } catch (e: Exception) {
             // Ignore
         }
@@ -509,7 +510,7 @@ fun HomeScreen(
 
     val onToggleCollapse: (String) -> Unit = { tag ->
         expandedTags = if (expandedTags.contains(tag)) expandedTags - tag else expandedTags + tag
-        scope.launch {
+        scope.launch(Dispatchers.IO) {
             api.dispatch(AppIntent.ToggleTagCollapse(tag))
             updateTaskList()
         }
@@ -592,7 +593,7 @@ fun HomeScreen(
         scope.launch {
             activeOpCount++
             try {
-                val actionDesc = api.dispatch(AppIntent.ToggleTask(task.uid))
+                val actionDesc = withContext(Dispatchers.IO) { api.dispatch(AppIntent.ToggleTask(task.uid)) }
                 updateTaskList()
                 checkSyncStatus()
                 onDataChanged()
@@ -606,7 +607,7 @@ fun HomeScreen(
                         duration = SnackbarDuration.Short
                     )
                     if (result == SnackbarResult.ActionPerformed) {
-                        val desc = api.undo()
+                        val desc = withContext(Dispatchers.IO) { api.undo() }
                         updateTaskList()
                         checkSyncStatus()
                         onDataChanged()
@@ -626,7 +627,7 @@ fun HomeScreen(
     }
 
     val handleRefresh = {
-        scope.launch {
+        scope.launch(Dispatchers.IO) {
             isManualSyncing = true
             try {
                 api.sync()
@@ -654,7 +655,7 @@ fun HomeScreen(
         if (text.startsWith(":") && !text.contains(" ")) {
             when (text.lowercase()) {
                 ":undo" -> {
-                    scope.launch {
+                    scope.launch(Dispatchers.IO) {
                         val desc = api.undo()
                         updateTaskList()
                         checkSyncStatus()
@@ -667,7 +668,7 @@ fun HomeScreen(
                     return
                 }
                 ":redo" -> {
-                    scope.launch {
+                    scope.launch(Dispatchers.IO) {
                         val desc = api.redo()
                         updateTaskList()
                         checkSyncStatus()
@@ -680,7 +681,7 @@ fun HomeScreen(
                     return
                 }
                 ":empty-trash" -> {
-                    scope.launch {
+                    scope.launch(Dispatchers.IO) {
                         api.emptyTrash()
                         updateTaskList()
                         checkSyncStatus()
@@ -704,16 +705,20 @@ fun HomeScreen(
 
         if (text.startsWith("#") && !text.contains(" ") && !isAliasDef) {
             val tag = text.removePrefix("#")
-            filterTags = api.resolveSelectionAliases(tag, false).toSet()
-            sidebarTab = 1
-            newTaskText = TextFieldValue("")
-            updateTaskList()
+            scope.launch(Dispatchers.IO) {
+                filterTags = api.resolveSelectionAliases(tag, false).toSet()
+                sidebarTab = 1
+                newTaskText = TextFieldValue("")
+                updateTaskList()
+            }
         } else if ((text.startsWith("@@") || text.startsWith("loc:")) && !text.contains(" ") && !isAliasDef) {
             val loc = if (text.startsWith("@@")) text.removePrefix("@@") else text.removePrefix("loc:")
-            filterLocations = api.resolveSelectionAliases(loc.replace("\"", ""), true).toSet()
-            sidebarTab = 2
-            newTaskText = TextFieldValue("")
-            updateTaskList()
+            scope.launch(Dispatchers.IO) {
+                filterLocations = api.resolveSelectionAliases(loc.replace("\"", ""), true).toSet()
+                sidebarTab = 2
+                newTaskText = TextFieldValue("")
+                updateTaskList()
+            }
         } else {
             val currentChildUid = creatingChildUid
 
@@ -875,12 +880,12 @@ fun HomeScreen(
         if (action == "open_locations_gpx") {
             scope.launch {
                 try {
-                    val gpxContent = api.exportLocationsGpx(task.uid)
-                    val file = File(context.cacheDir, "locations_${task.uid}.gpx")
-                    file.writeText(gpxContent)
-                    val uri = FileProvider.getUriForFile(
-                        context, "${context.packageName}.fileprovider", file
-                    )
+                    val uri = withContext(Dispatchers.IO) {
+                        val gpxContent = api.exportLocationsGpx(task.uid)
+                        val file = File(context.cacheDir, "locations_${task.uid}.gpx")
+                        file.writeText(gpxContent)
+                        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                    }
                     val intent = Intent(Intent.ACTION_VIEW).apply {
                         setDataAndType(uri, "application/gpx+xml")
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -942,7 +947,7 @@ fun HomeScreen(
                         // We'll fetch it asynchronously
                         scope.launch {
                             try {
-                                val fullTask = api.getTaskByUid(task.uid)
+                                val fullTask = withContext(Dispatchers.IO) { api.getTaskByUid(task.uid) }
                                 if (fullTask != null) {
                                     val textToCopy = if (fullTask.description.isEmpty()) fullTask.smartString 
                                     else "${fullTask.smartString}\n\n${fullTask.description}"
@@ -965,7 +970,7 @@ fun HomeScreen(
                 }
 
                 if (intent != null) {
-                    val actionDesc = api.dispatch(intent)
+                    val actionDesc = withContext(Dispatchers.IO) { api.dispatch(intent) }
                     updateTaskList()
                     onDataChanged()
                     lastSyncFailed = false
@@ -978,7 +983,7 @@ fun HomeScreen(
                             duration = SnackbarDuration.Short
                         )
                         if (result == SnackbarResult.ActionPerformed) {
-                            val desc = api.undo()
+                            val desc = withContext(Dispatchers.IO) { api.undo() }
                             updateTaskList()
                             checkSyncStatus()
                             onDataChanged()
@@ -999,7 +1004,7 @@ fun HomeScreen(
     }
 
     val handlePullRefresh = {
-        scope.launch {
+        scope.launch(Dispatchers.IO) {
             isPullRefreshing = true
             try {
                 api.sync()
@@ -1188,7 +1193,7 @@ fun HomeScreen(
     ) {
         when {
             focusedTaskUid != null -> {
-                scope.launch { api.dispatch(AppIntent.FocusTaskTree(null)); updateTaskList() }
+                scope.launch(Dispatchers.IO) { api.dispatch(AppIntent.FocusTaskTree(null)); updateTaskList() }
             }
             isSearchActive -> isSearchActive = false
             yankedUid != null -> {
@@ -1234,10 +1239,12 @@ fun HomeScreen(
                                     val uid = (taskToMove?.task)?.uid ?: return@clickable
                                     scope.launch {
                                         try {
-                                            val actionDesc = if (moveTree) {
-                                                api.dispatch(AppIntent.MoveTaskTree(uid, cal.href))
-                                            } else {
-                                                api.dispatch(AppIntent.MoveTask(uid, cal.href))
+                                            val actionDesc = withContext(Dispatchers.IO) {
+                                                if (moveTree) {
+                                                    api.dispatch(AppIntent.MoveTaskTree(uid, cal.href))
+                                                } else {
+                                                    api.dispatch(AppIntent.MoveTask(uid, cal.href))
+                                                }
                                             }
                                             taskToMove = null
                                             updateTaskList()
@@ -1251,7 +1258,7 @@ fun HomeScreen(
                                                     duration = SnackbarDuration.Short
                                                 )
                                                 if (result == SnackbarResult.ActionPerformed) {
-                                                    val desc = api.undo()
+                                                    val desc = withContext(Dispatchers.IO) { api.undo() }
                                                     updateTaskList()
                                                     checkSyncStatus()
                                                     onDataChanged()
@@ -1345,7 +1352,7 @@ fun HomeScreen(
                     val input = sessionInputText
                     sessionTaskUid = null
                     sessionInputText = ""
-                    scope.launch {
+                    scope.launch(Dispatchers.IO) {
                         try {
                             api.addSession(uid, input)
                             updateTaskList()
@@ -1406,7 +1413,7 @@ fun HomeScreen(
                     val uids = tasksToDelete.map { it.task.uid }
                     scope.launch {
                         try {
-                            val actionDesc = api.dispatch(AppIntent.DeleteTasks(uids))
+                            val actionDesc = withContext(Dispatchers.IO) { api.dispatch(AppIntent.DeleteTasks(uids)) }
                             updateTaskList()
                             onDataChanged()
                             triggerBackgroundSync(context, api)
@@ -1417,7 +1424,7 @@ fun HomeScreen(
                                     duration = SnackbarDuration.Short
                                 )
                                 if (result == SnackbarResult.ActionPerformed) {
-                                    val desc = api.undo()
+                                    val desc = withContext(Dispatchers.IO) { api.undo() }
                                     updateTaskList()
                                     checkSyncStatus()
                                     onDataChanged()
@@ -1572,15 +1579,17 @@ fun HomeScreen(
                             item {
                                 TextButton(
                                     onClick = {
-                                        calendars.forEach {
-                                            if (it.href != "local://trash" || defaultCalHref == "local://trash") api.setCalendarVisibility(
-                                                it.href,
-                                                true
-                                            )
+                                        scope.launch(Dispatchers.IO) {
+                                            calendars.forEach {
+                                                if (it.href != "local://trash" || defaultCalHref == "local://trash") api.setCalendarVisibility(
+                                                    it.href,
+                                                    true
+                                                )
+                                            }
+                                            onDataChanged()
+                                            updateTaskList()
+                                            pendingTabId = "ALL"
                                         }
-                                        onDataChanged()
-                                        updateTaskList()
-                                        pendingTabId = "ALL"
                                         scope.launch { drawerState.close() }
                                     },
                                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
@@ -1600,58 +1609,60 @@ fun HomeScreen(
                                     // Set visibility + Save custom combination
                                     IconButton(
                                         onClick = {
-                                            val currentTab = tabs.getOrNull(pagerState.currentPage)
-                                            val isIsolated =
-                                                currentTab != null && currentTab.id != "ALL" && currentTab.id != "CUSTOM"
-                                            val isTogglingOn = !cal.isVisible
+                                            scope.launch(Dispatchers.IO) {
+                                                val currentTab = tabs.getOrNull(pagerState.currentPage)
+                                                val isIsolated =
+                                                    currentTab != null && currentTab.id != "ALL" && currentTab.id != "CUSTOM"
+                                                val isTogglingOn = !cal.isVisible
 
-                                            if (isIsolated && isTogglingOn && currentTab!!.id != cal.href) {
-                                                // User is focused on one collection and enables another -> create a custom view
-                                                val isolatedHref = currentTab.id
-                                                val newCustomHrefs = setOf(isolatedHref, cal.href)
-                                                customHrefs = newCustomHrefs
+                                                if (isIsolated && isTogglingOn && currentTab!!.id != cal.href) {
+                                                    // User is focused on one collection and enables another -> create a custom view
+                                                    val isolatedHref = currentTab.id
+                                                    val newCustomHrefs = setOf(isolatedHref, cal.href)
+                                                    customHrefs = newCustomHrefs
 
-                                                // Sync backend visibility to this new custom set
-                                                enabledCals.forEach { c ->
-                                                    val shouldBeVisible = newCustomHrefs.contains(c.href)
-                                                    if (c.isVisible != shouldBeVisible) {
-                                                        api.setCalendarVisibility(c.href, shouldBeVisible)
+                                                    // Sync backend visibility to this new custom set
+                                                    enabledCals.forEach { c ->
+                                                        val shouldBeVisible = newCustomHrefs.contains(c.href)
+                                                        if (c.isVisible != shouldBeVisible) {
+                                                            api.setCalendarVisibility(c.href, shouldBeVisible)
+                                                        }
+                                                    }
+                                                    pendingTabId = "CUSTOM"
+
+                                                } else {
+                                                    // Standard behavior: curating the custom view
+                                                    api.setCalendarVisibility(cal.href, !cal.isVisible)
+
+                                                    // Manually calculate the new visible set to update the Custom tab state
+                                                    val currentVisibleHrefs =
+                                                        enabledCals.filter { it.isVisible }.map { it.href }.toMutableSet()
+                                                    if (isTogglingOn) {
+                                                        currentVisibleHrefs.add(cal.href)
+                                                    } else {
+                                                        currentVisibleHrefs.remove(cal.href)
+                                                    }
+
+                                                    if (currentVisibleHrefs.size > 1 && currentVisibleHrefs.size < allHrefs.size) {
+                                                        customHrefs = currentVisibleHrefs
+                                                    } else {
+                                                        customHrefs = emptySet()
+                                                    }
+
+                                                    // Auto-switch tab to match the new visibility state
+                                                    if (currentVisibleHrefs.size == allHrefs.size) {
+                                                        pendingTabId = "ALL"
+                                                    } else if (currentVisibleHrefs.size > 1) {
+                                                        pendingTabId = "CUSTOM"
+                                                    } else if (currentVisibleHrefs.size == 1) {
+                                                        pendingTabId = currentVisibleHrefs.first()
+                                                    } else if (currentVisibleHrefs.isEmpty()) {
+                                                        pendingTabId = "ALL"
                                                     }
                                                 }
-                                                pendingTabId = "CUSTOM"
-
-                                            } else {
-                                                // Standard behavior: curating the custom view
-                                                api.setCalendarVisibility(cal.href, !cal.isVisible)
-
-                                                // Manually calculate the new visible set to update the Custom tab state
-                                                val currentVisibleHrefs =
-                                                    enabledCals.filter { it.isVisible }.map { it.href }.toMutableSet()
-                                                if (isTogglingOn) {
-                                                    currentVisibleHrefs.add(cal.href)
-                                                } else {
-                                                    currentVisibleHrefs.remove(cal.href)
-                                                }
-
-                                                if (currentVisibleHrefs.size > 1 && currentVisibleHrefs.size < allHrefs.size) {
-                                                    customHrefs = currentVisibleHrefs
-                                                } else {
-                                                    customHrefs = emptySet()
-                                                }
-
-                                                // Auto-switch tab to match the new visibility state
-                                                if (currentVisibleHrefs.size == allHrefs.size) {
-                                                    pendingTabId = "ALL"
-                                                } else if (currentVisibleHrefs.size > 1) {
-                                                    pendingTabId = "CUSTOM"
-                                                } else if (currentVisibleHrefs.size == 1) {
-                                                    pendingTabId = currentVisibleHrefs.first()
-                                                } else if (currentVisibleHrefs.isEmpty()) {
-                                                    pendingTabId = "ALL"
-                                                }
+                                                onDataChanged()
+                                                updateTaskList()
                                             }
-                                            onDataChanged()
-                                            updateTaskList()
                                         },
                                         enabled = !isDefault
                                     ) { NfIcon(iconChar, color = iconColor) }
@@ -1659,59 +1670,61 @@ fun HomeScreen(
                                     // Set write target ONLY (do not close menu, do not jump tab)
                                     TextButton(
                                         onClick = {
-                                            val currentTab = tabs.getOrNull(pagerState.currentPage)
-                                            val isIsolated =
-                                                currentTab != null && currentTab.id != "ALL" && currentTab.id != "CUSTOM"
+                                            scope.launch(Dispatchers.IO) {
+                                                val currentTab = tabs.getOrNull(pagerState.currentPage)
+                                                val isIsolated =
+                                                    currentTab != null && currentTab.id != "ALL" && currentTab.id != "CUSTOM"
 
-                                            api.setDefaultCalendar(cal.href)
-                                            localDefaultCalHref = cal.href // Instantly update header
-                                            customWriteTarget = cal.href
+                                                api.setDefaultCalendar(cal.href)
+                                                localDefaultCalHref = cal.href
+                                                customWriteTarget = cal.href
 
-                                            if (isIsolated && currentTab!!.id != cal.href) {
-                                                // We are on a single collection, and selected a DIFFERENT one as write target.
-                                                // Overwrite custom selection with exactly these two.
-                                                val isolatedHref = currentTab.id
-                                                customHrefs = setOf(isolatedHref, cal.href)
+                                                if (isIsolated && currentTab!!.id != cal.href) {
+                                                    // We are on a single collection, and selected a DIFFERENT one as write target.
+                                                    // Overwrite custom selection with exactly these two.
+                                                    val isolatedHref = currentTab.id
+                                                    customHrefs = setOf(isolatedHref, cal.href)
 
-                                                // Ensure only these two are visible globally
-                                                enabledCals.forEach { c ->
-                                                    val shouldBeVisible = (c.href == isolatedHref || c.href == cal.href)
-                                                    if (c.isVisible != shouldBeVisible) {
-                                                        api.setCalendarVisibility(c.href, shouldBeVisible)
-                                                    }
-                                                }
-
-                                                // Jump to custom tab
-                                                pendingTabId = "CUSTOM"
-                                            } else {
-                                                // Standard behavior (Already on ALL, CUSTOM, or clicking the focused collection)
-                                                if (!cal.isVisible) {
-                                                    api.setCalendarVisibility(cal.href, true)
-                                                    val currentVisible =
-                                                        enabledCals.filter { it.isVisible }.map { it.href }
-                                                            .toMutableSet()
-                                                    currentVisible.add(cal.href)
-
-                                                    if (currentVisible.size > 1 && currentVisible.size < allHrefs.size) {
-                                                        customHrefs = currentVisible
-                                                    } else {
-                                                        customHrefs = emptySet()
+                                                    // Ensure only these two are visible globally
+                                                    enabledCals.forEach { c ->
+                                                        val shouldBeVisible = (c.href == isolatedHref || c.href == cal.href)
+                                                        if (c.isVisible != shouldBeVisible) {
+                                                            api.setCalendarVisibility(c.href, shouldBeVisible)
+                                                        }
                                                     }
 
-                                                    if (currentVisible.size == allHrefs.size) {
-                                                        pendingTabId = "ALL"
-                                                    } else if (currentVisible.size > 1) {
-                                                        pendingTabId = "CUSTOM"
-                                                    } else if (currentVisible.size == 1) {
-                                                        pendingTabId = currentVisible.first()
+                                                    // Jump to custom tab
+                                                    pendingTabId = "CUSTOM"
+                                                } else {
+                                                    // Standard behavior (Already on ALL, CUSTOM, or clicking the focused collection)
+                                                    if (!cal.isVisible) {
+                                                        api.setCalendarVisibility(cal.href, true)
+                                                        val currentVisible =
+                                                            enabledCals.filter { it.isVisible }.map { it.href }
+                                                                .toMutableSet()
+                                                        currentVisible.add(cal.href)
+
+                                                        if (currentVisible.size > 1 && currentVisible.size < allHrefs.size) {
+                                                            customHrefs = currentVisible
+                                                        } else {
+                                                            customHrefs = emptySet()
+                                                        }
+
+                                                        if (currentVisible.size == allHrefs.size) {
+                                                            pendingTabId = "ALL"
+                                                        } else if (currentVisible.size > 1) {
+                                                            pendingTabId = "CUSTOM"
+                                                        } else if (currentVisible.size == 1) {
+                                                            pendingTabId = currentVisible.first()
+                                                        }
+                                                    }
+                                                    if (customHrefs.isNotEmpty() && cal.href !in customHrefs) {
+                                                        customHrefs = customHrefs + cal.href
                                                     }
                                                 }
-                                                if (customHrefs.isNotEmpty() && cal.href !in customHrefs) {
-                                                    customHrefs = customHrefs + cal.href
-                                                }
+                                                onDataChanged()
+                                                updateTaskList()
                                             }
-                                            onDataChanged()
-                                            updateTaskList()
                                         },
                                         modifier = Modifier.weight(1f),
                                         colors = ButtonDefaults.textButtonColors(contentColor = if (isDefault) calColor else MaterialTheme.colorScheme.onSurface)
@@ -1721,12 +1734,12 @@ fun HomeScreen(
 
                                     // Jump to tab (isolate + close menu)
                                     IconButton(onClick = {
-                                        scope.launch {
+                                        scope.launch(Dispatchers.IO) {
                                             api.isolateCalendar(cal.href)
                                             onDataChanged()
                                             pendingTabId = cal.href
-                                            drawerState.close()
                                         }
+                                        scope.launch { drawerState.close() }
                                     }) { NfIcon(NfIcons.ARROW_RIGHT, size = 18.sp) }
                                 }
                             }
@@ -1796,7 +1809,7 @@ fun HomeScreen(
                                     isExpanded = loc.isExpanded,
                                     onToggleCollapse = {
                                         expandedLocations = if (expandedLocations.contains(loc.name)) expandedLocations - loc.name else expandedLocations + loc.name
-                                        scope.launch {
+                                        scope.launch(Dispatchers.IO) {
                                             api.dispatch(AppIntent.ToggleLocationCollapse(loc.name))
                                         }
                                     },
@@ -1827,10 +1840,14 @@ fun HomeScreen(
                                             .fillMaxWidth()
                                             .clickable {
                                                 if (isTag) {
-                                                    filterTags = api.resolveSelectionAliases(goal.key.removePrefix("#"), false).toSet()
+                                                    scope.launch(Dispatchers.IO) {
+                                                        filterTags = api.resolveSelectionAliases(goal.key.removePrefix("#"), false).toSet()
+                                                    }
                                                     scope.launch { drawerState.close() }
                                                 } else if (goal.key.startsWith("@@")) {
-                                                    filterLocations = api.resolveSelectionAliases(goal.key.removePrefix("@@"), true).toSet()
+                                                    scope.launch(Dispatchers.IO) {
+                                                        filterLocations = api.resolveSelectionAliases(goal.key.removePrefix("@@"), true).toSet()
+                                                    }
                                                     scope.launch { drawerState.close() }
                                                 } else if (isTask) {
                                                     scope.launch {
@@ -2041,7 +2058,7 @@ fun HomeScreen(
                                 ) {
                                     Text(stringResource(R.string.wiki_index), fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                                     IconButton(onClick = {
-                                        scope.launch {
+                                        scope.launch(Dispatchers.IO) {
                                             val fallbackHref = tabs.getOrNull(pagerState.currentPage)?.isWriteTarget ?: defaultCalHref ?: "local://default"
                                             val href = journalSelectedHref ?: fallbackHref
                                             val uid = api.createWikiPage("", href, null)
@@ -2091,7 +2108,7 @@ fun HomeScreen(
                                     if (isTask && page.hasChildren) {
                                         IconButton(
                                             onClick = {
-                                                scope.launch {
+                                                scope.launch(Dispatchers.IO) {
                                                     api.dispatch(AppIntent.ToggleTreeCollapse(page.uid))
                                                     onDataChanged()
                                                 }
@@ -2454,7 +2471,7 @@ fun HomeScreen(
                         },
                         navigationIcon = {
                             if (focusedTaskUid != null) {
-                                IconButton(onClick = { scope.launch { api.dispatch(AppIntent.FocusTaskTree(null)); updateTaskList() } }) {
+                                IconButton(onClick = { scope.launch(Dispatchers.IO) { api.dispatch(AppIntent.FocusTaskTree(null)); updateTaskList() } }) {
                                     NfIcon(NfIcons.BACK, 20.sp)
                                 }
                             } else {
@@ -2876,7 +2893,7 @@ fun HomeScreen(
                                                 onAction = { act -> onTaskAction(act, stableTask.task) },
                                                 onClick = onTaskClick,
                                                 onWikiLink = { target, contextUid ->
-                                                    scope.launch {
+                                                    scope.launch(Dispatchers.IO) {
                                                         try {
                                                             val targetUid = api.openWikiLink(target, contextUid, null)
                                                             onTaskClick(targetUid)
