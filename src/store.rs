@@ -1940,8 +1940,10 @@ impl TaskStore {
 
                     clone.alarms.extend(preserved_alarms);
 
-                    if !ext.dependencies.is_empty() {
-                        clone.dependencies.extend(ext.dependencies.clone());
+                    for dep in &ext.dependencies {
+                        if !clone.dependencies.contains(dep) {
+                            clone.dependencies.push(dep.clone());
+                        }
                     }
                     actually_changed = true;
                 } else {
@@ -1951,7 +1953,11 @@ impl TaskStore {
                         options.default_reminder_time,
                     );
                     let mut new_deps = dummy.dependencies;
-                    new_deps.extend(ext.dependencies.clone());
+                    for dep in &ext.dependencies {
+                        if !new_deps.contains(dep) {
+                            new_deps.push(dep.clone());
+                        }
+                    }
                     clone.dependencies = new_deps;
                     clone.related_to = dummy.related_to;
                     clone.target_collection = dummy.target_collection;
@@ -2047,7 +2053,11 @@ impl TaskStore {
                 new_task.apply_extracted_status(ext.status);
 
                 new_task.parent_uid = parent_uid;
-                new_task.dependencies = ext.dependencies;
+                for dep in &ext.dependencies {
+                    if !new_task.dependencies.contains(dep) {
+                        new_task.dependencies.push(dep.clone());
+                    }
+                }
 
                 let final_href = if let Some(target) = new_task.target_collection.take() {
                     crate::model::resolve_collection(&target, options.calendars, &inherited_href)

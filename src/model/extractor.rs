@@ -273,7 +273,7 @@ pub fn extract_markdown_tasks(
     let is_task_line = compute_task_lines(input, is_journal);
 
     let mut indent_stack: Vec<(StackItemKind, String, usize)> = Vec::new();
-    let mut item_kind_at_indent: HashMap<usize, usize> = HashMap::new(); // indent -> block_id
+    let mut item_kind_at_indent: HashMap<usize, (usize, usize)> = HashMap::new(); // indent -> (block_id, last_num)
     let mut next_block_id = 0;
     let mut numbered_tasks: Vec<(usize, usize, usize)> = Vec::new(); // (block_id, parsed_num, extracted_idx)
 
@@ -416,15 +416,18 @@ pub fn extract_markdown_tasks(
             let new_idx = extracted.len();
 
             if is_numbered {
+                // A number lower than the previous one at this indent means a new
+                // dependency chain started (the serializer resets numbering for
+                // independent chains), so it must not join the current block.
                 let block_id = match item_kind_at_indent.get(&indent) {
-                    Some(&b) => b,
+                    Some(&(b, last_num)) if parsed_num >= last_num => b,
                     _ => {
                         let b = next_block_id;
                         next_block_id += 1;
                         b
                     }
                 };
-                item_kind_at_indent.insert(indent, block_id);
+                item_kind_at_indent.insert(indent, (block_id, parsed_num));
                 numbered_tasks.push((block_id, parsed_num, new_idx));
             } else {
                 // Remove entry to break numbering blocks

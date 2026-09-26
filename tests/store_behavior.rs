@@ -647,6 +647,57 @@ fn test_extract_markdown_tasks_full() {
 }
 
 #[test]
+fn test_extract_numbered_chains_reset_block_on_number_decrease() {
+    // Two independent chains (B depends on A, D depends on C) serialized back to
+    // back must not be merged into one block: D must not inherit a dependency on A.
+    let input = "1. [ ] A\n2. [ ] B\n1. [ ] C\n2. [ ] D\n";
+    let (_, tasks) =
+        cfait::model::extract_markdown_tasks(input, false, &mut std::collections::HashMap::new());
+    assert_eq!(tasks.len(), 4);
+
+    let deps_of = |text: &str| -> Vec<String> {
+        tasks
+            .iter()
+            .find(|t| t.raw_text == text)
+            .map(|t| t.dependencies.clone())
+            .unwrap_or_default()
+    };
+
+    assert!(deps_of("A").is_empty());
+    assert_eq!(deps_of("B").len(), 1);
+    assert!(!deps_of("B").contains(&tasks[2].uid)); // B must not depend on C
+    assert!(deps_of("C").is_empty());
+    assert_eq!(deps_of("D").len(), 1);
+    assert!(deps_of("D").contains(&tasks[2].uid)); // D depends on C
+    assert!(!deps_of("D").contains(&tasks[0].uid)); // D must not depend on A
+}
+
+#[test]
+fn test_extract_numbered_parallel_siblings_share_block() {
+    // B and C both depend on A: the serializer keeps them at the same number,
+    // so they must stay in one block and both resolve to A.
+    let input = "1. [ ] A\n2. [ ] B\n2. [ ] C\n";
+    let (_, tasks) =
+        cfait::model::extract_markdown_tasks(input, false, &mut std::collections::HashMap::new());
+    assert_eq!(tasks.len(), 3);
+
+    assert_eq!(tasks[1].dependencies, vec![tasks[0].uid.clone()]);
+    assert_eq!(tasks[2].dependencies, vec![tasks[0].uid.clone()]);
+}
+
+#[test]
+fn test_extract_numbered_sequential_chain() {
+    let input = "1. [ ] A\n2. [ ] B\n3. [ ] C\n";
+    let (_, tasks) =
+        cfait::model::extract_markdown_tasks(input, false, &mut std::collections::HashMap::new());
+    assert_eq!(tasks.len(), 3);
+
+    assert!(tasks[0].dependencies.is_empty());
+    assert_eq!(tasks[1].dependencies, vec![tasks[0].uid.clone()]);
+    assert_eq!(tasks[2].dependencies, vec![tasks[1].uid.clone()]);
+}
+
+#[test]
 fn test_task_display_logic() {
     let mut task = Task::new("Test", &HashMap::new(), None);
 
