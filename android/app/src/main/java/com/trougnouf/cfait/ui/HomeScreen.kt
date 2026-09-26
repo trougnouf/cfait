@@ -1312,7 +1312,10 @@ fun HomeScreen(
                 OutlinedTextField(
                     value = sessionInputText,
                     onValueChange = { sessionInputText = it },
-                    placeholder = { Text("${stringResource(R.string.eg)} ${com.trougnouf.cfait.ui.randomSessionExample()}", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)) },
+                    placeholder = {
+                        val example = remember { com.trougnouf.cfait.ui.randomSessionExample() }
+                        Text("${stringResource(R.string.eg)} $example", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                    },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )

@@ -724,7 +724,10 @@ fun TaskDetailScreen(
                     OutlinedTextField(
                         value = sessionInput,
                         onValueChange = { sessionInput = it },
-                        placeholder = { Text("${stringResource(R.string.eg)} ${com.trougnouf.cfait.ui.randomSessionExample()}", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)) },
+                        placeholder = {
+                            val example = remember { com.trougnouf.cfait.ui.randomSessionExample() }
+                            Text("${stringResource(R.string.eg)} $example", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                        },
                         modifier = Modifier.weight(1f),
                         singleLine = true
                     )

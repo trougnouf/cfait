@@ -35,6 +35,9 @@ import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
 
+/** Tree icons used for the collapse/expand toggle, picked deterministically per task or tag. */
+private val TREE_ICONS = listOf(NfIcons.TREE_FA, NfIcons.TREE_FAE, NfIcons.TREE_MD, NfIcons.PALM_TREE, NfIcons.PINE_TREE)
+
 @Composable
 fun TaskCheckbox(
     isDone: Boolean,
@@ -170,20 +173,23 @@ fun TaskRow(
                 )
 
                 if (showInlineDescriptions && task.task.descriptionInline.isNotEmpty() && !expanded && !task.task.isCollapsed) {
-                    val descSpans = com.trougnouf.cfait.ui.parseInlineMarkdown(
-                        task.task.descriptionInline,
-                        if (isDark) Color(0xFFAAAAAA) else Color(0xFF666666),
-                        false,
-                        highlightRegex,
-                        highlightColor
-                    )
+                    val descColor = if (isDark) Color(0xFFAAAAAA) else Color(0xFF666666)
+                    val descSpans = remember(task.task.descriptionInline, descColor, highlightRegex, highlightColor) {
+                        com.trougnouf.cfait.ui.parseInlineMarkdown(
+                            task.task.descriptionInline,
+                            descColor,
+                            false,
+                            highlightRegex,
+                            highlightColor
+                        )
+                    }
                     ClickableText(
                         text = descSpans,
                         modifier = Modifier.padding(top = 2.dp, bottom = 2.dp),
                         style = androidx.compose.ui.text.TextStyle(
                             fontSize = 12.sp,
                             lineHeight = 14.sp,
-                            color = if (isDark) Color(0xFFAAAAAA) else Color(0xFF666666)
+                            color = descColor
                         ),
                         maxLines = 3,
                         overflow = TextOverflow.Ellipsis,
@@ -460,12 +466,11 @@ fun TaskRow(
             }
 
             if (task.task.hasVisibleSubtasks || isCollapsed) {
-                val trees = listOf(NfIcons.TREE_FA, NfIcons.TREE_FAE, NfIcons.TREE_MD, NfIcons.PALM_TREE, NfIcons.PINE_TREE)
                 val hash = kotlin.math.abs(task.task.uid.hashCode())
                 val iconChar = if (isCollapsed) {
                     NfIcons.FAMILY_TREE
                 } else {
-                    trees[hash % 5]
+                    TREE_ICONS[hash % 5]
                 }
                 val iconColor = if (isCollapsed) {
                     MaterialTheme.colorScheme.primary
@@ -678,10 +683,9 @@ fun CompactTagRow(
 
         if (hasChildren && onToggleCollapse != null) {
             Spacer(Modifier.width(8.dp))
-            val trees = listOf(NfIcons.TREE_FA, NfIcons.TREE_FAE, NfIcons.TREE_MD, NfIcons.PALM_TREE, NfIcons.PINE_TREE)
             val hash = kotlin.math.abs(name.hashCode())
             val iconChar = if (isExpanded) {
-                trees[hash % 5]
+                TREE_ICONS[hash % 5]
             } else {
                 NfIcons.FAMILY_TREE
             }
