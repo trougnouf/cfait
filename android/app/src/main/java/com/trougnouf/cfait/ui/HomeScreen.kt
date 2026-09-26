@@ -85,6 +85,19 @@ data class TabInfo(
     val isWriteTarget: String?
 )
 
+private val weekDaysMondayFirst = listOf("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su")
+private val weekDaysSundayFirst = listOf("Su", "Mo", "Tu", "We", "Th", "Fr", "Sa")
+
+data class JournalCalendarData(
+    val parsedDate: java.util.Date,
+    val currentDay: Int,
+    val startOffset: Int,
+    val daysInMonth: Int,
+    val isMondayFirst: Boolean,
+    val todayDay: Int,
+    val monthStr: String
+)
+
 @Composable
 fun ColoredOverflowDots() {
     Row(verticalAlignment = Alignment.Bottom) {
@@ -464,6 +477,16 @@ fun HomeScreen(
         }
     }
 
+    fun selectJournalDate(newDate: String) {
+        journalDateStr = newDate
+        // Try to find the journal page for this date
+        journalWikiUid = viewData?.journalPages?.firstOrNull { it.title == newDate }?.uid
+        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            api.setJournalDate(newDate)
+            updateTaskList()
+        }
+    }
+
     val onToggleCollapse: (String) -> Unit = { tag ->
         expandedTags = if (expandedTags.contains(tag)) expandedTags - tag else expandedTags + tag
         scope.launch {
@@ -522,7 +545,7 @@ fun HomeScreen(
             if (journalTodayHref!!.isNotEmpty()) {
                 journalSelectedHref = journalTodayHref
             }
-            scope.launch {
+            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 api.setJournalDate(today)
                 updateTaskList()
             }
@@ -1835,65 +1858,64 @@ fun HomeScreen(
                         } else if (sidebarTab == 4 && viewData != null) {
                             item {
                                 val ctxData = viewData.journalContext
-                                val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
-                                val parsedDate = try { sdf.parse(ctxData.date) ?: java.util.Date() } catch (e: Exception) { java.util.Date() }
-                                val cal = java.util.Calendar.getInstance()
-                                cal.time = parsedDate
+                                // This item recomposes whenever the task list refreshes, so keep the
+                                // Calendar work out of the hot path.
+                                val calData = remember(ctxData.date, firstDayOfWeek) {
+                                    val parsedDate = try {
+                                        java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).parse(ctxData.date) ?: java.util.Date()
+                                    } catch (e: Exception) { java.util.Date() }
+                                    val cal = java.util.Calendar.getInstance()
+                                    cal.time = parsedDate
 
-                                val currentYear = cal.get(java.util.Calendar.YEAR)
-                                val currentMonth = cal.get(java.util.Calendar.MONTH)
-                                val currentDay = cal.get(java.util.Calendar.DAY_OF_MONTH)
+                                    val currentYear = cal.get(java.util.Calendar.YEAR)
+                                    val currentMonth = cal.get(java.util.Calendar.MONTH)
+                                    val currentDay = cal.get(java.util.Calendar.DAY_OF_MONTH)
 
-                                cal.set(java.util.Calendar.DAY_OF_MONTH, 1)
-                                val firstDayOfWeekInt = cal.get(java.util.Calendar.DAY_OF_WEEK) // 1=Sun, 2=Mon
+                                    cal.set(java.util.Calendar.DAY_OF_MONTH, 1)
+                                    val firstDayOfWeekInt = cal.get(java.util.Calendar.DAY_OF_WEEK) // 1=Sun, 2=Mon
 
-                                val isMondayFirst = firstDayOfWeek == com.trougnouf.cfait.core.MobileFirstDayOfWeek.MONDAY
-                                val startOffset = if (isMondayFirst) {
-                                    (firstDayOfWeekInt + 5) % 7
-                                } else {
-                                    firstDayOfWeekInt - 1
+                                    val isMondayFirst = firstDayOfWeek == com.trougnouf.cfait.core.MobileFirstDayOfWeek.MONDAY
+                                    val startOffset = if (isMondayFirst) {
+                                        (firstDayOfWeekInt + 5) % 7
+                                    } else {
+                                        firstDayOfWeekInt - 1
+                                    }
+
+                                    val daysInMonth = cal.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
+
+                                    val todayCal = java.util.Calendar.getInstance()
+                                    val isCurrentMonthYear = todayCal.get(java.util.Calendar.YEAR) == currentYear && todayCal.get(java.util.Calendar.MONTH) == currentMonth
+                                    val todayDay = if (isCurrentMonthYear) todayCal.get(java.util.Calendar.DAY_OF_MONTH) else -1
+
+                                    val monthStr = java.text.SimpleDateFormat("MMMM yyyy", java.util.Locale.getDefault()).format(parsedDate)
+
+                                    JournalCalendarData(parsedDate, currentDay, startOffset, daysInMonth, isMondayFirst, todayDay, monthStr)
                                 }
-
-                                val daysInMonth = cal.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
-
-                                val todayCal = java.util.Calendar.getInstance()
-                                val isCurrentMonthYear = todayCal.get(java.util.Calendar.YEAR) == currentYear && todayCal.get(java.util.Calendar.MONTH) == currentMonth
-                                val todayDay = if (isCurrentMonthYear) todayCal.get(java.util.Calendar.DAY_OF_MONTH) else -1
-
-                                val monthFmt = java.text.SimpleDateFormat("MMMM yyyy", java.util.Locale.getDefault())
-                                val monthStr = monthFmt.format(parsedDate)
+                                val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
 
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(8.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    IconButton(onClick = { 
+                                    IconButton(onClick = {
                                         val c = java.util.Calendar.getInstance()
-                                        c.time = parsedDate
+                                        c.time = calData.parsedDate
                                         c.add(java.util.Calendar.MONTH, -1)
-                                        val newDate = sdf.format(c.time)
-                                        journalDateStr = newDate
-                                        // Try to find the journal page for this date
-                                        journalWikiUid = viewData?.journalPages?.firstOrNull { it.title == newDate }?.uid
-                                        scope.launch { api.setJournalDate(newDate); updateTaskList() } 
+                                        selectJournalDate(sdf.format(c.time))
                                     }) { NfIcon(NfIcons.ARROW_LEFT) }
-                                    
-                                    Text(monthStr, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                    
-                                    IconButton(onClick = { 
+
+                                    Text(calData.monthStr, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+
+                                    IconButton(onClick = {
                                         val c = java.util.Calendar.getInstance()
-                                        c.time = parsedDate
+                                        c.time = calData.parsedDate
                                         c.add(java.util.Calendar.MONTH, 1)
-                                        val newDate = sdf.format(c.time)
-                                        journalDateStr = newDate
-                                        // Try to find the journal page for this date
-                                        journalWikiUid = viewData?.journalPages?.firstOrNull { it.title == newDate }?.uid
-                                        scope.launch { api.setJournalDate(newDate); updateTaskList() } 
+                                        selectJournalDate(sdf.format(c.time))
                                     }) { NfIcon(NfIcons.ARROW_RIGHT) }
                                 }
 
-                                val weekDays = if (isMondayFirst) listOf("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su") else listOf("Su", "Mo", "Tu", "We", "Th", "Fr", "Sa")
+                                val weekDays = if (calData.isMondayFirst) weekDaysMondayFirst else weekDaysSundayFirst
                                 Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                                     weekDays.forEach {
                                         Text(it, fontSize = 12.sp, color = Color.Gray, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
@@ -1901,7 +1923,7 @@ fun HomeScreen(
                                 }
                                 Spacer(Modifier.height(4.dp))
 
-                                val totalCells = startOffset + daysInMonth
+                                val totalCells = calData.startOffset + calData.daysInMonth
                                 val numRows = (totalCells + 6) / 7
 
                                 Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
@@ -1909,12 +1931,12 @@ fun HomeScreen(
                                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                                             for (c in 0 until 7) {
                                                 val cellIdx = r * 7 + c
-                                                if (cellIdx < startOffset || cellIdx >= totalCells) {
+                                                if (cellIdx < calData.startOffset || cellIdx >= totalCells) {
                                                     Spacer(Modifier.weight(1f))
                                                 } else {
-                                                    val day = cellIdx - startOffset + 1
-                                                    val isSelected = day == currentDay
-                                                    val isToday = day == todayDay
+                                                    val day = cellIdx - calData.startOffset + 1
+                                                    val isSelected = day == calData.currentDay
+                                                    val isToday = day == calData.todayDay
                                                     val dayData = ctxData.journalDaysInMonth.find { it.day.toUInt() == day.toUInt() }
                                                     val hasEntry = dayData != null
 
@@ -1938,13 +1960,9 @@ fun HomeScreen(
                                                             .background(bgColor)
                                                             .clickable {
                                                                 val clickedCal = java.util.Calendar.getInstance()
-                                                                clickedCal.time = parsedDate
+                                                                clickedCal.time = calData.parsedDate
                                                                 clickedCal.set(java.util.Calendar.DAY_OF_MONTH, day)
-                                                                val newDate = sdf.format(clickedCal.time)
-                                                                journalDateStr = newDate
-                                                                // Try to find the journal page for this date
-                                                                journalWikiUid = viewData?.journalPages?.firstOrNull { it.title == newDate }?.uid
-                                                                scope.launch { api.setJournalDate(newDate); updateTaskList() }
+                                                                selectJournalDate(sdf.format(clickedCal.time))
                                                             },
                                                         contentAlignment = Alignment.Center
                                                     ) {
@@ -1966,47 +1984,27 @@ fun HomeScreen(
                                 ) {
                                     Button(
                                         onClick = {
-                                            scope.launch {
-                                                val c = java.util.Calendar.getInstance()
-                                                c.time = parsedDate
-                                                c.add(java.util.Calendar.DAY_OF_MONTH, -1)
-                                                val newDate = sdf.format(c.time)
-                                                journalDateStr = newDate
-                                                // Try to find the journal page for this date
-                                                journalWikiUid = viewData?.journalPages?.firstOrNull { it.title == newDate }?.uid
-                                                api.setJournalDate(newDate)
-                                                updateTaskList()
-                                            }
+                                            val c = java.util.Calendar.getInstance()
+                                            c.time = calData.parsedDate
+                                            c.add(java.util.Calendar.DAY_OF_MONTH, -1)
+                                            selectJournalDate(sdf.format(c.time))
                                         },
                                         colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.onSurface),
                                         contentPadding = PaddingValues(0.dp)
                                     ) { Text("< ${stringResource(R.string.journal_yesterday)}", fontSize = 12.sp) }
 
                                     Button(
-                                        onClick = {
-                                            val newDate = sdf.format(java.util.Date())
-                                            journalDateStr = newDate
-                                            // Try to find the journal page for this date
-                                            journalWikiUid = viewData?.journalPages?.firstOrNull { it.title == newDate }?.uid
-                                            scope.launch { api.setJournalDate(newDate); updateTaskList() }
-                                        },
+                                        onClick = { selectJournalDate(sdf.format(java.util.Date())) },
                                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer),
                                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                                     ) { Text(stringResource(R.string.journal_today), fontSize = 12.sp) }
 
                                     Button(
                                         onClick = {
-                                            scope.launch {
-                                                val c = java.util.Calendar.getInstance()
-                                                c.time = parsedDate
-                                                c.add(java.util.Calendar.DAY_OF_MONTH, 1)
-                                                val newDate = sdf.format(c.time)
-                                                journalDateStr = newDate
-                                                // Try to find the journal page for this date
-                                                journalWikiUid = viewData?.journalPages?.firstOrNull { it.title == newDate }?.uid
-                                                api.setJournalDate(newDate)
-                                                updateTaskList()
-                                            }
+                                            val c = java.util.Calendar.getInstance()
+                                            c.time = calData.parsedDate
+                                            c.add(java.util.Calendar.DAY_OF_MONTH, 1)
+                                            selectJournalDate(sdf.format(c.time))
                                         },
                                         colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.onSurface),
                                         contentPadding = PaddingValues(0.dp)
@@ -2772,15 +2770,7 @@ fun HomeScreen(
                                     journalDateStr = journalDateStr,
                                     journalWikiUid = journalWikiUid,
                                     journalWikiTitle = journalWikiTitle,
-                                    onDateChange = { d ->
-                                        journalDateStr = d
-                                        // Try to find the journal page for this date
-                                        journalWikiUid = viewData?.journalPages?.firstOrNull { it.title == d }?.uid
-                                        scope.launch {
-                                            api.setJournalDate(d)
-                                            updateTaskList()
-                                        }
-                                    },
+                                    onDateChange = { d -> selectJournalDate(d) },
                                     onOpenWikiPage = { newUid, newTitle ->
                                         journalWikiUid = newUid
                                         journalWikiTitle = newTitle
