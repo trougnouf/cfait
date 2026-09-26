@@ -71,11 +71,23 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.*
-import com.trougnouf.cfait.core.MobileGoalType
 import com.trougnouf.cfait.ui.StableTaskSummary
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import android.content.Intent
+import androidx.core.content.FileProvider
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.TextFieldValue
+import kotlin.math.abs
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+import java.util.concurrent.atomic.AtomicInteger
 
 data class TabInfo(
     val id: String,
@@ -89,7 +101,7 @@ private val weekDaysMondayFirst = listOf("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su
 private val weekDaysSundayFirst = listOf("Su", "Mo", "Tu", "We", "Th", "Fr", "Sa")
 
 data class JournalCalendarData(
-    val parsedDate: java.util.Date,
+    val parsedDate: Date,
     val currentDay: Int,
     val startOffset: Int,
     val daysInMonth: Int,
@@ -124,9 +136,9 @@ fun parseIcon(s: String): String {
 fun HomeScreen(
     api: CfaitMobile,
     calendars: List<MobileCalendar>,
-    viewData: com.trougnouf.cfait.core.MobileViewData?,
+    viewData: MobileViewData?,
     aliases: Map<String, List<String>>,
-    onUpdateViewData: (com.trougnouf.cfait.core.MobileViewData, Map<String, List<String>>) -> Unit,
+    onUpdateViewData: (MobileViewData, Map<String, List<String>>) -> Unit,
     defaultCalHref: String?,
     defaultPriority: Int,
     isLoading: Boolean,
@@ -144,13 +156,13 @@ fun HomeScreen(
     actionBarPosition: String = "top",
     tabAutoHide: Boolean = true,
     listStates: SnapshotStateMap<String, LazyListState>,
-    goals: Map<String, com.trougnouf.cfait.core.MobileGoal>,
+    goals: Map<String, MobileGoal>,
     showCalendarsTab: Boolean,
     showTagsTab: Boolean,
     showLocationsTab: Boolean,
     showGoalsTab: Boolean,
     showJournalTab: Boolean,
-    firstDayOfWeek: com.trougnouf.cfait.core.MobileFirstDayOfWeek,
+    firstDayOfWeek: MobileFirstDayOfWeek,
     defaultDurationGoalMins: Int,
     sessionsCountAsCompletions: Boolean,
     onGlobalRefresh: () -> Unit,
@@ -183,7 +195,7 @@ fun HomeScreen(
 
     // --- State Declarations ---
     var sidebarTab by rememberSaveable { mutableIntStateOf(0) }
-    var journalDateStr by rememberSaveable { mutableStateOf(java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())) }
+    var journalDateStr by rememberSaveable { mutableStateOf(SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())) }
     var journalWikiUid by rememberSaveable { mutableStateOf<String?>(null) }
     var journalWikiTitle by rememberSaveable { mutableStateOf("") }
     var isManualSyncing by remember { mutableStateOf(false) }
@@ -211,7 +223,7 @@ fun HomeScreen(
     var hasInitializedCustom by rememberSaveable { mutableStateOf(false) }
     var hasInitWriteTarget by rememberSaveable { mutableStateOf(false) }
 
-    // FIX 1: Initialize the custom write target from the backend config on startup,
+    // Initialize the custom write target from the backend config on startup,
     // so it isn't null and properly restores when swiping back from isolated tabs.
     LaunchedEffect(defaultCalHref) {
         if (!hasInitWriteTarget && defaultCalHref != null) {
@@ -220,7 +232,7 @@ fun HomeScreen(
         }
     }
 
-    // FIX: Trigger on allHrefs and ensure we cover ALL visibility states.
+    // Trigger on allHrefs and ensure we cover ALL visibility states.
     LaunchedEffect(backendVisibleHrefs, allHrefs) {
         if (!hasInitializedCustom && allHrefs.isNotEmpty()) {
             if (backendVisibleHrefs.size == allHrefs.size) {
@@ -238,7 +250,7 @@ fun HomeScreen(
     // Stable tabs list: All -> Custom -> Rest
     val tabs = remember(enabledCals.map { it.href }, customHrefs, customWriteTarget, allHrefs) {
         val list = mutableListOf<TabInfo>()
-        // FIX 2: Apply the global customWriteTarget to the "All" tab as well so it restores properly.
+        // Apply the global customWriteTarget to the "All" tab as well so it restores properly.
         list.add(TabInfo("ALL", "All", allHrefs, null, customWriteTarget))
         if (customHrefs.isNotEmpty() && customHrefs.size < allHrefs.size) {
             list.add(TabInfo("CUSTOM", "Custom", customHrefs, null, customWriteTarget))
@@ -261,7 +273,7 @@ fun HomeScreen(
         if (pagerState.isScrollInProgress) {
             isTabsTemporarilyVisible = true
         } else {
-            kotlinx.coroutines.delay(2500)
+            delay(2500)
             isTabsTemporarilyVisible = false
         }
     }
@@ -344,7 +356,7 @@ fun HomeScreen(
                 localDefaultCalHref = quickAddCalHref
             }
             try {
-                kotlinx.coroutines.delay(50)
+                delay(50)
                 newTaskFocusRequester.requestFocus()
                 keyboardController?.show()
             } catch (_: Exception) {
@@ -379,8 +391,8 @@ fun HomeScreen(
     }
     val highlightColor = if (isDark) Color(0xFFFFFF00) else Color(0xFFFF5500)
 
-    var newTaskText by rememberSaveable(stateSaver = androidx.compose.ui.text.input.TextFieldValue.Saver) { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
-    var newDescriptionText by rememberSaveable(stateSaver = androidx.compose.ui.text.input.TextFieldValue.Saver) { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
+    var newTaskText by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue("")) }
+    var newDescriptionText by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue("")) }
     var isCreateExpanded by rememberSaveable { mutableStateOf(false) }
     var showExportSourceDialog by remember { mutableStateOf(false) }
     var showExportDestDialog by remember { mutableStateOf(false) }
@@ -449,18 +461,18 @@ fun HomeScreen(
 
         val c1 = tabs.getOrNull(currentIndex)?.color ?: onSurfaceColor
         val c2 = tabs.getOrNull(safeTarget)?.color ?: onSurfaceColor
-        lerp(c1, c2, kotlin.math.abs(pageOffset))
+        lerp(c1, c2, abs(pageOffset))
     }
 
     // --- Functions ---
     // Monotonic generation counter so a slow, stale getViewTasks response can
     // never overwrite a newer one (the source of the intermittent blank list).
-    val updateTaskGen = remember { java.util.concurrent.atomic.AtomicInteger(0) }
+    val updateTaskGen = remember { AtomicInteger(0) }
     fun updateTaskList() {
         val gen = updateTaskGen.incrementAndGet()
         // The first poll of the UniFFI future runs the whole Rust body
         // synchronously, so keep it off the main thread.
-        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        scope.launch(Dispatchers.IO) {
             try {
                 val options = MobileFilterOptions(
                     filterTags = filterTags.toList(),
@@ -489,7 +501,7 @@ fun HomeScreen(
         journalDateStr = newDate
         // Try to find the journal page for this date
         journalWikiUid = viewData?.journalPages?.firstOrNull { it.title == newDate }?.uid
-        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        scope.launch(Dispatchers.IO) {
             api.setJournalDate(newDate)
             updateTaskList()
         }
@@ -498,13 +510,13 @@ fun HomeScreen(
     val onToggleCollapse: (String) -> Unit = { tag ->
         expandedTags = if (expandedTags.contains(tag)) expandedTags - tag else expandedTags + tag
         scope.launch {
-            api.dispatch(com.trougnouf.cfait.core.AppIntent.ToggleTagCollapse(tag))
+            api.dispatch(AppIntent.ToggleTagCollapse(tag))
             updateTaskList()
         }
     }
 
     fun checkSyncStatus() {
-        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        scope.launch(Dispatchers.IO) {
             try {
                 localHasUnsynced = api.hasUnsyncedChanges()
             } catch (e: Exception) {
@@ -545,7 +557,7 @@ fun HomeScreen(
 
     LaunchedEffect(journalTodayHref) {
         if (journalTodayHref != null) {
-            val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+            val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
             sidebarTab = 4
             journalDateStr = today
             journalWikiUid = null
@@ -553,7 +565,7 @@ fun HomeScreen(
             if (journalTodayHref!!.isNotEmpty()) {
                 journalSelectedHref = journalTodayHref
             }
-            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            scope.launch(Dispatchers.IO) {
                 api.setJournalDate(today)
                 updateTaskList()
             }
@@ -651,7 +663,7 @@ fun HomeScreen(
                             Toast.makeText(context, context.getString(R.string.task_action_undone, desc), Toast.LENGTH_SHORT).show()
                         }
                     }
-                    newTaskText = androidx.compose.ui.text.input.TextFieldValue("")
+                    newTaskText = TextFieldValue("")
                     return
                 }
                 ":redo" -> {
@@ -664,7 +676,7 @@ fun HomeScreen(
                             Toast.makeText(context, context.getString(R.string.task_action_redone, desc), Toast.LENGTH_SHORT).show()
                         }
                     }
-                    newTaskText = androidx.compose.ui.text.input.TextFieldValue("")
+                    newTaskText = TextFieldValue("")
                     return
                 }
                 ":empty-trash" -> {
@@ -674,12 +686,12 @@ fun HomeScreen(
                         checkSyncStatus()
                         triggerBackgroundSync(context, api)
                     }
-                    newTaskText = androidx.compose.ui.text.input.TextFieldValue("")
+                    newTaskText = TextFieldValue("")
                     return
                 }
                 ":delete-all" -> {
                     showDeleteAllDialog = true
-                    newTaskText = androidx.compose.ui.text.input.TextFieldValue("")
+                    newTaskText = TextFieldValue("")
                     return
                 }
                 else -> {
@@ -694,34 +706,33 @@ fun HomeScreen(
             val tag = text.removePrefix("#")
             filterTags = api.resolveSelectionAliases(tag, false).toSet()
             sidebarTab = 1
-            newTaskText = androidx.compose.ui.text.input.TextFieldValue("")
+            newTaskText = TextFieldValue("")
             updateTaskList()
         } else if ((text.startsWith("@@") || text.startsWith("loc:")) && !text.contains(" ") && !isAliasDef) {
             val loc = if (text.startsWith("@@")) text.removePrefix("@@") else text.removePrefix("loc:")
             filterLocations = api.resolveSelectionAliases(loc.replace("\"", ""), true).toSet()
             sidebarTab = 2
-            newTaskText = androidx.compose.ui.text.input.TextFieldValue("")
+            newTaskText = TextFieldValue("")
             updateTaskList()
         } else {
             val currentChildUid = creatingChildUid
 
             // Task creation does synchronous FFI writes; keep it off the main thread.
-            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            scope.launch(Dispatchers.IO) {
                 activeOpCount++
                 try {
-                    // FIX: Ensure the backend knows the correct target immediately,
+                    // Ensure the backend knows the correct target immediately,
                     // even if the user typed this while the page was still settling.
                     val activeTab = tabs.getOrNull(pagerState.currentPage)
                     if (activeTab?.isWriteTarget != null && activeTab.isWriteTarget != defaultCalHref) {
                         api.setDefaultCalendar(activeTab.isWriteTarget)
                     }
 
-                    // *** CALL THE NEW DESCRIPTION API ***
                     val newUid = api.addTaskWithDescription(text, desc)
                     
                     // Clear inputs ONLY on success to prevent data loss
-                    newTaskText = androidx.compose.ui.text.input.TextFieldValue("")
-                    newDescriptionText = androidx.compose.ui.text.input.TextFieldValue("")
+                    newTaskText = TextFieldValue("")
+                    newDescriptionText = TextFieldValue("")
                     isCreateExpanded = false
                     if (!childLockActive) {
                         creatingChildUid = null
@@ -780,7 +791,7 @@ fun HomeScreen(
 
     // --- Geolocation State ---
     var pendingGeoTask by rememberSaveable { mutableStateOf<String?>(null) }
-    var pendingGeoDesc by rememberSaveable { mutableStateOf<String?>(null) } // <-- ADD THIS LINE
+    var pendingGeoDesc by rememberSaveable { mutableStateOf<String?>(null) }
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -865,17 +876,17 @@ fun HomeScreen(
             scope.launch {
                 try {
                     val gpxContent = api.exportLocationsGpx(task.uid)
-                    val file = java.io.File(context.cacheDir, "locations_${task.uid}.gpx")
+                    val file = File(context.cacheDir, "locations_${task.uid}.gpx")
                     file.writeText(gpxContent)
-                    val uri = androidx.core.content.FileProvider.getUriForFile(
+                    val uri = FileProvider.getUriForFile(
                         context, "${context.packageName}.fileprovider", file
                     )
-                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                    val intent = Intent(Intent.ACTION_VIEW).apply {
                         setDataAndType(uri, "application/gpx+xml")
-                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
                     context.startActivity(
-                        android.content.Intent.createChooser(
+                        Intent.createChooser(
                             intent,
                             context.getString(R.string.action_open_locations)
                         )
@@ -893,7 +904,7 @@ fun HomeScreen(
             yankedUid = null
             // For create_child, we need the full task to get categories, locations, etc.
             // We'll set the uid and let the actual creation fetch the full task when needed
-            newTaskText = androidx.compose.ui.text.input.TextFieldValue("")
+            newTaskText = TextFieldValue("")
             return
         }
 
@@ -1025,7 +1036,7 @@ fun HomeScreen(
         if (pendingTabId != null) {
             val idx = tabs.indexOfFirst { it.id == pendingTabId }
             if (idx >= 0) {
-                // FIX: Only clear the pendingTabId if the tab ACTUALLY exists (idx >= 0).
+                // Only clear the pendingTabId if the tab ACTUALLY exists (idx >= 0).
                 // If it's -1, we leave pendingTabId alone so it retries when tabs re-render.
                 if (pagerState.currentPage != idx) {
                     pagerState.scrollToPage(idx)
@@ -1039,17 +1050,17 @@ fun HomeScreen(
     LaunchedEffect(pagerState.settledPage) {
         if (tabs.isEmpty() || pagerState.isScrollInProgress) return@LaunchedEffect
 
-        // FIX 2: Prevent the default initial UI state (page 0 / "All") from
+        // Prevent the default initial UI state (page 0 / "All") from
         // overwriting the user's saved backend configuration during app startup.
         if (!hasInitializedCustom) return@LaunchedEffect
 
         val settledTab = tabs.getOrNull(pagerState.settledPage) ?: return@LaunchedEffect
 
-        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            // FIX: Wait a fraction of a second so the Compose gesture subsystem
+        scope.launch(Dispatchers.IO) {
+            // Wait a fraction of a second so the Compose gesture subsystem
             // fully releases the horizontal lock. This completely eliminates
             // the delay preventing immediate vertical scrolling.
-            kotlinx.coroutines.delay(250)
+            delay(250)
 
             var needsRefresh = false
             enabledCals.forEach { cal ->
@@ -1144,7 +1155,7 @@ fun HomeScreen(
                     listState.scrollToItem(index)
                 } else if (autoScrollUid != null) {
                     listState.animateScrollToItem(index)
-                    kotlinx.coroutines.delay(2000)
+                    delay(2000)
                 }
             }
         } finally {
@@ -1165,7 +1176,7 @@ fun HomeScreen(
             showScrollToTop = false
         } else if (isScrollingUp) {
             showScrollToTop = true
-            kotlinx.coroutines.delay(3000)
+            delay(3000)
             if (showScrollToTop && !isProgrammaticScroll) showScrollToTop = false
         }
     }
@@ -1321,7 +1332,7 @@ fun HomeScreen(
                     value = sessionInputText,
                     onValueChange = { sessionInputText = it },
                     placeholder = {
-                        val example = remember { com.trougnouf.cfait.ui.randomSessionExample() }
+                        val example = remember { randomSessionExample() }
                         Text("${stringResource(R.string.eg)} $example", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
                     },
                     singleLine = true,
@@ -1364,7 +1375,7 @@ fun HomeScreen(
                 Column {
                     val count = tasksToDelete.size
                     Text(
-                        com.trougnouf.cfait.ui.resolvePluralMap(
+                        resolvePluralMap(
                             stringResource(R.string.delete_all_confirm, count),
                             count
                         )
@@ -1378,7 +1389,7 @@ fun HomeScreen(
                             val moreCount = tasksToDelete.size - 10
                             item {
                                 Text(
-                                    com.trougnouf.cfait.ui.resolvePluralMap(
+                                    resolvePluralMap(
                                         stringResource(R.string.and_more, moreCount),
                                         moreCount
                                     ),
@@ -1516,7 +1527,7 @@ fun HomeScreen(
                             Row(
                                 modifier = Modifier.weight(1f).background(
                                     if (isAllTagsSelected) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f) else Color.Transparent,
-                                    androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
+                                    RoundedCornerShape(4.dp)
                                 ).clickable { filterTags = emptySet(); scope.launch { drawerState.close() } }
                                     .padding(horizontal = 12.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
@@ -1528,7 +1539,7 @@ fun HomeScreen(
                             Spacer(Modifier.width(8.dp))
                             Surface(
                                 color = if (matchAllCategories) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer,
-                                shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
+                                shape = RoundedCornerShape(4.dp),
                                 modifier = Modifier.clickable { matchAllCategories = !matchAllCategories }
                             ) {
                                 Text(
@@ -1573,7 +1584,7 @@ fun HomeScreen(
                                         scope.launch { drawerState.close() }
                                     },
                                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                                ) { Text(androidx.compose.ui.res.stringResource(R.string.show_all_collections)) }
+                                ) { Text(stringResource(R.string.show_all_collections)) }
                                 HorizontalDivider()
                             }
                             items(enabledCals) { cal ->
@@ -1847,7 +1858,7 @@ fun HomeScreen(
                                         if (!isTask) {
                                             Spacer(Modifier.width(12.dp))
                                             IconButton(onClick = {
-                                                scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                                scope.launch(Dispatchers.IO) {
                                                     try {
                                                         val cfg = api.getConfig()
                                                         val newGoals = cfg.goals.toMutableMap()
@@ -1873,36 +1884,36 @@ fun HomeScreen(
                                 // Calendar work out of the hot path.
                                 val calData = remember(ctxData.date, firstDayOfWeek) {
                                     val parsedDate = try {
-                                        java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).parse(ctxData.date) ?: java.util.Date()
-                                    } catch (e: Exception) { java.util.Date() }
-                                    val cal = java.util.Calendar.getInstance()
+                                        SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(ctxData.date) ?: Date()
+                                    } catch (e: Exception) { Date() }
+                                    val cal = Calendar.getInstance()
                                     cal.time = parsedDate
 
-                                    val currentYear = cal.get(java.util.Calendar.YEAR)
-                                    val currentMonth = cal.get(java.util.Calendar.MONTH)
-                                    val currentDay = cal.get(java.util.Calendar.DAY_OF_MONTH)
+                                    val currentYear = cal.get(Calendar.YEAR)
+                                    val currentMonth = cal.get(Calendar.MONTH)
+                                    val currentDay = cal.get(Calendar.DAY_OF_MONTH)
 
-                                    cal.set(java.util.Calendar.DAY_OF_MONTH, 1)
-                                    val firstDayOfWeekInt = cal.get(java.util.Calendar.DAY_OF_WEEK) // 1=Sun, 2=Mon
+                                    cal.set(Calendar.DAY_OF_MONTH, 1)
+                                    val firstDayOfWeekInt = cal.get(Calendar.DAY_OF_WEEK) // 1=Sun, 2=Mon
 
-                                    val isMondayFirst = firstDayOfWeek == com.trougnouf.cfait.core.MobileFirstDayOfWeek.MONDAY
+                                    val isMondayFirst = firstDayOfWeek == MobileFirstDayOfWeek.MONDAY
                                     val startOffset = if (isMondayFirst) {
                                         (firstDayOfWeekInt + 5) % 7
                                     } else {
                                         firstDayOfWeekInt - 1
                                     }
 
-                                    val daysInMonth = cal.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
+                                    val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
 
-                                    val todayCal = java.util.Calendar.getInstance()
-                                    val isCurrentMonthYear = todayCal.get(java.util.Calendar.YEAR) == currentYear && todayCal.get(java.util.Calendar.MONTH) == currentMonth
-                                    val todayDay = if (isCurrentMonthYear) todayCal.get(java.util.Calendar.DAY_OF_MONTH) else -1
+                                    val todayCal = Calendar.getInstance()
+                                    val isCurrentMonthYear = todayCal.get(Calendar.YEAR) == currentYear && todayCal.get(Calendar.MONTH) == currentMonth
+                                    val todayDay = if (isCurrentMonthYear) todayCal.get(Calendar.DAY_OF_MONTH) else -1
 
-                                    val monthStr = java.text.SimpleDateFormat("MMMM yyyy", java.util.Locale.getDefault()).format(parsedDate)
+                                    val monthStr = SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(parsedDate)
 
                                     JournalCalendarData(parsedDate, currentDay, startOffset, daysInMonth, isMondayFirst, todayDay, monthStr)
                                 }
-                                val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(8.dp),
@@ -1910,18 +1921,18 @@ fun HomeScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     IconButton(onClick = {
-                                        val c = java.util.Calendar.getInstance()
+                                        val c = Calendar.getInstance()
                                         c.time = calData.parsedDate
-                                        c.add(java.util.Calendar.MONTH, -1)
+                                        c.add(Calendar.MONTH, -1)
                                         selectJournalDate(sdf.format(c.time))
                                     }) { NfIcon(NfIcons.ARROW_LEFT) }
 
                                     Text(calData.monthStr, fontWeight = FontWeight.Bold, fontSize = 16.sp)
 
                                     IconButton(onClick = {
-                                        val c = java.util.Calendar.getInstance()
+                                        val c = Calendar.getInstance()
                                         c.time = calData.parsedDate
-                                        c.add(java.util.Calendar.MONTH, 1)
+                                        c.add(Calendar.MONTH, 1)
                                         selectJournalDate(sdf.format(c.time))
                                     }) { NfIcon(NfIcons.ARROW_RIGHT) }
                                 }
@@ -1954,7 +1965,7 @@ fun HomeScreen(
                                                     val bgColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
                                                     val contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary 
                                                                        else if (hasEntry) {
-                                                                           if (dayData!!.colors.size == 1) com.trougnouf.cfait.ui.parseHexColor(dayData.colors[0])
+                                                                           if (dayData!!.colors.size == 1) parseHexColor(dayData.colors[0])
                                                                            else Color(0xFFE91E63)
                                                                        }
                                                                        else if (isToday) MaterialTheme.colorScheme.primary 
@@ -1970,9 +1981,9 @@ fun HomeScreen(
                                                             .clip(CircleShape)
                                                             .background(bgColor)
                                                             .clickable {
-                                                                val clickedCal = java.util.Calendar.getInstance()
+                                                                val clickedCal = Calendar.getInstance()
                                                                 clickedCal.time = calData.parsedDate
-                                                                clickedCal.set(java.util.Calendar.DAY_OF_MONTH, day)
+                                                                clickedCal.set(Calendar.DAY_OF_MONTH, day)
                                                                 selectJournalDate(sdf.format(clickedCal.time))
                                                             },
                                                         contentAlignment = Alignment.Center
@@ -1995,9 +2006,9 @@ fun HomeScreen(
                                 ) {
                                     Button(
                                         onClick = {
-                                            val c = java.util.Calendar.getInstance()
+                                            val c = Calendar.getInstance()
                                             c.time = calData.parsedDate
-                                            c.add(java.util.Calendar.DAY_OF_MONTH, -1)
+                                            c.add(Calendar.DAY_OF_MONTH, -1)
                                             selectJournalDate(sdf.format(c.time))
                                         },
                                         colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.onSurface),
@@ -2005,16 +2016,16 @@ fun HomeScreen(
                                     ) { Text("< ${stringResource(R.string.journal_yesterday)}", fontSize = 12.sp) }
 
                                     Button(
-                                        onClick = { selectJournalDate(sdf.format(java.util.Date())) },
+                                        onClick = { selectJournalDate(sdf.format(Date())) },
                                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer),
                                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                                     ) { Text(stringResource(R.string.journal_today), fontSize = 12.sp) }
 
                                     Button(
                                         onClick = {
-                                            val c = java.util.Calendar.getInstance()
+                                            val c = Calendar.getInstance()
                                             c.time = calData.parsedDate
-                                            c.add(java.util.Calendar.DAY_OF_MONTH, 1)
+                                            c.add(Calendar.DAY_OF_MONTH, 1)
                                             selectJournalDate(sdf.format(c.time))
                                         },
                                         colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.onSurface),
@@ -2058,7 +2069,7 @@ fun HomeScreen(
                                 }
                 
                                 val color = if (isTask) {
-                                    calendars.find { it.href == page.calendarHref }?.color?.let { com.trougnouf.cfait.ui.parseHexColor(it) } ?: Color.Gray
+                                    calendars.find { it.href == page.calendarHref }?.color?.let { parseHexColor(it) } ?: Color.Gray
                                 } else {
                                     Color.Gray
                                 }
@@ -2081,7 +2092,7 @@ fun HomeScreen(
                                         IconButton(
                                             onClick = {
                                                 scope.launch {
-                                                    api.dispatch(com.trougnouf.cfait.core.AppIntent.ToggleTreeCollapse(page.uid))
+                                                    api.dispatch(AppIntent.ToggleTreeCollapse(page.uid))
                                                     onDataChanged()
                                                 }
                                             },
@@ -2463,7 +2474,7 @@ fun HomeScreen(
                     if (isSearchActive) {
                         LaunchedEffect(isSearchActive) {
                             // A tiny delay ensures the TextField is fully laid out in the Compose tree
-                            kotlinx.coroutines.delay(50)
+                            delay(50)
                             try {
                                 searchFocusRequester.requestFocus()
                                 keyboardController?.show()
@@ -2491,7 +2502,7 @@ fun HomeScreen(
                                 focusedIndicatorColor = Color.Transparent,
                                 unfocusedIndicatorColor = Color.Transparent
                             ),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                            shape = RoundedCornerShape(8.dp),
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
                                 .focusRequester(searchFocusRequester),
                         )
@@ -2616,7 +2627,7 @@ fun HomeScreen(
                                                 )
                                             },
                                             modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 250.dp),
-                                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp),
+                                            textStyle = TextStyle(fontSize = 14.sp),
                                             visualTransformation = remember(isDark) { MarkdownTransformation(isDark, api) },
                                         )
                                         CursorContextBanner(api, newDescriptionText, creatingChildUid, onNavigate = onTaskClick) { newDescriptionText = it }
@@ -2716,9 +2727,9 @@ fun HomeScreen(
                                     dragY += (change.position.y - change.previousPosition.y)
 
                                     // Check if we broke the minimum distance to be considered a deliberate swipe
-                                    if (kotlin.math.abs(dragX) > touchSlop || kotlin.math.abs(dragY) > touchSlop) {
+                                    if (abs(dragX) > touchSlop || abs(dragY) > touchSlop) {
                                         // If it's horizontal and moving right
-                                        if (dragX > touchSlop && kotlin.math.abs(dragX) > kotlin.math.abs(dragY)) {
+                                        if (dragX > touchSlop && abs(dragX) > abs(dragY)) {
                                             scope.launch { drawerState.open() }
                                             change.consume()
 
@@ -2792,7 +2803,7 @@ fun HomeScreen(
                                     onTaskClick = onTaskClick,
                                     onDataChanged = {
                                         updateTaskList()
-                                        com.trougnouf.cfait.ui.triggerBackgroundSync(context, api)
+                                        triggerBackgroundSync(context, api)
                                     },
                                     onToggleCollapse = onToggleCollapse
                                 )
