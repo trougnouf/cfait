@@ -255,6 +255,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some(current) = &app.active_cal_href
                 && app.calendars.iter().any(|c| c.href == *current)
                 && !app.hidden_calendars.contains(current)
+                && !app.disabled_calendars.contains(current)
             {
                 valid_active = Some(current.clone());
             }
@@ -262,6 +263,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if valid_active.is_none()
                 && let Some(ref net_active_href) = net_active
                 && !app.hidden_calendars.contains(net_active_href)
+                && !app.disabled_calendars.contains(net_active_href)
             {
                 valid_active = Some(net_active_href.clone());
             }
