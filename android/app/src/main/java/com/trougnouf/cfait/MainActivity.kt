@@ -450,10 +450,18 @@ fun CfaitNavHost(
     fun saveTaskInBackground(uid: String, smart: String, desc: String) {
         scope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
-                api.updateTaskSmart(uid, smart)
-                api.updateTaskDescription(uid, desc)
-                refreshLists()
-                com.trougnouf.cfait.ui.triggerBackgroundSync(context, api)
+                val current = api.getTaskByUid(uid)
+                // Skip the FFI round-trips (and their journal writes) when
+                // neither field actually changed. If we can't read the current
+                // task, assume it changed and proceed with the save.
+                val smartChanged = current?.smartString != smart
+                val descChanged = current?.description != desc
+                if (smartChanged) api.updateTaskSmart(uid, smart)
+                if (descChanged) api.updateTaskDescription(uid, desc)
+                if (smartChanged || descChanged) {
+                    refreshLists()
+                    com.trougnouf.cfait.ui.triggerBackgroundSync(context, api)
+                }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e // IGNORE CANCELLATION (don't show to user)
                 Toast.makeText(
@@ -640,6 +648,13 @@ fun CfaitNavHost(
                         autoScrollUid = uid
                         navController.popBackStack()
                     },
+                    onApply = { smart, desc ->
+                        // Save and stay on the detail screen. saveTaskInBackground
+                        // calls refreshLists(), which bumps refreshTick and makes
+                        // the detail screen re-read the task metadata in place.
+                        saveTaskInBackground(uid, smart, desc)
+                    },
+                    refreshTick = refreshTick,
                     onNavigate = { targetUid ->
                         scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                             try {

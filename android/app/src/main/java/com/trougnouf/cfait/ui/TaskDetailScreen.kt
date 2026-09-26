@@ -7,7 +7,6 @@ import androidx.activity.compose.BackHandler
 import android.Manifest
 import android.content.pm.PackageManager
 import android.widget.Toast
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -52,8 +51,10 @@ fun TaskDetailScreen(
     calendars: List<MobileCalendar>,
     onBack: () -> Unit,
     onSave: (String, String) -> Unit,
+    onApply: (String, String) -> Unit,
     onNavigate: (String) -> Unit,
     onEditTree: (String) -> Unit,
+    refreshTick: Long,
 ) {
     var task by remember { mutableStateOf<MobileTask?>(null) }
     val scope = rememberCoroutineScope()
@@ -74,6 +75,7 @@ fun TaskDetailScreen(
     // --- Geolocation State ---
     var pendingGeoInput by remember { mutableStateOf<String?>(null) }
     var pendingGeoDesc by remember { mutableStateOf<String?>(null) }
+    var pendingGeoKeepOpen by remember { mutableStateOf(false) }
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -82,8 +84,10 @@ fun TaskDetailScreen(
         scope.launch {
             val input = pendingGeoInput ?: return@launch
             val desc = pendingGeoDesc ?: ""
+            val keepOpen = pendingGeoKeepOpen
             pendingGeoInput = null
             pendingGeoDesc = null
+            pendingGeoKeepOpen = false
 
             if (granted) {
                 val loc = fetchCurrentLocation(context)
@@ -92,17 +96,17 @@ fun TaskDetailScreen(
                         Regex("geo:here", RegexOption.IGNORE_CASE),
                         "geo:${loc.latitude},${loc.longitude}"
                     )
-                    onSave(resolved, desc)
+                    if (keepOpen) onApply(resolved, desc) else onSave(resolved, desc)
                 } else {
                     Toast.makeText(
                         context,
                         context.getString(R.string.could_not_determine_location),
                         Toast.LENGTH_SHORT
                     ).show()
-                    onSave(input, desc)
+                    if (keepOpen) onApply(input, desc) else onSave(input, desc)
                 }
             } else {
-                onSave(input, desc)
+                if (keepOpen) onApply(input, desc) else onSave(input, desc)
             }
         }
     }
@@ -135,11 +139,23 @@ fun TaskDetailScreen(
 
     LaunchedEffect(uid) { reload() }
 
+    // Re-read task metadata (without touching the text fields) so sections
+    // like geo, dependencies and sessions reflect the latest save.
+    fun refreshTaskMeta() {
+        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            task = api.getTaskByUid(uid)
+        }
+    }
+
+    LaunchedEffect(refreshTick) {
+        if (task != null) refreshTaskMeta()
+    }
+
     BackHandler {
         onBack()
     }
 
-    fun handleSaveWithGeo(input: String, desc: String) {
+    fun handleSaveWithGeo(input: String, desc: String, keepOpen: Boolean = false) {
         if (input.contains("geo:here", ignoreCase = true)) {
             val hasFine = ContextCompat.checkSelfPermission(
                 context,
@@ -154,24 +170,24 @@ fun TaskDetailScreen(
                 scope.launch {
                     val loc = fetchCurrentLocation(context)
                     if (loc != null) {
-                        onSave(
-                            input.replace(
-                                Regex("geo:here", RegexOption.IGNORE_CASE),
-                                "geo:${loc.latitude},${loc.longitude}"
-                            ), desc
+                        val resolved = input.replace(
+                            Regex("geo:here", RegexOption.IGNORE_CASE),
+                            "geo:${loc.latitude},${loc.longitude}"
                         )
+                        if (keepOpen) onApply(resolved, desc) else onSave(resolved, desc)
                     } else {
                         Toast.makeText(
                             context,
                             context.getString(R.string.could_not_determine_location),
                             Toast.LENGTH_SHORT
                         ).show()
-                        onSave(input, desc)
+                        if (keepOpen) onApply(input, desc) else onSave(input, desc)
                     }
                 }
             } else {
                 pendingGeoInput = input
                 pendingGeoDesc = desc
+                pendingGeoKeepOpen = keepOpen
                 locationPermissionLauncher.launch(
                     arrayOf(
                         Manifest.permission.ACCESS_FINE_LOCATION,
@@ -180,7 +196,7 @@ fun TaskDetailScreen(
                 )
             }
         } else {
-            onSave(input, desc)
+            if (keepOpen) onApply(input, desc) else onSave(input, desc)
         }
     }
 
@@ -212,10 +228,10 @@ fun TaskDetailScreen(
                                         triggerBackgroundSync(context, api)
                                     } catch (e: Exception) {
                                         if (e is CancellationException) throw e
-                                        android.widget.Toast.makeText(
+                                        Toast.makeText(
                                             context,
-                                            "Error: ${e.message}",
-                                            android.widget.Toast.LENGTH_SHORT
+                                            context.getString(R.string.error_general, e.message ?: ""),
+                                            Toast.LENGTH_SHORT
                                         ).show()
                                     }
                                 }
@@ -275,9 +291,12 @@ fun TaskDetailScreen(
                             }
                         }
 
+                        // The button is shown when either field has history; the
+                        // click handler prefers the last-edited field and falls
+                        // back to the other.
                         val canUndoDesc = descUndoStack.size > 1
                         val canUndoSmart = smartUndoStack.size > 1
-                        val canUndo = (lastEdited == "smart" && canUndoSmart) || (lastEdited == "desc" && canUndoDesc) || canUndoSmart || canUndoDesc
+                        val canUndo = canUndoSmart || canUndoDesc
 
                         if (canUndo) {
                             IconButton(onClick = {
@@ -302,7 +321,7 @@ fun TaskDetailScreen(
                         
                         val canRedoDesc = descRedoStack.isNotEmpty()
                         val canRedoSmart = smartRedoStack.isNotEmpty()
-                        val canRedo = (lastEdited == "smart" && canRedoSmart) || (lastEdited == "desc" && canRedoDesc) || canRedoSmart || canRedoDesc
+                        val canRedo = canRedoSmart || canRedoDesc
 
                         if (canRedo) {
                             IconButton(onClick = {
@@ -335,12 +354,21 @@ fun TaskDetailScreen(
                         }
                         IconButton(
                             onClick = {
+                                // Save and stay on this screen (like the GUI's
+                                // "Save & Keep Editing" button).
+                                handleSaveWithGeo(smartInput.text, description.text, keepOpen = true)
+                            },
+                        ) {
+                            NfIcon(NfIcons.WRITE_TARGET, 20.sp)
+                        }
+                        IconButton(
+                            onClick = {
                                 // Optimistic Save:
                                 // We delegate the actual async work to the parent (MainActivity)
                                 // so we can leave this screen immediately without killing the save process.
                                 handleSaveWithGeo(smartInput.text, description.text)
                             },
-                        ) { 
+                        ) {
                             NfIcon(NfIcons.SAVE_AS, 20.sp, MaterialTheme.colorScheme.primary)
                         }
                     }
@@ -366,7 +394,7 @@ fun TaskDetailScreen(
                     onValueChange = { 
                         val replaced = it.copy(text = it.text.replace("\n", ""))
                         if (replaced.text != smartInput.text) {
-                            smartUndoStack = (smartUndoStack + it).takeLast(50)
+                            smartUndoStack = (smartUndoStack + replaced).takeLast(50)
                             smartRedoStack = emptyList()
                             lastEdited = "smart"
                         }
@@ -423,10 +451,10 @@ fun TaskDetailScreen(
                                     triggerBackgroundSync(context, api)
                                 } catch (e: Exception) {
                                     if (e is CancellationException) throw e
-                                    android.widget.Toast.makeText(
+                                    Toast.makeText(
                                         context,
                                         context.getString(R.string.error_general, e.message ?: ""),
-                                        android.widget.Toast.LENGTH_SHORT
+                                        Toast.LENGTH_SHORT
                                     ).show()
                                 }
                             }
@@ -479,10 +507,10 @@ fun TaskDetailScreen(
                                         triggerBackgroundSync(context, api)
                                     } catch (e: Exception) {
                                         if (e is CancellationException) throw e
-                                        android.widget.Toast.makeText(
+                                        Toast.makeText(
                                             context,
                                             context.getString(R.string.error_general, e.message ?: ""),
-                                            android.widget.Toast.LENGTH_SHORT
+                                            Toast.LENGTH_SHORT
                                         ).show()
                                     }
                                 }
@@ -538,10 +566,10 @@ fun TaskDetailScreen(
                                         triggerBackgroundSync(context, api)
                                     } catch (e: Exception) {
                                         if (e is CancellationException) throw e
-                                        android.widget.Toast.makeText(
+                                        Toast.makeText(
                                             context,
-                                            "Error: ${e.message}",
-                                            android.widget.Toast.LENGTH_SHORT
+                                            context.getString(R.string.error_general, e.message ?: ""),
+                                            Toast.LENGTH_SHORT
                                         ).show()
                                     }
                                 }
@@ -596,10 +624,10 @@ fun TaskDetailScreen(
                                         triggerBackgroundSync(context, api)
                                     } catch (e: Exception) {
                                         if (e is CancellationException) throw e
-                                        android.widget.Toast.makeText(
+                                        Toast.makeText(
                                             context,
-                                            "Error: ${e.message}",
-                                            android.widget.Toast.LENGTH_SHORT
+                                            context.getString(R.string.error_general, e.message ?: ""),
+                                            Toast.LENGTH_SHORT
                                         ).show()
                                     }
                                 }
@@ -710,10 +738,10 @@ fun TaskDetailScreen(
                                         if (e is CancellationException) throw e
                                         val msg = e.message ?: ""
                                         if (msg.contains("Invalid time format") || msg.contains("Task not found")) {
-                                            android.widget.Toast.makeText(
+                                            Toast.makeText(
                                                 context,
                                                 context.getString(R.string.error_format, msg),
-                                                android.widget.Toast.LENGTH_SHORT
+                                                Toast.LENGTH_SHORT
                                             ).show()
                                         } else {
                                             // The time session was successfully saved locally, but the
@@ -767,7 +795,7 @@ fun TaskDetailScreen(
                                             triggerBackgroundSync(context, api)
                                         } catch (e: Exception) {
                                             if (e !is CancellationException) {
-                                                android.widget.Toast.makeText(context, e.message ?: "", android.widget.Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(context, context.getString(R.string.error_general, e.message ?: ""), Toast.LENGTH_SHORT).show()
                                             }
                                         }
                                     }
@@ -830,10 +858,10 @@ fun TaskDetailScreen(
                                         triggerBackgroundSync(context, api)
                                     } catch (e: Exception) {
                                         if (e is CancellationException) throw e
-                                        android.widget.Toast.makeText(
+                                        Toast.makeText(
                                             context,
                                             context.getString(R.string.error_deleting_session, e.message ?: ""),
-                                            android.widget.Toast.LENGTH_SHORT
+                                            Toast.LENGTH_SHORT
                                         ).show()
                                     }
                                 }
@@ -904,10 +932,10 @@ fun TaskDetailScreen(
                                         triggerBackgroundSync(context, api)
                                     } catch (e: Exception) {
                                         if (e is CancellationException) throw e
-                                        android.widget.Toast.makeText(
+                                        Toast.makeText(
                                             context,
-                                            "Error: ${e.message}",
-                                            android.widget.Toast.LENGTH_SHORT
+                                            context.getString(R.string.error_general, e.message ?: ""),
+                                            Toast.LENGTH_SHORT
                                         ).show()
                                     }
                                 }
@@ -957,6 +985,12 @@ fun TaskDetailScreen(
                 modifier = Modifier.fillMaxWidth().heightIn(min = 150.dp),
                 textStyle = TextStyle(textAlign = androidx.compose.ui.text.style.TextAlign.Start),
                 visualTransformation = remember(isDark) { MarkdownTransformation(isDark, api) },
+                keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = {
+                    // Save and keep editing, so the keyboard can stay handy
+                    // while iterating on the description.
+                    handleSaveWithGeo(smartInput.text, description.text, keepOpen = true)
+                }),
             )
 
             if (task!!.createdDateIso != null || task!!.lastModifiedDateIso != null) {
