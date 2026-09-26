@@ -143,6 +143,29 @@ fn test_import_folded_alarm_description() {
     );
 }
 
+#[test]
+#[serial]
+fn test_import_task_with_marker_text_in_description() {
+    let ctx = TestContext::new();
+    let href = "local://marker-in-desc-test";
+
+    // A description quoting iCalendar syntax must not fragment the component:
+    // exactly one task is imported, with its full description intact.
+    let ics = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Other//Client//EN\r\nBEGIN:VTODO\r\nUID:marker-desc-uid\r\nSUMMARY:Document the ics format\r\nDTSTAMP:20260924T120000Z\r\nDESCRIPTION:An ics file starts with BEGIN:VTODO and ends with END:VTODO\r\nEND:VTODO\r\nEND:VCALENDAR";
+
+    let result = LocalStorage::import_from_ics(&ctx, href, ics);
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), 1);
+
+    let imported = LocalStorage::load_for_href(&ctx, href).unwrap();
+    assert_eq!(imported.len(), 1);
+    assert_eq!(imported[0].summary, "Document the ics format");
+    assert_eq!(
+        imported[0].description,
+        "An ics file starts with BEGIN:VTODO and ends with END:VTODO"
+    );
+}
+
 // ==================== VJOURNAL Export/Import Tests ====================
 
 #[test]

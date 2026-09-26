@@ -190,22 +190,33 @@ impl LocalStorage {
         // Normalize line endings to \r\n for consistent parsing
         let normalized_content = ics_content.replace("\r\n", "\n").replace('\n', "\r\n");
 
-        // Split by VTODO and VJOURNAL blocks and parse each
+        // Split by VTODO and VJOURNAL blocks and parse each. Markers are only
+        // matched at the start of a line: a property value may legally contain
+        // the marker text (e.g. a description quoting iCalendar syntax), but
+        // raw newlines inside values are forbidden by RFC 5545, so a marker at
+        // column 0 is always a real component boundary.
         for (begin_marker, end_marker) in [
             ("BEGIN:VTODO", "END:VTODO"),
             ("BEGIN:VJOURNAL", "END:VJOURNAL"),
         ] {
-            let parts: Vec<&str> = normalized_content.split(begin_marker).collect();
+            let begin_sep = format!("\r\n{begin_marker}");
+            let end_sep = format!("\r\n{end_marker}");
 
-            for component in parts.iter().skip(1) {
-                if !component.contains(end_marker) {
+            let mut components: Vec<&str> = Vec::new();
+            if let Some(rest) = normalized_content.strip_prefix(begin_marker) {
+                components.push(rest);
+            }
+            components.extend(normalized_content.split(&begin_sep).skip(1));
+
+            for component in components {
+                // Extract just the component content (everything up to and including
+                // the end marker, which must sit at the start of a line)
+                let comp_end = if let Some(pos) = component.find(&end_sep) {
+                    pos + end_sep.len()
+                } else if component.ends_with(end_marker) {
+                    component.len()
+                } else {
                     continue;
-                }
-
-                // Extract just the component content (everything up to and including the end marker)
-                let comp_end = match component.find(end_marker) {
-                    Some(pos) => pos + end_marker.len(),
-                    None => continue,
                 };
                 let comp_content = &component[..comp_end];
 
