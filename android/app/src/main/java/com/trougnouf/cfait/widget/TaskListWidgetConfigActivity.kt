@@ -5,6 +5,7 @@ import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -38,6 +39,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import com.trougnouf.cfait.R
+import com.trougnouf.cfait.CfaitApplication
+import com.trougnouf.cfait.core.MobileCalendar
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -51,7 +55,9 @@ import androidx.compose.ui.unit.dp
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Configuration activity shown when the user places the task-list widget.
@@ -80,11 +86,18 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
         }
 
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val api = (applicationContext as com.trougnouf.cfait.CfaitApplication).api
-        val calendars = try { api.getCalendars().filter { !it.isDisabled } } catch (_: Exception) { emptyList() }
+        val api = (applicationContext as CfaitApplication).api
         val s = "_$appWidgetId"
 
         setContent {
+            var calendars by remember { mutableStateOf<List<MobileCalendar>>(emptyList()) }
+            // Load calendars off the main thread: getCalendars() takes the
+            // store lock, which the background cache load may be holding.
+            LaunchedEffect(Unit) {
+                calendars = withContext(Dispatchers.IO) {
+                    try { api.getCalendars().filter { !it.isDisabled } } catch (_: Exception) { emptyList() }
+                }
+            }
             var searchQuery by remember {
                 mutableStateOf(prefs.getString(KEY_SEARCH_QUERY + s, "is:ready") ?: "is:ready")
             }
@@ -286,7 +299,7 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
                                         }
                                         TaskListWidget().update(this@TaskListWidgetConfigActivity, glanceId)
                                     } catch (e: Exception) {
-                                        android.util.Log.w("CfaitWidget", "Widget update after config failed", e)
+                                        Log.w("CfaitWidget", "Widget update after config failed", e)
                                     } finally {
                                         finish()
                                     }

@@ -51,6 +51,9 @@ import com.trougnouf.cfait.core.MobileTaskSummary
 
 private val FocusTaskUidKey = ActionParameters.Key<String>(EXTRA_FOCUS_TASK_UID)
 
+/** Action parameter key carrying the task uid for in-widget toggle callbacks. */
+internal val TaskUidKey = ActionParameters.Key<String>("task_uid")
+
 /** State key used to force widget recomposition after in-widget actions or config changes. */
 internal val RefreshTickKey = longPreferencesKey("refresh_tick")
 
@@ -318,7 +321,7 @@ private fun TaskRow(task: MobileTaskSummary, textColor: Color, calColor: Color) 
                 text = if (task.isCollapsed) "▶" else "▼",
                 modifier = GlanceModifier.clickable(
                     actionRunCallback<ToggleTreeCollapseActionCallback>(
-                        actionParametersOf(ToggleTreeCollapseActionCallback.TaskUidKey to task.uid)
+                        actionParametersOf(TaskUidKey to task.uid)
                     )
                 ),
                 style = TextStyle(
@@ -337,7 +340,7 @@ private fun TaskRow(task: MobileTaskSummary, textColor: Color, calColor: Color) 
                 text = if (task.isDone) "☑" else "☐",
                 modifier = GlanceModifier.clickable(
                     actionRunCallback<ToggleTaskActionCallback>(
-                        actionParametersOf(ToggleTaskActionCallback.TaskUidKey to task.uid)
+                        actionParametersOf(TaskUidKey to task.uid)
                     )
                 ),
                 style = TextStyle(

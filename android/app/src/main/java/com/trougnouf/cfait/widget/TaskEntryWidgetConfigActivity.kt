@@ -5,6 +5,7 @@ import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -36,6 +37,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.ui.res.stringResource
 import com.trougnouf.cfait.R
+import com.trougnouf.cfait.core.MobileCalendar
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -50,7 +53,9 @@ import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.lifecycle.lifecycleScope
 import com.trougnouf.cfait.CfaitApplication
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Configuration activity shown when the user places the task-entry widget.
@@ -82,7 +87,6 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
 
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val api = (applicationContext as CfaitApplication).api
-        val calendars = try { api.getCalendars().filter { !it.isDisabled } } catch (_: Exception) { emptyList() }
         val s = "_$appWidgetId"
 
         val textColors = listOf(
@@ -99,8 +103,20 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
 
         setContent {
             var mode by remember { mutableStateOf(prefs.getInt(KEY_MODE + s, 0)) }
+            var calendars by remember { mutableStateOf<List<MobileCalendar>>(emptyList()) }
             var selectedCalHref by remember {
-                mutableStateOf(prefs.getString(KEY_CALENDAR_HREF + s, calendars.firstOrNull()?.href ?: ""))
+                mutableStateOf(prefs.getString(KEY_CALENDAR_HREF + s, "") ?: "")
+            }
+            // Load calendars off the main thread: getCalendars() takes the
+            // store lock, which the background cache load may be holding.
+            LaunchedEffect(Unit) {
+                val cals = withContext(Dispatchers.IO) {
+                    try { api.getCalendars().filter { !it.isDisabled } } catch (_: Exception) { emptyList() }
+                }
+                calendars = cals
+                if (selectedCalHref.isEmpty() && cals.isNotEmpty()) {
+                    selectedCalHref = cals.first().href
+                }
             }
             var searchQuery by remember {
                 mutableStateOf(prefs.getString(KEY_SEARCH_QUERY + s, "is:ready") ?: "is:ready")
@@ -313,7 +329,7 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
                                         }
                                         TaskEntryWidget().update(this@TaskEntryWidgetConfigActivity, glanceId)
                                     } catch (e: Exception) {
-                                        android.util.Log.w("CfaitWidget", "Widget update after config failed", e)
+                                        Log.w("CfaitWidget", "Widget update after config failed", e)
                                     } finally {
                                         finish()
                                     }

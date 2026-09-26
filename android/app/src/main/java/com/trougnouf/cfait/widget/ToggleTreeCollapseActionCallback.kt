@@ -2,7 +2,7 @@
 package com.trougnouf.cfait.widget
 
 import android.content.Context
-import androidx.datastore.preferences.core.longPreferencesKey
+import android.util.Log
 import androidx.glance.GlanceId
 import androidx.glance.action.ActionParameters
 import androidx.glance.appwidget.action.ActionCallback
@@ -10,6 +10,7 @@ import androidx.glance.appwidget.state.updateAppWidgetState
 import com.trougnouf.cfait.CfaitApplication
 import com.trougnouf.cfait.core.AppIntent
 import com.trougnouf.cfait.ui.triggerBackgroundSync
+import com.trougnouf.cfait.util.NotificationHelper
 
 /**
  * ActionCallback triggered when the user taps the fold/unfold indicator of a
@@ -17,11 +18,6 @@ import com.trougnouf.cfait.ui.triggerBackgroundSync
  * the widget mirrors the same fold/unfold status used in the main app.
  */
 class ToggleTreeCollapseActionCallback : ActionCallback {
-
-    companion object {
-        val TaskUidKey = ActionParameters.Key<String>("task_uid")
-        private val RefreshTickKey = longPreferencesKey("refresh_tick")
-    }
 
     override suspend fun onAction(
         context: Context,
@@ -31,11 +27,13 @@ class ToggleTreeCollapseActionCallback : ActionCallback {
         val uid = parameters[TaskUidKey] ?: return
         try {
             val app = context.applicationContext as CfaitApplication
+            // Wait for the background cache load before touching the store
+            app.dataLoaded.await()
             app.api.dispatch(AppIntent.ToggleTreeCollapse(uid = uid))
             triggerBackgroundSync(context, app.api)
         } catch (e: Exception) {
-            android.util.Log.w("CfaitWidget", "Failed to toggle tree collapse for $uid", e)
-            com.trougnouf.cfait.util.NotificationHelper.showWidgetErrorNotification(context)
+            Log.w("CfaitWidget", "Failed to toggle tree collapse for $uid", e)
+            NotificationHelper.showWidgetErrorNotification(context)
             return
         }
 
