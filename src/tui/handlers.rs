@@ -59,6 +59,34 @@ fn dispatch_intent_tui(state: &mut AppState, intent: AppIntent, action_tx: &Send
     }
 }
 
+/// Delete the goal at the given sidebar index and persist the change.
+fn delete_goal_at(state: &mut AppState, idx: usize) {
+    let mut keys: Vec<_> = state.goals.keys().cloned().collect();
+    keys.sort();
+    if let Some(key) = keys.get(idx) {
+        state.goals.remove(key);
+        if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
+            let old = cfg.clone();
+            cfg.goals = state.goals.clone();
+            cfg.update_sync_timestamp_if_changed(&old);
+            let _ = cfg.save(state.ctx.as_ref());
+        }
+        state.refresh_filtered_view();
+    }
+}
+
+/// Delete a journal page (task) and clear the editing pointer if it targeted it.
+fn delete_journal_page(state: &mut AppState, uid: String, action_tx: &Sender<Action>) {
+    dispatch_intent_tui(
+        state,
+        AppIntent::DeleteTaskTree { uid: uid.clone() },
+        action_tx,
+    );
+    if state.journal_editing_uid.as_deref() == Some(uid.as_str()) {
+        state.journal_editing_uid = None;
+    }
+}
+
 /// Common alarm action handler: applies the alarm mutation, clears the alarm UI,
 /// refreshes the view, and spawns a persist task. `extra` runs between clearing
 /// the alarm and refreshing (e.g. mode reset for custom snooze).
@@ -2879,32 +2907,14 @@ pub async fn handle_key_event(
                     && state.sidebar_mode == SidebarMode::Goals
                     && let Some(idx) = state.cal_state.selected()
                 {
-                    let mut keys: Vec<_> = state.goals.keys().cloned().collect();
-                    keys.sort();
-                    if idx < keys.len()
-                        && let Some(key) = keys.get(idx)
-                    {
-                        state.goals.remove(key);
-                        if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
-                            let old = cfg.clone();
-                            cfg.goals = state.goals.clone();
-                            cfg.update_sync_timestamp_if_changed(&old);
-                            let _ = cfg.save(state.ctx.as_ref());
-                        }
-                        state.refresh_filtered_view();
-                    }
+                    delete_goal_at(state, idx);
                 } else if state.sidebar_mode == SidebarMode::Journal
                     && state.active_focus == Focus::Sidebar
                     && let Some(idx) = state.cal_state.selected()
                     && let Some(page) = state.cached_journal_pages.get(idx)
                     && page.is_task
                 {
-                    let uid = page.key.clone();
-                    let uid_clone = uid.clone();
-                    dispatch_intent_tui(state, AppIntent::DeleteTaskTree { uid }, action_tx);
-                    if state.journal_editing_uid == Some(uid_clone) {
-                        state.journal_editing_uid = None;
-                    }
+                    delete_journal_page(state, page.key.clone(), action_tx);
                 }
             }
             KeyCode::Char('+') => {
@@ -2942,16 +2952,7 @@ pub async fn handle_key_event(
                         };
 
                         if let Some(uid) = uid_opt {
-                            let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
-                            let intent = AppIntent::DeleteTaskTree { uid: uid.clone() };
-                            let actions = state.apply_task_intent(&intent, &config);
-                            state.refresh_filtered_view();
-                            if state.journal_editing_uid == Some(uid) {
-                                state.journal_editing_uid = None;
-                            }
-                            if !actions.is_empty() {
-                                send_persist_batch(action_tx, actions);
-                            }
+                            delete_journal_page(state, uid, action_tx);
                         }
                     } else if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone()) {
                         let intent = if key.modifiers.contains(KeyModifiers::CONTROL) {
@@ -2966,32 +2967,14 @@ pub async fn handle_key_event(
                     && state.sidebar_mode == SidebarMode::Goals
                     && let Some(idx) = state.cal_state.selected()
                 {
-                    let mut keys: Vec<_> = state.goals.keys().cloned().collect();
-                    keys.sort();
-                    if idx < keys.len()
-                        && let Some(key) = keys.get(idx)
-                    {
-                        state.goals.remove(key);
-                        if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
-                            let old = cfg.clone();
-                            cfg.goals = state.goals.clone();
-                            cfg.update_sync_timestamp_if_changed(&old);
-                            let _ = cfg.save(state.ctx.as_ref());
-                        }
-                        state.refresh_filtered_view();
-                    }
+                    delete_goal_at(state, idx);
                 } else if state.active_focus == Focus::Sidebar
                     && state.sidebar_mode == SidebarMode::Journal
                     && let Some(idx) = state.cal_state.selected()
                     && let Some(page) = state.cached_journal_pages.get(idx)
                     && page.is_task
                 {
-                    let uid = page.key.clone();
-                    let uid_clone = uid.clone();
-                    dispatch_intent_tui(state, AppIntent::DeleteTaskTree { uid }, action_tx);
-                    if state.journal_editing_uid == Some(uid_clone) {
-                        state.journal_editing_uid = None;
-                    }
+                    delete_journal_page(state, page.key.clone(), action_tx);
                 }
             }
             KeyCode::Char('c') => {
@@ -3579,7 +3562,9 @@ pub async fn handle_key_event(
                                 state.hidden_calendars.insert("local://trash".to_string());
                             }
                             if state.active_cal_href.as_deref() != Some("local://recovery") {
-                                state.hidden_calendars.insert("local://recovery".to_string());
+                                state
+                                    .hidden_calendars
+                                    .insert("local://recovery".to_string());
                             }
                             state.pending_refresh_generation = state.edit_generation;
                             let _ = action_tx.send(Action::Refresh).await;
