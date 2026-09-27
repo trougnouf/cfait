@@ -918,6 +918,11 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
             return;
         };
         parent.calendar_href = target_href.clone();
+        if let Some(target) = parent.target_collection.take() {
+            parent.calendar_href =
+                crate::model::resolve_collection(&target, &state.calendars, &parent.calendar_href);
+        }
+        let parent_href = parent.calendar_href.clone();
 
         let parent_uid = parent.uid.clone();
 
@@ -971,7 +976,11 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
             sub.dependencies.extend(ext.dependencies);
             sub.dependencies.sort();
             sub.dependencies.dedup();
-            sub.calendar_href = target_href.clone();
+            sub.calendar_href = if let Some(target) = sub.target_collection.take() {
+                crate::model::resolve_collection(&target, &state.calendars, &parent_href)
+            } else {
+                parent_href.clone()
+            };
             if let Some(pc) = ext.percent_complete {
                 sub.percent_complete = Some(pc);
             }
@@ -1072,7 +1081,11 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
 
                 sub.parent_uid = Some(ext.parent_uid.unwrap_or(uid.clone()));
                 sub.dependencies = ext.dependencies;
-                sub.calendar_href = parent_href.clone();
+                sub.calendar_href = if let Some(target) = sub.target_collection.take() {
+                    crate::model::resolve_collection(&target, &state.calendars, &parent_href)
+                } else {
+                    parent_href.clone()
+                };
                 if let Some(pc) = ext.percent_complete {
                     sub.percent_complete = Some(pc);
                 }

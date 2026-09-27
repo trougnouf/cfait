@@ -3139,6 +3139,8 @@ impl CfaitMobile {
         let mut resolved_props = std::collections::HashMap::new();
         resolved_props.insert(parent_uid.clone(), parent_props);
 
+        let sub_calendars = mobile_calendars_to_model(&self.get_calendars());
+
         for ext in extracted_subtasks {
             let mut sub = Task::new(&ext.raw_text, &config.tag_aliases, def_time);
             sub.uid = ext.uid.clone();
@@ -3175,7 +3177,11 @@ impl CfaitMobile {
             }
             sub.is_note = ext.is_note;
 
-            sub.calendar_href = parent_href.clone();
+            sub.calendar_href = if let Some(target) = sub.target_collection.take() {
+                crate::model::resolve_collection(&target, &sub_calendars, &parent_href)
+            } else {
+                parent_href.clone()
+            };
 
             self.controller
                 .create_task(sub)
@@ -3280,6 +3286,9 @@ impl CfaitMobile {
         let def_time =
             chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
 
+        // `get_calendars` locks the store internally, so this must run before the lock below.
+        let sub_calendars = mobile_calendars_to_model(&self.get_calendars());
+
         let mut store = self.controller.store.lock().await;
         let is_journal = store
             .get_task_ref(&uid)
@@ -3344,7 +3353,11 @@ impl CfaitMobile {
 
             sub.parent_uid = Some(ext.parent_uid.unwrap_or(uid.clone()));
             sub.dependencies = ext.dependencies;
-            sub.calendar_href = parent_href.clone();
+            sub.calendar_href = if let Some(target) = sub.target_collection.take() {
+                crate::model::resolve_collection(&target, &sub_calendars, &parent_href)
+            } else {
+                parent_href.clone()
+            };
             if let Some(pc) = ext.percent_complete {
                 sub.percent_complete = Some(pc);
             }
@@ -4191,13 +4204,16 @@ mod tests {
         let herbary_href =
             futures::executor::block_on(mobile.create_local_calendar("herbary".to_string(), None))
                 .unwrap();
+        let balcony_href =
+            futures::executor::block_on(mobile.create_local_calendar("balcony".to_string(), None))
+                .unwrap();
         mobile
             .set_default_calendar(LOCAL_CALENDAR_HREF.to_string())
             .unwrap();
 
         let parent_uid = futures::executor::block_on(mobile.add_task_with_description(
             "water the tomatoes col:herbary".to_string(),
-            "pick the herbs\n- [ ] wash the leaves".to_string(),
+            "pick the herbs\n- [ ] rinse the herbs\n- [ ] wash the leaves col:balcony".to_string(),
         ))
         .unwrap();
         assert!(!parent_uid.is_empty());
@@ -4208,16 +4224,28 @@ mod tests {
             Some(herbary_href.as_str()),
             "parent should land in its col: target"
         );
-        let sub = store
+        let subtasks: Vec<&crate::model::Task> = store
             .calendars
-            .get(&herbary_href)
-            .and_then(|tasks| {
-                tasks
-                    .values()
-                    .find(|t| t.parent_uid.as_deref() == Some(parent_uid.as_str()))
-            })
-            .expect("subtask should live in the parent's target collection");
-        assert_eq!(sub.calendar_href, herbary_href);
+            .values()
+            .flat_map(|tasks| tasks.values())
+            .filter(|t| t.parent_uid.as_deref() == Some(parent_uid.as_str()))
+            .collect();
+        assert_eq!(subtasks.len(), 2);
+        let plain = subtasks
+            .iter()
+            .copied()
+            .find(|t| t.summary.contains("rinse the herbs"))
+            .expect("plain subtask should follow the parent's target collection");
+        assert_eq!(plain.calendar_href, herbary_href);
+        let moved = subtasks
+            .iter()
+            .copied()
+            .find(|t| t.summary.contains("wash the leaves"))
+            .expect("col:-tagged subtask should exist");
+        assert_eq!(
+            moved.calendar_href, balcony_href,
+            "a subtask's own col: should override the inherited collection"
+        );
         drop(store);
 
         let _ = std::fs::remove_dir_all(&root);

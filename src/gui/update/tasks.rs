@@ -1984,7 +1984,12 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
 
                 sub.parent_uid = Some(ext.parent_uid.unwrap_or(edit_uid.clone()));
                 sub.dependencies = ext.dependencies;
-                sub.calendar_href = new_href.clone();
+                if let Some(target) = sub.target_collection.take() {
+                    sub.calendar_href =
+                        crate::model::resolve_collection(&target, &app.calendars, &new_href);
+                } else {
+                    sub.calendar_href = new_href.clone();
+                }
                 if let Some(pc) = ext.percent_complete {
                     sub.percent_complete = Some(pc);
                 }
