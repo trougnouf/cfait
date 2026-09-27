@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Tests for store behavior.
-use cfait::config::{PausedSortBehavior, SortPreset};
+use cfait::config::{Config, PausedSortBehavior, SortPreset};
 use cfait::context::TestContext;
-use cfait::model::{Task, TaskStatus};
+use cfait::model::{AppIntent, DateType, Task, TaskStatus};
 use cfait::store::{FilterOptions, TaskStore};
+use chrono::NaiveDate;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -1252,4 +1253,43 @@ fn test_sidebar_has_children_with_interleaved_sibling() {
     );
     assert!(!by_key("garden:flowers").has_children);
     assert!(!by_key("garden-bed").has_children);
+}
+
+#[test]
+fn test_complete_tree_on_recurring_root_keeps_children_completed() {
+    let mut store = make_store();
+
+    let mut parent = Task::new("Water the ferns", &HashMap::new(), None);
+    parent.uid = "parent".to_string();
+    parent.calendar_href = "cal1".to_string();
+    parent.rrule = Some("FREQ=DAILY".to_string());
+    parent.dtstart = Some(DateType::AllDay(
+        NaiveDate::from_ymd_opt(2026, 9, 27).unwrap(),
+    ));
+
+    let mut child = Task::new("Repot the basil", &HashMap::new(), None);
+    child.uid = "child".to_string();
+    child.calendar_href = "cal1".to_string();
+    child.parent_uid = Some("parent".to_string());
+
+    store.add_task(parent);
+    store.add_task(child);
+
+    store.apply_task_intent(
+        &AppIntent::CompleteTree {
+            uid: "parent".to_string(),
+        },
+        &Config::default(),
+    );
+
+    // The recurring root advances to its next instance...
+    let root = store.get_task_ref("parent").expect("recurring root");
+    assert_eq!(root.status, TaskStatus::NeedsAction);
+    // ...and the child must stay completed, not be reset by the root's recycle.
+    let child = store.get_task_ref("child").expect("child");
+    assert_eq!(
+        child.status,
+        TaskStatus::Completed,
+        "child should stay completed after completing a recurring root's tree"
+    );
 }

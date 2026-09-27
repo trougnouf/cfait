@@ -4779,8 +4779,12 @@ impl TaskStore {
         let mut actions = Vec::new();
         match intent {
             AppIntent::CompleteTree { uid } => {
-                let mut uids_to_complete = self.get_descendant_uids(uid);
-                uids_to_complete.push(uid.clone());
+                // Complete the root before its descendants: when the root is
+                // recurring, completing it resets already-done descendants, so
+                // the children must be (re)completed after that reset for the
+                // tree to end up fully done.
+                let mut uids_to_complete = vec![uid.clone()];
+                uids_to_complete.extend(self.get_descendant_uids(uid));
 
                 let target_status = if let Some(t) = self.get_task_ref(uid) {
                     if t.status.is_done() {
