@@ -1528,53 +1528,56 @@ pub async fn handle_key_event(
                         crate::system::open_url(&clean_uid);
                         state.message = rust_i18n::t!("open_url").to_string();
                     } else {
-                        let target_uid =
-                            match state.store.resolve_dependency_ref(&clean_uid, context_uid) {
-                                Ok(resolved_uid) => resolved_uid,
-                                Err(_) => {
-                                    if kind == crate::model::parser::SyntaxType::WikiLink {
-                                        let config =
-                                            crate::config::Config::load(state.ctx.as_ref())
-                                                .unwrap_or_default();
-                                        let def_time = chrono::NaiveTime::parse_from_str(
-                                            &config.default_reminder_time,
-                                            "%H:%M",
-                                        )
-                                        .ok();
-                                        let ctx_is_journal = context_uid
-                                            .and_then(|u| state.store.get_task_ref(u))
-                                            .map(|t| t.is_journal)
-                                            .unwrap_or(state.sidebar_mode == SidebarMode::Journal);
+                        let target_uid = match state
+                            .store
+                            .resolve_dependency_ref(&clean_uid, context_uid)
+                        {
+                            Ok(resolved_uid) => resolved_uid,
+                            Err(_) => {
+                                if kind == crate::model::parser::SyntaxType::WikiLink {
+                                    let config = crate::config::Config::load(state.ctx.as_ref())
+                                        .unwrap_or_default();
+                                    let def_time = chrono::NaiveTime::parse_from_str(
+                                        &config.default_reminder_time,
+                                        "%H:%M",
+                                    )
+                                    .ok();
+                                    let ctx_is_journal = context_uid
+                                        .and_then(|u| state.store.get_task_ref(u))
+                                        .map(|t| t.is_journal)
+                                        .unwrap_or(state.sidebar_mode == SidebarMode::Journal);
 
-                                        let (final_uid, actions) =
-                                            state.store.walk_or_create_wiki_path(
-                                                &clean_uid,
-                                                context_uid,
-                                                ctx_is_journal,
-                                                &state.tag_aliases,
-                                                def_time,
-                                                state.active_cal_href.clone(),
-                                            );
+                                    let (final_uid, actions) =
+                                        state.store.walk_or_create_wiki_path(
+                                            &clean_uid,
+                                            context_uid,
+                                            ctx_is_journal,
+                                            &state.tag_aliases,
+                                            def_time,
+                                            state.active_cal_href.clone(),
+                                        );
 
-                                        if !actions.is_empty() {
-                                            state.edit_generation =
-                                                state.edit_generation.wrapping_add(1);
-                                            send_persist_batch(action_tx, actions);
-                                        }
-                                        final_uid
-                                    } else {
-                                        state.message = format!("Searching: '{}'", clean_uid);
-                                        state.input_buffer = clean_uid;
-                                        state.active_search_query = state.input_buffer.clone();
-                                        state.search_collapsed_tasks.clear();
-                                        state.selected_categories.clear();
-                                        state.selected_locations.clear();
-                                        state.refresh_filtered_view();
-                                        state.mode = InputMode::Normal;
-                                        return None;
+                                    if !actions.is_empty() {
+                                        state.edit_generation =
+                                            state.edit_generation.wrapping_add(1);
+                                        send_persist_batch(action_tx, actions);
                                     }
+                                    final_uid
+                                } else {
+                                    state.message =
+                                        rust_i18n::t!("searching_for", term = clean_uid.clone())
+                                            .to_string();
+                                    state.input_buffer = clean_uid;
+                                    state.active_search_query = state.input_buffer.clone();
+                                    state.search_collapsed_tasks.clear();
+                                    state.selected_categories.clear();
+                                    state.selected_locations.clear();
+                                    state.refresh_filtered_view();
+                                    state.mode = InputMode::Normal;
+                                    return None;
                                 }
-                            };
+                            }
+                        };
 
                         if let Some(href) = state.store.index.get(&target_uid).cloned() {
                             state.active_search_query.clear();
@@ -4544,9 +4547,8 @@ pub async fn handle_key_event(
                         state.message = rust_i18n::t!("jumped_to_task").to_string();
                     } else {
                         // FALLBACK: Treat degraded/unresolved references as a search query!
-                        let target_uid_clone = target_uid.clone();
-                        state.input_buffer = target_uid_clone.clone();
-                        state.active_search_query = target_uid_clone;
+                        state.input_buffer = target_uid.clone();
+                        state.active_search_query = target_uid.clone();
                         state.search_collapsed_tasks.clear();
                         state.selected_categories.clear();
                         state.selected_locations.clear();
@@ -4554,7 +4556,8 @@ pub async fn handle_key_event(
                         state.refresh_filtered_view();
 
                         state.mode = InputMode::Normal;
-                        state.message = format!("Searching: '{}'", target_uid.clone());
+                        state.message =
+                            rust_i18n::t!("searching_for", term = target_uid).to_string();
                     }
                 }
             }

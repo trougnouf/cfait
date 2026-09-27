@@ -684,6 +684,7 @@
     "search_is_ready": "est:prêt",
     "search_is_started": "est:démarré",
     "search_placeholder": "Rechercher…",
+    "searching_for": "Recherche : « {term} »",
     "select_destination_collection": "Sélectionner la collection de destination :",
     "select_local_collection_to_export": "Sélectionner la collection locale à exporter :",
     "select_target_collection": "Sélectionnez la collection cible :",

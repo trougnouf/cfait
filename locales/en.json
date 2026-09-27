@@ -664,6 +664,7 @@
     "search": "Search",
     "search_and_filtering": "Search & filtering",
     "search_placeholder": "Search…",
+    "searching_for": "Searching: '{term}'",
     "select_destination_collection": "Select destination collection:",
     "select_local_collection_to_export": "Select which local collection to export:",
     "select_target_collection": "Select target collection:",
