@@ -539,8 +539,6 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         };
 
         let build_btn = |action: &TaskAction| -> Option<Element<'_, Message>> {
-            let idx = app.find_task_index_by_uid(uid).unwrap();
-
             if !crate::gui::view::is_action_available(action, task, app) {
                 return None;
             }
@@ -2363,23 +2361,6 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
             .align_y(iced::Alignment::Center)
     };
 
-    let _get_byte_offset = |content: &iced::widget::text_editor::Content| -> usize {
-        let cursor_pos = content.cursor().position;
-        let line_idx = cursor_pos.line;
-        let col_idx = cursor_pos.column;
-        let text = content.text();
-        let mut byte_offset = 0;
-
-        for (current_line, line_str) in text.split('\n').enumerate() {
-            if current_line == line_idx {
-                let col_bytes: usize = line_str.chars().take(col_idx).map(|c| c.len_utf8()).sum();
-                return byte_offset + col_bytes;
-            }
-            byte_offset += line_str.len() + 1; // +1 for '\n'
-        }
-        byte_offset
-    };
-
     let is_desc_focused = app.last_edited_field == 1 || app.editing_tree_uid.is_some();
     let active_content = if is_desc_focused {
         &app.description_value
@@ -2598,24 +2579,6 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
             .push(save_btn)
             .align_y(iced::Alignment::Center)
             .spacing(10);
-
-        let _get_byte_offset = |content: &iced::widget::text_editor::Content| -> usize {
-            let cursor_pos = content.cursor().position;
-            let line_idx = cursor_pos.line;
-            let col_idx = cursor_pos.column;
-            let text = content.text();
-            let mut byte_offset = 0;
-
-            for (current_line, line_str) in text.split('\n').enumerate() {
-                if current_line == line_idx {
-                    let col_bytes: usize =
-                        line_str.chars().take(col_idx).map(|c| c.len_utf8()).sum();
-                    return byte_offset + col_bytes;
-                }
-                byte_offset += line_str.len() + 1; // +1 for '\n'
-            }
-            byte_offset
-        };
 
         let banner_element = if let Some(banner) = context_banner {
             column![Space::new().height(4), banner]
@@ -2874,13 +2837,15 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
         }
     }
 
-    visible_cals.sort_by_key(|c| {
-        if app.store.get_journal_entry(&c.href, date).is_some() {
-            0
-        } else {
-            1
-        }
-    });
+    // Calendars that already have a VJOURNAL entry for this date, computed
+    // once so the sort and the buttons below don't re-scan the store.
+    let entry_cals: HashSet<String> = visible_cals
+        .iter()
+        .filter(|c| app.store.get_journal_entry(&c.href, date).is_some())
+        .map(|c| c.href.clone())
+        .collect();
+
+    visible_cals.sort_by_key(|c| if entry_cals.contains(&c.href) { 0 } else { 1 });
 
     let active_href = app
         .journal_editing_href
@@ -2904,7 +2869,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
     let mut cal_buttons = row![].spacing(6).align_y(iced::Alignment::Center);
     for cal in &visible_cals {
         let is_selected = cal.href == active_href;
-        let has_entry = app.store.get_journal_entry(&cal.href, date).is_some();
+        let has_entry = entry_cals.contains(&cal.href);
         let cal_name = cal.name.clone();
         let cal_href = cal.href.clone();
         let mut cal_color = cal
@@ -3026,72 +2991,56 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
             .map(|t| t.uid.clone())
     });
 
-    let header_drag_area: Element<_> = if app.force_ssd {
-        let header_row = if let Some(uid) = current_day_uid.clone() {
-            let delete_btn = tooltip(
-                iced::widget::button(icon::icon(icon::TRASH).size(14))
-                    .style(iced::widget::button::danger)
-                    .padding(8)
-                    .on_press(Message::DeleteTaskTree(uid.clone())),
-                text(rust_i18n::t!("delete_task_tree")).size(12),
-                tooltip::Position::Bottom,
-            )
-            .style(crate::gui::view::tooltip_style);
+    let header_row = if let Some(uid) = current_day_uid.clone() {
+        let delete_btn = tooltip(
+            iced::widget::button(icon::icon(icon::TRASH).size(14))
+                .style(iced::widget::button::danger)
+                .padding(8)
+                .on_press(Message::DeleteTaskTree(uid.clone())),
+            text(rust_i18n::t!("delete_task_tree")).size(12),
+            tooltip::Position::Bottom,
+        )
+        .style(crate::gui::view::tooltip_style);
 
-            let move_btn = tooltip(
-                iced::widget::button(icon::icon(icon::MOVE).size(14))
-                    .style(iced::widget::button::secondary)
-                    .padding(8)
-                    .on_press(Message::StartMoveTask(uid.clone())),
-                text(rust_i18n::t!("menu_move")).size(12),
-                tooltip::Position::Bottom,
-            )
-            .style(crate::gui::view::tooltip_style);
+        let move_btn = tooltip(
+            iced::widget::button(icon::icon(icon::MOVE).size(14))
+                .style(iced::widget::button::secondary)
+                .padding(8)
+                .on_press(Message::StartMoveTask(uid.clone())),
+            text(rust_i18n::t!("menu_move")).size(12),
+            tooltip::Position::Bottom,
+        )
+        .style(crate::gui::view::tooltip_style);
 
-            let create_subpage_btn = tooltip(
-                iced::widget::button(icon::icon(icon::CREATE_CHILD).size(14))
-                    .style(iced::widget::button::secondary)
-                    .padding(8)
-                    .on_press(Message::CreateJournalSubPage(uid.clone())),
-                text(rust_i18n::t!("create_subtask")).size(12),
-                tooltip::Position::Bottom,
-            )
-            .style(crate::gui::view::tooltip_style);
+        let create_subpage_btn = tooltip(
+            iced::widget::button(icon::icon(icon::CREATE_CHILD).size(14))
+                .style(iced::widget::button::secondary)
+                .padding(8)
+                .on_press(Message::CreateJournalSubPage(uid.clone())),
+            text(rust_i18n::t!("create_subtask")).size(12),
+            tooltip::Position::Bottom,
+        )
+        .style(crate::gui::view::tooltip_style);
 
-            if app.journal_editing_uid.is_some() {
-                row![
-                    iced::widget::text_input("Page title...", &app.journal_title_input)
-                        .on_input(Message::JournalTitleInputChanged)
-                        .size(22)
-                        .font(iced::Font {
-                            weight: iced::font::Weight::Bold,
-                            ..Default::default()
-                        })
-                        .padding(5)
-                        .width(Length::FillPortion(2)),
-                    Space::new().width(Length::FillPortion(1)),
-                    create_subpage_btn,
-                    move_btn,
-                    delete_btn,
-                    Space::new().width(15),
-                    window_controls
-                ]
-                .align_y(iced::Alignment::Center)
-            } else {
-                row![
-                    text(header_title).size(22).font(iced::Font {
+        if app.journal_editing_uid.is_some() {
+            row![
+                iced::widget::text_input("Page title...", &app.journal_title_input)
+                    .on_input(Message::JournalTitleInputChanged)
+                    .size(22)
+                    .font(iced::Font {
                         weight: iced::font::Weight::Bold,
                         ..Default::default()
-                    }),
-                    Space::new().width(Length::Fill),
-                    create_subpage_btn,
-                    move_btn,
-                    delete_btn,
-                    Space::new().width(15),
-                    window_controls
-                ]
-                .align_y(iced::Alignment::Center)
-            }
+                    })
+                    .padding(5)
+                    .width(Length::FillPortion(2)),
+                Space::new().width(Length::FillPortion(1)),
+                create_subpage_btn,
+                move_btn,
+                delete_btn,
+                Space::new().width(15),
+                window_controls
+            ]
+            .align_y(iced::Alignment::Center)
         } else {
             row![
                 text(header_title).size(22).font(iced::Font {
@@ -3099,101 +3048,36 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
                     ..Default::default()
                 }),
                 Space::new().width(Length::Fill),
+                create_subpage_btn,
+                move_btn,
+                delete_btn,
+                Space::new().width(15),
                 window_controls
             ]
             .align_y(iced::Alignment::Center)
-        };
-        container(header_row)
-            .padding(iced::Padding {
-                top: 10.0,
-                bottom: 5.0,
-                left: 10.0,
-                right: 10.0,
-            })
-            .into()
+        }
     } else {
-        let header_row = if let Some(uid) = current_day_uid.clone() {
-            let delete_btn = tooltip(
-                iced::widget::button(icon::icon(icon::TRASH).size(14))
-                    .style(iced::widget::button::danger)
-                    .padding(8)
-                    .on_press(Message::DeleteTaskTree(uid.clone())),
-                text(rust_i18n::t!("delete_task_tree")).size(12),
-                tooltip::Position::Bottom,
-            )
-            .style(crate::gui::view::tooltip_style);
+        row![
+            text(header_title).size(22).font(iced::Font {
+                weight: iced::font::Weight::Bold,
+                ..Default::default()
+            }),
+            Space::new().width(Length::Fill),
+            window_controls
+        ]
+        .align_y(iced::Alignment::Center)
+    };
 
-            let move_btn = tooltip(
-                iced::widget::button(icon::icon(icon::MOVE).size(14))
-                    .style(iced::widget::button::secondary)
-                    .padding(8)
-                    .on_press(Message::StartMoveTask(uid.clone())),
-                text(rust_i18n::t!("menu_move")).size(12),
-                tooltip::Position::Bottom,
-            )
-            .style(crate::gui::view::tooltip_style);
+    let header_container = container(header_row).padding(iced::Padding {
+        top: 10.0,
+        bottom: 5.0,
+        left: 10.0,
+        right: 10.0,
+    });
 
-            let create_subpage_btn = tooltip(
-                iced::widget::button(icon::icon(icon::CREATE_CHILD).size(14))
-                    .style(iced::widget::button::secondary)
-                    .padding(8)
-                    .on_press(Message::CreateJournalSubPage(uid.clone())),
-                text(rust_i18n::t!("create_subtask")).size(12),
-                tooltip::Position::Bottom,
-            )
-            .style(crate::gui::view::tooltip_style);
-
-            if app.journal_editing_uid.is_some() {
-                row![
-                    iced::widget::text_input("Page title...", &app.journal_title_input)
-                        .on_input(Message::JournalTitleInputChanged)
-                        .size(22)
-                        .font(iced::Font {
-                            weight: iced::font::Weight::Bold,
-                            ..Default::default()
-                        })
-                        .padding(5)
-                        .width(Length::FillPortion(2)),
-                    Space::new().width(Length::FillPortion(1)),
-                    create_subpage_btn,
-                    move_btn,
-                    delete_btn,
-                    Space::new().width(15),
-                    window_controls
-                ]
-                .align_y(iced::Alignment::Center)
-            } else {
-                row![
-                    text(header_title).size(22).font(iced::Font {
-                        weight: iced::font::Weight::Bold,
-                        ..Default::default()
-                    }),
-                    Space::new().width(Length::Fill),
-                    create_subpage_btn,
-                    move_btn,
-                    delete_btn,
-                    Space::new().width(15),
-                    window_controls
-                ]
-                .align_y(iced::Alignment::Center)
-            }
-        } else {
-            row![
-                text(header_title).size(22).font(iced::Font {
-                    weight: iced::font::Weight::Bold,
-                    ..Default::default()
-                }),
-                Space::new().width(Length::Fill),
-                window_controls
-            ]
-            .align_y(iced::Alignment::Center)
-        };
-        let header_container = container(header_row).padding(iced::Padding {
-            top: 10.0,
-            bottom: 5.0,
-            left: 10.0,
-            right: 10.0,
-        });
+    let header_drag_area: Element<_> = if app.force_ssd {
+        header_container.into()
+    } else {
         MouseArea::new(header_container)
             .on_press(Message::WindowDragged)
             .into()
