@@ -3574,9 +3574,12 @@ pub async fn handle_key_event(
                             }
                         } else {
                             state.hidden_calendars.clear();
-                            // Re-hide trash if not active
+                            // Re-hide system calendars if not active
                             if state.active_cal_href.as_deref() != Some("local://trash") {
                                 state.hidden_calendars.insert("local://trash".to_string());
+                            }
+                            if state.active_cal_href.as_deref() != Some("local://recovery") {
+                                state.hidden_calendars.insert("local://recovery".to_string());
                             }
                             state.pending_refresh_generation = state.edit_generation;
                             let _ = action_tx.send(Action::Refresh).await;
