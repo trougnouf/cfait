@@ -2275,9 +2275,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         }
     }
 
-    // Remaining popups (moving, exporting, relationship browsing, alarms, description editor)
-    // ... these are intentionally left identical to previous behavior and kept minimal here.
-    // For brevity we will render them similarly to earlier code paths if their modes are active.
+    // Modal popups, rendered on top of the main layout when their mode is active.
 
     if state.mode == InputMode::Moving {
         let area = centered_rect(60, 50, f.area());
