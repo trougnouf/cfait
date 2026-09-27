@@ -1293,3 +1293,60 @@ fn test_complete_tree_on_recurring_root_keeps_children_completed() {
         "child should stay completed after completing a recurring root's tree"
     );
 }
+
+#[test]
+fn test_history_snapshot_survives_parent_recurrence_reset() {
+    let mut store = make_store();
+
+    let mut parent = Task::new("Water the ferns", &HashMap::new(), None);
+    parent.uid = "parent".to_string();
+    parent.calendar_href = "cal1".to_string();
+    parent.rrule = Some("FREQ=DAILY".to_string());
+    parent.dtstart = Some(DateType::AllDay(
+        NaiveDate::from_ymd_opt(2026, 9, 27).unwrap(),
+    ));
+
+    let mut child = Task::new("Repot the basil", &HashMap::new(), None);
+    child.uid = "child".to_string();
+    child.calendar_href = "cal1".to_string();
+    child.parent_uid = Some("parent".to_string());
+    child.rrule = Some("FREQ=DAILY".to_string());
+    child.dtstart = Some(DateType::AllDay(
+        NaiveDate::from_ymd_opt(2026, 9, 27).unwrap(),
+    ));
+
+    store.add_task(parent);
+    store.add_task(child);
+
+    // Completing the recurring child leaves a history snapshot under the parent.
+    let (history, secondary, _reset) = store.toggle_task("child").expect("toggle child");
+    assert!(
+        secondary.is_some(),
+        "recurring child should advance to a next instance"
+    );
+    let history_uid = history.uid.clone();
+    assert!(
+        history
+            .unmapped_properties
+            .iter()
+            .any(|p| p.key == "X-CFAIT-HISTORY-OF"),
+        "history snapshot must be marked"
+    );
+
+    // Completing the recurring parent must not corrupt the child's history record.
+    store.toggle_task("parent").expect("toggle parent");
+
+    let snapshot = store.get_task_ref(&history_uid).expect("history snapshot");
+    assert_eq!(
+        snapshot.status,
+        TaskStatus::Completed,
+        "history snapshot must not be reset to NeedsAction"
+    );
+    assert!(
+        snapshot
+            .unmapped_properties
+            .iter()
+            .any(|p| p.key == "COMPLETED"),
+        "history snapshot must keep its COMPLETED property"
+    );
+}

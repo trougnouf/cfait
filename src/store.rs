@@ -1595,10 +1595,16 @@ impl TaskStore {
                 }
             }
 
-            // Reset each done descendant to NeedsAction and persist
+            // Reset each done descendant to NeedsAction and persist. History
+            // snapshots are completion records (X-CFAIT-HISTORY-OF), not live
+            // tasks, so they must never be reset.
             for child_uid in descendants {
                 if let Some((child, _)) = self.get_task_mut(&child_uid)
                     && child.status.is_done()
+                    && !child
+                        .unmapped_properties
+                        .iter()
+                        .any(|p| p.key == "X-CFAIT-HISTORY-OF")
                 {
                     child.status = TaskStatus::NeedsAction;
                     child.percent_complete = None;
