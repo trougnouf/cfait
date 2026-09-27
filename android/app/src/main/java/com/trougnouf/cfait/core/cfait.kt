@@ -881,8 +881,6 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_next_alarm_timestamp(): Int
 
-    external fun uniffi_cfait_checksum_method_cfaitmobile_get_next_global_alarm_time(): Int
-
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_ongoing_tasks(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_or_create_daily_note(): Int
@@ -1221,8 +1219,6 @@ internal object UniffiLib {
         `ptr`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
-
-    external fun uniffi_cfait_fn_method_cfaitmobile_get_next_global_alarm_time(`ptr`: Long): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_get_ongoing_tasks(
         `ptr`: Long,
@@ -1888,9 +1884,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cfait_checksum_method_cfaitmobile_get_next_alarm_timestamp() and 0xFFFF) != 39485) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if ((lib.uniffi_cfait_checksum_method_cfaitmobile_get_next_global_alarm_time() and 0xFFFF) != 18887) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cfait_checksum_method_cfaitmobile_get_ongoing_tasks() and 0xFFFF) != 42174) {
@@ -2720,8 +2713,6 @@ public interface CfaitMobileInterface {
     fun `getHelpData`(): List<MobileHelpCategoryData>
 
     fun `getNextAlarmTimestamp`(): kotlin.Long?
-
-    suspend fun `getNextGlobalAlarmTime`(): kotlin.Long?
 
     fun `getOngoingTasks`(): List<MobileTask>
 
@@ -3705,23 +3696,6 @@ open class CfaitMobile :
                     )
                 }
             },
-        )
-
-    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `getNextGlobalAlarmTime`(): kotlin.Long? =
-        uniffiRustCallAsync(
-            callWithHandle { uniffiHandle ->
-                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_next_global_alarm_time(
-                    uniffiHandle,
-                )
-            },
-            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
-            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
-            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
-            // lift function
-            { FfiConverterOptionalLong.lift(it) },
-            // Error FFI converter
-            UniffiNullRustCallStatusErrorHandler,
         )
 
     override fun `getOngoingTasks`(): List<MobileTask> =

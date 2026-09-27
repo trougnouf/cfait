@@ -3665,27 +3665,6 @@ impl CfaitMobile {
         Ok(())
     }
 
-    pub async fn get_next_global_alarm_time(&self) -> Option<i64> {
-        let store = self.controller.store.lock().await;
-        let mut earliest: Option<i64> = None;
-        for map in store.calendars.values() {
-            for task in map.values() {
-                if task.status.is_done()
-                    || task.calendar_href == crate::storage::LOCAL_TRASH_HREF
-                    || task.calendar_href == "local://recovery"
-                {
-                    continue;
-                }
-                if let Some(ts) = task.next_trigger_timestamp()
-                    && (earliest.is_none() || ts < earliest.unwrap())
-                {
-                    earliest = Some(ts);
-                }
-            }
-        }
-        earliest
-    }
-
     pub async fn delete_all_calendar_events(&self) -> Result<u32, MobileError> {
         let client = {
             self.controller
