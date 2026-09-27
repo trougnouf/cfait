@@ -11,13 +11,14 @@
  */
 
 use crate::color_utils;
+use crate::model::CalendarListEntry;
 use crate::model::parser::{SyntaxType, tokenize_smart_input};
 use crate::store::{TaskListItem, UNCATEGORIZED_ID};
 use crate::tui::action::SidebarMode;
 use crate::tui::state::{AppState, Focus, InputMode};
 
 use rust_i18n::t;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use ratatui::{
     Frame,
@@ -483,35 +484,50 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             }
 
             let today = chrono::Local::now().date_naive();
+
+            // Index journal entries by date in one pass over all calendars,
+            // instead of re-scanning every task for each day of the grid.
+            let mut journal_by_date: HashMap<chrono::NaiveDate, Vec<&CalendarListEntry>> =
+                HashMap::new();
+            for c in &state.calendars {
+                let supports = if c.href.starts_with("local://") {
+                    true
+                } else {
+                    c.supports_vjournal.unwrap_or(false)
+                };
+                if state.hidden_calendars.contains(&c.href)
+                    || state.disabled_calendars.contains(&c.href)
+                    || c.href == crate::storage::LOCAL_TRASH_HREF
+                    || c.href == "local://recovery"
+                    || !supports
+                {
+                    continue;
+                }
+                if let Some(tasks) = state.store.calendars.get(&c.href) {
+                    for t in tasks.values() {
+                        if !t.is_journal {
+                            continue;
+                        }
+                        if let Some(d) = t.dtstart.as_ref().map(|d| d.to_date_naive()) {
+                            let list = journal_by_date.entry(d).or_default();
+                            if !list.iter().any(|e| e.href == c.href) {
+                                list.push(c);
+                            }
+                        }
+                    }
+                }
+            }
+
             for d in 1..=days_in_month {
                 let current_date =
                     chrono::NaiveDate::from_ymd_opt(date.year(), date.month(), d).unwrap();
                 let is_selected = current_date == date;
                 let is_today = current_date == today;
 
-                let mut journal_cals = Vec::new();
-                for c in &state.calendars {
-                    let supports = if c.href.starts_with("local://") {
-                        true
-                    } else {
-                        c.supports_vjournal.unwrap_or(false)
-                    };
-                    if state.hidden_calendars.contains(&c.href)
-                        || state.disabled_calendars.contains(&c.href)
-                        || c.href == crate::storage::LOCAL_TRASH_HREF
-                        || c.href == "local://recovery"
-                        || !supports
-                    {
-                        continue;
-                    }
-                    if state
-                        .store
-                        .get_journal_entry(&c.href, current_date)
-                        .is_some()
-                    {
-                        journal_cals.push(c);
-                    }
-                }
+                let journal_cals: Vec<&CalendarListEntry> = journal_by_date
+                    .get(&current_date)
+                    .cloned()
+                    .unwrap_or_default();
                 let has_journal = !journal_cals.is_empty();
                 let day_str = format!("{:2} ", d);
 
