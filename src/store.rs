@@ -4336,6 +4336,7 @@ impl TaskStore {
         let empty_parent_locs: Vec<String> = Vec::new();
         let mut parent_visual_cache: HashMap<String, (HashSet<String>, Vec<String>)> =
             HashMap::new();
+        let now_local_date = chrono::Local::now().date_naive();
         for t in final_tasks_processed.iter_mut() {
             let eff_blocked = t.is_blocked || t.is_implicitly_blocked;
             t.sort_rank = t.calculate_base_rank(
@@ -4366,7 +4367,6 @@ impl TaskStore {
                 .map(|d| !t.status.is_done() && d.to_comparison_time() < now)
                 .unwrap_or(false);
 
-            let now_local_date = chrono::Local::now().date_naive();
             t.is_due_today = t
                 .effective_due
                 .as_ref()
