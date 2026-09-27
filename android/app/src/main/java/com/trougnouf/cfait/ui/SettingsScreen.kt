@@ -256,10 +256,8 @@ fun SettingsScreen(
             scope.launch {
                 try {
                     val icsContent = withContext(Dispatchers.IO) {
-                        val inputStream = context.contentResolver.openInputStream(uri)
-                        val content = inputStream?.bufferedReader()?.use { it.readText() }
-                        inputStream?.close()
-                        content
+                        context.contentResolver.openInputStream(uri)
+                            ?.bufferedReader()?.use { it.readText() }
                     }
 
                     if (icsContent != null && importTargetHref != null) {

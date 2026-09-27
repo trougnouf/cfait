@@ -210,7 +210,7 @@ fun AdvancedSettingsScreen(
                 tlsClientCertPath = path
                 scope.launch { saveToDisk() }
             } else {
-                status = context.getString(R.string.tls_client_cert_none)
+                status = context.getString(R.string.error_could_not_read_file)
             }
         }
     }
@@ -224,7 +224,7 @@ fun AdvancedSettingsScreen(
                 tlsClientKeyPath = path
                 scope.launch { saveToDisk() }
             } else {
-                status = context.getString(R.string.tls_client_key_none)
+                status = context.getString(R.string.error_could_not_read_file)
             }
         }
     }
@@ -930,6 +930,15 @@ fun AdvancedSettingsScreen(
                     text = debugStatus,
                     color = if (debugIsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(top = 8.dp),
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
+            if (status.isNotEmpty()) {
+                Text(
+                    text = status,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 16.dp),
                     style = MaterialTheme.typography.bodySmall
                 )
             }
