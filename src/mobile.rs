@@ -3122,6 +3122,7 @@ impl CfaitMobile {
         }
 
         self.resolve_task_calendar(&mut task, &config).await;
+        let parent_href = task.calendar_href.clone();
 
         let parent_props = (
             task.categories.clone(),
@@ -3174,10 +3175,7 @@ impl CfaitMobile {
             }
             sub.is_note = ext.is_note;
 
-            let active_cal = self.session.lock().await.active_calendar_href.clone();
-            sub.calendar_href = active_cal
-                .or(config.default_calendar.clone())
-                .unwrap_or(crate::storage::LOCAL_CALENDAR_HREF.to_string());
+            sub.calendar_href = parent_href.clone();
 
             self.controller
                 .create_task(sub)
@@ -4160,7 +4158,7 @@ impl CfaitMobile {
 
 #[cfg(test)]
 mod tests {
-    use super::apply_mobile_credentials_update;
+    use super::{CfaitMobile, LOCAL_CALENDAR_HREF, Uuid, apply_mobile_credentials_update};
     use crate::config::Config;
 
     #[test]
@@ -4203,5 +4201,46 @@ mod tests {
 
         assert_eq!(config.username, "alice");
         assert_eq!(config.password, "new-secret");
+    }
+
+    #[test]
+    fn description_subtasks_follow_the_parent_target_collection() {
+        let root = std::env::temp_dir().join(format!("cfait-mobile-test-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&root).unwrap();
+
+        let mobile = CfaitMobile::new(root.to_string_lossy().to_string());
+        let herbary_href =
+            futures::executor::block_on(mobile.create_local_calendar("herbary".to_string(), None))
+                .unwrap();
+        mobile
+            .set_default_calendar(LOCAL_CALENDAR_HREF.to_string())
+            .unwrap();
+
+        let parent_uid = futures::executor::block_on(mobile.add_task_with_description(
+            "water the tomatoes col:herbary".to_string(),
+            "pick the herbs\n- [ ] wash the leaves".to_string(),
+        ))
+        .unwrap();
+        assert!(!parent_uid.is_empty());
+
+        let store = mobile.controller.store.blocking_lock();
+        assert_eq!(
+            store.index.get(&parent_uid).map(String::as_str),
+            Some(herbary_href.as_str()),
+            "parent should land in its col: target"
+        );
+        let sub = store
+            .calendars
+            .get(&herbary_href)
+            .and_then(|tasks| {
+                tasks
+                    .values()
+                    .find(|t| t.parent_uid.as_deref() == Some(parent_uid.as_str()))
+            })
+            .expect("subtask should live in the parent's target collection");
+        assert_eq!(sub.calendar_href, herbary_href);
+        drop(store);
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
