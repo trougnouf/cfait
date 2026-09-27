@@ -191,7 +191,7 @@ pub async fn run_network_actor(
         .await;
 
     let mut calendars = match client.get_calendars().await {
-        Ok((cals, _)) => cals,
+        Ok(cals) => cals,
         Err(e) => {
             let err_str = e.to_string();
             if err_str.contains("InvalidCertificate") {
@@ -521,7 +521,7 @@ pub async fn run_network_actor(
                             .await;
 
                         let mut calendars = match client.get_calendars().await {
-                            Ok((c, _)) => c,
+                            Ok(c) => c,
                             Err(e) => {
                                 // A failed fetch must not wipe the UI's calendar
                                 // list with an empty one; report it and let the

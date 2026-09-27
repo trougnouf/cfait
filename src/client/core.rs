@@ -411,15 +411,15 @@ impl RustyClient {
         )
         .await;
 
-        // Attempt to fetch calendars and optionally auto-correct URL/prefixes
-        let ((calendars, corrected_url_opt), warning) = match client.get_calendars().await {
-            Ok((c, corrected_url)) => {
+        // Attempt to fetch calendars
+        let (calendars, warning) = match client.get_calendars().await {
+            Ok(c) => {
                 if c.is_empty() {
                     let helpful_msg = rust_i18n::t!("error_no_calendars_found").to_string();
-                    ((c, corrected_url), Some(helpful_msg))
+                    (c, Some(helpful_msg))
                 } else {
                     let _ = Cache::save_calendars(client.ctx.as_ref(), &c);
-                    ((c, corrected_url), None)
+                    (c, None)
                 }
             }
             Err(e) => {
@@ -449,7 +449,7 @@ impl RustyClient {
                     rust_i18n::t!("error_offline_fallback", error = error_msg.clone()).to_string()
                 });
 
-                ((cals, None), Some(final_warning))
+                (cals, Some(final_warning))
             }
         };
 
@@ -471,12 +471,6 @@ impl RustyClient {
         {
             active_href = Some(href.clone());
             config_for_saving.default_calendar = Some(href);
-            needs_config_save = true;
-        }
-
-        // If discovery produced a corrected root URL, persist it asynchronously.
-        if let Some(corrected_url) = corrected_url_opt {
-            config_for_saving.url = corrected_url;
             needs_config_save = true;
         }
 
@@ -511,11 +505,10 @@ impl RustyClient {
         Ok((client, calendars, tasks, active_href, warning))
     }
 
-    // Helper to encapsulate the core discovery logic (used by get_calendars)
-    async fn perform_calendar_discovery(
-        &self,
-        _discovery_path: &str,
-    ) -> anyhow::Result<Vec<CalendarListEntry>> {
+    // Helper to encapsulate the core discovery logic (used by get_calendars).
+    // Discovery is always principal-based (current-user-principal -> home-set
+    // -> depth-1 PROPFIND), which works regardless of the configured URL path.
+    async fn perform_calendar_discovery(&self) -> anyhow::Result<Vec<CalendarListEntry>> {
         let client = self
             .client
             .as_ref()
@@ -675,43 +668,10 @@ impl RustyClient {
         Ok(calendars)
     }
 
-    /// Get calendars (remote + local), with optional auto-corrected URL returned.
-    pub async fn get_calendars(&self) -> anyhow::Result<(Vec<CalendarListEntry>, Option<String>)> {
+    /// Get calendars (remote + local).
+    pub async fn get_calendars(&self) -> anyhow::Result<Vec<CalendarListEntry>> {
         if let Some(_client) = &self.client {
-            // attempt discovery at configured path
-            let user_configured_path = self.client.as_ref().unwrap().base_url().path();
-            let mut corrected_url = None;
-
-            let mut calendars = self
-                .perform_calendar_discovery(user_configured_path)
-                .await?;
-
-            // Fallback: if nothing found, try server root and offer corrected root URL
-            if calendars.is_empty()
-                && user_configured_path != "/"
-                && let Ok(fallback) = self.perform_calendar_discovery("/").await
-                && !fallback.is_empty()
-            {
-                calendars = fallback;
-                let base_uri = self.client.as_ref().unwrap().base_url();
-                if let (Some(scheme), Some(authority)) = (base_uri.scheme(), base_uri.authority()) {
-                    corrected_url = Some(format!("{}://{}", scheme, authority));
-                }
-            }
-
-            // Fallback: if still nothing found, try Nextcloud's CalDAV root path
-            if calendars.is_empty()
-                && user_configured_path != "/remote.php/dav"
-                && user_configured_path != "/remote.php/dav/"
-                && let Ok(nc_fallback) = self.perform_calendar_discovery("/remote.php/dav").await
-                && !nc_fallback.is_empty()
-            {
-                calendars = nc_fallback;
-                let base_uri = self.client.as_ref().unwrap().base_url();
-                if let (Some(scheme), Some(authority)) = (base_uri.scheme(), base_uri.authority()) {
-                    corrected_url = Some(format!("{}://{}/remote.php/dav", scheme, authority));
-                }
-            }
+            let mut calendars = self.perform_calendar_discovery().await?;
 
             // Include local calendars; but only show recovery/trash if they contain tasks
             if let Ok(local_cals) = LocalCalendarRegistry::load(self.ctx.as_ref()) {
@@ -731,7 +691,7 @@ impl RustyClient {
                 }
             }
 
-            Ok((calendars, corrected_url))
+            Ok(calendars)
         } else {
             // Offline mode: return cached + local calendars
             let mut calendars = Cache::load_calendars(self.ctx.as_ref()).unwrap_or_default();
@@ -754,7 +714,7 @@ impl RustyClient {
                     }
                 }
             }
-            Ok((calendars, None))
+            Ok(calendars)
         }
     }
 
@@ -1777,8 +1737,8 @@ impl RustyClient {
                 Journal::push(self.ctx.as_ref(), Action::Create(new_task))?;
                 count += 1;
             } else if !is_source_local && is_target_local {
-                Journal::push(self.ctx.as_ref(), Action::Delete(task.clone()))?;
                 let mut new_task = task.clone();
+                Journal::push(self.ctx.as_ref(), Action::Delete(task))?;
                 new_task.calendar_href = target_calendar_href.to_string();
                 new_task.href = String::new();
                 new_task.etag = String::new();
