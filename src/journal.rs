@@ -299,7 +299,9 @@ impl Journal {
                     }
                 }
                 Action::Move(t, new_href) => {
-                    if urls_match(&t.calendar_href, calendar_href) {
+                    if urls_match(&t.calendar_href, &new_href) {
+                        // Same-calendar move is a no-op; leave the task in place.
+                    } else if urls_match(&t.calendar_href, calendar_href) {
                         task_map.remove(&t.uid);
                     } else if urls_match(&new_href, calendar_href) {
                         let mut moved_task = t;
@@ -311,5 +313,69 @@ impl Journal {
         }
 
         *tasks = task_map.into_values().collect();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::context::TestContext;
+
+    fn task_in(calendar_href: &str) -> Task {
+        let mut task = Task::new("water the ferns", &HashMap::new(), None);
+        task.uid = "uid-ferns".to_string();
+        task.calendar_href = calendar_href.to_string();
+        task.etag = "etag-1".to_string();
+        task
+    }
+
+    #[test]
+    fn same_calendar_move_is_a_noop() {
+        let ctx = TestContext::new();
+        let task = task_in("cal://user/1/main/");
+        Journal::push(
+            &ctx,
+            Action::Move(task.clone(), "cal://user/1/main/".to_string()),
+        )
+        .unwrap();
+
+        let mut tasks = vec![task];
+        Journal::apply_to_tasks(&ctx, &mut tasks, "cal://user/1/main/");
+
+        assert_eq!(
+            tasks.len(),
+            1,
+            "a same-calendar move must not make the task vanish"
+        );
+        assert_eq!(tasks[0].uid, "uid-ferns");
+    }
+
+    #[test]
+    fn cross_calendar_move_leaves_source_and_arrives_at_target() {
+        let ctx = TestContext::new();
+        let task = task_in("cal://user/1/main/");
+        Journal::push(
+            &ctx,
+            Action::Move(task.clone(), "cal://user/1/other/".to_string()),
+        )
+        .unwrap();
+
+        // From the source calendar's view the task is gone.
+        let mut from_source = vec![task.clone()];
+        Journal::apply_to_tasks(&ctx, &mut from_source, "cal://user/1/main/");
+        assert!(
+            from_source.is_empty(),
+            "task should leave the source calendar"
+        );
+
+        // From the target calendar's view the task arrives.
+        let mut into_target: Vec<Task> = Vec::new();
+        Journal::apply_to_tasks(&ctx, &mut into_target, "cal://user/1/other/");
+        assert_eq!(
+            into_target.len(),
+            1,
+            "task should arrive at the target calendar"
+        );
+        assert_eq!(into_target[0].calendar_href, "cal://user/1/other/");
     }
 }
