@@ -236,10 +236,7 @@ async fn apply_markdown_update(
     Ok((actions, warnings))
 }
 
-fn run_editor_cli(
-    initial_content: &str,
-    config: &cfait::config::Config,
-) -> Result<Option<String>, String> {
+fn run_editor_cli(initial_content: &str, config: &cfait::config::Config) -> Result<String, String> {
     let mut editor_cmd = None;
     if !config.description_editor.is_empty() && config.description_editor != "builtin" {
         editor_cmd = Some(config.description_editor.clone());
@@ -281,7 +278,7 @@ fn run_editor_cli(
 
     if success && let Ok(new_content) = std::fs::read_to_string(&path) {
         let _ = std::fs::remove_file(&path);
-        return Ok(Some(new_content));
+        return Ok(new_content);
     }
 
     let _ = std::fs::remove_file(&path);
@@ -1423,11 +1420,7 @@ async fn main() -> Result<()> {
             };
 
             let new_content = match run_editor_cli(&initial_content, &config) {
-                Ok(Some(c)) => c,
-                Ok(None) => {
-                    println!("No changes made.");
-                    return Ok(());
-                }
+                Ok(c) => c,
                 Err(e) => {
                     eprintln!("Error running editor: {}", e);
                     std::process::exit(1);
