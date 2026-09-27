@@ -83,7 +83,6 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.coroutines.resume
-import kotlin.math.abs
 
 val NerdFont = FontFamily(Font(R.font.symbols_nerd_font))
 
@@ -735,8 +734,7 @@ fun HeatmapRow(history: List<Float>) {
 }
 
 fun getTagColor(tag: String, isDark: Boolean): Color {
-    val hash = tag.hashCode()
-    val h = (abs(hash) % 360).toFloat()
+    val h = ((tag.hashCode() and Int.MAX_VALUE) % 360).toFloat()
 
     // Dynamic Saturation and Value based on theme
     val s = if (isDark) 0.6f else 0.9f // Lower saturation in dark mode for better legibility

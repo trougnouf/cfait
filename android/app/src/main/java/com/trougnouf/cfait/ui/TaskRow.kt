@@ -36,7 +36,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
-import kotlin.math.abs
 import kotlinx.coroutines.delay
 
 /** Tree icons used for the collapse/expand toggle, picked deterministically per task or tag. */
@@ -470,7 +469,8 @@ fun TaskRow(
             }
 
             if (task.task.hasVisibleSubtasks || isCollapsed) {
-                val hash = abs(task.task.uid.hashCode())
+                // Mask the sign bit so the hash is non-negative even for hashCode() == Int.MIN_VALUE
+                val hash = task.task.uid.hashCode() and Int.MAX_VALUE
                 val iconChar = if (isCollapsed) {
                     NfIcons.FAMILY_TREE
                 } else {
@@ -687,7 +687,7 @@ fun CompactTagRow(
 
         if (hasChildren && onToggleCollapse != null) {
             Spacer(Modifier.width(8.dp))
-            val hash = abs(name.hashCode())
+            val hash = name.hashCode() and Int.MAX_VALUE
             val iconChar = if (isExpanded) {
                 TREE_ICONS[hash % 5]
             } else {
