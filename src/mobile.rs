@@ -1036,19 +1036,19 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
         }
     }
 
-    if let Some(goal) = &t.goal {
-        let progress = store.calculate_goal_progress(&format!("task:{}", t.uid), goal);
-        let (c_str, t_str) = if goal.goal_type == crate::config::GoalType::Duration {
-            crate::model::parser::format_goal_duration(progress, goal.target)
-        } else {
-            (progress.to_string(), goal.target.to_string())
-        };
-        goal_progress_str = Some(c_str);
-        goal_target_str = Some(goal.format_target_display(&t_str));
-    }
-
     if let Some(goal) = t.get_effective_goal() {
-        goal_history = store.calculate_goal_history(&format!("task:{}", t.uid), &goal, 7);
+        let (progress, history) =
+            store.calculate_goal_progress_and_history(&format!("task:{}", t.uid), &goal, 7);
+        goal_history = history;
+        if t.goal.is_some() {
+            let (c_str, t_str) = if goal.goal_type == crate::config::GoalType::Duration {
+                crate::model::parser::format_goal_duration(progress, goal.target)
+            } else {
+                (progress.to_string(), goal.target.to_string())
+            };
+            goal_progress_str = Some(c_str);
+            goal_target_str = Some(goal.format_target_display(&t_str));
+        }
     }
 
     MobileTask {
@@ -2597,7 +2597,7 @@ impl CfaitMobile {
 
         let mut evaluated_goals = Vec::new();
         for (key, goal) in &config.goals {
-            let progress = store.calculate_goal_progress(key, goal);
+            let (progress, history) = store.calculate_goal_progress_and_history(key, goal, 7);
             let (progress_str, target_str) = if goal.goal_type == crate::config::GoalType::Duration
             {
                 crate::model::parser::format_goal_duration(progress, goal.target)
@@ -2609,7 +2609,6 @@ impl CfaitMobile {
             } else {
                 0.0
             };
-            let history = store.calculate_goal_history(key, goal, 7);
 
             evaluated_goals.push(MobileGoalProgress {
                 key: key.clone(),
@@ -2622,7 +2621,6 @@ impl CfaitMobile {
         }
 
         if config.show_task_goals_in_sidebar {
-            let _now = chrono::Utc::now();
             let mut task_goals = Vec::new();
             for (href, map) in store.calendars.iter() {
                 if hidden.contains(href)
@@ -2639,8 +2637,11 @@ impl CfaitMobile {
                         continue;
                     }
                     if let Some(goal) = &t.goal {
-                        let progress =
-                            store.calculate_goal_progress(&format!("task:{}", t.uid), goal);
+                        let (progress, history) = store.calculate_goal_progress_and_history(
+                            &format!("task:{}", t.uid),
+                            goal,
+                            7,
+                        );
                         let (progress_str, target_str) =
                             if goal.goal_type == crate::config::GoalType::Duration {
                                 crate::model::parser::format_goal_duration(progress, goal.target)
@@ -2652,8 +2653,6 @@ impl CfaitMobile {
                         } else {
                             0.0
                         };
-                        let history =
-                            store.calculate_goal_history(&format!("task:{}", t.uid), goal, 7);
                         task_goals.push(MobileGoalProgress {
                             key: format!("task:{}", t.uid), // special prefix for UI to know it's a task jump
                             progress_str,
