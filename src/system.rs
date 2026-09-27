@@ -3,7 +3,7 @@
 // Background system actor for handling alarms and notifications.
 use crate::config::Config; // Import Config
 use crate::context::{AppContext, StandardContext}; // Import AppContext trait
-use crate::model::{Alarm, AlarmTrigger, DateType, Task}; // Import DateType
+use crate::model::{Alarm, AlarmTrigger, Task};
 use chrono::{NaiveTime, Utc}; // Import Time helpers
 #[cfg(not(target_os = "android"))]
 use notify_rust::Notification;
@@ -529,12 +529,7 @@ pub fn spawn_alarm_actor(
                         let trigger_dt = match alarm.trigger {
                             AlarmTrigger::Absolute(dt) => dt,
                             AlarmTrigger::Relative(mins) => {
-                                // ... existing relative logic ...
-                                let anchor = if let Some(DateType::Specific(d)) = task.due {
-                                    d
-                                } else if let Some(DateType::Specific(s)) = task.dtstart {
-                                    s
-                                } else {
+                                let Some(anchor) = task.relative_alarm_anchor(default_time) else {
                                     continue;
                                 };
                                 anchor + chrono::Duration::minutes(mins as i64)

@@ -2073,7 +2073,7 @@ impl CfaitMobile {
                     continue;
                 }
 
-                if let Some(ts) = task.next_trigger_timestamp() {
+                if let Some(ts) = task.next_trigger_timestamp(default_time) {
                     check_ts(ts, &mut global_earliest);
                 }
                 if config.auto_reminders
@@ -2148,11 +2148,7 @@ impl CfaitMobile {
                     let trigger_dt = match alarm.trigger {
                         AlarmTrigger::Absolute(dt) => dt,
                         AlarmTrigger::Relative(mins) => {
-                            let anchor = if let Some(DateType::Specific(d)) = task.due {
-                                d
-                            } else if let Some(DateType::Specific(s)) = task.dtstart {
-                                s
-                            } else {
+                            let Some(anchor) = task.relative_alarm_anchor(default_time) else {
                                 continue;
                             };
                             anchor + chrono::Duration::minutes(mins as i64)
@@ -2467,6 +2463,7 @@ impl CfaitMobile {
         // Then acquire store lock
         let store = self.controller.store.lock().await;
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
+        let default_reminder_time = config.parsed_default_reminder_time();
         let mut hidden: HashSet<String> = config.hidden_calendars.into_iter().collect();
         hidden.extend(config.disabled_calendars);
 
@@ -2513,6 +2510,7 @@ impl CfaitMobile {
             sort_preset: config.sort_preset,
             paused_sort_behavior: config.paused_sort_behavior,
             sort_tiebreak_recent: config.sort_tiebreak_recent,
+            default_reminder_time,
             expanded_done_groups: &expanded_set,
             expanded_tags: &expanded_tags_set,
             expanded_locations: &expanded_locations_set,
@@ -2970,6 +2968,7 @@ impl CfaitMobile {
     ) -> Option<String> {
         let store = self.controller.store.lock().await;
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
+        let default_reminder_time = config.parsed_default_reminder_time();
         let mut hidden: HashSet<String> = config.hidden_calendars.into_iter().collect();
         hidden.extend(config.disabled_calendars);
         let cutoff_date = config
@@ -2997,6 +2996,7 @@ impl CfaitMobile {
             sort_preset: config.sort_preset,
             paused_sort_behavior: config.paused_sort_behavior,
             sort_tiebreak_recent: config.sort_tiebreak_recent,
+            default_reminder_time,
             expanded_done_groups: &HashSet::new(),
             expanded_tags: &HashSet::new(),
             expanded_locations: &HashSet::new(),
@@ -3776,11 +3776,10 @@ impl CfaitMobile {
                 let trigger_dt = match alarm.trigger {
                     crate::model::AlarmTrigger::Absolute(dt) => dt,
                     crate::model::AlarmTrigger::Relative(mins) => {
-                        let anchor = if let Some(crate::model::DateType::Specific(d)) = task.due {
-                            d
-                        } else if let Some(crate::model::DateType::Specific(s)) = task.dtstart {
-                            s
-                        } else {
+                        let config =
+                            crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
+                        let default_time = config.parsed_default_reminder_time();
+                        let Some(anchor) = task.relative_alarm_anchor(default_time) else {
                             return false;
                         };
                         anchor + chrono::Duration::minutes(mins as i64)

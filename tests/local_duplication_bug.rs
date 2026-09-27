@@ -5,6 +5,7 @@ use cfait::context::TestContext;
 use cfait::model::{Task, TaskStatus};
 use cfait::storage::{LOCAL_CALENDAR_HREF, LocalStorage};
 use cfait::store::{FilterOptions, TaskStore};
+use chrono::NaiveTime;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -82,6 +83,7 @@ fn test_reproduce_android_local_revert_bug() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     });
 
     let visible_task = filter_res

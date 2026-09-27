@@ -4,6 +4,7 @@ use cfait::config::{PausedSortBehavior, SortPreset};
 use cfait::context::TestContext;
 use cfait::model::Task;
 use cfait::store::{FilterOptions, TaskStore};
+use chrono::NaiveTime;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -56,6 +57,7 @@ fn test_search_includes_non_matching_children() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     });
 
     let results = filter_res.items;
@@ -131,6 +133,7 @@ fn test_search_includes_deep_hierarchy() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     });
 
     let results = filter_res.items;
@@ -186,6 +189,7 @@ fn test_child_match_does_not_force_parent_if_parent_does_not_match() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     });
 
     let results = filter_res.items;
@@ -287,6 +291,7 @@ fn test_multiple_parents_with_children() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     });
 
     let results = filter_res.items;
@@ -362,6 +367,7 @@ fn test_sibling_match_only_includes_matching_sibling() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     });
 
     let results = filter_res.items;
@@ -462,6 +468,7 @@ fn test_empty_search_shows_all_tasks() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     });
 
     let results = filter_res.items;
@@ -518,6 +525,7 @@ fn test_hierarchy_expansion_with_completed_tasks() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     });
 
     let results = filter_res.items;
@@ -554,6 +562,7 @@ fn test_hierarchy_expansion_with_completed_tasks() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     });
 
     let results_hidden = filter_res_hidden.items;

@@ -25,7 +25,7 @@
 // the version field in AlarmIndex::default() to invalidate stale indices.
 
 use crate::context::AppContext;
-use crate::model::{AlarmTrigger, DateType, Task};
+use crate::model::{AlarmTrigger, Task};
 use crate::storage::LocalStorage;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
@@ -75,7 +75,7 @@ pub struct AlarmIndex {
 impl Default for AlarmIndex {
     fn default() -> Self {
         Self {
-            version: 3,
+            version: 4,
             last_updated: Utc::now().timestamp(),
             alarms: Vec::new(),
         }
@@ -103,7 +103,7 @@ impl AlarmIndex {
         LocalStorage::with_lock(&path, || {
             let content = fs::read_to_string(&path)?;
             let index: AlarmIndex = serde_json::from_str(&content)?;
-            if index.version != 3 {
+            if index.version != 4 {
                 return Ok(Self::default());
             }
             Ok(index)
@@ -166,16 +166,9 @@ impl AlarmIndex {
                     // Calculate trigger time
                     let trigger_dt = match alarm.trigger {
                         AlarmTrigger::Absolute(dt) => Some(dt),
-                        AlarmTrigger::Relative(mins) => {
-                            let anchor = if let Some(DateType::Specific(d)) = task.due {
-                                Some(d)
-                            } else if let Some(DateType::Specific(s)) = task.dtstart {
-                                Some(s)
-                            } else {
-                                None
-                            };
-                            anchor.map(|a| a + chrono::Duration::minutes(mins as i64))
-                        }
+                        AlarmTrigger::Relative(mins) => task
+                            .relative_alarm_anchor(default_time)
+                            .map(|a| a + chrono::Duration::minutes(mins as i64)),
                     };
 
                     if let Some(trigger) = trigger_dt {
@@ -266,7 +259,7 @@ impl AlarmIndex {
         alarms.dedup_by(|a, b| a.alarm_uid == b.alarm_uid);
 
         Self {
-            version: 3,
+            version: 4,
             last_updated: now.timestamp(),
             alarms,
         }

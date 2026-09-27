@@ -619,6 +619,7 @@ pub struct FilterOptions<'a> {
     pub focused_task_uid: Option<&'a str>,
     pub paused_sort_behavior: crate::config::PausedSortBehavior,
     pub sort_tiebreak_recent: bool,
+    pub default_reminder_time: chrono::NaiveTime,
 }
 
 /// Options for synchronizing a tree from markdown.
@@ -4346,6 +4347,7 @@ impl TaskStore {
                 options.start_grace_period_days,
                 eff_blocked,
                 options.sort_preset,
+                options.default_reminder_time,
             );
 
             t.has_blocking_tasks = self.has_tasks_blocking(&t.uid);

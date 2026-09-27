@@ -1129,6 +1129,13 @@ impl Config {
         Self::load(ctx).map(|c| c.tag_aliases).unwrap_or_default()
     }
 
+    /// Parse the configured `default_reminder_time` ("HH:MM"), falling back to
+    /// 08:00 if the stored string is malformed.
+    pub fn parsed_default_reminder_time(&self) -> chrono::NaiveTime {
+        chrono::NaiveTime::parse_from_str(&self.default_reminder_time, "%H:%M")
+            .unwrap_or_else(|_| chrono::NaiveTime::from_hms_opt(8, 0, 0).unwrap())
+    }
+
     /// Load the configuration from disk using an explicit context.
     pub fn load(ctx: &dyn AppContext) -> Result<Self> {
         let path = ctx.get_config_file_path()?;

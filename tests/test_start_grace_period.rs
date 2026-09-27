@@ -4,7 +4,7 @@ use cfait::config::{PausedSortBehavior, SortPreset};
 use cfait::context::TestContext;
 use cfait::model::{Alarm, DateType, Task};
 use cfait::store::{FilterOptions, TaskStore};
-use chrono::{Duration, Utc};
+use chrono::{Duration, NaiveTime, Utc};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -67,6 +67,7 @@ fn test_start_grace_period_keeps_tasks_in_active_section() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     };
 
     let filtered = store.filter(options).items;
@@ -158,6 +159,7 @@ fn test_grace_period_zero_pushes_all_future_starts() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     };
 
     let filtered = store.filter(options).items;
@@ -251,6 +253,7 @@ fn test_acknowledged_alarm_keeps_task_in_active_section() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     };
 
     let filtered = store.filter(options).items;
@@ -353,6 +356,7 @@ fn test_any_acknowledged_alarm_keeps_task_active() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     };
 
     let filtered = store.filter(options).items;
@@ -445,6 +449,7 @@ fn test_recurring_task_with_fresh_dates_goes_to_future() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     };
 
     let filtered = store.filter(options).items;

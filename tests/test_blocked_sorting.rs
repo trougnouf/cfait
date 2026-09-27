@@ -4,7 +4,7 @@ use cfait::config::{PausedSortBehavior, SortPreset};
 use cfait::context::TestContext;
 use cfait::model::{DateType, Task, TaskStatus};
 use cfait::store::{FilterOptions, TaskStore};
-use chrono::Utc;
+use chrono::{NaiveTime, Utc};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -65,6 +65,7 @@ fn test_blocked_tasks_skip_urgent_rank() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     };
 
     let filtered = store.filter(options).items;
@@ -153,6 +154,7 @@ fn test_blocked_tasks_skip_due_soon_rank() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     };
 
     let filtered = store.filter(options).items;
@@ -239,6 +241,7 @@ fn test_blocked_tasks_skip_started_rank() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     };
 
     let filtered = store.filter(options).items;
@@ -326,6 +329,7 @@ fn test_dependency_blocked_tasks_also_skip_ranks() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     };
 
     let filtered = store.filter(options).items;
@@ -418,6 +422,7 @@ fn test_is_ready_filters_manually_blocked_tasks() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     };
 
     let filtered = store.filter(options).items;
@@ -496,6 +501,7 @@ fn test_is_blocked_filter_shows_only_blocked() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     };
 
     let filtered = store.filter(options).items;

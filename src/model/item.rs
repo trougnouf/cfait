@@ -488,6 +488,7 @@ pub struct CompareOptions {
     pub sort_preset: crate::config::SortPreset,
     pub paused_sort_behavior: crate::config::PausedSortBehavior,
     pub sort_tiebreak_recent: bool,
+    pub default_reminder_time: NaiveTime,
 }
 
 /// Comparison helper for sort policies. The ordering decision tree is centralized here
@@ -871,6 +872,7 @@ impl Task {
     ///
     /// The `effectively_blocked` argument signals whether the task is blocked
     /// either explicitly (is_blocked) or implicitly (inherited from ancestors).
+    #[allow(clippy::too_many_arguments)]
     pub fn calculate_base_rank(
         &self,
         cutoff: Option<DateTime<Utc>>,
@@ -879,6 +881,7 @@ impl Task {
         start_grace_period_days: u32,
         effectively_blocked: bool,
         sort_preset: crate::config::SortPreset,
+        default_reminder_time: NaiveTime,
     ) -> u8 {
         // Trash items are bottom-most
         if self.calendar_href == "local://trash" {
@@ -916,7 +919,9 @@ impl Task {
             if let Some(start) = &self.effective_dtstart {
                 let start_time = start.to_start_comparison_time();
                 let grace_threshold = now + chrono::Duration::days(start_grace_period_days as i64);
-                if start_time > grace_threshold && !self.has_active_or_recent_alarm() {
+                if start_time > grace_threshold
+                    && !self.has_active_or_recent_alarm(default_reminder_time)
+                {
                     return 7;
                 }
             }
@@ -1042,6 +1047,7 @@ impl Task {
             opts.start_grace_period_days,
             eff_blocked_self,
             opts.sort_preset,
+            opts.default_reminder_time,
         );
         let rank_other = other.calculate_base_rank(
             opts.cutoff,
@@ -1050,6 +1056,7 @@ impl Task {
             opts.start_grace_period_days,
             eff_blocked_other,
             opts.sort_preset,
+            opts.default_reminder_time,
         );
         let mut a = self.to_sort_key();
         a.rank = rank_self;
@@ -1177,7 +1184,24 @@ impl Task {
         false
     }
 
-    pub fn next_trigger_timestamp(&self) -> Option<i64> {
+    /// Resolve the anchor datetime for a relative alarm.
+    /// Specific dates anchor exactly; fuzzy dates (AllDay, Month, Year) anchor
+    /// at the default reminder time, matching how implicit alarms resolve them.
+    /// Returns None when the task has no due or start date to anchor to.
+    pub fn relative_alarm_anchor(&self, default_time: NaiveTime) -> Option<DateTime<Utc>> {
+        if let Some(DateType::Specific(d)) = self.due {
+            Some(d)
+        } else if let Some(DateType::Specific(s)) = self.dtstart {
+            Some(s)
+        } else {
+            self.due
+                .as_ref()
+                .or(self.dtstart.as_ref())
+                .map(|d| d.to_utc_with_default_time(default_time))
+        }
+    }
+
+    pub fn next_trigger_timestamp(&self, default_time: NaiveTime) -> Option<i64> {
         let now = Utc::now();
         let mut earliest: Option<i64> = None;
 
@@ -1188,20 +1212,11 @@ impl Task {
 
             let trigger_dt = match alarm.trigger {
                 AlarmTrigger::Absolute(dt) => dt,
-                _ => {
-                    // Relative triggers are anchored to due or dtstart (prefer due)
-                    let anchor = if let Some(DateType::Specific(d)) = self.due {
-                        d
-                    } else if let Some(DateType::Specific(s)) = self.dtstart {
-                        s
-                    } else {
+                AlarmTrigger::Relative(mins) => {
+                    let Some(anchor) = self.relative_alarm_anchor(default_time) else {
                         continue;
                     };
-                    anchor
-                        + chrono::Duration::minutes(match alarm.trigger {
-                            AlarmTrigger::Relative(mins) => mins as i64,
-                            _ => 0,
-                        })
+                    anchor + chrono::Duration::minutes(mins as i64)
                 }
             };
 
@@ -1224,7 +1239,7 @@ impl Task {
         })
     }
 
-    pub fn has_active_or_recent_alarm(&self) -> bool {
+    pub fn has_active_or_recent_alarm(&self, default_time: NaiveTime) -> bool {
         let now = Utc::now();
         self.alarms.iter().any(|alarm| {
             if let Some(ack) = alarm.acknowledged {
@@ -1233,11 +1248,7 @@ impl Task {
                 let trigger_dt = match alarm.trigger {
                     AlarmTrigger::Absolute(dt) => dt,
                     AlarmTrigger::Relative(mins) => {
-                        let anchor = if let Some(DateType::Specific(d)) = self.due {
-                            d
-                        } else if let Some(DateType::Specific(s)) = self.dtstart {
-                            s
-                        } else {
+                        let Some(anchor) = self.relative_alarm_anchor(default_time) else {
                             return false;
                         };
                         anchor + chrono::Duration::minutes(mins as i64)

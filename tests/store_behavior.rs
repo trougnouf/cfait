@@ -4,7 +4,7 @@ use cfait::config::{Config, PausedSortBehavior, SortPreset};
 use cfait::context::TestContext;
 use cfait::model::{AppIntent, DateType, Task, TaskStatus};
 use cfait::store::{FilterOptions, TaskStore};
-use chrono::NaiveDate;
+use chrono::{NaiveDate, NaiveTime};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -63,6 +63,7 @@ fn test_filter_by_tag() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     });
     let results = filter_res.items;
 
@@ -118,6 +119,7 @@ fn test_filter_hierarchical_tags() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     });
     let results = filter_res.items;
 
@@ -179,6 +181,7 @@ fn test_hide_hidden_calendars() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     });
     let results = filter_res.items;
 
@@ -1237,6 +1240,7 @@ fn test_sidebar_has_children_with_interleaved_sibling() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     });
 
     let by_key = |key: &str| {

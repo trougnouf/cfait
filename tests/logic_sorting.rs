@@ -4,7 +4,7 @@ use cfait::config::{PausedSortBehavior, SortPreset};
 use cfait::model::item::{CompareOptions, SortKey, compare_sortkeys};
 use cfait::model::{DateType, Task, TaskStatus};
 use cfait::store::organize_hierarchy;
-use chrono::{Duration, Utc};
+use chrono::{Duration, NaiveTime, Utc};
 use std::collections::{HashMap, HashSet};
 
 fn task(summary: &str) -> Task {
@@ -36,6 +36,7 @@ fn test_sorting_priority_basic() {
                 sort_preset: SortPreset::default(),
                 paused_sort_behavior: PausedSortBehavior::default(),
                 sort_tiebreak_recent: false,
+                default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
             }
         ), // Pass defaults
         std::cmp::Ordering::Less
@@ -55,6 +56,7 @@ fn test_sorting_priority_basic() {
                 sort_preset: SortPreset::default(),
                 paused_sort_behavior: PausedSortBehavior::default(),
                 sort_tiebreak_recent: false,
+                default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
             }
         ), // Pass defaults
         std::cmp::Ordering::Less
@@ -90,6 +92,7 @@ fn test_sorting_status_trumps_everything() {
                 sort_preset: SortPreset::default(),
                 paused_sort_behavior: PausedSortBehavior::default(),
                 sort_tiebreak_recent: false,
+                default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
             }
         ),
         std::cmp::Ordering::Less
@@ -120,6 +123,7 @@ fn test_sorting_completed_sinks() {
                 sort_preset: SortPreset::default(),
                 paused_sort_behavior: PausedSortBehavior::default(),
                 sort_tiebreak_recent: false,
+                default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
             }
         ),
         std::cmp::Ordering::Less
@@ -153,6 +157,7 @@ fn test_sorting_due_dates() {
                 sort_preset: SortPreset::default(),
                 paused_sort_behavior: PausedSortBehavior::default(),
                 sort_tiebreak_recent: false,
+                default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
             }
         ),
         std::cmp::Ordering::Less
@@ -172,6 +177,7 @@ fn test_sorting_due_dates() {
                 sort_preset: SortPreset::default(),
                 paused_sort_behavior: PausedSortBehavior::default(),
                 sort_tiebreak_recent: false,
+                default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
             }
         ),
         std::cmp::Ordering::Less

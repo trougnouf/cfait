@@ -445,6 +445,7 @@ impl AppState {
             sort_preset: config.sort_preset,
             paused_sort_behavior: self.paused_sort_behavior,
             sort_tiebreak_recent: self.sort_tiebreak_recent,
+            default_reminder_time: config.parsed_default_reminder_time(),
             expanded_done_groups: &self.expanded_done_groups,
             expanded_tags: &self.expanded_tags,
             expanded_locations: &self.expanded_locations,

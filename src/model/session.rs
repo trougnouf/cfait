@@ -108,6 +108,7 @@ impl SessionState {
             sort_preset: config.sort_preset,
             paused_sort_behavior: config.paused_sort_behavior,
             sort_tiebreak_recent: config.sort_tiebreak_recent,
+            default_reminder_time: config.parsed_default_reminder_time(),
             expanded_done_groups: &expanded_done_groups,
             expanded_tags: &expanded_tags,
             expanded_locations: &expanded_locations,

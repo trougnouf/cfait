@@ -17,6 +17,7 @@ use cfait::context::TestContext;
 use cfait::model::Task;
 use cfait::model::parser::tokenize_smart_input;
 use cfait::store::{FilterOptions, TaskStore};
+use chrono::NaiveTime;
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -155,6 +156,7 @@ fn default_options<'a>(
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     }
 }
 

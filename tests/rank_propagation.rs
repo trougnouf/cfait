@@ -4,6 +4,7 @@ use cfait::config::{PausedSortBehavior, SortPreset};
 use cfait::context::TestContext;
 use cfait::model::Task;
 use cfait::store::{FilterOptions, TaskStore};
+use chrono::NaiveTime;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -74,6 +75,7 @@ fn parent_inherits_child_priority_and_sorts_before_sibling() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     };
 
     let result = store.filter(opts).items;
@@ -170,6 +172,7 @@ fn compare_two_parents_inherited_priorities_determine_order() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     };
 
     let result = store.filter(opts).items;
@@ -261,6 +264,7 @@ fn parent_inherits_started_child_over_unset_sibling() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     };
 
     let result = store.filter(opts).items;

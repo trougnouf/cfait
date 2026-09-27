@@ -4,7 +4,7 @@ use cfait::config::{PausedSortBehavior, SortPreset};
 use cfait::context::TestContext;
 use cfait::model::{Task, TaskStatus};
 use cfait::store::{FilterOptions, TaskStore};
-use chrono::{Datelike, Duration, Local};
+use chrono::{Datelike, Duration, Local, NaiveTime};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -192,6 +192,7 @@ fn test_is_ready_filters_future_start_dates() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     };
 
     let filtered = store.filter(options).items;
@@ -279,6 +280,7 @@ fn test_is_ready_filters_blocked_tasks() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     };
 
     let filtered = store.filter(options).items;
@@ -372,6 +374,7 @@ fn test_is_ready_combines_with_other_filters() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     };
 
     let filtered = store.filter(options).items;
@@ -452,6 +455,7 @@ fn test_is_ready_filters_implicitly_future_tasks() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     };
 
     let filtered = store.filter(options).items;
@@ -515,6 +519,7 @@ fn test_is_ready_filters_implicitly_future_tasks() {
         focused_task_uid: None,
         paused_sort_behavior: PausedSortBehavior::default(),
         sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
     };
 
     let all_tasks = store.filter(options_all).items;

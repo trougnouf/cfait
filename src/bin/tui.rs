@@ -1539,6 +1539,7 @@ async fn main() -> Result<()> {
 
             let config =
                 cfait::config::Config::load_with_credentials(ctx.as_ref()).unwrap_or_default();
+            let default_reminder_time = config.parsed_default_reminder_time();
             let store = build_store_cli(&ctx).await;
 
             let mut hidden: HashSet<String> = HashSet::new();
@@ -1609,6 +1610,7 @@ async fn main() -> Result<()> {
                 sort_preset: config.sort_preset,
                 paused_sort_behavior: config.paused_sort_behavior,
                 sort_tiebreak_recent: config.sort_tiebreak_recent,
+                default_reminder_time,
                 expanded_done_groups: &expanded_done_groups,
                 expanded_tags: &expanded_tags,
                 expanded_locations: &expanded_locations,

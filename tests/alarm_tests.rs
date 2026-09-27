@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Tests for basic alarm functionality.
 use cfait::model::{AlarmTrigger, DateType, Task};
-use chrono::{Duration, Local, Timelike};
+use chrono::{Duration, Local, NaiveTime, Timelike};
 use std::collections::HashMap;
 
 fn mock_aliases() -> HashMap<String, Vec<String>> {
@@ -51,7 +51,10 @@ fn test_reminder_relative_anchor() {
     }
 
     // Verify next_trigger_timestamp calculation
-    let trigger_ts = t.next_trigger_timestamp().expect("Should have trigger");
+    let default_time = NaiveTime::from_hms_opt(9, 0, 0).unwrap();
+    let trigger_ts = t
+        .next_trigger_timestamp(default_time)
+        .expect("Should have trigger");
 
     let due_dt = match t.due.unwrap() {
         DateType::Specific(d) => d,
@@ -87,18 +90,43 @@ fn test_reminder_absolute() {
 
 #[test]
 fn test_reminder_no_anchor_ignored() {
-    // Relative reminder with NO specific time -> Should effectively be ignored or not calc'd
-    let t = Task::new("Vague Task @tomorrow rem:10m", &mock_aliases(), None);
+    // Relative reminder on a task with no date at all -> no anchor, never fires
+    let t = Task::new("Vague Task rem:10m", &mock_aliases(), None);
 
     // It is parsed into the list...
     assert_eq!(t.alarms.len(), 1);
 
-    // ...but next_trigger_timestamp should ignore it because anchor is missing/AllDay
-    let ts = t.next_trigger_timestamp();
+    // ...but next_trigger_timestamp should ignore it because there is no anchor
+    let default_time = NaiveTime::from_hms_opt(9, 0, 0).unwrap();
+    let ts = t.next_trigger_timestamp(default_time);
     assert!(
         ts.is_none(),
-        "Should not trigger relative alarm on AllDay task"
+        "Should not trigger relative alarm on a task with no date"
     );
+}
+
+#[test]
+fn test_reminder_relative_allday_anchor() {
+    // A relative reminder on an AllDay task anchors at the default reminder time
+    let t = Task::new(
+        "Water the tomatoes @tomorrow rem:30m",
+        &mock_aliases(),
+        None,
+    );
+    assert_eq!(t.alarms.len(), 1);
+
+    let default_time = NaiveTime::from_hms_opt(9, 0, 0).unwrap();
+    let trigger_ts = t
+        .next_trigger_timestamp(default_time)
+        .expect("AllDay task should anchor its relative reminder");
+
+    let due_date = match t.due.unwrap() {
+        DateType::AllDay(d) => d,
+        _ => panic!("Expected AllDay due date"),
+    };
+    let expected =
+        DateType::AllDay(due_date).to_utc_with_default_time(default_time) - Duration::minutes(30);
+    assert_eq!(trigger_ts, expected.timestamp());
 }
 
 #[test]
