@@ -861,10 +861,6 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_extract_list_prefix(): Int
 
-    external fun uniffi_cfait_checksum_method_cfaitmobile_get_all_locations(): Int
-
-    external fun uniffi_cfait_checksum_method_cfaitmobile_get_all_tags(): Int
-
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_available_locales(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_calendars(): Int
@@ -992,8 +988,6 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_cfait_checksum_method_cfaitmobile_update_task_description(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_update_task_smart(): Int
-
-    external fun uniffi_cfait_checksum_method_cfaitmobile_yank_task(): Int
 
     external fun uniffi_cfait_checksum_constructor_cfaitmobile_new(): Int
 
@@ -1173,10 +1167,6 @@ internal object UniffiLib {
         `line`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
-
-    external fun uniffi_cfait_fn_method_cfaitmobile_get_all_locations(`ptr`: Long): Long
-
-    external fun uniffi_cfait_fn_method_cfaitmobile_get_all_tags(`ptr`: Long): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_get_available_locales(
         `ptr`: Long,
@@ -1543,11 +1533,6 @@ internal object UniffiLib {
         `smartInput`: RustBuffer.ByValue,
     ): Long
 
-    external fun uniffi_cfait_fn_method_cfaitmobile_yank_task(
-        `ptr`: Long,
-        `uid`: RustBuffer.ByValue,
-    ): Long
-
     external fun uniffi_cfait_fn_func_init_panic_hook(
         `cacheDir`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
@@ -1856,12 +1841,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_cfait_checksum_method_cfaitmobile_extract_list_prefix() and 0xFFFF) != 48803) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_cfait_checksum_method_cfaitmobile_get_all_locations() and 0xFFFF) != 33149) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if ((lib.uniffi_cfait_checksum_method_cfaitmobile_get_all_tags() and 0xFFFF) != 17491) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
     if ((lib.uniffi_cfait_checksum_method_cfaitmobile_get_available_locales() and 0xFFFF) != 45059) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -2052,9 +2031,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cfait_checksum_method_cfaitmobile_update_task_smart() and 0xFFFF) != 43938) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if ((lib.uniffi_cfait_checksum_method_cfaitmobile_yank_task() and 0xFFFF) != 29486) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cfait_checksum_constructor_cfaitmobile_new() and 0xFFFF) != 58247) {
@@ -2691,10 +2667,6 @@ public interface CfaitMobileInterface {
 
     fun `extractListPrefix`(`line`: kotlin.String): kotlin.String
 
-    suspend fun `getAllLocations`(): List<MobileLocation>
-
-    suspend fun `getAllTags`(): List<MobileTag>
-
     fun `getAvailableLocales`(): List<kotlin.String>
 
     fun `getCalendars`(): List<MobileCalendar>
@@ -2910,8 +2882,6 @@ public interface CfaitMobileInterface {
         `uid`: kotlin.String,
         `smartInput`: kotlin.String,
     )
-
-    suspend fun `yankTask`(`uid`: kotlin.String)
 
     companion object
 }
@@ -3560,40 +3530,6 @@ open class CfaitMobile :
                     )
                 }
             },
-        )
-
-    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `getAllLocations`(): List<MobileLocation> =
-        uniffiRustCallAsync(
-            callWithHandle { uniffiHandle ->
-                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_all_locations(
-                    uniffiHandle,
-                )
-            },
-            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
-            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
-            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
-            // lift function
-            { FfiConverterSequenceTypeMobileLocation.lift(it) },
-            // Error FFI converter
-            UniffiNullRustCallStatusErrorHandler,
-        )
-
-    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `getAllTags`(): List<MobileTag> =
-        uniffiRustCallAsync(
-            callWithHandle { uniffiHandle ->
-                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_all_tags(
-                    uniffiHandle,
-                )
-            },
-            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
-            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
-            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
-            // lift function
-            { FfiConverterSequenceTypeMobileTag.lift(it) },
-            // Error FFI converter
-            UniffiNullRustCallStatusErrorHandler,
         )
 
     override fun `getAvailableLocales`(): List<kotlin.String> =
@@ -4691,25 +4627,6 @@ open class CfaitMobile :
         // Error FFI converter
         MobileException.ErrorHandler,
     )
-
-    @Throws(MobileException::class)
-    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `yankTask`(`uid`: kotlin.String) =
-        uniffiRustCallAsync(
-            callWithHandle { uniffiHandle ->
-                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_yank_task(
-                    uniffiHandle,
-                    FfiConverterString.lower(`uid`),
-                )
-            },
-            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
-            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
-            { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
-            // lift function
-            { },
-            // Error FFI converter
-            MobileException.ErrorHandler,
-        )
 
     /**
      * @suppress

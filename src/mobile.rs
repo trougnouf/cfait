@@ -2386,14 +2386,6 @@ impl CfaitMobile {
         self.apply_connection(config).await
     }
 
-    pub async fn get_all_tags(&self) -> Vec<MobileTag> {
-        Vec::new()
-    }
-
-    pub async fn get_all_locations(&self) -> Vec<MobileLocation> {
-        Vec::new()
-    }
-
     pub async fn get_task_by_uid(&self, uid: String) -> Option<MobileTask> {
         let store = self.controller.store.lock().await;
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
@@ -3021,10 +3013,6 @@ impl CfaitMobile {
             .collect();
         let idx = crate::store::select_weighted_random_index(&filtered, config.default_priority)?;
         filtered.get(idx).map(|t| t.uid.clone())
-    }
-
-    pub async fn yank_task(&self, _uid: String) -> Result<(), MobileError> {
-        Ok(())
     }
 
     pub async fn add_task_smart(&self, input: String) -> Result<String, MobileError> {
