@@ -2792,10 +2792,16 @@ impl CfaitMobile {
 
         session.apply_session_intent(&intent);
 
-        let mut config_to_save = config.clone();
-        config_to_save.expanded_tags = session.expanded_tags.clone();
-        config_to_save.expanded_locations = session.expanded_locations.clone();
-        let _ = config_to_save.save(self.ctx.as_ref());
+        // Only touch the config file when the expanded sidebar state actually
+        // changed — most intents (toggles, timers, navigation) do not.
+        if config.expanded_tags != session.expanded_tags
+            || config.expanded_locations != session.expanded_locations
+        {
+            let mut config_to_save = config.clone();
+            config_to_save.expanded_tags = session.expanded_tags.clone();
+            config_to_save.expanded_locations = session.expanded_locations.clone();
+            let _ = config_to_save.save(self.ctx.as_ref());
+        }
 
         let (forward, reverse, desc, primary_uid) = store.apply_task_intent(&intent, &config);
 
