@@ -1646,27 +1646,22 @@ impl RustyClient {
             self.fetch_calendar_tasks_internal(calendar_href, true),
         )
         .await;
-        if fetch_res.is_err() || fetch_res.as_ref().unwrap().is_err() {
-            if calendar_href.starts_with("local://") {
-                let mut tasks =
-                    crate::storage::LocalStorage::load_for_href(self.ctx.as_ref(), calendar_href)?;
-                crate::journal::Journal::apply_to_tasks(
-                    self.ctx.as_ref(),
-                    &mut tasks,
-                    calendar_href,
-                );
-                return Ok(tasks);
-            } else {
-                let (mut tasks, _) = crate::cache::Cache::load(self.ctx.as_ref(), calendar_href)?;
-                crate::journal::Journal::apply_to_tasks(
-                    self.ctx.as_ref(),
-                    &mut tasks,
-                    calendar_href,
-                );
-                return Ok(tasks);
-            }
+        if let Ok(Ok(tasks)) = fetch_res {
+            return Ok(tasks);
         }
-        Ok(fetch_res.unwrap().unwrap())
+
+        // The fetch failed or timed out: fall back to what is already on disk
+        // so a slow or failed server (or a corrupted cache file) doesn't break
+        // the UI.
+        let mut tasks = if calendar_href.starts_with("local://") {
+            crate::storage::LocalStorage::load_for_href(self.ctx.as_ref(), calendar_href)?
+        } else {
+            crate::cache::Cache::load(self.ctx.as_ref(), calendar_href)
+                .unwrap_or_default()
+                .0
+        };
+        crate::journal::Journal::apply_to_tasks(self.ctx.as_ref(), &mut tasks, calendar_href);
+        Ok(tasks)
     }
 
     /// Fetch tasks for all calendars concurrently. Failed calendars fall back
