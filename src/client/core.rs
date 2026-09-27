@@ -142,6 +142,17 @@ pub(crate) fn strip_host(href: &str) -> String {
     href.to_string()
 }
 
+/// Returns true when `filename` is a companion event file belonging to the
+/// task with the given uid. The match must respect the uid boundary: a plain
+/// `starts_with` on the uid prefix would also claim files of tasks whose uid
+/// is a prefix of this one (e.g. "abc" vs "abcd"), letting one task's
+/// cleanup delete another task's events.
+fn is_companion_event_file(uid: &str, filename: &str) -> bool {
+    let plain = format!("evt-{}.ics", uid);
+    let prefixed = format!("evt-{}-", uid);
+    filename == plain || (filename.starts_with(&prefixed) && filename.ends_with(".ics"))
+}
+
 // -----------------------------
 // High-level RustyClient - network construction and high-level APIs.
 // Lower-level sync steps are implemented in src/client/sync.rs (impl RustyClient there).
@@ -1102,7 +1113,7 @@ impl RustyClient {
                 let mut task_existing_filenames = std::collections::HashSet::new();
                 let mut retain_list = Vec::new();
                 for filename in all_existing_filenames.into_iter() {
-                    if filename.starts_with(&base_uid) && filename.ends_with(".ics") {
+                    if is_companion_event_file(&task.uid, &filename) {
                         task_existing_filenames.insert(filename);
                     } else {
                         retain_list.push(filename);
@@ -1963,4 +1974,28 @@ impl RustyClient {
     // They remain part of the RustyClient impl but are defined in the dedicated
     // sync module to avoid duplication and to keep the synchronization logic
     // consolidated.
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_companion_event_file;
+
+    #[test]
+    fn companion_event_file_matches_only_own_uid() {
+        assert!(is_companion_event_file("abc", "evt-abc.ics"));
+        assert!(is_companion_event_file("abc", "evt-abc-start.ics"));
+        assert!(is_companion_event_file("abc", "evt-abc-due.ics"));
+        assert!(is_companion_event_file("abc", "evt-abc-session-7.ics"));
+
+        // uid "abc" must not claim files of task "abcd"
+        assert!(!is_companion_event_file("abc", "evt-abcd.ics"));
+        assert!(!is_companion_event_file("abc", "evt-abcd-session-0.ics"));
+        // and "abcd" must not claim files of task "abc"
+        assert!(!is_companion_event_file("abcd", "evt-abc.ics"));
+        assert!(is_companion_event_file("abcd", "evt-abcd.ics"));
+
+        // non-event files never match
+        assert!(!is_companion_event_file("abc", "abc.ics"));
+        assert!(!is_companion_event_file("abc", "evt-abc.txt"));
+    }
 }
