@@ -1,12 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/model/parser.rs
-/*
-File: cfait/src/model/parser.rs
-Logic for parsing smart input strings into task properties.
-This file is recreated with updated handling for `done:` tokens to accept
-either a full datetime in the token (`done:YYYY-MM-DD HH:MM`) or the older
-date-only form with an optional separate time token following it.
-*/
+// Logic for parsing smart input strings into task properties.
 
 use crate::model::{Alarm, DateType, Task};
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, NaiveTime, Utc};
@@ -3122,12 +3116,6 @@ pub fn apply_smart_input(
                         task.percent_complete = Some(pc.min(100));
                         matched = true;
                     }
-                } else if let Ok(ndt) =
-                    chrono::NaiveDateTime::parse_from_str(clean_val, "%Y-%m-%d %H:%M")
-                {
-                    let utc_dt = crate::model::item::safe_local_to_utc(ndt.date(), ndt.time());
-                    task.set_completion_date(Some(utc_dt));
-                    matched = true;
                 } else if let Some(d) = parse_smart_date_with_lex(clean_val, lex) {
                     let mut temp_consumed = 1;
                     let (dt, _) =
@@ -4354,5 +4342,53 @@ mod alias_extraction_tests {
         assert_eq!(clean, "#garden #green");
         assert_eq!(aliases.get("garden"), Some(&vec!["#balcony".to_string()]));
         assert!(!is_pure_alias_remainder(&clean, true));
+    }
+}
+
+#[cfg(test)]
+mod done_roundtrip_tests {
+    use super::*;
+    use crate::model::item::Task;
+    use chrono::{Local, NaiveDate, Utc};
+
+    #[test]
+    fn completion_datetime_survives_smart_string_roundtrip() {
+        // A completed task's `done:` token is serialized as `done:YYYY-MM-DD HH:MM`
+        // (with a space), so it re-tokenizes into a date token followed by a time
+        // token. The parser must merge them back into the original datetime.
+        let mut task = Task::new("water the tomatoes", &HashMap::new(), None);
+        let ndt = NaiveDate::from_ymd_opt(2024, 1, 15)
+            .unwrap()
+            .and_hms_opt(14, 30, 0)
+            .unwrap();
+        let local_dt = ndt
+            .and_local_timezone(Local)
+            .single()
+            .expect("valid local datetime");
+        task.set_completion_date(Some(local_dt.with_timezone(&Utc)));
+
+        let smart = task.to_smart_string();
+        assert!(
+            smart.contains("done:2024-01-15 14:30"),
+            "expected a done: token in the smart string, got: {smart}"
+        );
+
+        let reparsed = Task::new(&smart, &HashMap::new(), None);
+        let original = task.completion_date().expect("original completion date");
+        let roundtripped = reparsed
+            .completion_date()
+            .expect("round-tripped completion date");
+
+        assert_eq!(
+            original
+                .with_timezone(&Local)
+                .format("%Y-%m-%d %H:%M")
+                .to_string(),
+            roundtripped
+                .with_timezone(&Local)
+                .format("%Y-%m-%d %H:%M")
+                .to_string(),
+            "completion datetime lost its time on round-trip"
+        );
     }
 }
