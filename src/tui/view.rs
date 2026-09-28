@@ -214,6 +214,62 @@ fn format_description_for_markdown(raw: &str) -> String {
     paragraphs.join("\n\n")
 }
 
+/// Build the sidebar entry for a single goal: a bold title line, a progress
+/// bar with the current/target values, and a row of history cells.
+fn goal_progress_entry(
+    name: &str,
+    title_style: Style,
+    progress: u32,
+    goal: &crate::config::Goal,
+    history: &[f32],
+) -> Text<'static> {
+    let target = goal.target;
+    let (cur_str, tar_str) = if goal.goal_type == crate::config::GoalType::Duration {
+        crate::model::parser::format_goal_duration(progress, target)
+    } else {
+        (progress.to_string(), target.to_string())
+    };
+
+    let target_display = goal.format_target_display(&tar_str);
+    let title = format!("{} ({})", name, target_display);
+    let pct = if target > 0 {
+        (progress as f32 / target as f32).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let bar_len = 5;
+    let filled = (pct * bar_len as f32).round() as usize;
+    let bar = format!("[{}{}]", "■".repeat(filled), " ".repeat(bar_len - filled));
+
+    let color = if pct >= 1.0 {
+        Color::Green
+    } else {
+        Color::Yellow
+    };
+
+    let mut spans = vec![
+        Span::styled(bar, Style::default().fg(color)),
+        Span::raw(format!(" {}/{} ", cur_str, tar_str)),
+    ];
+
+    for &h_pct in history {
+        let h_color = if h_pct >= 1.0 {
+            Color::Green
+        } else if h_pct > 0.0 {
+            Color::Yellow
+        } else {
+            Color::DarkGray
+        };
+        spans.push(Span::styled("■", Style::default().fg(h_color)));
+    }
+
+    Text::from(vec![
+        Line::from(Span::styled(title, title_style)),
+        Line::from(spans),
+        Line::from(""), // spacing
+    ])
+}
+
 pub fn draw(f: &mut Frame, state: &mut AppState) {
     let is_dark_theme = state.theme.is_dark();
     let footer_height = if state.mode == InputMode::EditingDescription
@@ -649,116 +705,29 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         .get(key)
                         .cloned()
                         .unwrap_or((0, Vec::new()));
-                    let target = goal.target;
-
-                    let (cur_str, tar_str) = if goal.goal_type == crate::config::GoalType::Duration
-                    {
-                        crate::model::parser::format_goal_duration(progress, target)
-                    } else {
-                        (progress.to_string(), target.to_string())
-                    };
-
-                    let target_display = goal.format_target_display(&tar_str);
-                    let title = format!("{} ({})", key, target_display);
-                    let pct = if target > 0 {
-                        (progress as f32 / target as f32).clamp(0.0, 1.0)
-                    } else {
-                        0.0
-                    };
-                    let bar_len = 5;
-                    let filled = (pct * bar_len as f32).round() as usize;
-                    let bar = format!("[{}{}]", "■".repeat(filled), " ".repeat(bar_len - filled));
-
-                    let color = if pct >= 1.0 {
-                        Color::Green
-                    } else {
-                        Color::Yellow
-                    };
-
-                    let mut spans = vec![
-                        Span::styled(bar, Style::default().fg(color)),
-                        Span::raw(format!(" {}/{} ", cur_str, tar_str)),
-                    ];
-
-                    for &h_pct in &history {
-                        let h_color = if h_pct >= 1.0 {
-                            Color::Green
-                        } else if h_pct > 0.0 {
-                            Color::Yellow
-                        } else {
-                            Color::DarkGray
-                        };
-                        spans.push(Span::styled("■", Style::default().fg(h_color)));
-                    }
-
-                    let text = Text::from(vec![
-                        Line::from(Span::styled(
-                            title,
-                            Style::default().add_modifier(Modifier::BOLD),
-                        )),
-                        Line::from(spans),
-                        Line::from(""), // spacing
-                    ]);
-                    items.push(ListItem::new(text));
+                    items.push(ListItem::new(goal_progress_entry(
+                        key,
+                        Style::default().add_modifier(Modifier::BOLD),
+                        progress,
+                        goal,
+                        &history,
+                    )));
                 }
 
                 for (_, summary, goal, progress, history) in &state.cached_task_goals {
-                    let target = goal.target;
-                    let (cur_str, tar_str) = if goal.goal_type == crate::config::GoalType::Duration
-                    {
-                        crate::model::parser::format_goal_duration(*progress, target)
-                    } else {
-                        (progress.to_string(), target.to_string())
-                    };
-
-                    let target_display = goal.format_target_display(&tar_str);
-                    let title = format!("{} ({})", summary, target_display);
-                    let pct = if target > 0 {
-                        (*progress as f32 / target as f32).clamp(0.0, 1.0)
-                    } else {
-                        0.0
-                    };
-                    let bar_len = 5;
-                    let filled = (pct * bar_len as f32).round() as usize;
-                    let bar = format!("[{}{}]", "■".repeat(filled), " ".repeat(bar_len - filled));
-
-                    let color = if pct >= 1.0 {
-                        Color::Green
-                    } else {
-                        Color::Yellow
-                    };
-
-                    let mut spans = vec![
-                        Span::styled(bar, Style::default().fg(color)),
-                        Span::raw(format!(" {}/{} ", cur_str, tar_str)),
-                    ];
-
-                    for &h_pct in history {
-                        let h_color = if h_pct >= 1.0 {
-                            Color::Green
-                        } else if h_pct > 0.0 {
-                            Color::Yellow
-                        } else {
-                            Color::DarkGray
-                        };
-                        spans.push(Span::styled("■", Style::default().fg(h_color)));
-                    }
-
-                    let text = Text::from(vec![
-                        Line::from(Span::styled(
-                            title,
-                            Style::default()
-                                .add_modifier(Modifier::BOLD)
-                                .fg(if is_dark_theme {
-                                    Color::Cyan
-                                } else {
-                                    Color::Blue
-                                }),
-                        )),
-                        Line::from(spans),
-                        Line::from(""), // spacing
-                    ]);
-                    items.push(ListItem::new(text));
+                    items.push(ListItem::new(goal_progress_entry(
+                        summary,
+                        Style::default()
+                            .add_modifier(Modifier::BOLD)
+                            .fg(if is_dark_theme {
+                                Color::Cyan
+                            } else {
+                                Color::Blue
+                            }),
+                        *progress,
+                        goal,
+                        history,
+                    )));
                 }
             }
             (
