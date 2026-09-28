@@ -1069,6 +1069,14 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         // Build Task list items
         let list_inner_width = main_chunks[0].width.saturating_sub(2) as usize;
 
+        // Map calendar hrefs to their color once per frame so task rows can
+        // look up their bracket color in O(1) instead of scanning the list.
+        let cal_colors: HashMap<&str, Option<&str>> = state
+            .calendars
+            .iter()
+            .map(|c| (c.href.as_str(), c.color.as_deref()))
+            .collect();
+
         let task_items: Vec<ListItem> = state
             .tasks
             .iter()
@@ -1169,11 +1177,9 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
                         // Color the checkbox brackets with the task's collection color,
                         // mirroring the collections sidebar tab.
-                        let bracket_style = state
-                            .calendars
-                            .iter()
-                            .find(|c| c.href == t.calendar_href)
-                            .and_then(|c| c.color.as_ref())
+                        let bracket_style = cal_colors
+                            .get(t.calendar_href.as_str())
+                            .and_then(|c| c.as_ref())
                             .and_then(|hex| color_utils::parse_hex_to_u8(hex))
                             .map(|(r, g, b)| Style::default().fg(Color::Rgb(r, g, b)))
                             .unwrap_or_default();
