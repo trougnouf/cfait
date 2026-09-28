@@ -27,6 +27,10 @@
     "all_actions_pinned": "Todas las acciones fijadas",
     "all_tasks": "Todas las tareas",
     "allow_insecure_ssl": "Permitir SSL inseguro",
+    "and_more": {
+        "one": "…y 1 más",
+        "other": "... y %{count} más"
+    },
     "android_sync_note": "Nota: Android exige un intervalo mínimo de 15 minutos.",
     "any": "Cualquiera",
     "app_name": "Cfait",
@@ -60,6 +64,14 @@
     },
     "calendar_events_reversible_note": "Esta operación es completamente reversible. Simplemente cierre y vuelva a abrir \"Crear eventos del calendario\" para recrearlos.",
     "calendar_integration": "Integración con el calendario",
+    "calendar_sync_created": {
+        "one": "Evento de calendario creado",
+        "other": "%{count} eventos en el calendario creados"
+    },
+    "calendar_sync_deleted": {
+        "one": "Evento de calendario eliminado",
+        "other": "%{count} eventos en el calendario eliminados"
+    },
     "calendars": "Colecciones",
     "cancel": "Cancelar",
     "cancel_task": "Cancelar tarea",
@@ -282,6 +294,7 @@
     "expand_completed_tasks": "Desplegar tareas completadas",
     "expand_tree_with_key": "Expandir árbol (z)",
     "export": "Exportar",
+    "export_calendar_title": "Exportar %{name}",
     "export_cancelled": "Exportación cancelada",
     "export_collection_not_found": "Error de exportación: la colección '%{collection}' no se encuentra o no está en caché. Ejecute 'cfait sync' primero para obtenerla.",
     "export_debug_share_title": "Exportar datos de depuración",
@@ -718,6 +731,12 @@
     "snooze_hint": "Posponer (ej. 15m, 1h)",
     "snooze_presets": "Opciones de posponer",
     "sort_collections_by_size": "Ordenar las colecciones por tamaño (primero las tareas más numerosas)",
+    "sort_paused_none": "Apagado (se trata como no iniciado)",
+    "sort_paused_tiebreak": "Desempate (dentro del rango/fecha)",
+    "sort_paused_top": "Inicio de la lista (por encima de los no iniciados)",
+    "sort_preset_ongoing_urgent_due": "En curso > Urgente > Vencimiento próximo",
+    "sort_preset_urgent_due_ongoing": "Urgente > Vencimiento próximo > En curso",
+    "sort_preset_urgent_ongoing_due": "Urgente > En curso > Vencimiento próximo",
     "sort_standard_by_date": "Tareas habituales ordenadas por fecha",
     "sort_standard_by_priority": "Tareas habituales ordenadas por prioridad",
     "sort_standard_by_priority_explain": "Solo afecta a las tareas fuera de las categorías de urgentes, próximas a vencer y en curso. Las tareas en curso siempre se ordenan por encima de las comunes, independientemente de este ajuste.",
