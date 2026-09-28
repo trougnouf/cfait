@@ -17,6 +17,7 @@ use super::tooltip_style;
 use iced::widget::{
     Space, button, column, container, rich_text, row, span, text, text_editor, tooltip,
 };
+use iced::{Color, Element, Length, Theme};
 
 pub fn parse_inline_markdown(
     text_str: &str,
@@ -111,7 +112,71 @@ pub fn parse_inline_markdown(
     }
     spans
 }
-use iced::{Color, Element, Length, Theme};
+
+/// Truncates `s` to at most `max` characters, appending "..." when cut.
+fn truncate_chars(s: &str, max: usize) -> String {
+    if s.chars().count() > max {
+        format!("{}...", s.chars().take(max - 3).collect::<String>())
+    } else {
+        s.to_string()
+    }
+}
+
+/// Maps a clicked link target to a message: real URLs open externally,
+/// anything else is treated as a wiki link within the task.
+fn link_message(target: String, task_uid: &str) -> Message {
+    if target.contains("://") || target.starts_with("mailto:") {
+        Message::OpenUrl(target)
+    } else {
+        Message::OpenWikiLink(target, Some(task_uid.to_string()))
+    }
+}
+
+/// Renders a paragraph of description text as a rich-text row and appends it to `col`.
+fn push_rich_paragraph<'a>(
+    col: iced::widget::Column<'a, Message>,
+    paragraph: &str,
+    base_color: Color,
+    highlight_regex: &Option<std::rc::Rc<regex::Regex>>,
+    highlight_color: Color,
+    task_uid: &'a str,
+) -> iced::widget::Column<'a, Message> {
+    let spans = parse_inline_markdown(
+        paragraph,
+        base_color,
+        false,
+        highlight_regex,
+        highlight_color,
+    );
+    col.push(
+        rich_text(spans)
+            .size(14)
+            .on_link_click(move |target: String| link_message(target, task_uid)),
+    )
+}
+
+/// Monospace spans for one line of a fenced code block in a description.
+fn code_block_spans(line: &str) -> Vec<iced::widget::text::Span<'static, String>> {
+    vec![
+        span(line.to_string())
+            .color(Color::from_rgb(0.8, 0.6, 0.4))
+            .font(iced::Font::MONOSPACE),
+    ]
+}
+
+/// Appends a completion marker (and date, when present) to a related task's name.
+fn with_completion_marker(name: String, task: &crate::model::Task) -> String {
+    if !task.status.is_done() {
+        return name;
+    }
+    match task.completion_date() {
+        Some(comp_date) => {
+            let local = comp_date.with_timezone(&chrono::Local);
+            format!("{} (✓ {})", name, local.format("%Y-%m-%d %H:%M"))
+        }
+        None => format!("{} (✓)", name),
+    }
+}
 
 // Helper inside the file to provide generic action styles
 
@@ -499,15 +564,10 @@ pub fn view_task_row<'a>(
                     };
                     text_color.a *= dim_factor;
 
-                    let display_cat = if cat.contains('=') {
-                        cat.rsplit(':').next().unwrap_or(cat)
-                    } else {
-                        cat.as_str()
-                    };
                     let label = if cat.contains('=') {
-                        display_cat.to_string()
+                        cat.rsplit(':').next().unwrap_or(cat).to_string()
                     } else {
-                        format!("#{}", display_cat)
+                        format!("#{}", cat)
                     };
 
                     tags_row = tags_row.push(
@@ -712,13 +772,7 @@ pub fn view_task_row<'a>(
             let summary_text: Element<'a, Message> = rich_text(summary_spans)
                 .size(font_size)
                 .width(Length::Fill)
-                .on_link_click(move |target: String| {
-                    if target.contains("://") || target.starts_with("mailto:") {
-                        Message::OpenUrl(target)
-                    } else {
-                        Message::OpenWikiLink(target, Some(task.uid.clone()))
-                    }
-                })
+                .on_link_click(move |target: String| link_message(target, &task.uid))
                 .into();
 
             let main_text_col: Element<'a, Message> = if place_inline {
@@ -746,9 +800,6 @@ pub fn view_task_row<'a>(
             let mut actions = row![].spacing(3).align_y(iced::Alignment::Center);
 
             let has_subtasks = task.has_visible_subtasks;
-            let _has_notes_or_deps = !task.description.is_empty()
-                || !task.dependencies.is_empty()
-                || !task.related_to.is_empty();
 
             if has_subtasks || is_tree_collapsed {
                 let trees = [
@@ -825,16 +876,8 @@ pub fn view_task_row<'a>(
             if let Some(yanked) = &app.yanked_uid {
                 if *yanked != task.uid {
                     let yanked_summary = app.store.get_summary(yanked).unwrap_or_default();
-                    let t_sum = if task.summary.chars().count() > 25 {
-                        format!("{}...", task.summary.chars().take(22).collect::<String>())
-                    } else {
-                        task.summary.clone()
-                    };
-                    let y_sum = if yanked_summary.chars().count() > 25 {
-                        format!("{}...", yanked_summary.chars().take(22).collect::<String>())
-                    } else {
-                        yanked_summary.clone()
-                    };
+                    let t_sum = truncate_chars(&task.summary, 25);
+                    let y_sum = truncate_chars(&yanked_summary, 25);
 
                     let block_btn = button(icon::icon(icon::BLOCKED).size(14))
                         .style(|theme, status| action_style(theme, status, 0))
@@ -1269,6 +1312,11 @@ pub fn view_task_row<'a>(
             if has_content_to_show && is_expanded {
                 if !task.description.is_empty() {
                     let mut desc_col = column![].spacing(4);
+                    let base_text_color = if is_dark_theme {
+                        Color::from_rgb(0.7, 0.7, 0.7)
+                    } else {
+                        Color::from_rgb(0.3, 0.3, 0.3)
+                    };
                     let mut current_paragraph = String::new();
                     let mut in_code_block = false;
 
@@ -1277,70 +1325,36 @@ pub fn view_task_row<'a>(
 
                         if trimmed.starts_with("```") {
                             if !current_paragraph.is_empty() {
-                                let spans = parse_inline_markdown(
+                                desc_col = push_rich_paragraph(
+                                    desc_col,
                                     &current_paragraph,
-                                    if is_dark_theme {
-                                        Color::from_rgb(0.7, 0.7, 0.7)
-                                    } else {
-                                        Color::from_rgb(0.3, 0.3, 0.3)
-                                    },
-                                    false,
+                                    base_text_color,
                                     &highlight_regex,
                                     highlight_color,
+                                    &task.uid,
                                 );
-                                desc_col = desc_col.push(rich_text(spans).size(14).on_link_click(
-                                    move |target: String| {
-                                        if target.contains("://") || target.starts_with("mailto:") {
-                                            Message::OpenUrl(target)
-                                        } else {
-                                            Message::OpenWikiLink(target, Some(task.uid.clone()))
-                                        }
-                                    },
-                                ));
                                 current_paragraph.clear();
                             }
                             in_code_block = !in_code_block;
-                            let spans: Vec<iced::widget::text::Span<'_, String>> = vec![
-                                span(line.to_string())
-                                    .color(Color::from_rgb(0.8, 0.6, 0.4))
-                                    .font(iced::Font::MONOSPACE),
-                            ];
-                            desc_col = desc_col.push(rich_text(spans).size(14));
+                            desc_col = desc_col.push(rich_text(code_block_spans(line)).size(14));
                             continue;
                         }
 
                         if in_code_block {
-                            let spans: Vec<iced::widget::text::Span<'_, String>> = vec![
-                                span(line.to_string())
-                                    .color(Color::from_rgb(0.8, 0.6, 0.4))
-                                    .font(iced::Font::MONOSPACE),
-                            ];
-                            desc_col = desc_col.push(rich_text(spans).size(14));
+                            desc_col = desc_col.push(rich_text(code_block_spans(line)).size(14));
                             continue;
                         }
 
                         if trimmed.is_empty() {
                             if !current_paragraph.is_empty() {
-                                let spans = parse_inline_markdown(
+                                desc_col = push_rich_paragraph(
+                                    desc_col,
                                     &current_paragraph,
-                                    if is_dark_theme {
-                                        Color::from_rgb(0.7, 0.7, 0.7)
-                                    } else {
-                                        Color::from_rgb(0.3, 0.3, 0.3)
-                                    },
-                                    false,
+                                    base_text_color,
                                     &highlight_regex,
                                     highlight_color,
+                                    &task.uid,
                                 );
-                                desc_col = desc_col.push(rich_text(spans).size(14).on_link_click(
-                                    move |target: String| {
-                                        if target.contains("://") || target.starts_with("mailto:") {
-                                            Message::OpenUrl(target)
-                                        } else {
-                                            Message::OpenWikiLink(target, Some(task.uid.clone()))
-                                        }
-                                    },
-                                ));
                                 current_paragraph.clear();
                             }
                             desc_col = desc_col.push(Space::new().height(Length::Fixed(4.0)));
@@ -1358,34 +1372,18 @@ pub fn view_task_row<'a>(
 
                         if is_header || is_quote || is_list {
                             if !current_paragraph.is_empty() {
-                                let spans = parse_inline_markdown(
+                                desc_col = push_rich_paragraph(
+                                    desc_col,
                                     &current_paragraph,
-                                    if is_dark_theme {
-                                        Color::from_rgb(0.7, 0.7, 0.7)
-                                    } else {
-                                        Color::from_rgb(0.3, 0.3, 0.3)
-                                    },
-                                    false,
+                                    base_text_color,
                                     &highlight_regex,
                                     highlight_color,
+                                    &task.uid,
                                 );
-                                desc_col = desc_col.push(rich_text(spans).size(14).on_link_click(
-                                    move |target: String| {
-                                        if target.contains("://") || target.starts_with("mailto:") {
-                                            Message::OpenUrl(target)
-                                        } else {
-                                            Message::OpenWikiLink(target, Some(task.uid.clone()))
-                                        }
-                                    },
-                                ));
                                 current_paragraph.clear();
                             }
 
-                            let mut base_color = if is_dark_theme {
-                                Color::from_rgb(0.7, 0.7, 0.7)
-                            } else {
-                                Color::from_rgb(0.3, 0.3, 0.3)
-                            };
+                            let mut base_color = base_text_color;
                             let mut size = 14;
 
                             let display_line: String = if is_header {
@@ -1455,13 +1453,7 @@ pub fn view_task_row<'a>(
                             }
 
                             desc_col = desc_col.push(rich_text(spans).size(size).on_link_click(
-                                move |target: String| {
-                                    if target.contains("://") || target.starts_with("mailto:") {
-                                        Message::OpenUrl(target)
-                                    } else {
-                                        Message::OpenWikiLink(target, Some(task.uid.clone()))
-                                    }
-                                },
+                                move |target: String| link_message(target, &task.uid),
                             ));
                         } else {
                             if !current_paragraph.is_empty() {
@@ -1471,39 +1463,25 @@ pub fn view_task_row<'a>(
                         }
                     }
                     if !current_paragraph.is_empty() {
-                        let spans = parse_inline_markdown(
+                        desc_col = push_rich_paragraph(
+                            desc_col,
                             &current_paragraph,
-                            if is_dark_theme {
-                                Color::from_rgb(0.7, 0.7, 0.7)
-                            } else {
-                                Color::from_rgb(0.3, 0.3, 0.3)
-                            },
-                            false,
+                            base_text_color,
                             &highlight_regex,
                             highlight_color,
+                            &task.uid,
                         );
-                        desc_col = desc_col.push(rich_text(spans).size(14).on_link_click(
-                            move |target: String| {
-                                if target.contains("://") || target.starts_with("mailto:") {
-                                    Message::OpenUrl(target)
-                                } else {
-                                    Message::OpenWikiLink(target, Some(task.uid.clone()))
-                                }
-                            },
-                        ));
                     }
                     details_col = details_col.push(desc_col);
                 }
 
                 if has_valid_parent {
                     let p_uid = task.parent_uid.as_ref().unwrap();
-                    let mut p_name = app
+                    let p_name = app
                         .store
                         .get_summary(p_uid)
                         .unwrap_or_else(|| rust_i18n::t!("unknown_parent").to_string());
-                    if p_name.chars().count() > 120 {
-                        p_name = format!("{}...", p_name.chars().take(117).collect::<String>());
-                    }
+                    let p_name = truncate_chars(&p_name, 120);
                     let remove_parent_btn = button(icon::icon(icon::CROSS).size(10))
                         .style(button::danger)
                         .padding(2)
@@ -1536,13 +1514,11 @@ pub fn view_task_row<'a>(
                             .color(Color::from_rgb(0.8, 0.4, 0.4)),
                     );
                     for dep_uid in &task.dependencies {
-                        let mut name = app
+                        let name = app
                             .store
                             .get_summary(dep_uid)
                             .unwrap_or_else(|| rust_i18n::t!("unknown_task").to_string());
-                        if name.chars().count() > 120 {
-                            name = format!("{}...", name.chars().take(117).collect::<String>());
-                        }
+                        let name = truncate_chars(&name, 120);
                         let is_done = app.store.is_task_done(dep_uid).unwrap_or(false);
                         let check = if is_done { "[x]" } else { "[ ]" };
                         let remove_dep_btn = button(icon::icon(icon::CROSS).size(10))
@@ -1583,19 +1559,8 @@ pub fn view_task_row<'a>(
                     for related_uid in &task.related_to {
                         let mut name = rust_i18n::t!("unknown_task").to_string();
                         if let Some(rel_task) = app.store.get_task_ref(related_uid) {
-                            name = rel_task.summary.clone();
-                            if name.chars().count() > 120 {
-                                name = format!("{}...", name.chars().take(117).collect::<String>());
-                            }
-                            if rel_task.status.is_done() {
-                                if let Some(comp_date) = rel_task.completion_date() {
-                                    let local = comp_date.with_timezone(&chrono::Local);
-                                    name =
-                                        format!("{} (✓ {})", name, local.format("%Y-%m-%d %H:%M"));
-                                } else {
-                                    name = format!("{} (✓)", name);
-                                }
-                            }
+                            name = truncate_chars(&rel_task.summary, 120);
+                            name = with_completion_marker(name, rel_task);
                         }
                         let remove_related_btn = button(icon::icon(icon::CROSS).size(10))
                             .style(button::danger)
@@ -1634,13 +1599,8 @@ pub fn view_task_row<'a>(
                             .size(12)
                             .color(Color::from_rgb(0.6, 0.4, 0.8)),
                     );
-                    for (blocked_uid, mut blocked_name) in blocking_tasks {
-                        if blocked_name.chars().count() > 120 {
-                            blocked_name = format!(
-                                "{}...",
-                                blocked_name.chars().take(117).collect::<String>()
-                            );
-                        }
+                    for (blocked_uid, blocked_name) in blocking_tasks {
+                        let blocked_name = truncate_chars(&blocked_name, 120);
                         let remove_block_btn = button(icon::icon(icon::UNLINK).size(10))
                             .style(button::danger)
                             .padding(2)
@@ -1685,26 +1645,10 @@ pub fn view_task_row<'a>(
                             .size(12)
                             .color(Color::from_rgb(0.8, 0.6, 0.8)),
                     );
-                    for (related_uid, mut related_name) in incoming_related {
-                        if related_name.chars().count() > 120 {
-                            related_name = format!(
-                                "{}...",
-                                related_name.chars().take(117).collect::<String>()
-                            );
-                        }
-                        if let Some(rel_task) = app.store.get_task_ref(&related_uid)
-                            && rel_task.status.is_done()
-                        {
-                            if let Some(comp_date) = rel_task.completion_date() {
-                                let local = comp_date.with_timezone(&chrono::Local);
-                                related_name = format!(
-                                    "{} (✓ {})",
-                                    related_name,
-                                    local.format("%Y-%m-%d %H:%M")
-                                );
-                            } else {
-                                related_name = format!("{} (✓)", related_name);
-                            }
+                    for (related_uid, related_name) in incoming_related {
+                        let mut related_name = truncate_chars(&related_name, 120);
+                        if let Some(rel_task) = app.store.get_task_ref(&related_uid) {
+                            related_name = with_completion_marker(related_name, rel_task);
                         }
                         let remove_related_btn = button(icon::icon(icon::CROSS).size(10))
                             .style(button::danger)
@@ -2062,14 +2006,9 @@ pub fn view_task_row<'a>(
 
                         if trimmed.starts_with("```") {
                             in_code_block = !in_code_block;
-                            let spans: Vec<iced::widget::text::Span<'_, String>> = vec![
-                                span(line.to_string())
-                                    .color(Color::from_rgb(0.8, 0.6, 0.4))
-                                    .font(iced::Font::MONOSPACE),
-                            ];
                             let inline_desc = row![
                                 Space::new().width(Length::Fixed(indent_size as f32 + 34.0)),
-                                rich_text(spans).size(14)
+                                rich_text(code_block_spans(line)).size(14)
                             ];
                             desc_col = desc_col.push(inline_desc);
                             line_count += 1;
@@ -2080,14 +2019,9 @@ pub fn view_task_row<'a>(
                         }
 
                         if in_code_block {
-                            let spans: Vec<iced::widget::text::Span<'_, String>> = vec![
-                                span(line.to_string())
-                                    .color(Color::from_rgb(0.8, 0.6, 0.4))
-                                    .font(iced::Font::MONOSPACE),
-                            ];
                             let inline_desc = row![
                                 Space::new().width(Length::Fixed(indent_size as f32 + 34.0)),
-                                rich_text(spans).size(14)
+                                rich_text(code_block_spans(line)).size(14)
                             ];
                             desc_col = desc_col.push(inline_desc);
                             line_count += 1;
@@ -2176,11 +2110,7 @@ pub fn view_task_row<'a>(
                             rich_text(spans)
                                 .size(14)
                                 .on_link_click(move |target: String| {
-                                    if target.contains("://") || target.starts_with("mailto:") {
-                                        Message::OpenUrl(target)
-                                    } else {
-                                        Message::OpenWikiLink(target, Some(task.uid.clone()))
-                                    }
+                                    link_message(target, &task.uid)
                                 })
                         ];
 
