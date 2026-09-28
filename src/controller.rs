@@ -212,7 +212,6 @@ impl TaskController {
         }
 
         let local_syncable = config.get_syncable();
-        let config_changed = false;
 
         match existing_task {
             Some(mut task) => {
@@ -374,7 +373,9 @@ impl TaskController {
                 return Ok(true);
             }
         }
-        Ok(config_changed)
+        // Fall-through: the remote settings task exists and is already in
+        // sync with the local config, so nothing changed.
+        Ok(false)
     }
 
     /// Synchronize the journal with the remote server and update the in-memory store
@@ -536,14 +537,10 @@ impl TaskController {
         Ok(vec![])
     }
 
-    pub async fn empty_trash(&self) -> Result<usize, String> {
-        // Enumerate from disk so items created by another instance (CLI,
-        // background daemon) are purged even if our in-memory store never
-        // loaded them.
-        let disk_trash =
-            LocalStorage::load_for_href(self.ctx.as_ref(), crate::storage::LOCAL_TRASH_HREF)
-                .map_err(|e| e.to_string())?;
-        let count = disk_trash.len();
+    /// Drop `tasks` from the in-memory store and persist their deletion to
+    /// disk, returning how many were purged.
+    async fn purge_tasks(&self, tasks: Vec<Task>) -> Result<usize, String> {
+        let count = tasks.len();
         if count == 0 {
             return Ok(0);
         }
@@ -551,14 +548,24 @@ impl TaskController {
         // Drop them from the in-memory store too, so the UI reflects the purge.
         {
             let mut store = self.store.lock().await;
-            for task in &disk_trash {
+            for task in &tasks {
                 let _ = store.delete_task(&task.uid);
             }
         }
 
-        let actions = disk_trash.into_iter().map(Action::Delete).collect();
+        let actions = tasks.into_iter().map(Action::Delete).collect();
         self.persist_changes(actions).await?;
         Ok(count)
+    }
+
+    pub async fn empty_trash(&self) -> Result<usize, String> {
+        // Enumerate from disk so items created by another instance (CLI,
+        // background daemon) are purged even if our in-memory store never
+        // loaded them.
+        let disk_trash =
+            LocalStorage::load_for_href(self.ctx.as_ref(), crate::storage::LOCAL_TRASH_HREF)
+                .map_err(|e| e.to_string())?;
+        self.purge_tasks(disk_trash).await
     }
 
     pub async fn prune_trash(&self) -> Result<usize, String> {
@@ -592,20 +599,6 @@ impl TaskController {
             }
         }
 
-        if purged_tasks.is_empty() {
-            return Ok(0);
-        }
-
-        let count = purged_tasks.len();
-        {
-            let mut store = self.store.lock().await;
-            for task in &purged_tasks {
-                let _ = store.delete_task(&task.uid);
-            }
-        }
-
-        let actions = purged_tasks.into_iter().map(Action::Delete).collect();
-        self.persist_changes(actions).await?;
-        Ok(count)
+        self.purge_tasks(purged_tasks).await
     }
 }
