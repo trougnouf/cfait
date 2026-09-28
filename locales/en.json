@@ -43,6 +43,7 @@
     "window_title": "Cfait | 🗹 Take control of your TODO list",
     "app_theme": "App theme",
     "auto_remind_on_due_start_label": "Auto-remind on due/start",
+    "backfill_error": "Backfill error: %{error}",
     "background_sync": "Background sync",
     "background_sync_failed": "Background sync failed: %{error}",
     "warning_background_sync_failed": "Warning: Background sync failed: %{error}",
@@ -537,6 +538,7 @@
     "import_failed": "Import failed: %{error}",
     "import_failed_read_text": "Failed to read file as text: %{error}",
     "import_failed_to_parse": "Failed to parse ICS file: %{error}",
+    "import_no_tasks": "Failed to import any tasks",
     "error_cannot_import_to_system_calendar": "Cannot import to system collection (trash/recovery).",
     "import_file_name": "File: %{file}",
     "import_success": {

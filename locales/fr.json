@@ -36,6 +36,7 @@
     "app_name": "Cfait",
     "app_theme": "Thème de l'application",
     "auto_remind_on_due_start_label": "Rappel automatique (échéance/début)",
+    "backfill_error": "Échec de la mise à jour des événements du calendrier : %{error}",
     "background_sync": "Synchronisation en arrière-plan",
     "background_sync_failed": "Échec de la synchro : %{error}",
     "battery_optimization_explain": "Autoriser cfait à s'exécuter en arrière-plan sans restrictions pour garantir la fiabilité des alarmes et de la synchronisation.",
@@ -477,6 +478,7 @@
     "import_failed": "Échec de l'importation : %{error}",
     "import_failed_read_text": "Échec de lecture du fichier en tant que texte : %{error}",
     "import_failed_to_parse": "Échec de l'analyse du fichier ICS : %{error}",
+    "import_no_tasks": "Échec de l'importation des tâches",
     "import_file_name": "Fichier : %{file}",
     "import_success": {
         "one": "Importation réussie de 1 tâche",

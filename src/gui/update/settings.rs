@@ -1,16 +1,18 @@
-// File: ./src/gui/update/settings.rs
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Renders the settings and onboarding screens.
+// Handles settings and onboarding messages.
 
 use crate::cache::Cache;
 
 use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp};
-use crate::gui::update::common::{apply_alias_retroactively, refresh_filtered_tasks, save_config};
+use crate::gui::update::common::{
+    apply_alias_retroactively, dispatch_intent, refresh_filtered_tasks, save_config,
+};
 use crate::model::parser::validate_alias_integrity;
 use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_TRASH_HREF, LocalCalendarRegistry, LocalStorage};
 use iced::Task;
+use std::sync::Arc;
 
 fn update_tab_visibility<F>(
     app: &mut GuiApp,
@@ -51,6 +53,64 @@ where
         };
     }
     true
+}
+
+/// Clear the alias editor form.
+fn reset_alias_inputs(app: &mut GuiApp) {
+    app.editing_alias_key = None;
+    app.alias_input_key.clear();
+    app.alias_input_values.clear();
+}
+
+/// Clear the goal editor form back to its defaults.
+fn reset_goal_inputs(app: &mut GuiApp) {
+    app.editing_goal_key = None;
+    app.goal_input_key.clear();
+    app.goal_input_target.clear();
+    app.goal_input_amount = "1".to_string();
+    app.goal_input_type = crate::config::GoalType::Count;
+    app.goal_input_unit = crate::config::IntervalUnit::Weeks;
+}
+
+/// The user-facing summary of a successful ICS import.
+fn import_success_message(count: usize, file_name: &str) -> String {
+    if count == 1 {
+        rust_i18n::t!("import_success_from_file.one", file = file_name).to_string()
+    } else {
+        rust_i18n::t!(
+            "import_success_from_file.other",
+            count = count,
+            file = file_name
+        )
+        .to_string()
+    }
+}
+
+/// Import ICS content into a calendar. Local calendars are written to disk;
+/// remote calendars create tasks through the controller so the journal can
+/// sync them.
+async fn import_ics_into(
+    ctx: Arc<dyn crate::context::AppContext>,
+    controller: crate::controller::TaskController,
+    href: &str,
+    content: &str,
+) -> Result<usize, String> {
+    if href.starts_with("local://") {
+        LocalStorage::import_from_ics(ctx.as_ref(), href, content).map_err(|e| e.to_string())
+    } else {
+        let tasks = LocalStorage::parse_ics(href, content)
+            .map_err(|e| rust_i18n::t!("import_failed", error = e.to_string()).to_string())?;
+        let mut count = 0;
+        for task in tasks {
+            if controller.create_task(task).await.is_ok() {
+                count += 1;
+            }
+        }
+        if count == 0 {
+            return Err(rust_i18n::t!("import_no_tasks").to_string());
+        }
+        Ok(count)
+    }
 }
 
 pub fn apply_config_to_app(app: &mut GuiApp, config: &crate::config::Config) {
@@ -362,9 +422,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.log_level = cfg.log_level;
             app.state = AppState::Settings;
 
-            app.editing_alias_key = None;
-            app.alias_input_key.clear();
-            app.alias_input_values.clear();
+            reset_alias_inputs(app);
 
             Task::none()
         }
@@ -375,9 +433,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.calendars.extend(app.local_cals_editing.clone());
             app.sort_calendars();
 
-            app.editing_alias_key = None;
-            app.alias_input_key.clear();
-            app.alias_input_values.clear();
+            reset_alias_inputs(app);
 
             save_config(app);
             refresh_filtered_tasks(app);
@@ -417,16 +473,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::CancelEditAlias => {
-            app.editing_alias_key = None;
-            app.alias_input_key.clear();
-            app.alias_input_values.clear();
-
-            app.editing_goal_key = None;
-            app.goal_input_key.clear();
-            app.goal_input_target.clear();
-            app.goal_input_amount = "1".to_string();
-            app.goal_input_type = crate::config::GoalType::Count;
-            app.goal_input_unit = crate::config::IntervalUnit::Weeks;
+            reset_alias_inputs(app);
+            reset_goal_inputs(app);
 
             Task::none()
         }
@@ -452,11 +500,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                             {
                                 app.tag_aliases.remove(old_key);
                             }
-                            app.editing_alias_key = None;
-
                             app.tag_aliases.insert(key.clone(), tags.clone());
-                            app.alias_input_key.clear();
-                            app.alias_input_values.clear();
+                            reset_alias_inputs(app);
                             app.error_msg = None;
                             save_config(app);
 
@@ -486,9 +531,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::RemoveAlias(key) => {
             if app.editing_alias_key.as_ref() == Some(&key) {
-                app.editing_alias_key = None;
-                app.alias_input_key.clear();
-                app.alias_input_values.clear();
+                reset_alias_inputs(app);
             }
             app.tag_aliases.remove(&key);
             save_config(app);
@@ -528,12 +571,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::CancelEditGoal => {
-            app.editing_goal_key = None;
-            app.goal_input_key.clear();
-            app.goal_input_target.clear();
-            app.goal_input_amount = "1".to_string();
-            app.goal_input_type = crate::config::GoalType::Count;
-            app.goal_input_unit = crate::config::IntervalUnit::Weeks;
+            reset_goal_inputs(app);
             Task::none()
         }
         Message::AddGoal => {
@@ -581,12 +619,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::SyncNow);
                 }
 
-                app.editing_goal_key = None;
-                app.goal_input_key.clear();
-                app.goal_input_target.clear();
-                app.goal_input_amount = "1".to_string();
-                app.goal_input_type = crate::config::GoalType::Count;
-                app.goal_input_unit = crate::config::IntervalUnit::Weeks;
+                reset_goal_inputs(app);
 
                 save_config(app);
             }
@@ -594,9 +627,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::RemoveGoal(key) => {
             if app.editing_goal_key.as_ref() == Some(&key) {
-                app.editing_goal_key = None;
-                app.goal_input_key.clear();
-                app.goal_input_target.clear();
+                reset_goal_inputs(app);
             }
             let old_config = app.core_config.clone();
             app.core_config.goals.remove(&key);
@@ -631,10 +662,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             } else {
                 crate::model::parser::rebuild_lexicon();
             }
-            let mut cfg = app.core_config.clone();
-            cfg.language = app.language.clone();
-            app.core_config = cfg.clone();
-            let _ = cfg.save(app.ctx.as_ref());
+            app.core_config.language = app.language.clone();
+            let _ = app.core_config.save(app.ctx.as_ref());
             Task::none()
         }
         Message::SetFirstDayOfWeek(val) => {
@@ -661,7 +690,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             } else {
                 app.pinned_actions.retain(|a| *a != action);
             }
-            crate::gui::update::common::save_config(app);
+            save_config(app);
             Task::none()
         }
         Message::MoveCalendar(href, direction) => {
@@ -681,9 +710,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 if idx != new_idx {
                     current_order.swap(idx, new_idx);
                     app.core_config.collection_order = current_order;
-                    crate::gui::update::common::save_config(app);
+                    save_config(app);
                     app.sort_calendars();
-                    crate::gui::update::common::refresh_filtered_tasks(app);
+                    refresh_filtered_tasks(app);
                 }
             }
             Task::none()
@@ -945,7 +974,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::BackfillEventsComplete(Err(e)) => {
             app.deleting_events = false;
             app.last_sync_failed = true;
-            app.error_msg = Some(format!("Backfill error: {}", e));
+            app.error_msg = Some(rust_i18n::t!("backfill_error", error = e).to_string());
             Task::none()
         }
         Message::ExportLocalIcs(calendar_href) => {
@@ -1025,7 +1054,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::ImportLocalIcs(calendar_href) => {
             let ctx = app.ctx.clone();
             let controller = app.controller.clone();
-            let is_local = calendar_href.starts_with("local://");
             Task::perform(
                 async move {
                     if let Some(file) = rfd::AsyncFileDialog::new()
@@ -1036,56 +1064,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         let content = file.read().await;
                         match String::from_utf8(content) {
                             Ok(ics_content) => {
-                                let result: Result<usize, String> = if is_local {
-                                    LocalStorage::import_from_ics(
-                                        ctx.as_ref(),
-                                        &calendar_href,
-                                        &ics_content,
-                                    )
-                                    .map_err(|e| e.to_string())
-                                } else {
-                                    // Remote: parse and create via controller (journaled for sync)
-                                    let tasks =
-                                        match LocalStorage::parse_ics(&calendar_href, &ics_content)
-                                        {
-                                            Ok(t) => t,
-                                            Err(e) => {
-                                                return Err(rust_i18n::t!(
-                                                    "import_failed",
-                                                    error = e.to_string()
-                                                )
-                                                .to_string());
-                                            }
-                                        };
-                                    let mut count = 0;
-                                    for task in tasks {
-                                        if controller.create_task(task).await.is_ok() {
-                                            count += 1;
-                                        }
-                                    }
-                                    if count == 0 {
-                                        return Err("Failed to import any tasks".to_string());
-                                    }
-                                    Ok(count)
-                                };
-                                match result {
+                                match import_ics_into(ctx, controller, &calendar_href, &ics_content)
+                                    .await
+                                {
                                     Ok(count) => {
-                                        let file_name = file.file_name();
-                                        let msg = if count == 1 {
-                                            rust_i18n::t!(
-                                                "import_success_from_file.one",
-                                                file = file_name
-                                            )
-                                            .to_string()
-                                        } else {
-                                            rust_i18n::t!(
-                                                "import_success_from_file.other",
-                                                count = count,
-                                                file = file_name
-                                            )
-                                            .to_string()
-                                        };
-                                        Ok(msg)
+                                        Ok(import_success_message(count, &file.file_name()))
                                     }
                                     Err(e) => {
                                         Err(rust_i18n::t!("import_failed", error = e).to_string())
@@ -1189,16 +1172,18 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::SubmitColorPicker(color) => {
-            if let Some(active_href) = &app.color_picker_active_href.clone() {
+            if let Some(active_href) = app.color_picker_active_href.as_ref() {
+                let hex = format!(
+                    "#{:02X}{:02X}{:02X}",
+                    (color.r * 255.0) as u8,
+                    (color.g * 255.0) as u8,
+                    (color.b * 255.0) as u8
+                );
                 if let Some(cal) = app
                     .local_cals_editing
                     .iter_mut()
                     .find(|c| c.href == *active_href)
                 {
-                    let r = (color.r * 255.0) as u8;
-                    let g = (color.g * 255.0) as u8;
-                    let b = (color.b * 255.0) as u8;
-                    let hex = format!("#{:02X}{:02X}{:02X}", r, g, b);
                     cal.color = Some(hex.clone());
                     let _ = LocalCalendarRegistry::save(app.ctx.as_ref(), &app.local_cals_editing);
 
@@ -1213,10 +1198,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     .iter_mut()
                     .find(|c| c.href == *active_href)
                 {
-                    let r = (color.r * 255.0) as u8;
-                    let g = (color.g * 255.0) as u8;
-                    let b = (color.b * 255.0) as u8;
-                    let hex = format!("#{:02X}{:02X}{:02X}", r, g, b);
                     cal.color = Some(hex);
                 }
             }
@@ -1368,77 +1349,36 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 })
                 .collect();
             if !uids.is_empty() {
-                crate::gui::update::common::dispatch_intent(
-                    app,
-                    crate::model::AppIntent::DeleteTasks { uids },
-                );
+                dispatch_intent(app, crate::model::AppIntent::DeleteTasks { uids });
             }
             Task::none()
         }
 
         Message::IcsImportDialogConfirm => {
-            if let Some(calendar_href) = &app.ics_import_selected_calendar.clone()
-                && let Some(ics_content) = &app.ics_import_content.clone()
-            {
+            if let (Some(calendar_href), Some(ics_content)) = (
+                app.ics_import_selected_calendar.clone(),
+                app.ics_import_content.clone(),
+            ) {
                 app.ics_import_dialog_open = false;
                 let file_path = app.ics_import_file_path.take();
                 app.ics_import_content = None;
                 app.ics_import_selected_calendar = None;
                 app.ics_import_task_count = None;
 
-                let href = calendar_href.clone();
-                let content = ics_content.clone();
                 let ctx = app.ctx.clone();
                 let controller = app.controller.clone();
-                let is_local = href.starts_with("local://");
                 return Task::perform(
                     async move {
-                        let result: Result<usize, String> = if is_local {
-                            LocalStorage::import_from_ics(ctx.as_ref(), &href, &content)
-                                .map_err(|e| e.to_string())
-                        } else {
-                            let tasks = match LocalStorage::parse_ics(&href, &content) {
-                                Ok(t) => t,
-                                Err(e) => {
-                                    return Err(rust_i18n::t!(
-                                        "import_failed",
-                                        error = e.to_string()
-                                    )
-                                    .to_string());
-                                }
-                            };
-                            let mut count = 0;
-                            for task in tasks {
-                                if controller.create_task(task).await.is_ok() {
-                                    count += 1;
-                                }
-                            }
-                            if count == 0 {
-                                return Err("Failed to import any tasks".to_string());
-                            }
-                            Ok(count)
-                        };
-                        match result {
+                        match import_ics_into(ctx, controller, &calendar_href, &ics_content).await {
                             Ok(count) => {
                                 let file_name = file_path
                                     .as_ref()
                                     .and_then(|p| std::path::Path::new(p).file_name())
                                     .and_then(|n| n.to_str())
                                     .unwrap_or("file");
-                                let msg = if count == 1 {
-                                    rust_i18n::t!("import_success_from_file.one", file = file_name)
-                                        .to_string()
-                                } else {
-                                    rust_i18n::t!(
-                                        "import_success_from_file.other",
-                                        count = count,
-                                        file = file_name
-                                    )
-                                    .to_string()
-                                };
-                                Ok(msg)
+                                Ok(import_success_message(count, file_name))
                             }
-                            Err(e) => Err(format!("{}", rust_i18n::t!("import_failed", error = e))),
+                            Err(e) => Err(rust_i18n::t!("import_failed", error = e).to_string()),
                         }
                     },
                     Message::ImportCompleted,
