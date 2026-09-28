@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! GUI view component for rendering individual task rows.
 use crate::color_utils;
+use crate::config::TaskAction;
 use crate::gui::icon;
 use crate::gui::message::Message;
 use crate::gui::state::GuiApp;
@@ -10,7 +11,6 @@ use crate::gui::view::focusable::focusable;
 
 use crate::model::display::{random_related_icon, random_session_example};
 use chrono::Utc;
-use rust_i18n::t;
 use std::time::Duration;
 
 use super::tooltip_style;
@@ -519,8 +519,7 @@ pub fn view_task_row<'a>(
             let has_content_to_show = has_info
                 || has_time
                 || app.adding_session_uid.as_ref() == Some(&task.uid)
-                || task.created_date().is_some()
-                || task.last_modified_date().is_some();
+                || task.has_created_or_modified_date();
 
             let has_metadata = !task.categories.is_empty()
                 || task.rrule.is_some()
@@ -541,11 +540,10 @@ pub fn view_task_row<'a>(
                 - indent_size as f32
                 - overhead_allowance;
 
+            let show_pc = !task.status.is_done() && task.percent_complete.unwrap_or(0) > 0;
             let mut tags_width = 0.0;
 
             if has_metadata {
-                let show_pc = !task.status.is_done() && task.percent_complete.unwrap_or(0) > 0;
-
                 if is_blocked {
                     tags_width += 65.0;
                 }
@@ -716,8 +714,6 @@ pub fn view_task_row<'a>(
                 let total_seconds = app.store.get_aggregated_time_seconds(&task.uid);
                 let total_mins = (total_seconds / 60) as u32;
 
-                let show_pc = !task.status.is_done() && task.percent_complete.unwrap_or(0) > 0;
-
                 if total_mins > 0
                     || task.estimated_duration.is_some()
                     || task.last_started_at.is_some()
@@ -830,7 +826,7 @@ pub fn view_task_row<'a>(
             };
 
             let is_strikethrough = (app.strikethrough_completed && task.status.is_done())
-                || task.calendar_href == "local://trash";
+                || task.calendar_href == crate::storage::LOCAL_TRASH_HREF;
 
             let summary_spans = parse_inline_markdown(
                 &task.summary,
@@ -1024,7 +1020,6 @@ pub fn view_task_row<'a>(
                 }
             }
 
-            use crate::config::TaskAction;
             for action in TaskAction::ALL {
                 if !app.pinned_actions.contains(action) {
                     continue;
@@ -1292,7 +1287,7 @@ pub fn view_task_row<'a>(
                 .width(Length::Fixed(24.0))
                 .height(Length::Fixed(24.0))
                 .padding(0)
-                .on_press(Message::ToggleTask(index, true))
+                .on_press(Message::ToggleTask(index))
                 .style(move |_, status| {
                     let base_active = button::Style {
                         background: Some(iced::Background::Color(bg_color)),
@@ -1426,12 +1421,8 @@ pub fn view_task_row<'a>(
                             continue;
                         }
 
-                        let is_header = trimmed.starts_with("# ")
-                            || trimmed.starts_with("## ")
-                            || trimmed.starts_with("### ")
-                            || trimmed.starts_with("#### ")
-                            || trimmed.starts_with("##### ")
-                            || trimmed.starts_with("###### ");
+                        let header = strip_header_prefix(trimmed);
+                        let is_header = header.is_some();
                         let is_quote = trimmed.starts_with("> ");
                         let is_list = trimmed.starts_with("- ") || trimmed.starts_with("* ");
 
@@ -1451,23 +1442,19 @@ pub fn view_task_row<'a>(
                             let mut base_color = base_text_color;
                             let mut size = 14;
 
-                            let display_line: String = if is_header {
+                            let display_line: String = if let Some((level, text)) = header {
                                 base_color = if is_dark_theme {
                                     Color::from_rgb(0.3, 0.7, 1.0)
                                 } else {
                                     Color::from_rgb(0.1, 0.4, 0.8)
                                 };
-                                if let Some((level, text)) = strip_header_prefix(trimmed) {
-                                    size = match level {
-                                        1 => 18,
-                                        2 => 16,
-                                        3 => 15,
-                                        _ => 14,
-                                    };
-                                    text
-                                } else {
-                                    trimmed.to_string()
-                                }
+                                size = match level {
+                                    1 => 18,
+                                    2 => 16,
+                                    3 => 15,
+                                    _ => 14,
+                                };
+                                text
                             } else if is_quote {
                                 base_color = if is_dark_theme {
                                     Color::from_rgb(0.5, 0.5, 0.5)
@@ -1666,7 +1653,7 @@ pub fn view_task_row<'a>(
                     let total_mins = total_seconds / 60;
 
                     let mut session_header = row![
-                        text(t!(
+                        text(rust_i18n::t!(
                             "time_tracked_duration",
                             h = total_mins / 60,
                             m = total_mins % 60
@@ -1690,7 +1677,6 @@ pub fn view_task_row<'a>(
                     details_col = details_col.push(session_header);
 
                     if app.adding_session_uid.as_ref() == Some(&task.uid) {
-                        let is_dark_theme = app.theme().extended_palette().is_dark;
                         let input = text_editor(&app.session_input)
                             .id(iced::widget::Id::from(format!(
                                 "session_input_{}",
@@ -1698,7 +1684,7 @@ pub fn view_task_row<'a>(
                             )))
                             .placeholder(format!(
                                 "{} {}, 14:00-15:30",
-                                t!("eg"),
+                                rust_i18n::t!("eg"),
                                 random_session_example()
                             ))
                             .on_action(Message::SessionInputChanged)
@@ -1787,13 +1773,14 @@ pub fn view_task_row<'a>(
 
                     if task.sessions.len() > 3 {
                         let toggle_text = if show_all {
-                            t!("show_less").to_string()
+                            rust_i18n::t!("show_less").to_string()
                         } else {
                             let count = task.sessions.len() - 3;
                             if count == 1 {
-                                t!("show_older_sessions.one").to_string()
+                                rust_i18n::t!("show_older_sessions.one").to_string()
                             } else {
-                                t!("show_older_sessions.other", count = count).to_string()
+                                rust_i18n::t!("show_older_sessions.other", count = count)
+                                    .to_string()
                             }
                         };
                         details_col = details_col.push(

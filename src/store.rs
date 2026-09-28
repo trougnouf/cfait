@@ -643,6 +643,23 @@ fn session_fully_covered(s: i64, e: i64, intervals: &[(i64, i64)]) -> bool {
     covered >= (e - s).max(0)
 }
 
+/// Sorts intervals by start and merges overlapping or touching ones.
+fn merge_intervals(intervals: Vec<(i64, i64)>) -> Vec<(i64, i64)> {
+    let mut sorted = intervals;
+    sorted.sort_unstable_by_key(|(s, _)| *s);
+    let mut merged: Vec<(i64, i64)> = Vec::with_capacity(sorted.len());
+    for (s, e) in sorted {
+        if let Some(last) = merged.last_mut()
+            && s <= last.1
+        {
+            last.1 = last.1.max(e);
+        } else {
+            merged.push((s, e));
+        }
+    }
+    merged
+}
+
 /// Raw per-task data collected during a single store scan for goal scoring.
 /// Sessions are unclipped; each period evaluation clips them on the fly, so
 /// one scan can serve the current progress plus the whole history.
@@ -791,13 +808,9 @@ impl TaskStore {
                 if let Some(existing_task) =
                     self.calendars.get(existing_href).and_then(|m| m.get(&uid))
                 {
-                    let is_system_cal = |href: &str| {
-                        href == crate::storage::LOCAL_TRASH_HREF || href == "local://recovery"
-                    };
-
-                    let keep_existing = if is_system_cal(existing_href) {
+                    let keep_existing = if crate::storage::is_system_calendar(existing_href) {
                         false
-                    } else if is_system_cal(&calendar_href) {
+                    } else if crate::storage::is_system_calendar(&calendar_href) {
                         true
                     } else if existing_task.sequence != task.sequence {
                         existing_task.sequence > task.sequence
@@ -1056,7 +1069,7 @@ impl TaskStore {
         let mut matches = Vec::new();
 
         for (href, map) in &self.calendars {
-            let is_system = href == crate::storage::LOCAL_TRASH_HREF || href == "local://recovery";
+            let is_system = crate::storage::is_system_calendar(href);
 
             for (uid, task) in map {
                 if (path_segments.len() == 1
@@ -1078,8 +1091,7 @@ impl TaskStore {
             fell_back = true;
             let single = crate::model::parser::strip_quotes(path_str);
             for (href, map) in &self.calendars {
-                let is_system =
-                    href == crate::storage::LOCAL_TRASH_HREF || href == "local://recovery";
+                let is_system = crate::storage::is_system_calendar(href);
                 for (uid, task) in map {
                     if uid.starts_with(&single)
                         || (!is_system
@@ -1169,7 +1181,7 @@ impl TaskStore {
 
             let mut found_uid: Option<String> = None;
             'search: for (href, map) in &self.calendars {
-                if href == crate::storage::LOCAL_TRASH_HREF || href == "local://recovery" {
+                if crate::storage::is_system_calendar(href) {
                     continue;
                 }
                 for (uid, t) in map {
@@ -1243,7 +1255,7 @@ impl TaskStore {
         let mut matches = Vec::new();
 
         for (href, map) in &self.calendars {
-            let is_system = href == crate::storage::LOCAL_TRASH_HREF || href == "local://recovery";
+            let is_system = crate::storage::is_system_calendar(href);
             for (uid, task) in map {
                 if (path_segments.len() == 1
                     && uid.starts_with(&crate::model::parser::strip_quotes(&path_segments[0])))
@@ -1311,8 +1323,7 @@ impl TaskStore {
 
             // Auto-heal: strip references that point to trashed/recovered tasks
             if let Some(t) = self.get_task_ref(&uid)
-                && (t.calendar_href == crate::storage::LOCAL_TRASH_HREF
-                    || t.calendar_href == "local://recovery")
+                && crate::storage::is_system_calendar(&t.calendar_href)
             {
                 continue;
             }
@@ -1902,9 +1913,7 @@ impl TaskStore {
                 let process_relations = |uids: &[String], prefix: &str, out: &mut String| {
                     for uid in uids {
                         if let Some(target_task) = self.get_task_ref(uid) {
-                            if target_task.calendar_href == crate::storage::LOCAL_TRASH_HREF
-                                || target_task.calendar_href == "local://recovery"
-                            {
+                            if crate::storage::is_system_calendar(&target_task.calendar_href) {
                                 continue;
                             }
                         } else {
@@ -2579,8 +2588,7 @@ impl TaskStore {
             for s_uid in sources {
                 if let Some(t) = self.get_task_ref(s_uid)
                     && t.status == crate::model::TaskStatus::Completed
-                    && t.calendar_href != crate::storage::LOCAL_TRASH_HREF
-                    && t.calendar_href != "local://recovery"
+                    && !crate::storage::is_system_calendar(&t.calendar_href)
                     && t.unmapped_properties
                         .iter()
                         .any(|p| p.key == "X-CFAIT-HISTORY-OF" && p.value == uid)
@@ -2736,7 +2744,7 @@ impl TaskStore {
 
         let mut claimed = Vec::new();
         for (href, map) in &self.calendars {
-            if href == crate::storage::LOCAL_TRASH_HREF || href == "local://recovery" {
+            if crate::storage::is_system_calendar(href) {
                 continue;
             }
             for t in map.values() {
@@ -2813,17 +2821,7 @@ impl TaskStore {
                         }
                     }
                 }
-                all_intervals.sort_unstable_by_key(|(s, _)| *s);
-                let mut merged: Vec<(i64, i64)> = Vec::with_capacity(all_intervals.len());
-                for (s, e) in all_intervals {
-                    if let Some(last) = merged.last_mut()
-                        && s <= last.1
-                    {
-                        last.1 = last.1.max(e);
-                        continue;
-                    }
-                    merged.push((s, e));
-                }
+                let merged = merge_intervals(all_intervals);
                 let mut progress = 0u32;
                 for (s, e) in &merged {
                     if e > s {
@@ -2904,7 +2902,7 @@ impl TaskStore {
         if !self.children_index.contains_key(uid) {
             return Vec::new();
         }
-        let mut intervals: Vec<(i64, i64)> = self
+        let intervals: Vec<(i64, i64)> = self
             .get_descendant_uids(uid)
             .iter()
             .filter_map(|d_uid| self.get_task_ref(d_uid))
@@ -2915,18 +2913,7 @@ impl TaskStore {
                     .chain(d.last_started_at.map(|s| (s, now_ts)))
             })
             .collect();
-        intervals.sort_unstable_by_key(|(s, _)| *s);
-        let mut merged: Vec<(i64, i64)> = Vec::with_capacity(intervals.len());
-        for (s, e) in intervals {
-            if let Some(last) = merged.last_mut()
-                && s <= last.1
-            {
-                last.1 = last.1.max(e);
-                continue;
-            }
-            merged.push((s, e));
-        }
-        merged
+        merge_intervals(intervals)
     }
 
     /// Returns the total tracked time (in seconds) for a task and all its
@@ -2964,18 +2951,8 @@ impl TaskStore {
             return 0;
         }
 
-        intervals.sort_unstable_by_key(|(s, _)| *s);
+        let merged = merge_intervals(intervals);
         let mut total: i64 = 0;
-        let mut merged: Vec<(i64, i64)> = Vec::with_capacity(intervals.len());
-        for (s, e) in intervals {
-            if let Some(last) = merged.last_mut()
-                && s <= last.1
-            {
-                last.1 = last.1.max(e);
-                continue;
-            }
-            merged.push((s, e));
-        }
         for (s, e) in &merged {
             if e > s {
                 total += e - s;
@@ -3093,10 +3070,7 @@ impl TaskStore {
         .timestamp();
 
         for (href, map) in &self.calendars {
-            if !visible_cals.contains(href)
-                || href == crate::storage::LOCAL_TRASH_HREF
-                || href == "local://recovery"
-            {
+            if !visible_cals.contains(href) || crate::storage::is_system_calendar(href) {
                 continue;
             }
 
@@ -3431,7 +3405,7 @@ impl TaskStore {
                 if options.focused_task_uid.is_some() {
                     // In focus mode, transcend active calendar to show all cross-calendar children.
                     // Only hide internal systemic calendars like trash/recovery.
-                    *href != crate::storage::LOCAL_TRASH_HREF && *href != "local://recovery"
+                    !crate::storage::is_system_calendar(href)
                 } else if let Some(active) = options.active_cal_href {
                     *href == active && !options.hidden_calendars.contains(*href)
                 } else {
@@ -3520,7 +3494,7 @@ impl TaskStore {
         }
 
         // Parse the search query once; run_pipeline is invoked up to 3 times below.
-        let query = crate::model::matcher::Query::new(options.search_term);
+        let query = crate::model::matcher::Query::new(options.search_term, lex);
 
         // The text-search result for a task is independent of the category/location
         // ignore flags, so compute it once per task and let every pipeline pass reuse
@@ -3529,7 +3503,7 @@ impl TaskStore {
         let search_ok: HashMap<&str, bool> = if search_active {
             all_allowed_refs
                 .iter()
-                .map(|t| (t.uid.as_str(), query.matches(t, lex, self)))
+                .map(|t| (t.uid.as_str(), query.matches(t, self)))
                 .collect()
         } else {
             HashMap::new()
@@ -3563,8 +3537,7 @@ impl TaskStore {
                 .iter()
                 .copied()
                 .filter(|t| {
-                    let is_system_cal = t.calendar_href == crate::storage::LOCAL_TRASH_HREF
-                        || t.calendar_href == "local://recovery";
+                    let is_system_cal = crate::storage::is_system_calendar(&t.calendar_href);
 
                     if t.is_journal
                         && !self.children_index.contains_key(&t.uid)
@@ -3975,10 +3948,7 @@ impl TaskStore {
         // 4.5) Build Journal Pages Tree
         let mut journal_tasks = Vec::new();
         for (href, map) in &self.calendars {
-            if options.hidden_calendars.contains(href)
-                || href == crate::storage::LOCAL_TRASH_HREF
-                || href == "local://recovery"
-            {
+            if options.hidden_calendars.contains(href) || crate::storage::is_system_calendar(href) {
                 continue;
             }
             for t in map.values() {
@@ -4674,6 +4644,22 @@ impl TaskStore {
         out
     }
 
+    /// Journal actions for a single calendar move. A local<->remote move is
+    /// recorded as a delete plus a create (the remote copy has no local href/etag),
+    /// while a same-kind move is a plain Move.
+    fn move_journal_actions(orig: Task, updated: Task, target: String) -> Vec<JournalAction> {
+        if !orig.calendar_href.starts_with("local://") && target.starts_with("local://") {
+            vec![JournalAction::Delete(orig), JournalAction::Create(updated)]
+        } else if orig.calendar_href.starts_with("local://") && !target.starts_with("local://") {
+            let mut moved = updated;
+            moved.href = String::new();
+            moved.etag = String::new();
+            vec![JournalAction::Delete(orig), JournalAction::Create(moved)]
+        } else {
+            vec![JournalAction::Move(orig, target)]
+        }
+    }
+
     /// Applies a Task-related AppIntent to the in-memory store and returns the tuple
     /// (forward_actions, reverse_actions, intent_description, primary_uid) for journaling and undo stacks.
     /// This method ignores Session-related intents (like SetSearchTerm).
@@ -4942,62 +4928,24 @@ impl TaskStore {
                 actions.extend(updated.into_iter().map(JournalAction::Update));
             }
             AppIntent::MoveTask { uid, target_href } => {
-                let safe_target = if target_href == crate::storage::LOCAL_TRASH_HREF
-                    || target_href == "local://recovery"
-                {
-                    crate::storage::LOCAL_CALENDAR_HREF.to_string()
-                } else {
-                    target_href.clone()
-                };
+                let safe_target = crate::storage::safe_target_href(target_href).to_string();
                 if let Some((orig, updated)) = self.move_task(uid, safe_target.clone()) {
-                    if !orig.calendar_href.starts_with("local://")
-                        && safe_target.starts_with("local://")
-                    {
-                        actions.push(JournalAction::Delete(orig));
-                        actions.push(JournalAction::Create(updated));
-                    } else if orig.calendar_href.starts_with("local://")
-                        && !safe_target.starts_with("local://")
-                    {
-                        actions.push(JournalAction::Delete(orig));
-                        let mut moved = updated.clone();
-                        moved.href = String::new();
-                        moved.etag = String::new();
-                        actions.push(JournalAction::Create(moved));
-                    } else {
-                        actions.push(JournalAction::Move(orig, safe_target));
-                    }
+                    actions.extend(Self::move_journal_actions(orig, updated, safe_target));
                 }
             }
             AppIntent::MoveTaskTree { uid, target_href } => {
-                let safe_target = if target_href == crate::storage::LOCAL_TRASH_HREF
-                    || target_href == "local://recovery"
-                {
-                    crate::storage::LOCAL_CALENDAR_HREF.to_string()
-                } else {
-                    target_href.clone()
-                };
+                let safe_target = crate::storage::safe_target_href(target_href).to_string();
 
                 let mut uids = self.get_descendant_uids(uid);
                 uids.push(uid.clone());
 
                 for u in uids {
                     if let Some((orig, updated)) = self.move_task(&u, safe_target.clone()) {
-                        if !orig.calendar_href.starts_with("local://")
-                            && safe_target.starts_with("local://")
-                        {
-                            actions.push(JournalAction::Delete(orig));
-                            actions.push(JournalAction::Create(updated));
-                        } else if orig.calendar_href.starts_with("local://")
-                            && !safe_target.starts_with("local://")
-                        {
-                            actions.push(JournalAction::Delete(orig));
-                            let mut moved = updated.clone();
-                            moved.href = String::new();
-                            moved.etag = String::new();
-                            actions.push(JournalAction::Create(moved));
-                        } else {
-                            actions.push(JournalAction::Move(orig, safe_target.clone()));
-                        }
+                        actions.extend(Self::move_journal_actions(
+                            orig,
+                            updated,
+                            safe_target.clone(),
+                        ));
                     }
                 }
             }

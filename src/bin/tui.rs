@@ -15,7 +15,7 @@ use anyhow::Result;
 use cfait::cache::Cache;
 use cfait::context::{AppContext, StandardContext};
 use cfait::model::Task;
-use cfait::storage::{LOCAL_TRASH_HREF, LocalCalendarRegistry, LocalStorage};
+use cfait::storage::{LocalCalendarRegistry, LocalStorage};
 use cfait::store::{FilterOptions, TaskStore};
 use chrono::Utc;
 use std::collections::HashSet;
@@ -475,7 +475,7 @@ async fn main() -> Result<()> {
             };
 
             // Prevent importing to trash or recovery calendars
-            if href == cfait::storage::LOCAL_TRASH_HREF || href == "local://recovery" {
+            if cfait::storage::is_system_calendar(&href) {
                 eprintln!(
                     "{}",
                     rust_i18n::t!("error_cannot_import_to_system_calendar")
@@ -867,8 +867,7 @@ async fn main() -> Result<()> {
                         .find(|c| {
                             !config.hidden_calendars.contains(&c.href)
                                 && !config.disabled_calendars.contains(&c.href)
-                                && c.href != LOCAL_TRASH_HREF
-                                && c.href != "local://recovery"
+                                && !cfait::storage::is_system_calendar(&c.href)
                         })
                         .map(|c| c.href)
                         .unwrap_or_else(|| cfait::storage::LOCAL_CALENDAR_HREF.to_string())
@@ -885,7 +884,7 @@ async fn main() -> Result<()> {
                     "{}",
                     rust_i18n::t!("warning_calendar_not_found", calendar = target_href)
                 );
-                target_href = "local://recovery".to_string();
+                target_href = cfait::storage::LOCAL_RECOVERY_HREF.to_string();
             }
 
             task.calendar_href = target_href;
@@ -1552,8 +1551,8 @@ async fn main() -> Result<()> {
             if target_href.as_deref() != Some(cfait::storage::LOCAL_TRASH_HREF) {
                 hidden.insert(cfait::storage::LOCAL_TRASH_HREF.to_string());
             }
-            if target_href.as_deref() != Some("local://recovery") {
-                hidden.insert("local://recovery".to_string());
+            if target_href.as_deref() != Some(cfait::storage::LOCAL_RECOVERY_HREF) {
+                hidden.insert(cfait::storage::LOCAL_RECOVERY_HREF.to_string());
             }
 
             let full_parent_uid = if let Some(partial) = parent_uid_arg {

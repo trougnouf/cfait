@@ -676,18 +676,14 @@ impl RustyClient {
             // Include local calendars; but only show recovery/trash if they contain tasks
             if let Ok(local_cals) = LocalCalendarRegistry::load(self.ctx.as_ref()) {
                 for local_cal in local_cals {
-                    if local_cal.href == "local://recovery"
-                        || local_cal.href == crate::storage::LOCAL_TRASH_HREF
+                    if crate::storage::is_system_calendar(&local_cal.href)
+                        && LocalStorage::load_for_href(self.ctx.as_ref(), &local_cal.href)
+                            .map(|tasks| tasks.is_empty())
+                            .unwrap_or(true)
                     {
-                        if let Ok(tasks) =
-                            LocalStorage::load_for_href(self.ctx.as_ref(), &local_cal.href)
-                            && !tasks.is_empty()
-                        {
-                            calendars.push(local_cal);
-                        }
-                    } else {
-                        calendars.push(local_cal);
+                        continue;
                     }
+                    calendars.push(local_cal);
                 }
             }
 
@@ -700,18 +696,14 @@ impl RustyClient {
                     if calendars.iter().any(|c| c.href == local_cal.href) {
                         continue;
                     }
-                    if local_cal.href == "local://recovery"
-                        || local_cal.href == crate::storage::LOCAL_TRASH_HREF
+                    if crate::storage::is_system_calendar(&local_cal.href)
+                        && LocalStorage::load_for_href(self.ctx.as_ref(), &local_cal.href)
+                            .map(|tasks| tasks.is_empty())
+                            .unwrap_or(true)
                     {
-                        if let Ok(tasks) =
-                            LocalStorage::load_for_href(self.ctx.as_ref(), &local_cal.href)
-                            && !tasks.is_empty()
-                        {
-                            calendars.push(local_cal);
-                        }
-                    } else {
-                        calendars.push(local_cal);
+                        continue;
                     }
+                    calendars.push(local_cal);
                 }
             }
             Ok(calendars)

@@ -400,8 +400,7 @@ impl GuiApp {
                 supports
                     && !self.hidden_calendars.contains(&c.href)
                     && !self.disabled_calendars.contains(&c.href)
-                    && c.href != crate::storage::LOCAL_TRASH_HREF
-                    && c.href != "local://recovery"
+                    && !crate::storage::is_system_calendar(&c.href)
             })
             .collect();
         visible.sort_by_key(|c| {
@@ -424,8 +423,7 @@ impl GuiApp {
             c.href == href
                 && !self.hidden_calendars.contains(&c.href)
                 && !self.disabled_calendars.contains(&c.href)
-                && c.href != crate::storage::LOCAL_TRASH_HREF
-                && c.href != "local://recovery"
+                && !crate::storage::is_system_calendar(&c.href)
         })
     }
 
@@ -462,7 +460,7 @@ impl GuiApp {
             .iter()
             .filter(|c| !self.disabled_calendars.contains(&c.href))
             .filter(|c| {
-                if c.href == crate::storage::LOCAL_TRASH_HREF || c.href == "local://recovery" {
+                if crate::storage::is_system_calendar(&c.href) {
                     self.store
                         .calendars
                         .get(&c.href)
@@ -501,8 +499,7 @@ impl GuiApp {
             .filter(|c| {
                 (include_current || c.href != task_calendar_href)
                     && !self.disabled_calendars.contains(&c.href)
-                    && c.href != crate::storage::LOCAL_TRASH_HREF
-                    && c.href != "local://recovery"
+                    && !crate::storage::is_system_calendar(&c.href)
             })
             .collect()
     }

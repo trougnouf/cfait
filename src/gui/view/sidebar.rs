@@ -6,8 +6,6 @@ use crate::color_utils;
 use crate::gui::icon;
 use crate::gui::message::Message;
 use crate::gui::state::GuiApp;
-use crate::storage::LOCAL_TRASH_HREF;
-
 use crate::store::UNCATEGORIZED_ID;
 use iced::never;
 use iced::widget::{
@@ -23,7 +21,7 @@ pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
 
     let are_all_visible = visible_calendars
         .iter()
-        .filter(|c| c.href != LOCAL_TRASH_HREF && c.href != "local://recovery")
+        .filter(|c| !crate::storage::is_system_calendar(&c.href))
         .all(|c| !app.hidden_calendars.contains(&c.href));
 
     let theme = app.theme();
@@ -1050,8 +1048,7 @@ pub fn view_sidebar_journal(app: &GuiApp) -> Element<'_, Message> {
 
             if !app.hidden_calendars.contains(&c.href)
                 && !app.disabled_calendars.contains(&c.href)
-                && c.href != crate::storage::LOCAL_TRASH_HREF
-                && c.href != "local://recovery"
+                && !crate::storage::is_system_calendar(&c.href)
                 && supports
                 && app.store.get_journal_entry(&c.href, date).is_some()
             {

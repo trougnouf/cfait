@@ -254,7 +254,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
     let cal_options: Vec<CalOption> = app
         .calendars
         .iter()
-        .filter(|c| c.href != crate::storage::LOCAL_TRASH_HREF && c.href != "local://recovery")
+        .filter(|c| !crate::storage::is_system_calendar(&c.href))
         .map(|c| CalOption {
             name: c.name.clone(),
             href: c.href.clone(),
@@ -1055,7 +1055,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
 
         let mut ordered_cals = Vec::new();
         for cal in &app.calendars {
-            if cal.href == crate::storage::LOCAL_TRASH_HREF || cal.href == "local://recovery" {
+            if crate::storage::is_system_calendar(&cal.href) {
                 continue;
             }
             if cal.href.starts_with("local://") {

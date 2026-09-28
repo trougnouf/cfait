@@ -77,7 +77,8 @@ pub fn safe_local_to_utc(date: NaiveDate, time: NaiveTime) -> DateTime<Utc> {
     let ndt = date.and_time(time);
     match ndt.and_local_timezone(Local) {
         chrono::LocalResult::Single(dt) => dt.with_timezone(&Utc),
-        chrono::LocalResult::Ambiguous(dt1, _) => dt1.with_timezone(&Utc), // prefer standard time over daylight
+        // Ambiguous local time (DST fall-back): keep the earlier, daylight-savings occurrence.
+        chrono::LocalResult::Ambiguous(dt1, _) => dt1.with_timezone(&Utc),
         chrono::LocalResult::None => {
             // Time falls in a DST gap. Resolve by advancing the time by 1 hour (which is usually valid),
             // then subtracting 1 hour in UTC. This maps the invalid local time to the UTC time just before the jump.
@@ -613,15 +614,6 @@ impl Task {
         }
     }
 
-    pub fn copy_transient_sort_fields_from(&mut self, other: &Self) {
-        self.sort_rank = other.sort_rank;
-        self.effective_priority = other.effective_priority;
-        self.effective_due = other.effective_due.clone();
-        self.effective_dtstart = other.effective_dtstart.clone();
-        self.transient_is_paused = other.transient_is_paused;
-        self.transient_recent_ts = other.transient_recent_ts;
-    }
-
     pub fn get_effective_goal(&self) -> Option<crate::config::Goal> {
         if let Some(g) = &self.goal {
             return Some(g.clone());
@@ -711,6 +703,14 @@ impl Task {
             .find(|p| p.key == "LAST-MODIFIED")
             .or_else(|| self.unmapped_properties.iter().find(|p| p.key == "DTSTAMP"))
             .and_then(|p| Self::parse_ics_datetime(p.value.trim()))
+    }
+
+    /// Cheap existence check for CREATED / LAST-MODIFIED / DTSTAMP properties
+    /// without parsing the values (unlike `created_date()` / `last_modified_date()`).
+    pub fn has_created_or_modified_date(&self) -> bool {
+        self.unmapped_properties
+            .iter()
+            .any(|p| p.key == "CREATED" || p.key == "LAST-MODIFIED" || p.key == "DTSTAMP")
     }
 
     /// Return the explicit COMPLETED date parsed from unmapped properties, if present.
@@ -887,7 +887,7 @@ impl Task {
         default_reminder_time: NaiveTime,
     ) -> u8 {
         // Trash items are bottom-most
-        if self.calendar_href == "local://trash" {
+        if self.calendar_href == crate::storage::LOCAL_TRASH_HREF {
             return 9;
         }
 
@@ -1096,43 +1096,44 @@ impl Task {
     /// This function keeps complexity manageable by:
     ///  - Sorting first using stable compare_for_sort
     ///
+    /// Parse an implicit alarm uid of the form `implicit_<due|start>:|<rfc3339>|<uid>`
+    /// into its trigger time and a short description ("Due now" / "Starting"). Implicit
+    /// alarms are synthesized, so they can be dismissed/snoozed without a stored Alarm.
+    fn parse_implicit_alarm_uid(alarm_uid: &str) -> Option<(DateTime<Utc>, &'static str)> {
+        let parts: Vec<&str> = alarm_uid.split('|').collect();
+        if parts.len() >= 2
+            && let Ok(dt) = DateTime::parse_from_rfc3339(parts[1])
+        {
+            let desc = if alarm_uid.contains("due") {
+                "Due now"
+            } else {
+                "Starting"
+            };
+            Some((dt.with_timezone(&Utc), desc))
+        } else {
+            None
+        }
+    }
+
     /// Dismiss an alarm by uid. Supports both explicit and implicit alarm ids.
-    ///    implicit alarms use the form "implicit|<rfc3339>" so we can dismiss/snooze them
-    ///    without needing a stored Alarm object.
     pub fn handle_dismiss(&mut self, alarm_uid: &str) -> bool {
         if alarm_uid.starts_with("implicit_") {
-            let parts: Vec<&str> = alarm_uid.split('|').collect();
-            if parts.len() >= 2
-                && let Ok(dt) = chrono::DateTime::parse_from_rfc3339(parts[1])
-            {
-                let desc = if alarm_uid.contains("due") {
-                    "Due now"
-                } else {
-                    "Starting"
-                };
-                self.dismiss_implicit_alarm(dt.with_timezone(&chrono::Utc), desc.to_string());
-                return true;
-            }
-            return false;
+            let Some((dt, desc)) = Self::parse_implicit_alarm_uid(alarm_uid) else {
+                return false;
+            };
+            self.dismiss_implicit_alarm(dt, desc.to_string());
+            return true;
         }
         self.dismiss_alarm(alarm_uid)
     }
 
     pub fn handle_snooze(&mut self, alarm_uid: &str, mins: u32) -> bool {
         if alarm_uid.starts_with("implicit_") {
-            let parts: Vec<&str> = alarm_uid.split('|').collect();
-            if parts.len() >= 2
-                && let Ok(dt) = chrono::DateTime::parse_from_rfc3339(parts[1])
-            {
-                let desc = if alarm_uid.contains("due") {
-                    "Due now"
-                } else {
-                    "Starting"
-                };
-                self.snooze_implicit_alarm(dt.with_timezone(&chrono::Utc), desc.to_string(), mins);
-                return true;
-            }
-            return false;
+            let Some((dt, desc)) = Self::parse_implicit_alarm_uid(alarm_uid) else {
+                return false;
+            };
+            self.snooze_implicit_alarm(dt, desc.to_string(), mins);
+            return true;
         }
         self.snooze_alarm(alarm_uid, mins)
     }
@@ -1523,8 +1524,8 @@ impl Task {
     }
 }
 
-// --- Backwards-compatible convenience wrappers delegating to adapters ---
-// These small wrappers keep external call sites simple during the refactor.
+// --- Convenience wrappers delegating to the ICS adapter and recurrence engine ---
+// These keep call sites (notably the test suite) simple.
 
 impl Task {
     /// Parse a VCALENDAR/ICS string into a Task (delegates to IcsAdapter).

@@ -724,7 +724,7 @@ impl RustyClient {
                             };
 
                             if let Some(mut task) = recovered_task {
-                                let recovery_href = "local://recovery";
+                                let recovery_href = crate::storage::LOCAL_RECOVERY_HREF;
 
                                 if !recovery_cal_created_this_cycle {
                                     if let Ok(mut locals) =

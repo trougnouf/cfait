@@ -750,6 +750,8 @@
     "start_grace_days": "Délai de démarrage (jours) :",
     "start_task": "Démarrer la tâche",
     "starting_daemon": "Démarrage du daemon Cfait en arrière-plan...",
+    "suggestions": "Suggestions",
+    "suggestions_hint": "tab : appliquer, Échap : fermer",
     "status": "Statut",
     "status_connected": "Connecté",
     "status_no_tasks_found": "Aucune tâche trouvée.",

@@ -45,7 +45,7 @@ pub fn compare_calendars(
 ) -> std::cmp::Ordering {
     let rank_a = if href_a == crate::storage::LOCAL_TRASH_HREF {
         4
-    } else if href_a == "local://recovery" {
+    } else if href_a == crate::storage::LOCAL_RECOVERY_HREF {
         3
     } else {
         1
@@ -53,7 +53,7 @@ pub fn compare_calendars(
 
     let rank_b = if href_b == crate::storage::LOCAL_TRASH_HREF {
         4
-    } else if href_b == "local://recovery" {
+    } else if href_b == crate::storage::LOCAL_RECOVERY_HREF {
         3
     } else {
         1
@@ -86,8 +86,8 @@ pub fn compare_calendars_with_size(
     order: &[String],
 ) -> std::cmp::Ordering {
     // First, check if one is a system collection (Trash/Recovery) and the other is not
-    let a_is_system = href_a == crate::storage::LOCAL_TRASH_HREF || href_a == "local://recovery";
-    let b_is_system = href_b == crate::storage::LOCAL_TRASH_HREF || href_b == "local://recovery";
+    let a_is_system = crate::storage::is_system_calendar(href_a);
+    let b_is_system = crate::storage::is_system_calendar(href_b);
 
     // If one is system and the other is standard, standard always comes first
     if a_is_system && !b_is_system {

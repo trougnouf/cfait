@@ -464,9 +464,7 @@ pub fn spawn_alarm_actor(
                     if task.status.is_done() || task.status == crate::model::TaskStatus::InProcess {
                         continue;
                     }
-                    if task.calendar_href == crate::storage::LOCAL_TRASH_HREF
-                        || task.calendar_href == "local://recovery"
-                    {
+                    if crate::storage::is_system_calendar(&task.calendar_href) {
                         continue;
                     }
 

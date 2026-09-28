@@ -11,8 +11,8 @@ and DateTime::<Utc>::from_utc(...) to construct timezone-aware values.
 use crate::config::Config;
 use crate::model::display::random_session_example;
 use crate::model::parser::{extract_inline_aliases, validate_alias_integrity};
-use crate::model::{AppIntent, CalendarListEntry, PENDING_REFRESH_ETAG, Task, TaskStatus};
-use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_TRASH_HREF};
+use crate::model::{AppIntent, PENDING_REFRESH_ETAG, Task, TaskStatus};
+use crate::storage::LOCAL_CALENDAR_HREF;
 use crate::system::SystemEvent;
 use crate::tui::action::{Action, AppEvent, SidebarMode};
 use crate::tui::state::{AppState, Focus, InputMode};
@@ -583,8 +583,7 @@ async fn execute_task_action(
                 .filter(|c| {
                     c.href != current_href
                         && !state.disabled_calendars.contains(&c.href)
-                        && c.href != crate::storage::LOCAL_TRASH_HREF
-                        && c.href != "local://recovery"
+                        && !crate::storage::is_system_calendar(&c.href)
                 })
                 .cloned()
                 .collect();
@@ -1250,8 +1249,7 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
                     .find(|c| {
                         !state.hidden_calendars.contains(&c.href)
                             && !state.disabled_calendars.contains(&c.href)
-                            && c.href != LOCAL_TRASH_HREF
-                            && c.href != "local://recovery"
+                            && !crate::storage::is_system_calendar(&c.href)
                     })
                     .map(|c| c.href.clone())
                     .or_else(|| {
@@ -1480,10 +1478,12 @@ pub async fn handle_key_event(
     if is_text_undo_mode {
         if is_undo(&key) {
             handle_text_undo(state);
+            state.refresh_suggestions();
             return None;
         }
         if is_redo(&key) {
             handle_text_redo(state);
+            state.refresh_suggestions();
             return None;
         }
         if matches!(key.code, KeyCode::Char('o') | KeyCode::Char('O'))
@@ -1535,10 +1535,11 @@ pub async fn handle_key_event(
                 } else {
                     let lex_guard = crate::model::parser::LEXICON.read().unwrap();
                     let lower = raw_word.to_lowercase();
-                    if let Some((p_str, _, _)) = lex_guard.match_prefix(&lower) {
-                        crate::model::parser::strip_quotes(&raw_word[p_str.len()..])
-                    } else {
-                        crate::model::parser::strip_quotes(&raw_word)
+                    match lex_guard.extract_prefix(&raw_word, &lower) {
+                        Some((_, _, rem_original)) => {
+                            crate::model::parser::strip_quotes(rem_original)
+                        }
+                        None => crate::model::parser::strip_quotes(&raw_word),
                     }
                 };
 
@@ -1967,13 +1968,22 @@ pub async fn handle_key_event(
                 state.mode = InputMode::Normal;
                 state.reset_input();
             }
+            KeyCode::Tab if state.suggestions.is_some() => {
+                state.apply_suggestion();
+            }
+            KeyCode::Up if state.suggestions.is_some() => state.move_suggestion_cursor(true),
+            KeyCode::Down if state.suggestions.is_some() => state.move_suggestion_cursor(false),
             KeyCode::Esc => {
-                state.mode = InputMode::Normal;
-                state.reset_input();
-                state.creating_with_desc = false;
-                state.new_task_title.clear();
-                state.creating_child_of = None;
-                state.message = rust_i18n::t!("editing_cancelled").to_string();
+                if state.suggestions.is_some() {
+                    state.dismiss_suggestions();
+                } else {
+                    state.mode = InputMode::Normal;
+                    state.reset_input();
+                    state.creating_with_desc = false;
+                    state.new_task_title.clear();
+                    state.creating_child_of = None;
+                    state.message = rust_i18n::t!("editing_cancelled").to_string();
+                }
             }
             KeyCode::Char(c) => state.enter_char(c),
             KeyCode::Backspace => state.delete_char(),
@@ -2062,10 +2072,19 @@ pub async fn handle_key_event(
                 }
                 state.mode = InputMode::Normal;
             }
+            KeyCode::Tab if state.suggestions.is_some() => {
+                state.apply_suggestion();
+            }
+            KeyCode::Up if state.suggestions.is_some() => state.move_suggestion_cursor(true),
+            KeyCode::Down if state.suggestions.is_some() => state.move_suggestion_cursor(false),
             KeyCode::Esc => {
-                state.mode = InputMode::Normal;
-                state.reset_input();
-                state.editing_uid = None;
+                if state.suggestions.is_some() {
+                    state.dismiss_suggestions();
+                } else {
+                    state.mode = InputMode::Normal;
+                    state.reset_input();
+                    state.editing_uid = None;
+                }
             }
             // Word-level editing (UAX#29 boundaries, same as the GUI)
             KeyCode::Backspace if key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -2596,16 +2615,7 @@ pub async fn handle_key_event(
                         target_uid = Some(page.key.clone());
                     }
                 } else if state.sidebar_mode == SidebarMode::Journal {
-                    target_uid = state.journal_editing_uid.clone().or_else(|| {
-                        let target_href = state
-                            .active_cal_href
-                            .clone()
-                            .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
-                        state
-                            .store
-                            .get_journal_entry(&target_href, state.journal_date)
-                            .map(|t| t.uid.clone())
-                    });
+                    target_uid = state.journal_target_uid();
                 } else if let Some(t) = state.get_selected_task() {
                     target_uid = Some(t.uid.clone());
                 }
@@ -2805,10 +2815,10 @@ pub async fn handle_key_event(
                     let mut items = Vec::new();
                     for (i, session) in sessions.iter().enumerate() {
                         let s_dt = chrono::DateTime::from_timestamp(session.start, 0)
-                            .unwrap_or_else(|| chrono::DateTime::from_timestamp(0, 0).unwrap())
+                            .unwrap_or(chrono::DateTime::UNIX_EPOCH)
                             .with_timezone(&chrono::Local);
                         let e_dt = chrono::DateTime::from_timestamp(session.end, 0)
-                            .unwrap_or_else(|| chrono::DateTime::from_timestamp(0, 0).unwrap())
+                            .unwrap_or(chrono::DateTime::UNIX_EPOCH)
                             .with_timezone(&chrono::Local);
                         let dur = (session.end - session.start) / 60;
                         let display = format!(
@@ -2938,18 +2948,7 @@ pub async fn handle_key_event(
             KeyCode::Delete => {
                 if state.active_focus == Focus::Main {
                     if state.sidebar_mode == SidebarMode::Journal {
-                        let uid_opt = if let Some(uid) = &state.journal_editing_uid {
-                            Some(uid.clone())
-                        } else {
-                            let active_href = state
-                                .active_cal_href
-                                .clone()
-                                .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
-                            state
-                                .store
-                                .get_journal_entry(&active_href, state.journal_date)
-                                .map(|t| t.uid.clone())
-                        };
+                        let uid_opt = state.journal_target_uid();
 
                         if let Some(uid) = uid_opt {
                             delete_journal_page(state, uid, action_tx);
@@ -2978,15 +2977,7 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Char('c') => {
-                let data = if let Some(parent_uid) = &state.yanked_uid {
-                    state
-                        .get_selected_task()
-                        .map(|view_task| (view_task.uid.clone(), parent_uid.clone()))
-                } else {
-                    None
-                };
-
-                if let Some((child_uid, parent_uid)) = data {
+                if let Some((child_uid, parent_uid)) = state.yank_pair() {
                     dispatch_intent_tui(
                         state,
                         AppIntent::MakeChild {
@@ -3004,16 +2995,7 @@ pub async fn handle_key_event(
                 let mut target_uid = None;
                 if state.active_focus == Focus::Main {
                     if state.sidebar_mode == SidebarMode::Journal {
-                        target_uid = state.journal_editing_uid.clone().or_else(|| {
-                            let target_href = state
-                                .active_cal_href
-                                .clone()
-                                .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
-                            state
-                                .store
-                                .get_journal_entry(&target_href, state.journal_date)
-                                .map(|t| t.uid.clone())
-                        });
+                        target_uid = state.journal_target_uid();
                     } else if let Some(task) = state.get_selected_task() {
                         target_uid = Some(task.uid.clone());
                     }
@@ -3069,36 +3051,12 @@ pub async fn handle_key_event(
             }
             KeyCode::Char('[') => {
                 if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
-                    let visible_cals = state.visible_journal_calendars();
-                    if !visible_cals.is_empty() {
-                        let current_idx = visible_cals
-                            .iter()
-                            .position(|c| Some(&c.href) == state.active_cal_href.as_ref())
-                            .unwrap_or(0);
-                        let prev_idx = if current_idx == 0 {
-                            visible_cals.len() - 1
-                        } else {
-                            current_idx - 1
-                        };
-                        state.active_cal_href = Some(visible_cals[prev_idx].href.clone());
-                        state.journal_editing_uid = None;
-                        state.refresh_filtered_view();
-                    }
+                    state.cycle_journal_calendar(false);
                 }
             }
             KeyCode::Char(']') => {
                 if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
-                    let visible_cals = state.visible_journal_calendars();
-                    if !visible_cals.is_empty() {
-                        let current_idx = visible_cals
-                            .iter()
-                            .position(|c| Some(&c.href) == state.active_cal_href.as_ref())
-                            .unwrap_or(0);
-                        let next_idx = (current_idx + 1) % visible_cals.len();
-                        state.active_cal_href = Some(visible_cals[next_idx].href.clone());
-                        state.journal_editing_uid = None;
-                        state.refresh_filtered_view();
-                    }
+                    state.cycle_journal_calendar(true);
                 }
             }
             KeyCode::Char('Y') => {
@@ -3163,15 +3121,7 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Char('b') => {
-                let data = if let Some(yanked) = &state.yanked_uid {
-                    state
-                        .get_selected_task()
-                        .map(|current| (current.uid.clone(), yanked.clone()))
-                } else {
-                    None
-                };
-
-                if let Some((curr_uid, yanked_uid)) = data {
+                if let Some((curr_uid, yanked_uid)) = state.yank_pair() {
                     if curr_uid == yanked_uid {
                         state.message = rust_i18n::t!("error_cannot_depend_on_self").to_string();
                     } else {
@@ -3194,31 +3144,20 @@ pub async fn handle_key_event(
                     state.journal_date += chrono::Duration::days(1);
                     state.journal_editing_uid = None;
                     state.refresh_filtered_view();
-                } else {
-                    let data = if let Some(yanked) = &state.yanked_uid {
-                        state
-                            .get_selected_task()
-                            .map(|current| (current.uid.clone(), yanked.clone()))
+                } else if let Some((curr_uid, yanked_uid)) = state.yank_pair() {
+                    if curr_uid == yanked_uid {
+                        state.message = rust_i18n::t!("error_cannot_relate_to_self").to_string();
                     } else {
-                        None
-                    };
-
-                    if let Some((curr_uid, yanked_uid)) = data {
-                        if curr_uid == yanked_uid {
-                            state.message =
-                                rust_i18n::t!("error_cannot_relate_to_self").to_string();
-                        } else {
-                            dispatch_intent_tui(
-                                state,
-                                AppIntent::AddRelatedTo {
-                                    uid: curr_uid,
-                                    related_uid: yanked_uid,
-                                },
-                                action_tx,
-                            );
-                            if !state.yank_lock_active {
-                                state.yanked_uid = None;
-                            }
+                        dispatch_intent_tui(
+                            state,
+                            AppIntent::AddRelatedTo {
+                                uid: curr_uid,
+                                related_uid: yanked_uid,
+                            },
+                            action_tx,
+                        );
+                        if !state.yank_lock_active {
+                            state.yanked_uid = None;
                         }
                     }
                 }
@@ -3279,18 +3218,9 @@ pub async fn handle_key_event(
                 let task_opt = if state.sidebar_mode == SidebarMode::Journal
                     && state.active_focus == Focus::Main
                 {
-                    let active_href = state
-                        .active_cal_href
-                        .clone()
-                        .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
-                    if let Some(uid) = &state.journal_editing_uid {
-                        state.store.get_task_ref(uid).cloned()
-                    } else {
-                        state
-                            .store
-                            .get_journal_entry(&active_href, state.journal_date)
-                            .cloned()
-                    }
+                    state
+                        .journal_target_uid()
+                        .and_then(|uid| state.store.get_task_ref(&uid).cloned())
                 } else {
                     state.get_selected_task().cloned()
                 };
@@ -3298,18 +3228,7 @@ pub async fn handle_key_event(
                 if let Some(task) = task_opt {
                     let current_href = task.calendar_href.clone();
                     let has_subtasks = task.has_subtasks;
-                    let include_current = has_subtasks;
-                    let move_targets: Vec<CalendarListEntry> = state
-                        .calendars
-                        .iter()
-                        .filter(|c| {
-                            (include_current || c.href != current_href)
-                                && !state.disabled_calendars.contains(&c.href)
-                                && c.href != crate::storage::LOCAL_TRASH_HREF
-                                && c.href != "local://recovery"
-                        })
-                        .cloned()
-                        .collect();
+                    let move_targets = state.move_targets_for(&current_href, has_subtasks);
                     if !move_targets.is_empty() {
                         state.move_targets = move_targets;
                         state.move_selection_state.select(Some(0));
@@ -3413,16 +3332,7 @@ pub async fn handle_key_event(
                                 && let Some(item) = state.cached_categories.get(idx)
                                 && item.has_children
                             {
-                                let key = item.full_key.clone();
-                                if !state.expanded_tags.remove(&key) {
-                                    state.expanded_tags.insert(key);
-                                }
-                                state.refresh_filtered_view();
-                                if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
-                                    cfg.expanded_tags =
-                                        state.expanded_tags.iter().cloned().collect();
-                                    let _ = cfg.save(state.ctx.as_ref());
-                                }
+                                state.toggle_expanded_tag(item.full_key.clone());
                             }
                         }
                         SidebarMode::Locations => {
@@ -3455,16 +3365,7 @@ pub async fn handle_key_event(
                                         action_tx,
                                     );
                                 } else {
-                                    let key = page.key.clone();
-                                    if !state.expanded_tags.remove(&key) {
-                                        state.expanded_tags.insert(key);
-                                    }
-                                    state.refresh_filtered_view();
-                                    if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
-                                        cfg.expanded_tags =
-                                            state.expanded_tags.iter().cloned().collect();
-                                        let _ = cfg.save(state.ctx.as_ref());
-                                    }
+                                    state.toggle_expanded_tag(page.key.clone());
                                 }
                             }
                         }
@@ -3543,10 +3444,7 @@ pub async fn handle_key_event(
                         let are_all_visible = state
                             .get_filtered_calendars()
                             .iter()
-                            .filter(|c| {
-                                c.href != crate::storage::LOCAL_TRASH_HREF
-                                    && c.href != "local://recovery"
-                            })
+                            .filter(|c| !crate::storage::is_system_calendar(&c.href))
                             .all(|c| !state.hidden_calendars.contains(&c.href));
 
                         if are_all_visible {
@@ -3558,13 +3456,19 @@ pub async fn handle_key_event(
                         } else {
                             state.hidden_calendars.clear();
                             // Re-hide system calendars if not active
-                            if state.active_cal_href.as_deref() != Some("local://trash") {
-                                state.hidden_calendars.insert("local://trash".to_string());
-                            }
-                            if state.active_cal_href.as_deref() != Some("local://recovery") {
+                            if state.active_cal_href.as_deref()
+                                != Some(crate::storage::LOCAL_TRASH_HREF)
+                            {
                                 state
                                     .hidden_calendars
-                                    .insert("local://recovery".to_string());
+                                    .insert(crate::storage::LOCAL_TRASH_HREF.to_string());
+                            }
+                            if state.active_cal_href.as_deref()
+                                != Some(crate::storage::LOCAL_RECOVERY_HREF)
+                            {
+                                state
+                                    .hidden_calendars
+                                    .insert(crate::storage::LOCAL_RECOVERY_HREF.to_string());
                             }
                             state.pending_refresh_generation = state.edit_generation;
                             let _ = action_tx.send(Action::Refresh).await;
@@ -3715,16 +3619,7 @@ pub async fn handle_key_event(
                                         action_tx,
                                     );
                                 } else {
-                                    let key = page.key.clone();
-                                    if !state.expanded_tags.remove(&key) {
-                                        state.expanded_tags.insert(key);
-                                    }
-                                    state.refresh_filtered_view();
-                                    if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
-                                        cfg.expanded_tags =
-                                            state.expanded_tags.iter().cloned().collect();
-                                        let _ = cfg.save(state.ctx.as_ref());
-                                    }
+                                    state.toggle_expanded_tag(page.key.clone());
                                 }
                             }
                         }
@@ -3855,17 +3750,7 @@ pub async fn handle_key_event(
                                     state.details_scroll = 0;
                                     state.refresh_filtered_view();
                                 } else {
-                                    // toggle expansion
-                                    let key = page.key.clone();
-                                    if !state.expanded_tags.remove(&key) {
-                                        state.expanded_tags.insert(key);
-                                    }
-                                    state.refresh_filtered_view();
-                                    if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
-                                        cfg.expanded_tags =
-                                            state.expanded_tags.iter().cloned().collect();
-                                        let _ = cfg.save(state.ctx.as_ref());
-                                    }
+                                    state.toggle_expanded_tag(page.key.clone());
                                 }
                             }
                         }
@@ -3971,16 +3856,7 @@ pub async fn handle_key_event(
                         target_uid = Some(page.key.clone());
                     }
                 } else if state.sidebar_mode == SidebarMode::Journal {
-                    target_uid = state.journal_editing_uid.clone().or_else(|| {
-                        let target_href = state
-                            .active_cal_href
-                            .clone()
-                            .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
-                        state
-                            .store
-                            .get_journal_entry(&target_href, state.journal_date)
-                            .map(|t| t.uid.clone())
-                    });
+                    target_uid = state.journal_target_uid();
                 } else if let Some(t) = state.get_selected_task() {
                     target_uid = Some(t.uid.clone());
                 }
@@ -4118,22 +3994,8 @@ pub async fn handle_key_event(
                 state.mode = InputMode::Normal;
                 state.message = String::new();
             }
-            KeyCode::Down | KeyCode::Char('j') => {
-                let len = state.session_items.len();
-                if len > 0 {
-                    let current = state.session_selection_state.selected().unwrap_or(0);
-                    let next = if current >= len - 1 { 0 } else { current + 1 };
-                    state.session_selection_state.select(Some(next));
-                }
-            }
-            KeyCode::Up | KeyCode::Char('k') => {
-                let len = state.session_items.len();
-                if len > 0 {
-                    let current = state.session_selection_state.selected().unwrap_or(0);
-                    let prev = if current == 0 { len - 1 } else { current - 1 };
-                    state.session_selection_state.select(Some(prev));
-                }
-            }
+            KeyCode::Down | KeyCode::Char('j') => state.next_session(),
+            KeyCode::Up | KeyCode::Char('k') => state.previous_session(),
             KeyCode::Delete | KeyCode::Char('x') => {
                 if let Some(idx) = state.session_selection_state.selected()
                     && let Some(&(real_idx, _)) = state.session_items.get(idx)
@@ -4156,10 +4018,10 @@ pub async fn handle_key_event(
                     && let Some(session) = task.sessions.get(real_idx)
                 {
                     let s_dt = chrono::DateTime::from_timestamp(session.start, 0)
-                        .unwrap_or_else(|| chrono::DateTime::from_timestamp(0, 0).unwrap())
+                        .unwrap_or(chrono::DateTime::UNIX_EPOCH)
                         .with_timezone(&chrono::Local);
                     let e_dt = chrono::DateTime::from_timestamp(session.end, 0)
-                        .unwrap_or_else(|| chrono::DateTime::from_timestamp(0, 0).unwrap())
+                        .unwrap_or(chrono::DateTime::UNIX_EPOCH)
                         .with_timezone(&chrono::Local);
                     let prefill = format!(
                         "{} {}-{}",
@@ -4222,18 +4084,7 @@ pub async fn handle_key_event(
                 {
                     let current_href = task.calendar_href.clone();
                     let new_moving_tree = !state.moving_tree;
-                    let include_current = new_moving_tree;
-                    let move_targets: Vec<CalendarListEntry> = state
-                        .calendars
-                        .iter()
-                        .filter(|c| {
-                            (include_current || c.href != current_href)
-                                && !state.disabled_calendars.contains(&c.href)
-                                && c.href != crate::storage::LOCAL_TRASH_HREF
-                                && c.href != "local://recovery"
-                        })
-                        .cloned()
-                        .collect();
+                    let move_targets = state.move_targets_for(&current_href, new_moving_tree);
                     state.moving_tree = new_moving_tree;
                     state.move_targets = move_targets;
                     if let Some(idx) = state.move_selection_state.selected()
@@ -4357,22 +4208,8 @@ pub async fn handle_key_event(
                 state.mode = InputMode::Normal;
                 state.message = String::new();
             }
-            KeyCode::Down | KeyCode::Char('j') => {
-                let len = state.relationship_items.len();
-                if len > 0 {
-                    let current = state.relationship_selection_state.selected().unwrap_or(0);
-                    let next = if current >= len - 1 { 0 } else { current + 1 };
-                    state.relationship_selection_state.select(Some(next));
-                }
-            }
-            KeyCode::Up | KeyCode::Char('k') => {
-                let len = state.relationship_items.len();
-                if len > 0 {
-                    let current = state.relationship_selection_state.selected().unwrap_or(0);
-                    let prev = if current == 0 { len - 1 } else { current - 1 };
-                    state.relationship_selection_state.select(Some(prev));
-                }
-            }
+            KeyCode::Down | KeyCode::Char('j') => state.next_relationship(),
+            KeyCode::Up | KeyCode::Char('k') => state.previous_relationship(),
             KeyCode::Delete | KeyCode::Char('x') => {
                 if let Some(idx) = state.relationship_selection_state.selected()
                     && let Some((target_uid, _, rel_type)) = state.relationship_items.get(idx)
@@ -4552,5 +4389,8 @@ pub async fn handle_key_event(
             _ => {}
         },
     }
+    // Keep suggestions in sync with any buffer/cursor/mode change made above;
+    // also the single place that (re)opens the popup when entering a mode.
+    state.refresh_suggestions();
     None
 }

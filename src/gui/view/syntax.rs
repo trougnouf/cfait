@@ -7,6 +7,28 @@ use iced::advanced::text::highlighter::{self, Highlighter};
 use iced::{Color, Font};
 use std::ops::Range;
 
+/// A span with no styling.
+fn plain_format() -> highlighter::Format<Font> {
+    highlighter::Format {
+        color: None,
+        font: None,
+    }
+}
+
+fn bold_font() -> Font {
+    Font {
+        weight: iced::font::Weight::Bold,
+        ..Default::default()
+    }
+}
+
+fn italic_font() -> Font {
+    Font {
+        style: iced::font::Style::Italic,
+        ..Default::default()
+    }
+}
+
 pub fn get_syntax_style(kind: SyntaxType, text: &str, is_dark: bool) -> (Option<Color>, bool) {
     match kind {
         SyntaxType::Priority => {
@@ -42,7 +64,6 @@ pub fn get_syntax_style(kind: SyntaxType, text: &str, is_dark: bool) -> (Option<
     }
 }
 
-// 1. Add state field
 pub struct SmartInputHighlighter {
     is_dark: bool,
     is_search: bool,
@@ -87,27 +108,14 @@ impl Highlighter for SmartInputHighlighter {
                     crate::gui::view::syntax::get_syntax_style(t.kind, text, self.is_dark);
                 let format = highlighter::Format {
                     color: opt_color,
-                    font: if is_bold {
-                        Some(Font {
-                            weight: iced::font::Weight::Bold,
-                            ..Default::default()
-                        })
-                    } else {
-                        None
-                    },
+                    font: is_bold.then_some(bold_font()),
                 };
                 (t.start..t.end, format)
             })
             .collect();
 
         if spans.is_empty() {
-            spans.push((
-                0..line.len(),
-                highlighter::Format {
-                    color: None,
-                    font: None,
-                },
-            ));
+            spans.push((0..line.len(), plain_format()));
         }
 
         spans.into_iter()
@@ -158,13 +166,7 @@ impl Highlighter for SessionHighlighter {
             let end = start + word.len();
 
             if start > cursor {
-                spans.push((
-                    cursor..start,
-                    highlighter::Format {
-                        color: None,
-                        font: None,
-                    },
-                ));
+                spans.push((cursor..start, plain_format()));
             }
 
             let lower = word.to_lowercase();
@@ -190,10 +192,7 @@ impl Highlighter for SessionHighlighter {
                 }
             } else {
                 // Default text
-                highlighter::Format {
-                    color: None,
-                    font: None,
-                }
+                plain_format()
             };
 
             spans.push((start..end, format));
@@ -201,13 +200,7 @@ impl Highlighter for SessionHighlighter {
         }
 
         if cursor < line.len() || spans.is_empty() {
-            spans.push((
-                cursor..line.len(),
-                highlighter::Format {
-                    color: None,
-                    font: None,
-                },
-            ));
+            spans.push((cursor..line.len(), plain_format()));
         }
 
         spans.into_iter()
@@ -346,18 +339,12 @@ impl Highlighter for MarkdownHighlighter {
         let base_format = if is_header {
             highlighter::Format {
                 color: header_color,
-                font: Some(Font {
-                    weight: iced::font::Weight::Bold,
-                    ..Default::default()
-                }),
+                font: Some(bold_font()),
             }
         } else if is_quote {
             highlighter::Format {
                 color: quote_color,
-                font: Some(Font {
-                    style: iced::font::Style::Italic,
-                    ..Default::default()
-                }),
+                font: Some(italic_font()),
             }
         } else if is_table {
             highlighter::Format {
@@ -464,24 +451,11 @@ impl Highlighter for MarkdownHighlighter {
             } else {
                 let mut format = base_format;
                 match el {
-                    InlineElement::Bold { .. } => {
-                        format.font = Some(Font {
-                            weight: iced::font::Weight::Bold,
-                            ..Default::default()
-                        })
-                    }
-                    InlineElement::Italic { .. } => {
-                        format.font = Some(Font {
-                            style: iced::font::Style::Italic,
-                            ..Default::default()
-                        })
-                    }
+                    InlineElement::Bold { .. } => format.font = Some(bold_font()),
+                    InlineElement::Italic { .. } => format.font = Some(italic_font()),
                     InlineElement::Strikethrough { .. } => {
                         format.color = dim_color;
-                        format.font = Some(Font {
-                            style: iced::font::Style::Italic,
-                            ..Default::default()
-                        });
+                        format.font = Some(italic_font());
                     }
                     InlineElement::Code { .. } => {
                         format.color = code_color;
@@ -501,13 +475,7 @@ impl Highlighter for MarkdownHighlighter {
             elem_cursor += raw.len();
         }
         if spans.is_empty() {
-            spans.push((
-                0..line.len(),
-                highlighter::Format {
-                    color: None,
-                    font: None,
-                },
-            ));
+            spans.push((0..line.len(), plain_format()));
         }
         spans.into_iter()
     }

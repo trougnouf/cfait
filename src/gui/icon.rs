@@ -1,11 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-/*
-File: cfait/src/gui/icon.rs
-
-This file defines icon font loading and codepoint constants used by the GUI.
-It mirrors the project's existing icon mappings with added tag/check variants
-used by the sidebar and Android clients.
-*/
+// Icon font loading and codepoint constants used by the GUI.
 
 use iced::Font;
 use iced::widget::{Text, text};
@@ -55,7 +49,6 @@ pub const CALENDAR_XMARK: char = '\u{f273}'; // nf-fa-calendar_xmark
 pub const TAG: char = '\u{f02b}'; //  (generic tag)
 pub const TAG_OUTLINE: char = '\u{f04fc}'; // nf-md-tag_outline
 pub const TAG_CHECK: char = '\u{f1a7a}'; // nf-md-tag_check
-pub const SETTINGS: char = '\u{f013}'; // 
 pub const REFRESH: char = '\u{f0450}'; // nf-md-refresh
 pub const SYNC_ALERT: char = '\u{f04e7}'; // nf-md-sync_alert
 pub const SYNC_OFF: char = '\u{f04e8}'; // nf-md-sync_off
@@ -73,13 +66,10 @@ pub const PLAY: char = '\u{eb2c}'; // nf-cod-play
 pub const PLAY_FA: char = '\u{f04b}'; // nf-fa-play
 pub const PAUSE: char = '\u{f04c}'; //  (Added)
 pub const DEBUG_STOP: char = '\u{ead7}'; // nf-cod-debug_stop (Added)
-pub const STOP: char = '\u{f04d}'; // 
 pub const LOCK: char = '\u{f023}'; // 
 pub const LINK: char = '\u{f0c1}'; // 
 pub const UNLINK: char = '\u{f127}'; // 
 pub const CLONE: char = '\u{f24d}'; // nf-fa-clone
-pub const SHIELD: char = '\u{f32a}'; // 
-pub const CHILD_ARROW: char = '\u{f149}'; // 
 pub const DETAILED_TRIANGLE: char = '\u{f01c6}'; // nf-md-details
 pub const INFO: char = '\u{f129}'; // 
 pub const REPEAT: char = '\u{f0b6}'; // 
@@ -115,7 +105,6 @@ pub const EYE_CLOSED: char = '\u{eae7}'; // nf-cod-eye_closed
 pub const THUMB_TACK: char = '\u{f08d}'; // nf-fa-thumb_tack
 
 // --- SUPPORT / DONATION ICONS ---
-pub const HEART_HAND: char = '\u{ed9b}'; // nf-fa-hand_holding_heart
 pub const CREDIT_CARD: char = '\u{f09d}'; // nf-fa-credit_card
 pub const BANK: char = '\u{f0a27}'; // nf-md-bank_transfer
 pub const BITCOIN: char = '\u{f10f}'; // nf-fa-bitcoin
@@ -140,8 +129,6 @@ pub const LIST_CHECK: char = '\u{f0ae}';
 pub const JOURNAL: char = '\u{f02d}'; // nf-fa-book / journal icon
 pub const NEW_FILE: char = '\u{ea7f}'; // nf-cod-new_file
 pub const NEWSPAPER_PLUS: char = '\u{f0f0d}'; // nf-md-newspaper_plus
-pub const NEWSPAPER_FA: char = '\u{f1ea}'; // nf-fa-newspaper
-pub const NEWSPAPER_MD: char = '\u{f0395}'; // nf-md-newspaper
 
 pub const CREATE_JOURNAL_ICONS: &[char] = &[NEW_FILE, NEWSPAPER_PLUS];
 
@@ -263,11 +250,6 @@ pub const RANDOM_ICONS: &[char] = &[
 pub const CALENDARS_HEADER: char = '\u{f00f2}'; // nf-md-calendar_multiple_check
 pub const TAGS_HEADER: char = '\u{f04fb}'; // nf-md-tag_multiple
 
-// RELATIONSHIP ICONS (for generic related-to with random selection)
-pub const RELATED_FEMALE_FEMALE: char = '\u{f0a5a}'; // nf-md-human_female_female
-pub const RELATED_MALE_MALE: char = '\u{f0a5e}'; // nf-md-human_male_male
-pub const RELATED_MALE_FEMALE: char = '\u{f02e8}'; // nf-md-human_male_female
-
 // Expansion Icons (used for virtual expand/collapse rows)
 // These are Nerd Font glyph codepoints for arrow expand down/up (md icons)
 pub const ARROW_EXPAND_DOWN: char = '\u{f0796}';
@@ -275,17 +257,6 @@ pub const ARROW_EXPAND_UP: char = '\u{f0799}';
 
 // Maximize icon (nf-fae-maximize)
 pub const MAXIMIZE: char = '\u{e25d}';
-
-// Fallback ASCII versions for environments that don't have the Nerd Font available.
-// Clients may choose to use these when rendering in basic terminals or font-limited UIs.
-pub const ARROW_EXPAND_DOWN_FALLBACK: char = 'v';
-pub const ARROW_EXPAND_UP_FALLBACK: char = '^';
-
-// Compatibility aliases: some modules/clients expect `VIRTUAL_*` names.
-// Keep these as simple aliases to the canonical ARROW_* constants to avoid
-// duplicating codepoints across the codebase.
-pub const VIRTUAL_EXPAND_DOWN: char = ARROW_EXPAND_DOWN;
-pub const VIRTUAL_EXPAND_UP: char = ARROW_EXPAND_UP;
 
 // Extract Subtasks Icons (random variation)
 pub const SHOVEL: char = '\u{f0710}'; // nf-md-shovel

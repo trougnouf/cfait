@@ -10,7 +10,7 @@ use crate::gui::update::common::{
     apply_alias_retroactively, dispatch_intent, refresh_filtered_tasks, save_config,
 };
 use crate::model::parser::validate_alias_integrity;
-use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_TRASH_HREF, LocalCalendarRegistry, LocalStorage};
+use crate::storage::{LOCAL_CALENDAR_HREF, LocalCalendarRegistry, LocalStorage};
 use iced::Task;
 use std::sync::Arc;
 
@@ -277,8 +277,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     .find(|c| {
                         !app.hidden_calendars.contains(&c.href)
                             && !app.disabled_calendars.contains(&c.href)
-                            && c.href != LOCAL_TRASH_HREF
-                            && c.href != "local://recovery"
+                            && !crate::storage::is_system_calendar(&c.href)
                     })
                     .map(|c| c.href.clone());
             }
@@ -697,8 +696,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             let mut current_order = app.core_config.collection_order.clone();
             for cal in &app.calendars {
                 if !current_order.contains(&cal.href)
-                    && cal.href != crate::storage::LOCAL_TRASH_HREF
-                    && cal.href != "local://recovery"
+                    && !crate::storage::is_system_calendar(&cal.href)
                 {
                     current_order.push(cal.href.clone());
                 }
@@ -1300,8 +1298,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 .iter()
                 .filter(|c| {
                     !app.disabled_calendars.contains(&c.href)
-                        && c.href != crate::storage::LOCAL_TRASH_HREF
-                        && c.href != "local://recovery"
+                        && !crate::storage::is_system_calendar(&c.href)
                 })
                 .map(|c| c.href.clone())
                 .next();

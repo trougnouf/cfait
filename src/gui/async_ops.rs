@@ -18,6 +18,17 @@ use tokio::time::{Duration, sleep};
 
 // --- WRAPPERS ---
 
+/// Awaits `fut`, converting a timeout into `Err(timeout_err)`.
+async fn with_timeout<T, E, F>(secs: u64, timeout_err: E, fut: F) -> Result<T, E>
+where
+    F: std::future::Future<Output = Result<T, E>>,
+{
+    match tokio::time::timeout(std::time::Duration::from_secs(secs), fut).await {
+        Ok(res) => res,
+        Err(_) => Err(timeout_err),
+    }
+}
+
 pub async fn connect_and_fetch_wrapper(
     ctx: Arc<dyn AppContext>,
     config: Config,
@@ -37,54 +48,66 @@ pub async fn connect_and_fetch_wrapper(
     .await
     {
         Ok(res) => res,
-        Err(_) => {
-            // Timeout occurred. Return offline fallback to avoid kicking user out.
-            let client = RustyClient::new(
-                ctx_clone.clone(),
-                &config_clone.url,
-                &config_clone.username,
-                &config_clone.password,
-                config_clone.allow_insecure_certs,
-                Some("GUI"),
-            )
-            .unwrap_or_else(|_| RustyClient {
-                client: None,
-                ctx: ctx_clone.clone(),
-            });
-
-            let cals = crate::cache::Cache::load_calendars(ctx_clone.as_ref()).unwrap_or_default();
-            let active_href = config_clone.default_calendar.clone();
-            let tasks = if let Some(ref h) = active_href {
-                let (mut t, _) =
-                    crate::cache::Cache::load(ctx_clone.as_ref(), h).unwrap_or((vec![], None));
-                crate::journal::Journal::apply_to_tasks(ctx_clone.as_ref(), &mut t, h);
-                t
-            } else {
-                vec![]
-            };
-
-            Ok((
-                client,
-                cals,
-                tasks,
-                active_href,
-                Some(rust_i18n::t!("error_timeout").to_string()),
-            ))
-        }
+        // Timeout occurred. Return offline fallback to avoid kicking user out.
+        Err(_) => Ok(offline_fallback(ctx_clone, config_clone)),
     }
+}
+
+/// Builds the offline fallback returned when the initial connection times out:
+/// a cache-backed client plus the tasks for the default calendar.
+fn offline_fallback(
+    ctx: Arc<dyn AppContext>,
+    config: Config,
+) -> (
+    RustyClient,
+    Vec<CalendarListEntry>,
+    Vec<TodoTask>,
+    Option<String>,
+    Option<String>,
+) {
+    let client = RustyClient::new(
+        ctx.clone(),
+        &config.url,
+        &config.username,
+        &config.password,
+        config.allow_insecure_certs,
+        Some("GUI"),
+    )
+    .unwrap_or_else(|_| RustyClient {
+        client: None,
+        ctx: ctx.clone(),
+    });
+
+    let cals = crate::cache::Cache::load_calendars(ctx.as_ref()).unwrap_or_default();
+    let active_href = config.default_calendar.clone();
+    let tasks = if let Some(ref h) = active_href {
+        let (mut t, _) = crate::cache::Cache::load(ctx.as_ref(), h).unwrap_or((vec![], None));
+        crate::journal::Journal::apply_to_tasks(ctx.as_ref(), &mut t, h);
+        t
+    } else {
+        vec![]
+    };
+
+    (
+        client,
+        cals,
+        tasks,
+        active_href,
+        Some(rust_i18n::t!("error_timeout").to_string()),
+    )
 }
 
 pub async fn async_fetch_wrapper(
     client: RustyClient,
     href: String,
 ) -> anyhow::Result<(String, Vec<TodoTask>)> {
-    match tokio::time::timeout(std::time::Duration::from_secs(60), client.get_tasks(&href)).await {
-        Ok(res) => {
-            let tasks = res?;
-            Ok((href, tasks))
-        }
-        Err(_) => Err(anyhow::anyhow!("Fetch timed out for calendar {}", href)),
-    }
+    let tasks = with_timeout(
+        60,
+        anyhow::anyhow!("Fetch timed out for calendar {}", href),
+        client.get_tasks(&href),
+    )
+    .await?;
+    Ok((href, tasks))
 }
 
 pub async fn async_create_remote_calendar_wrapper(
@@ -108,15 +131,12 @@ pub async fn async_fetch_all_wrapper(
     client: RustyClient,
     cals: Vec<CalendarListEntry>,
 ) -> anyhow::Result<Vec<(String, Vec<TodoTask>)>> {
-    match tokio::time::timeout(
-        std::time::Duration::from_secs(180),
+    with_timeout(
+        180,
+        anyhow::anyhow!("Fetch all timed out"),
         client.get_all_tasks(&cals),
     )
     .await
-    {
-        Ok(res) => res,
-        Err(_) => Err(anyhow::anyhow!("Fetch all timed out")),
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -127,6 +147,49 @@ pub enum WorkerCommand {
     /// Reload the disk state (config + calendars + tasks) and replace the
     /// worker's store with it. Used when another cfait instance changed files.
     FlushAndLoad,
+}
+
+/// Reload config + calendars + tasks from disk and replace the worker's store
+/// with it, notifying the UI either way.
+async fn flush_and_load(
+    ctx: Arc<dyn AppContext>,
+    controller: &TaskController,
+    ui_tx: &mpsc::Sender<crate::gui::message::Message>,
+) {
+    let res = tokio::task::spawn_blocking(move || {
+        crate::config::Config::invalidate_cache();
+        let cfg = crate::config::Config::load_with_credentials(ctx.as_ref()).unwrap_or_default();
+        let (cals, tasks) =
+            crate::cache::Cache::load_all_disk_state(ctx.as_ref(), cfg.enable_local_mode);
+        (Box::new(cfg), cals, tasks)
+    })
+    .await;
+    match res {
+        Ok((cfg, cals, tasks)) => {
+            // Replace the worker's store with the fresh disk state (under a
+            // single lock) so later Batch actions operate on current data.
+            let mut s = controller.store.lock().await;
+            s.clear();
+            s.insert_many(tasks.clone());
+            drop(s);
+            let _ = ui_tx
+                .send(crate::gui::message::Message::ExternalReloaded(
+                    cfg, cals, tasks,
+                ))
+                .await;
+        }
+        Err(e) => {
+            // Route the failure through LocalLoaded so the UI releases its
+            // loading state instead of waiting for an ExternalReloaded that
+            // never comes.
+            let _ = ui_tx
+                .send(crate::gui::message::Message::LocalLoaded(Err(format!(
+                    "external reload failed: {}",
+                    e
+                ))))
+                .await;
+        }
+    }
 }
 
 pub fn spawn_background_worker(
@@ -225,46 +288,7 @@ pub fn spawn_background_worker(
                         Some(WorkerCommand::FlushAndLoad) => {
                             // Channel FIFO guarantees any earlier Batch (disk writes)
                             // is fully persisted before this reload reads the disk.
-                            let ctx_clone = ctx.clone();
-                            let res = tokio::task::spawn_blocking(move || {
-                                crate::config::Config::invalidate_cache();
-                                let cfg = crate::config::Config::load_with_credentials(
-                                    ctx_clone.as_ref(),
-                                )
-                                .unwrap_or_default();
-                                let (cals, tasks) = crate::cache::Cache::load_all_disk_state(
-                                    ctx_clone.as_ref(),
-                                    cfg.enable_local_mode,
-                                );
-                                (Box::new(cfg), cals, tasks)
-                            })
-                            .await;
-                            match res {
-                                Ok((cfg, cals, tasks)) => {
-                                    // Replace the worker's store with the fresh disk
-                                    // state (under a single lock) so later Batch
-                                    // actions operate on current data.
-                                    let mut s = controller.store.lock().await;
-                                    s.clear();
-                                    s.insert_many(tasks.clone());
-                                    drop(s);
-                                    let _ = ui_tx
-                                        .send(crate::gui::message::Message::ExternalReloaded(
-                                            cfg, cals, tasks,
-                                        ))
-                                        .await;
-                                }
-                                Err(e) => {
-                                    // Route the failure through LocalLoaded so the UI
-                                    // releases its loading state instead of waiting
-                                    // for an ExternalReloaded that never comes.
-                                    let _ = ui_tx
-                                        .send(crate::gui::message::Message::LocalLoaded(Err(
-                                            format!("external reload failed: {}", e),
-                                        )))
-                                        .await;
-                                }
-                            }
+                            flush_and_load(ctx.clone(), &controller, &ui_tx).await;
                         }
                         None => break,
                     }
@@ -349,15 +373,12 @@ pub async fn async_migrate_wrapper(
     tasks: Vec<TodoTask>,
     target: String,
 ) -> anyhow::Result<usize> {
-    match tokio::time::timeout(
-        std::time::Duration::from_secs(45),
+    with_timeout(
+        45,
+        anyhow::anyhow!("Migration timed out"),
         client.migrate_tasks(tasks, &target),
     )
     .await
-    {
-        Ok(res) => res,
-        Err(_) => Err(anyhow::anyhow!("Migration timed out")),
-    }
 }
 
 /// Backfill calendar events for all tasks when the global setting is enabled.
@@ -383,7 +404,7 @@ pub async fn async_delete_all_events_wrapper(
     client: RustyClient,
     calendars: Vec<String>,
 ) -> anyhow::Result<usize> {
-    match tokio::time::timeout(std::time::Duration::from_secs(30), async {
+    with_timeout(30, anyhow::anyhow!("Deleting events timed out"), async {
         let mut total = 0;
         for cal_href in calendars {
             if let Ok(count) = client.delete_all_companion_events(&cal_href).await {
@@ -393,8 +414,4 @@ pub async fn async_delete_all_events_wrapper(
         Ok::<usize, anyhow::Error>(total)
     })
     .await
-    {
-        Ok(res) => res,
-        Err(_) => Err(anyhow::anyhow!("Deleting events timed out")),
-    }
 }

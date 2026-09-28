@@ -702,6 +702,8 @@
     "start": "Start",
     "start_grace_days": "Start grace (days):",
     "start_task": "Start task",
+    "suggestions": "Suggestions",
+    "suggestions_hint": "tab: apply, esc: dismiss",
     "status": "Status",
     "status_no_tasks_found": "No tasks found.",
     "status_no_tasks_to_migrate": "No tasks to migrate.",

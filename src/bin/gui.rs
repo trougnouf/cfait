@@ -55,6 +55,12 @@ fn main() -> iced::Result {
         i += 1;
     }
 
+    // Handle help flag (before any config or logging setup)
+    if args.iter().any(|arg| arg == "--help" || arg == "-h") {
+        cfait::cli::print_help(&binary_name);
+        return Ok(());
+    }
+
     // Create context and initialize logging
     let ctx: std::sync::Arc<dyn cfait::context::AppContext> =
         std::sync::Arc::new(cfait::context::StandardContext::new(override_root.clone()));
@@ -62,12 +68,6 @@ fn main() -> iced::Result {
     let config = cfait::config::Config::load(ctx.as_ref()).unwrap_or_default();
     // Initialize logging - enable stderr for GUI since it's safe
     cfait::system::init_logging(ctx.as_ref(), true, Some(config.log_level.to_level_filter()));
-
-    // Handle help flag
-    if args.iter().any(|arg| arg == "--help" || arg == "-h") {
-        cfait::cli::print_help(&binary_name);
-        return Ok(());
-    }
 
     // Grab the shared lock for the GUI (allows multiple UIs, blocks daemon)
     #[cfg(not(target_os = "android"))]

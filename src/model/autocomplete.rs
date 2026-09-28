@@ -132,8 +132,12 @@ pub fn suggest(
         let (prefix_str, query) = if let Some(stripped) = word.strip_prefix("@@") {
             ("@@", stripped)
         } else {
-            let match_res = lex.match_prefix(&lower).unwrap();
-            (match_res.0, &word[match_res.0.len()..])
+            let prefix_str = lex.match_prefix(&lower).map(|(p, _, _)| p).unwrap();
+            let query = lex
+                .extract_prefix(&word, &lower)
+                .map(|(_, _, rem)| rem)
+                .unwrap();
+            (prefix_str, query)
         };
         let query_lower = query.to_lowercase();
         let mut loc_counts: HashMap<String, usize> = HashMap::new();
@@ -174,13 +178,13 @@ pub fn suggest(
     }
 
     // 3. Collections
-    if let Some((p_str, PrefixToken::Collection, rem)) = lex.match_prefix(&lower) {
-        let original_prefix = &word[..p_str.len()];
-        let query_clean = crate::model::parser::strip_quotes(rem).to_lowercase();
+    if let Some((PrefixToken::Collection, _, rem_original)) = lex.extract_prefix(&word, &lower) {
+        let original_prefix = &word[..word.len() - rem_original.len()];
+        let query_clean = crate::model::parser::strip_quotes(rem_original).to_lowercase();
 
         let mut matches = Vec::new();
         for cal in calendars {
-            if cal.href == "local://trash" || cal.href == "local://recovery" {
+            if crate::storage::is_system_calendar(&cal.href) {
                 continue;
             }
             if contains_ignore_case(&cal.name, &query_clean) {
@@ -228,12 +232,12 @@ pub fn suggest(
         is_wiki = true;
         orig_prefix = "[[";
         search_query = stripped.trim_end_matches("]]");
-    } else if let Some((p_str, kind, rem)) = lex.match_prefix(&lower)
+    } else if let Some((kind, _, rem_original)) = lex.extract_prefix(&word, &lower)
         && (kind == PrefixToken::Dependency || kind == PrefixToken::Rel)
     {
         is_task_lookup = true;
-        orig_prefix = &word[..p_str.len()];
-        search_query = rem;
+        orig_prefix = &word[..word.len() - rem_original.len()];
+        search_query = rem_original;
     }
 
     if is_task_lookup {

@@ -1,12 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/model/parser.rs
-/*
-File: cfait/src/model/parser.rs
-Logic for parsing smart input strings into task properties.
-This file is recreated with updated handling for `done:` tokens to accept
-either a full datetime in the token (`done:YYYY-MM-DD HH:MM`) or the older
-date-only form with an optional separate time token following it.
-*/
+// Logic for parsing smart input strings into task properties.
 
 use crate::model::{Alarm, DateType, Task};
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, NaiveTime, Utc};
@@ -2734,6 +2728,44 @@ fn rrule_interval(rrule: &str) -> u32 {
         .unwrap_or(1)
 }
 
+/// If the token at `idx` is a time, pin the recurrence to its first
+/// occurrence at that time. Returns the extra tokens consumed (0 or 1).
+fn apply_recurrence_time(task: &mut Task, stream: &[String], idx: usize) -> usize {
+    if let Some(rrule) = &task.rrule
+        && idx < stream.len()
+        && let Some(t) = parse_time_string(&stream[idx])
+    {
+        let first_date = calculate_first_occurrence(rrule, Local::now().date_naive());
+        let date_val = DateType::Specific(crate::model::item::safe_local_to_utc(first_date, t));
+        task.due = Some(date_val.clone());
+        task.dtstart = Some(date_val);
+        1
+    } else {
+        0
+    }
+}
+
+/// Assign a parsed date (and optional end of a range) to the start and/or due slot.
+fn assign_start_due(
+    task: &mut Task,
+    set_start: bool,
+    set_due: bool,
+    dt: DateType,
+    dt_end: Option<DateType>,
+) {
+    if let Some(end) = dt_end {
+        task.dtstart = Some(dt);
+        task.due = Some(end);
+    } else {
+        if set_start {
+            task.dtstart = Some(dt.clone());
+        }
+        if set_due {
+            task.due = Some(dt);
+        }
+    }
+}
+
 pub fn apply_smart_input(
     task: &mut Task,
     input: &str,
@@ -2884,20 +2916,7 @@ pub fn apply_smart_input(
                     }
                 }
 
-                if let Some(rrule_str) = task.rrule.clone()
-                    && i + consumed < stream.len()
-                {
-                    let potential_time = &stream[i + consumed];
-                    if let Some(t) = parse_time_string(potential_time) {
-                        let today = Local::now().date_naive();
-                        let first_date = calculate_first_occurrence(&rrule_str, today);
-                        let dt_specific = crate::model::item::safe_local_to_utc(first_date, t);
-                        let date_val = DateType::Specific(dt_specific);
-                        task.due = Some(date_val.clone());
-                        task.dtstart = Some(date_val);
-                        consumed += 1;
-                    }
-                }
+                consumed += apply_recurrence_time(task, &stream, i + consumed);
             } else if !is_bg {
                 summary_words.push(unescape(token));
             }
@@ -2906,37 +2925,13 @@ pub fn apply_smart_input(
                 let freq = u.to_freq();
                 task.rrule = Some(format!("FREQ={}", freq));
                 has_recurrence = true;
-
-                if i + consumed < stream.len() {
-                    let potential_time = &stream[i + consumed];
-                    if let Some(t) = parse_time_string(potential_time) {
-                        let today = Local::now().date_naive();
-                        let first_date =
-                            calculate_first_occurrence(task.rrule.as_ref().unwrap(), today);
-                        let dt_specific = crate::model::item::safe_local_to_utc(first_date, t);
-                        let date_val = DateType::Specific(dt_specific);
-                        task.due = Some(date_val.clone());
-                        task.dtstart = Some(date_val);
-                        consumed += 1;
-                    }
-                }
+                consumed += apply_recurrence_time(task, &stream, i + consumed);
             }
         } else if pref == Some(PrefixToken::Recur) {
             if let Some(rrule) = parse_recurrence(rem) {
                 task.rrule = Some(rrule.clone());
                 has_recurrence = true;
-                if i + consumed < stream.len() {
-                    let potential_time = &stream[i + consumed];
-                    if let Some(t) = parse_time_string(potential_time) {
-                        let today = Local::now().date_naive();
-                        let first_date = calculate_first_occurrence(&rrule, today);
-                        let dt_specific = crate::model::item::safe_local_to_utc(first_date, t);
-                        let date_val = DateType::Specific(dt_specific);
-                        task.due = Some(date_val.clone());
-                        task.dtstart = Some(date_val);
-                        consumed += 1;
-                    }
-                }
+                consumed += apply_recurrence_time(task, &stream, i + consumed);
             } else if let Some((interval, unit, _)) =
                 parse_amount_and_unit_with_lex(rem, None, false, lex)
             {
@@ -3122,12 +3117,6 @@ pub fn apply_smart_input(
                         task.percent_complete = Some(pc.min(100));
                         matched = true;
                     }
-                } else if let Ok(ndt) =
-                    chrono::NaiveDateTime::parse_from_str(clean_val, "%Y-%m-%d %H:%M")
-                {
-                    let utc_dt = crate::model::item::safe_local_to_utc(ndt.date(), ndt.time());
-                    task.set_completion_date(Some(utc_dt));
-                    matched = true;
                 } else if let Some(d) = parse_smart_date_with_lex(clean_val, lex) {
                     let mut temp_consumed = 1;
                     let (dt, _) =
@@ -3368,17 +3357,7 @@ pub fn apply_smart_input(
                         i + temp_consumed,
                         &mut temp_consumed,
                     );
-                    if let Some(end) = dt_end {
-                        task.dtstart = Some(dt);
-                        task.due = Some(end);
-                    } else {
-                        if set_start {
-                            task.dtstart = Some(dt.clone());
-                        }
-                        if set_due {
-                            task.due = Some(dt);
-                        }
-                    }
+                    assign_start_due(task, set_start, set_due, dt, dt_end);
                     consumed = temp_consumed;
                     matched_date = true;
                 }
@@ -3400,17 +3379,7 @@ pub fn apply_smart_input(
                         i + temp_consumed,
                         &mut temp_consumed,
                     );
-                    if let Some(end) = dt_end {
-                        task.dtstart = Some(dt);
-                        task.due = Some(end);
-                    } else {
-                        if set_start {
-                            task.dtstart = Some(dt.clone());
-                        }
-                        if set_due {
-                            task.due = Some(dt);
-                        }
-                    }
+                    assign_start_due(task, set_start, set_due, dt, dt_end);
                     consumed = temp_consumed;
                     matched_date = true;
                 }
@@ -3420,17 +3389,7 @@ pub fn apply_smart_input(
                     let mut temp_consumed = 1;
                     let (dt, dt_end) =
                         finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
-                    if let Some(end) = dt_end {
-                        task.dtstart = Some(dt);
-                        task.due = Some(end);
-                    } else {
-                        if set_start {
-                            task.dtstart = Some(dt.clone());
-                        }
-                        if set_due {
-                            task.due = Some(dt);
-                        }
-                    }
+                    assign_start_due(task, set_start, set_due, dt, dt_end);
                     consumed = temp_consumed;
                 } else if let Some((t1, t2)) = parse_time_range(clean) {
                     let now_local = Local::now();
@@ -3472,17 +3431,7 @@ pub fn apply_smart_input(
                         i + temp_consumed,
                         &mut temp_consumed,
                     );
-                    if let Some(end) = dt_end {
-                        task.dtstart = Some(dt);
-                        task.due = Some(end);
-                    } else {
-                        if set_start {
-                            task.dtstart = Some(dt.clone());
-                        }
-                        if set_due {
-                            task.due = Some(dt);
-                        }
-                    }
+                    assign_start_due(task, set_start, set_due, dt, dt_end);
                     consumed = temp_consumed;
                 } else if !is_bg {
                     summary_words.push(unescape(token));
@@ -4354,5 +4303,53 @@ mod alias_extraction_tests {
         assert_eq!(clean, "#garden #green");
         assert_eq!(aliases.get("garden"), Some(&vec!["#balcony".to_string()]));
         assert!(!is_pure_alias_remainder(&clean, true));
+    }
+}
+
+#[cfg(test)]
+mod done_roundtrip_tests {
+    use super::*;
+    use crate::model::item::Task;
+    use chrono::{Local, NaiveDate, Utc};
+
+    #[test]
+    fn completion_datetime_survives_smart_string_roundtrip() {
+        // A completed task's `done:` token is serialized as `done:YYYY-MM-DD HH:MM`
+        // (with a space), so it re-tokenizes into a date token followed by a time
+        // token. The parser must merge them back into the original datetime.
+        let mut task = Task::new("water the tomatoes", &HashMap::new(), None);
+        let ndt = NaiveDate::from_ymd_opt(2024, 1, 15)
+            .unwrap()
+            .and_hms_opt(14, 30, 0)
+            .unwrap();
+        let local_dt = ndt
+            .and_local_timezone(Local)
+            .single()
+            .expect("valid local datetime");
+        task.set_completion_date(Some(local_dt.with_timezone(&Utc)));
+
+        let smart = task.to_smart_string();
+        assert!(
+            smart.contains("done:2024-01-15 14:30"),
+            "expected a done: token in the smart string, got: {smart}"
+        );
+
+        let reparsed = Task::new(&smart, &HashMap::new(), None);
+        let original = task.completion_date().expect("original completion date");
+        let roundtripped = reparsed
+            .completion_date()
+            .expect("round-tripped completion date");
+
+        assert_eq!(
+            original
+                .with_timezone(&Local)
+                .format("%Y-%m-%d %H:%M")
+                .to_string(),
+            roundtripped
+                .with_timezone(&Local)
+                .format("%Y-%m-%d %H:%M")
+                .to_string(),
+            "completion datetime lost its time on round-trip"
+        );
     }
 }

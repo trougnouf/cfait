@@ -740,10 +740,9 @@ impl CfaitMobile {
         } else {
             let lex_guard = crate::model::parser::LEXICON.read().unwrap();
             let lower = raw_word.to_lowercase();
-            if let Some((p_str, _, _)) = lex_guard.match_prefix(&lower) {
-                crate::model::parser::strip_quotes(&raw_word[p_str.len()..])
-            } else {
-                crate::model::parser::strip_quotes(&raw_word)
+            match lex_guard.extract_prefix(&raw_word, &lower) {
+                Some((_, _, rem_original)) => crate::model::parser::strip_quotes(rem_original),
+                None => crate::model::parser::strip_quotes(&raw_word),
             }
         };
 
@@ -1250,9 +1249,7 @@ fn firing_entries_to_mobile(
         .into_iter()
         .filter(|e| {
             store.get_task_ref(&e.task_uid).is_some_and(|task| {
-                !task.status.is_done()
-                    && task.calendar_href != crate::storage::LOCAL_TRASH_HREF
-                    && task.calendar_href != "local://recovery"
+                !task.status.is_done() && !crate::storage::is_system_calendar(&task.calendar_href)
             })
         })
         .map(|e| MobileAlarmInfo {
@@ -1394,8 +1391,7 @@ impl CfaitMobile {
         ics_content: String,
     ) -> Result<String, MobileError> {
         // Prevent importing to trash or recovery calendars
-        if calendar_href == crate::storage::LOCAL_TRASH_HREF || calendar_href == "local://recovery"
-        {
+        if crate::storage::is_system_calendar(&calendar_href) {
             return Err(MobileError::from(
                 rust_i18n::t!("error_cannot_import_to_system_calendar").to_string(),
             ));
@@ -1806,9 +1802,7 @@ impl CfaitMobile {
 
         let mut current_order = config.collection_order.clone();
         for cal in &cals {
-            if !current_order.contains(&cal.href)
-                && cal.href != crate::storage::LOCAL_TRASH_HREF
-                && cal.href != "local://recovery"
+            if !current_order.contains(&cal.href) && !crate::storage::is_system_calendar(&cal.href)
             {
                 current_order.push(cal.href.clone());
             }
@@ -1841,7 +1835,7 @@ impl CfaitMobile {
         // Process locals - need lock to check if trash/recovery are empty
         if !locals.is_empty() {
             for loc in locals {
-                if loc.href == crate::storage::LOCAL_TRASH_HREF || loc.href == "local://recovery" {
+                if crate::storage::is_system_calendar(&loc.href) {
                     if let Some(map) = store.calendars.get(&loc.href) {
                         if map.is_empty() {
                             continue;
@@ -1910,7 +1904,7 @@ impl CfaitMobile {
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let mut results = Vec::new();
         for (href, map) in &store.calendars {
-            if href == crate::storage::LOCAL_TRASH_HREF || href == "local://recovery" {
+            if crate::storage::is_system_calendar(href) {
                 continue;
             }
             for t in map.values() {
@@ -2067,9 +2061,7 @@ impl CfaitMobile {
                 if task.status.is_done() || task.status == crate::model::TaskStatus::InProcess {
                     continue;
                 }
-                if task.calendar_href == crate::storage::LOCAL_TRASH_HREF
-                    || task.calendar_href == "local://recovery"
-                {
+                if crate::storage::is_system_calendar(&task.calendar_href) {
                     continue;
                 }
 
@@ -2135,9 +2127,7 @@ impl CfaitMobile {
                 if task.status.is_done() || task.status == crate::model::TaskStatus::InProcess {
                     continue;
                 }
-                if task.calendar_href == crate::storage::LOCAL_TRASH_HREF
-                    || task.calendar_href == "local://recovery"
-                {
+                if crate::storage::is_system_calendar(&task.calendar_href) {
                     continue;
                 }
 
@@ -2613,10 +2603,7 @@ impl CfaitMobile {
         if config.show_task_goals_in_sidebar {
             let mut task_goals = Vec::new();
             for (href, map) in store.calendars.iter() {
-                if hidden.contains(href)
-                    || href == crate::storage::LOCAL_TRASH_HREF
-                    || href == "local://recovery"
-                {
+                if hidden.contains(href) || crate::storage::is_system_calendar(href) {
                     continue;
                 }
                 for t in map.values() {
@@ -3746,10 +3733,7 @@ impl CfaitMobile {
             None => return false,
         };
 
-        if task.status.is_done()
-            || task.calendar_href == crate::storage::LOCAL_TRASH_HREF
-            || task.calendar_href == "local://recovery"
-        {
+        if task.status.is_done() || crate::storage::is_system_calendar(&task.calendar_href) {
             return false;
         }
 

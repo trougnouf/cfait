@@ -214,6 +214,62 @@ fn format_description_for_markdown(raw: &str) -> String {
     paragraphs.join("\n\n")
 }
 
+/// Build the sidebar entry for a single goal: a bold title line, a progress
+/// bar with the current/target values, and a row of history cells.
+fn goal_progress_entry(
+    name: &str,
+    title_style: Style,
+    progress: u32,
+    goal: &crate::config::Goal,
+    history: &[f32],
+) -> Text<'static> {
+    let target = goal.target;
+    let (cur_str, tar_str) = if goal.goal_type == crate::config::GoalType::Duration {
+        crate::model::parser::format_goal_duration(progress, target)
+    } else {
+        (progress.to_string(), target.to_string())
+    };
+
+    let target_display = goal.format_target_display(&tar_str);
+    let title = format!("{} ({})", name, target_display);
+    let pct = if target > 0 {
+        (progress as f32 / target as f32).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let bar_len = 5;
+    let filled = (pct * bar_len as f32).round() as usize;
+    let bar = format!("[{}{}]", "■".repeat(filled), " ".repeat(bar_len - filled));
+
+    let color = if pct >= 1.0 {
+        Color::Green
+    } else {
+        Color::Yellow
+    };
+
+    let mut spans = vec![
+        Span::styled(bar, Style::default().fg(color)),
+        Span::raw(format!(" {}/{} ", cur_str, tar_str)),
+    ];
+
+    for &h_pct in history {
+        let h_color = if h_pct >= 1.0 {
+            Color::Green
+        } else if h_pct > 0.0 {
+            Color::Yellow
+        } else {
+            Color::DarkGray
+        };
+        spans.push(Span::styled("■", Style::default().fg(h_color)));
+    }
+
+    Text::from(vec![
+        Line::from(Span::styled(title, title_style)),
+        Line::from(spans),
+        Line::from(""), // spacing
+    ])
+}
+
 pub fn draw(f: &mut Frame, state: &mut AppState) {
     let is_dark_theme = state.theme.is_dark();
     let footer_height = if state.mode == InputMode::EditingDescription
@@ -497,8 +553,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 };
                 if state.hidden_calendars.contains(&c.href)
                     || state.disabled_calendars.contains(&c.href)
-                    || c.href == crate::storage::LOCAL_TRASH_HREF
-                    || c.href == "local://recovery"
+                    || crate::storage::is_system_calendar(&c.href)
                     || !supports
                 {
                     continue;
@@ -649,116 +704,29 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         .get(key)
                         .cloned()
                         .unwrap_or((0, Vec::new()));
-                    let target = goal.target;
-
-                    let (cur_str, tar_str) = if goal.goal_type == crate::config::GoalType::Duration
-                    {
-                        crate::model::parser::format_goal_duration(progress, target)
-                    } else {
-                        (progress.to_string(), target.to_string())
-                    };
-
-                    let target_display = goal.format_target_display(&tar_str);
-                    let title = format!("{} ({})", key, target_display);
-                    let pct = if target > 0 {
-                        (progress as f32 / target as f32).clamp(0.0, 1.0)
-                    } else {
-                        0.0
-                    };
-                    let bar_len = 5;
-                    let filled = (pct * bar_len as f32).round() as usize;
-                    let bar = format!("[{}{}]", "■".repeat(filled), " ".repeat(bar_len - filled));
-
-                    let color = if pct >= 1.0 {
-                        Color::Green
-                    } else {
-                        Color::Yellow
-                    };
-
-                    let mut spans = vec![
-                        Span::styled(bar, Style::default().fg(color)),
-                        Span::raw(format!(" {}/{} ", cur_str, tar_str)),
-                    ];
-
-                    for &h_pct in &history {
-                        let h_color = if h_pct >= 1.0 {
-                            Color::Green
-                        } else if h_pct > 0.0 {
-                            Color::Yellow
-                        } else {
-                            Color::DarkGray
-                        };
-                        spans.push(Span::styled("■", Style::default().fg(h_color)));
-                    }
-
-                    let text = Text::from(vec![
-                        Line::from(Span::styled(
-                            title,
-                            Style::default().add_modifier(Modifier::BOLD),
-                        )),
-                        Line::from(spans),
-                        Line::from(""), // spacing
-                    ]);
-                    items.push(ListItem::new(text));
+                    items.push(ListItem::new(goal_progress_entry(
+                        key,
+                        Style::default().add_modifier(Modifier::BOLD),
+                        progress,
+                        goal,
+                        &history,
+                    )));
                 }
 
                 for (_, summary, goal, progress, history) in &state.cached_task_goals {
-                    let target = goal.target;
-                    let (cur_str, tar_str) = if goal.goal_type == crate::config::GoalType::Duration
-                    {
-                        crate::model::parser::format_goal_duration(*progress, target)
-                    } else {
-                        (progress.to_string(), target.to_string())
-                    };
-
-                    let target_display = goal.format_target_display(&tar_str);
-                    let title = format!("{} ({})", summary, target_display);
-                    let pct = if target > 0 {
-                        (*progress as f32 / target as f32).clamp(0.0, 1.0)
-                    } else {
-                        0.0
-                    };
-                    let bar_len = 5;
-                    let filled = (pct * bar_len as f32).round() as usize;
-                    let bar = format!("[{}{}]", "■".repeat(filled), " ".repeat(bar_len - filled));
-
-                    let color = if pct >= 1.0 {
-                        Color::Green
-                    } else {
-                        Color::Yellow
-                    };
-
-                    let mut spans = vec![
-                        Span::styled(bar, Style::default().fg(color)),
-                        Span::raw(format!(" {}/{} ", cur_str, tar_str)),
-                    ];
-
-                    for &h_pct in history {
-                        let h_color = if h_pct >= 1.0 {
-                            Color::Green
-                        } else if h_pct > 0.0 {
-                            Color::Yellow
-                        } else {
-                            Color::DarkGray
-                        };
-                        spans.push(Span::styled("■", Style::default().fg(h_color)));
-                    }
-
-                    let text = Text::from(vec![
-                        Line::from(Span::styled(
-                            title,
-                            Style::default()
-                                .add_modifier(Modifier::BOLD)
-                                .fg(if is_dark_theme {
-                                    Color::Cyan
-                                } else {
-                                    Color::Blue
-                                }),
-                        )),
-                        Line::from(spans),
-                        Line::from(""), // spacing
-                    ]);
-                    items.push(ListItem::new(text));
+                    items.push(ListItem::new(goal_progress_entry(
+                        summary,
+                        Style::default()
+                            .add_modifier(Modifier::BOLD)
+                            .fg(if is_dark_theme {
+                                Color::Cyan
+                            } else {
+                                Color::Blue
+                            }),
+                        *progress,
+                        goal,
+                        history,
+                    )));
                 }
             }
             (
@@ -1069,6 +1037,14 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         // Build Task list items
         let list_inner_width = main_chunks[0].width.saturating_sub(2) as usize;
 
+        // Map calendar hrefs to their color once per frame so task rows can
+        // look up their bracket color in O(1) instead of scanning the list.
+        let cal_colors: HashMap<&str, Option<&str>> = state
+            .calendars
+            .iter()
+            .map(|c| (c.href.as_str(), c.color.as_deref()))
+            .collect();
+
         let task_items: Vec<ListItem> = state
             .tasks
             .iter()
@@ -1159,7 +1135,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                             base_style = base_style.fg(base_color).add_modifier(Modifier::DIM);
                         }
 
-                        let is_trash = t.calendar_href == "local://trash";
+                        let is_trash = t.calendar_href == crate::storage::LOCAL_TRASH_HREF;
 
                         if (t.status.is_done() && state.strikethrough_completed) || is_trash {
                             base_style = base_style.add_modifier(Modifier::CROSSED_OUT);
@@ -1169,11 +1145,9 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
                         // Color the checkbox brackets with the task's collection color,
                         // mirroring the collections sidebar tab.
-                        let bracket_style = state
-                            .calendars
-                            .iter()
-                            .find(|c| c.href == t.calendar_href)
-                            .and_then(|c| c.color.as_ref())
+                        let bracket_style = cal_colors
+                            .get(t.calendar_href.as_str())
+                            .and_then(|c| c.as_ref())
                             .and_then(|hex| color_utils::parse_hex_to_u8(hex))
                             .map(|(r, g, b)| Style::default().fg(Color::Rgb(r, g, b)))
                             .unwrap_or_default();
@@ -1799,10 +1773,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 let mut session_lines: Vec<String> = Vec::new();
                 for session in task.sessions.iter().rev().take(3) {
                     let s_dt = chrono::DateTime::from_timestamp(session.start, 0)
-                        .unwrap_or_else(|| chrono::DateTime::from_timestamp(0, 0).unwrap())
+                        .unwrap_or(chrono::DateTime::UNIX_EPOCH)
                         .with_timezone(&chrono::Local);
                     let e_dt = chrono::DateTime::from_timestamp(session.end, 0)
-                        .unwrap_or_else(|| chrono::DateTime::from_timestamp(0, 0).unwrap())
+                        .unwrap_or(chrono::DateTime::UNIX_EPOCH)
                         .with_timezone(&chrono::Local);
                     let dur = (session.end - session.start) / 60;
                     session_lines.push(format!(
@@ -2272,6 +2246,72 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 .split(footer_area);
             f.render_widget(status, chunks[0]);
             f.render_widget(help, chunks[1]);
+        }
+    }
+
+    // Auto-complete popup, anchored directly above the input line
+    if matches!(state.mode, InputMode::Creating | InputMode::Editing)
+        && let Some((_, suggestions)) = &state.suggestions
+    {
+        // Leave at least one row of main content visible above the popup.
+        let available = footer_area.y.saturating_sub(1);
+        let height = (suggestions.len() as u16 + 2).min(available);
+        if height > 2 {
+            let area = Rect::new(
+                footer_area.x,
+                footer_area.y.saturating_sub(height),
+                footer_area.width,
+                height,
+            );
+            let inner_height = height.saturating_sub(2) as usize;
+            let selected = state
+                .suggestion_selection
+                .min(suggestions.len().saturating_sub(1));
+            let start = if suggestions.len() > inner_height {
+                selected.saturating_sub(inner_height - 1)
+            } else {
+                0
+            };
+            let items: Vec<ListItem> = suggestions[start..]
+                .iter()
+                .enumerate()
+                .map(|(i, s)| {
+                    let label = if s.description.is_empty() {
+                        s.display.clone()
+                    } else {
+                        format!("{}  ({})", s.display, s.description)
+                    };
+                    let mut item = ListItem::new(label);
+                    if start + i == selected {
+                        item = item.style(
+                            Style::default()
+                                .bg(if is_dark_theme {
+                                    Color::Blue
+                                } else {
+                                    Color::Rgb(255, 200, 100)
+                                })
+                                .fg(Color::Black),
+                        );
+                    }
+                    item
+                })
+                .collect();
+            let popup = List::new(items).block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(format!(
+                        " {} ({}) ",
+                        t!("suggestions"),
+                        t!("suggestions_hint")
+                    ))
+                    .border_style(Style::default().fg(if is_dark_theme {
+                        Color::Yellow
+                    } else {
+                        Color::Rgb(200, 100, 0)
+                    })),
+            );
+            f.render_widget(Clear, area);
+            f.render_widget(popup, area);
         }
     }
 

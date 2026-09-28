@@ -9,6 +9,7 @@ use crate::tui::action::SidebarMode;
 use fastrand;
 use ratatui::widgets::ListState;
 use std::collections::{HashMap, HashSet};
+use std::ops::Range;
 use std::sync::Arc;
 use tokio::sync::mpsc; // Add import
 
@@ -168,6 +169,10 @@ pub struct AppState {
     pub new_task_title: String,
     pub tag_aliases: HashMap<String, Vec<String>>,
 
+    // Auto-complete state for the smart-input buffer (Creating/Editing only)
+    pub suggestions: Option<(Range<usize>, Vec<crate::model::autocomplete::Suggestion>)>,
+    pub suggestion_selection: usize,
+
     // Relationship browsing state
     pub relationship_items: Vec<(String, String, String)>, // (uid, display_name, rel_type)
     pub relationship_selection_state: ListState,
@@ -308,6 +313,8 @@ impl AppState {
             new_task_title: String::new(),
 
             tag_aliases: HashMap::new(),
+            suggestions: None,
+            suggestion_selection: 0,
             export_source_selection_state: ListState::default(),
             export_source_calendars: Vec::new(),
             export_selection_state: ListState::default(),
@@ -351,7 +358,7 @@ impl AppState {
             .filter(|c| self.local_mode_enabled || !c.href.starts_with("local://"))
             .filter(|c| !self.disabled_calendars.contains(&c.href))
             .filter(|c| {
-                if c.href == crate::storage::LOCAL_TRASH_HREF || c.href == "local://recovery" {
+                if crate::storage::is_system_calendar(&c.href) {
                     self.store
                         .calendars
                         .get(&c.href)
@@ -485,8 +492,7 @@ impl AppState {
             for (href, map) in self.store.calendars.iter() {
                 if self.hidden_calendars.contains(href)
                     || self.disabled_calendars.contains(href)
-                    || href == crate::storage::LOCAL_TRASH_HREF
-                    || href == "local://recovery"
+                    || crate::storage::is_system_calendar(href)
                 {
                     continue;
                 }
@@ -563,6 +569,13 @@ impl AppState {
             Some(TaskListItem::Task(task)) => Some(task),
             _ => None,
         }
+    }
+
+    /// The (selected task uid, yanked uid) pair, if both exist.
+    pub fn yank_pair(&self) -> Option<(String, String)> {
+        let yanked = self.yanked_uid.as_ref()?;
+        let selected = self.get_selected_task()?;
+        Some((selected.uid.clone(), yanked.clone()))
     }
 
     /// Find the index of a task by UID, ignoring control items
@@ -769,6 +782,100 @@ impl AppState {
         new_cursor_pos.clamp(0, self.input_buffer.chars().count())
     }
 
+    // --- AUTO-COMPLETE ---
+
+    /// Recompute suggestions for the current buffer and cursor. Suggestions
+    /// are only offered while creating or editing a task; any stale popup
+    /// state is cleared in every other mode.
+    pub fn refresh_suggestions(&mut self) {
+        if !matches!(self.mode, InputMode::Creating | InputMode::Editing) {
+            if self.suggestions.is_some() {
+                self.dismiss_suggestions();
+            }
+            return;
+        }
+        // cursor_position is a char count; convert to a byte offset before
+        // slicing so multibyte text can't panic.
+        let cursor_byte = self
+            .input_buffer
+            .char_indices()
+            .map(|(i, _)| i)
+            .nth(self.cursor_position)
+            .unwrap_or(self.input_buffer.len());
+        let result = crate::model::autocomplete::suggest(
+            &self.input_buffer,
+            cursor_byte,
+            &self.store,
+            &self.tag_aliases,
+            &self.calendars,
+        );
+        let range_changed = match (&self.suggestions, &result) {
+            (Some((r, _)), Some((nr, _))) => r != nr,
+            (None, Some(_)) | (Some(_), None) => true,
+            (None, None) => false,
+        };
+        if range_changed {
+            self.suggestion_selection = 0;
+        }
+        if let Some((_, items)) = &result
+            && self.suggestion_selection >= items.len()
+        {
+            self.suggestion_selection = items.len().saturating_sub(1);
+        }
+        self.suggestions = result;
+    }
+
+    /// Dismiss the open suggestion popup without touching the buffer.
+    pub fn dismiss_suggestions(&mut self) {
+        self.suggestions = None;
+        self.suggestion_selection = 0;
+    }
+
+    /// Move the highlighted suggestion up or down, wrapping around.
+    pub fn move_suggestion_cursor(&mut self, up: bool) {
+        if let Some((_, items)) = &self.suggestions
+            && !items.is_empty()
+        {
+            self.suggestion_selection = if up {
+                (self.suggestion_selection + items.len() - 1) % items.len()
+            } else {
+                (self.suggestion_selection + 1) % items.len()
+            };
+        }
+    }
+
+    /// Replace the current token with the highlighted suggestion and move the
+    /// cursor past it. Pushes the previous buffer onto the undo history.
+    pub fn apply_suggestion(&mut self) -> bool {
+        let Some((range, items)) = self.suggestions.take() else {
+            return false;
+        };
+        let Some(suggestion) = items.get(self.suggestion_selection) else {
+            self.suggestions = Some((range, items));
+            return false;
+        };
+        let old = self.input_buffer.clone();
+        // Range is not Copy in this toolchain, so capture what we need before
+        // moving it into replace_range.
+        let range_start = range.start;
+        let at_end = range.end == old.len();
+        let mut buffer = old.clone();
+        buffer.replace_range(range, &suggestion.replacement);
+        let mut cursor_chars =
+            old[..range_start].chars().count() + suggestion.replacement.chars().count();
+        // Append a space when completing at the end of the buffer so the next
+        // typed character starts a new token (matches the GUI).
+        if at_end {
+            buffer.push(' ');
+            cursor_chars += 1;
+        }
+        self.input_buffer = buffer;
+        self.cursor_position = cursor_chars;
+        self.text_history.push(old);
+        self.refresh_suggestions();
+        true
+    }
+
     /// Journal-capable calendars that are currently visible (not hidden,
     /// disabled, or reserved for trash/recovery).
     pub fn visible_journal_calendars(&self) -> Vec<&CalendarListEntry> {
@@ -782,11 +889,65 @@ impl AppState {
                 };
                 !self.hidden_calendars.contains(&c.href)
                     && !self.disabled_calendars.contains(&c.href)
-                    && c.href != crate::storage::LOCAL_TRASH_HREF
-                    && c.href != "local://recovery"
+                    && !crate::storage::is_system_calendar(&c.href)
                     && supports
             })
             .collect()
+    }
+
+    /// Cycle the active journal calendar to the next (forward) or previous
+    /// visible one, wrapping around at the ends.
+    pub fn cycle_journal_calendar(&mut self, forward: bool) {
+        let visible = self.visible_journal_calendars();
+        if visible.is_empty() {
+            return;
+        }
+        let current_idx = visible
+            .iter()
+            .position(|c| Some(&c.href) == self.active_cal_href.as_ref())
+            .unwrap_or(0);
+        let next_idx = if forward {
+            (current_idx + 1) % visible.len()
+        } else if current_idx == 0 {
+            visible.len() - 1
+        } else {
+            current_idx - 1
+        };
+        self.active_cal_href = Some(visible[next_idx].href.clone());
+        self.journal_editing_uid = None;
+        self.refresh_filtered_view();
+    }
+
+    /// Calendars a task currently in `current_href` can be moved to. When
+    /// `include_current` is set, the current calendar is offered as well (moving
+    /// a whole tree back to its own calendar is allowed).
+    pub fn move_targets_for(
+        &self,
+        current_href: &str,
+        include_current: bool,
+    ) -> Vec<CalendarListEntry> {
+        self.calendars
+            .iter()
+            .filter(|c| {
+                (include_current || c.href != current_href)
+                    && !self.disabled_calendars.contains(&c.href)
+                    && !crate::storage::is_system_calendar(&c.href)
+            })
+            .cloned()
+            .collect()
+    }
+
+    /// Toggles `key` in the expanded-tags set, refreshes the view, and
+    /// persists the change to the config.
+    pub fn toggle_expanded_tag(&mut self, key: String) {
+        if !self.expanded_tags.remove(&key) {
+            self.expanded_tags.insert(key);
+        }
+        self.refresh_filtered_view();
+        if let Ok(mut cfg) = crate::config::Config::load(self.ctx.as_ref()) {
+            cfg.expanded_tags = self.expanded_tags.iter().cloned().collect();
+            let _ = cfg.save(self.ctx.as_ref());
+        }
     }
 
     // --- HELPER FOR SIDEBAR LENGTH ---
@@ -972,105 +1133,109 @@ impl AppState {
             Focus::Sidebar => Focus::Main,
         }
     }
-    pub fn next_move_target(&mut self) {
-        if self.move_targets.is_empty() {
+    /// Steps `selection` to the next (forward) or previous index among `len`
+    /// items, wrapping around at the ends. No-op when the list is empty.
+    fn step_selection(selection: &mut ListState, len: usize, forward: bool) {
+        if len == 0 {
             return;
         }
-        let i = match self.move_selection_state.selected() {
-            Some(i) => {
-                if i >= self.move_targets.len() - 1 {
+        let i = match selection.selected() {
+            Some(i) if forward => {
+                if i >= len - 1 {
                     0
                 } else {
                     i + 1
                 }
             }
+            Some(i) => {
+                if i == 0 {
+                    len - 1
+                } else {
+                    i - 1
+                }
+            }
             None => 0,
         };
-        self.move_selection_state.select(Some(i));
+        selection.select(Some(i));
+    }
+
+    pub fn next_move_target(&mut self) {
+        Self::step_selection(
+            &mut self.move_selection_state,
+            self.move_targets.len(),
+            true,
+        );
     }
 
     pub fn previous_move_target(&mut self) {
-        if self.move_targets.is_empty() {
-            return;
-        }
-        let i = match self.move_selection_state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.move_targets.len() - 1
-                } else {
-                    i - 1
-                }
-            }
-            None => 0,
-        };
-        self.move_selection_state.select(Some(i));
+        Self::step_selection(
+            &mut self.move_selection_state,
+            self.move_targets.len(),
+            false,
+        );
     }
     pub fn next_export_source(&mut self) {
-        if self.export_source_calendars.is_empty() {
-            return;
-        }
-        let i = match self.export_source_selection_state.selected() {
-            Some(i) => {
-                if i >= self.export_source_calendars.len() - 1 {
-                    0
-                } else {
-                    i + 1
-                }
-            }
-            None => 0,
-        };
-        self.export_source_selection_state.select(Some(i));
+        Self::step_selection(
+            &mut self.export_source_selection_state,
+            self.export_source_calendars.len(),
+            true,
+        );
     }
 
     pub fn previous_export_source(&mut self) {
-        if self.export_source_calendars.is_empty() {
-            return;
-        }
-        let i = match self.export_source_selection_state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.export_source_calendars.len() - 1
-                } else {
-                    i - 1
-                }
-            }
-            None => 0,
-        };
-        self.export_source_selection_state.select(Some(i));
+        Self::step_selection(
+            &mut self.export_source_selection_state,
+            self.export_source_calendars.len(),
+            false,
+        );
     }
 
     pub fn next_export_target(&mut self) {
-        if self.export_targets.is_empty() {
-            return;
-        }
-        let i = match self.export_selection_state.selected() {
-            Some(i) => {
-                if i >= self.export_targets.len() - 1 {
-                    0
-                } else {
-                    i + 1
-                }
-            }
-            None => 0,
-        };
-        self.export_selection_state.select(Some(i));
+        Self::step_selection(
+            &mut self.export_selection_state,
+            self.export_targets.len(),
+            true,
+        );
     }
 
     pub fn previous_export_target(&mut self) {
-        if self.export_targets.is_empty() {
-            return;
-        }
-        let i = match self.export_selection_state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.export_targets.len() - 1
-                } else {
-                    i - 1
-                }
-            }
-            None => 0,
-        };
-        self.export_selection_state.select(Some(i));
+        Self::step_selection(
+            &mut self.export_selection_state,
+            self.export_targets.len(),
+            false,
+        );
+    }
+
+    pub fn next_session(&mut self) {
+        Self::step_selection(
+            &mut self.session_selection_state,
+            self.session_items.len(),
+            true,
+        );
+    }
+
+    pub fn previous_session(&mut self) {
+        Self::step_selection(
+            &mut self.session_selection_state,
+            self.session_items.len(),
+            false,
+        );
+    }
+
+    pub fn next_relationship(&mut self) {
+        Self::step_selection(
+            &mut self.relationship_selection_state,
+            self.relationship_items.len(),
+            true,
+        );
+    }
+
+    pub fn previous_relationship(&mut self) {
+        Self::step_selection(
+            &mut self.relationship_selection_state,
+            self.relationship_items.len(),
+            false,
+        );
     }
 
     /// Sets journal_editing_uid to the journal entry UID for the current journal_date,
@@ -1086,6 +1251,21 @@ impl AppState {
         if let Some(entry) = self.store.get_journal_entry(&href, self.journal_date) {
             self.journal_editing_uid = Some(entry.uid.clone());
         }
+    }
+
+    /// The uid of the journal entry currently in view: the one being edited, or
+    /// the entry of the active calendar's journal date if none is being edited.
+    pub fn journal_target_uid(&self) -> Option<String> {
+        if let Some(uid) = &self.journal_editing_uid {
+            return Some(uid.clone());
+        }
+        let target_href = self
+            .active_cal_href
+            .clone()
+            .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
+        self.store
+            .get_journal_entry(&target_href, self.journal_date)
+            .map(|t| t.uid.clone())
     }
 
     pub fn verify_sidebar_mode(&mut self) {
@@ -1319,5 +1499,122 @@ mod tests {
         state.delete_word_forward();
         assert_eq!(state.input_buffer, "abcdef");
         assert_eq!(state.cursor_position, 3);
+    }
+
+    fn state_with_tag_popup() -> AppState {
+        let mut state = AppState::new();
+        state.mode = InputMode::Creating;
+        state.input_buffer = "#gard".to_string();
+        state.cursor_position = 5; // end of buffer
+        state.tag_aliases.insert("#garden".to_string(), vec![]);
+        state.tag_aliases.insert("#gardening".to_string(), vec![]);
+        state.refresh_suggestions();
+        state
+    }
+
+    #[test]
+    fn test_suggestions_offered_for_tag_prefix() {
+        let state = state_with_tag_popup();
+
+        let (range, items) = state.suggestions.as_ref().expect("tag suggestions");
+        assert_eq!(*range, 0..5);
+        // Alias-only matches sort alphabetically at equal counts.
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].replacement, "#garden");
+        assert_eq!(items[1].replacement, "#gardening");
+        assert_eq!(state.suggestion_selection, 0);
+    }
+
+    #[test]
+    fn test_suggestions_cleared_outside_input_modes() {
+        let mut state = state_with_tag_popup();
+        assert!(state.suggestions.is_some());
+
+        state.mode = InputMode::Normal;
+        state.refresh_suggestions();
+
+        assert!(state.suggestions.is_none());
+        assert_eq!(state.suggestion_selection, 0);
+    }
+
+    #[test]
+    fn test_apply_suggestion_appends_space_at_buffer_end() {
+        let mut state = state_with_tag_popup();
+
+        assert!(state.apply_suggestion());
+        assert_eq!(state.input_buffer, "#garden ");
+        assert_eq!(state.cursor_position, 8);
+
+        // Undo restores the pre-completion buffer.
+        let restored = state.text_history.pop_undo(state.input_buffer.clone());
+        assert_eq!(restored, Some("#gard".to_string()));
+    }
+
+    #[test]
+    fn test_apply_suggestion_mid_buffer_keeps_rest() {
+        let mut state = state_with_tag_popup();
+        state.input_buffer = "#gard and more".to_string();
+        state.cursor_position = 5;
+        state.refresh_suggestions();
+
+        assert!(state.apply_suggestion());
+        assert_eq!(state.input_buffer, "#garden and more");
+        assert_eq!(state.cursor_position, 7);
+    }
+
+    #[test]
+    fn test_apply_suggestion_without_popup_is_noop() {
+        let mut state = AppState::new();
+        state.mode = InputMode::Creating;
+        state.input_buffer = "water the garden".to_string();
+        state.cursor_position = 0;
+
+        assert!(!state.apply_suggestion());
+        assert_eq!(state.input_buffer, "water the garden");
+    }
+
+    #[test]
+    fn test_move_suggestion_cursor_wraps_and_applies_selection() {
+        let mut state = state_with_tag_popup();
+
+        state.move_suggestion_cursor(false); // down: 0 -> 1
+        assert_eq!(state.suggestion_selection, 1);
+        state.move_suggestion_cursor(false); // down: wraps 1 -> 0
+        assert_eq!(state.suggestion_selection, 0);
+        state.move_suggestion_cursor(true); // up: wraps 0 -> 1
+        assert_eq!(state.suggestion_selection, 1);
+
+        // Applying uses the highlighted entry, not always the first.
+        assert!(state.apply_suggestion());
+        assert_eq!(state.input_buffer, "#gardening ");
+        assert_eq!(state.cursor_position, 11);
+    }
+
+    #[test]
+    fn test_refresh_keeps_selection_within_same_token() {
+        let mut state = state_with_tag_popup();
+        state.suggestion_selection = 1;
+
+        // Moving the cursor inside the same token keeps the selection.
+        state.cursor_position = 3;
+        state.refresh_suggestions();
+        assert_eq!(state.suggestion_selection, 1);
+
+        // A token change resets the selection to the top.
+        state.input_buffer = "#gard more #gard".to_string();
+        state.cursor_position = 14;
+        state.refresh_suggestions();
+        assert_eq!(state.suggestion_selection, 0);
+    }
+
+    #[test]
+    fn test_dismiss_suggestions_clears_state() {
+        let mut state = state_with_tag_popup();
+        assert!(state.suggestions.is_some());
+
+        state.dismiss_suggestions();
+
+        assert!(state.suggestions.is_none());
+        assert_eq!(state.suggestion_selection, 0);
     }
 }

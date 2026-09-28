@@ -50,6 +50,32 @@ fn extract_uid_tag(line: &str) -> (String, Option<String>) {
     (line.trim_end().to_string(), None)
 }
 
+/// Leading whitespace of `line`, as (indent level with tabs counting as 4, byte offset past it).
+fn leading_indent(line: &str) -> (usize, usize) {
+    let mut indent = 0;
+    let mut byte_offset = 0;
+    for c in line.chars() {
+        if c == ' ' {
+            indent += 1;
+            byte_offset += c.len_utf8();
+        } else if c == '\t' {
+            indent += 4;
+            byte_offset += c.len_utf8();
+        } else {
+            break;
+        }
+    }
+    (indent, byte_offset)
+}
+
+/// Number of leading ASCII digit bytes in `s`.
+fn leading_digit_bytes(s: &str) -> usize {
+    s.as_bytes()
+        .iter()
+        .take_while(|&&b| b.is_ascii_digit())
+        .count()
+}
+
 fn compute_task_lines(input: &str, global_is_journal: bool) -> Vec<bool> {
     let lines_vec: Vec<&str> = input.lines().collect();
     let mut is_task_line = vec![false; lines_vec.len()];
@@ -61,19 +87,7 @@ fn compute_task_lines(input: &str, global_is_journal: bool) -> Vec<bool> {
     let mut context_stack: Vec<(usize, bool)> = vec![(0, global_is_journal)];
 
     for (i, line) in lines_vec.iter().enumerate() {
-        let mut indent = 0;
-        let mut byte_offset = 0;
-        for c in line.chars() {
-            if c == ' ' {
-                indent += 1;
-                byte_offset += c.len_utf8();
-            } else if c == '\t' {
-                indent += 4;
-                byte_offset += c.len_utf8();
-            } else {
-                break;
-            }
-        }
+        let (indent, byte_offset) = leading_indent(line);
         indents[i] = indent;
 
         // Update context_stack based on indentation
@@ -108,14 +122,7 @@ fn compute_task_lines(input: &str, global_is_journal: bool) -> Vec<bool> {
             list_marker = true;
             after_marker = &rest[2..];
         } else {
-            let mut digit_bytes = 0;
-            for c in rest.chars() {
-                if c.is_ascii_digit() {
-                    digit_bytes += c.len_utf8();
-                } else {
-                    break;
-                }
-            }
+            let digit_bytes = leading_digit_bytes(rest);
             if digit_bytes > 0 && rest[digit_bytes..].starts_with(". ") {
                 list_marker = true;
                 after_marker = &rest[digit_bytes + 2..];
@@ -212,14 +219,7 @@ pub fn extract_list_prefix(line: &str) -> String {
     } else if rest.starts_with("* ") {
         prefix.push_str("* ");
     } else {
-        let mut digit_bytes = 0;
-        for c in rest.chars() {
-            if c.is_ascii_digit() {
-                digit_bytes += c.len_utf8();
-            } else {
-                break;
-            }
-        }
+        let digit_bytes = leading_digit_bytes(rest);
         if digit_bytes > 0 {
             let after = &rest[digit_bytes..];
             if after.starts_with(". [ ] ")
@@ -280,19 +280,7 @@ pub fn extract_markdown_tasks(
     let mut active_task_idx: Option<usize> = None;
 
     for (line_idx, line) in lines_vec.into_iter().enumerate() {
-        let mut indent = 0;
-        let mut byte_offset = 0;
-        for c in line.chars() {
-            if c == ' ' {
-                indent += 1;
-                byte_offset += c.len_utf8();
-            } else if c == '\t' {
-                indent += 4;
-                byte_offset += c.len_utf8();
-            } else {
-                break;
-            }
-        }
+        let (indent, byte_offset) = leading_indent(line);
 
         let rest = &line[byte_offset..];
 
@@ -347,14 +335,7 @@ pub fn extract_markdown_tasks(
                     raw_text = after_marker;
                 }
             } else {
-                let mut digit_bytes = 0;
-                for c in rest.chars() {
-                    if c.is_ascii_digit() {
-                        digit_bytes += c.len_utf8();
-                    } else {
-                        break;
-                    }
-                }
+                let digit_bytes = leading_digit_bytes(rest);
                 if digit_bytes > 0 && rest[digit_bytes..].starts_with(". ") {
                     let after_marker = &rest[digit_bytes + 2..];
                     if let Some((status, pc, r)) = parse_checkbox(after_marker) {
@@ -545,7 +526,8 @@ pub fn extract_markdown_tasks(
     // Clean up trailing newlines
     let cleaned_root_desc = cleaned_root_desc.trim_end().to_string();
     for task in &mut extracted {
-        task.description = task.description.trim_end().to_string();
+        let trimmed_len = task.description.trim_end().len();
+        task.description.truncate(trimmed_len);
     }
 
     // Distribute the payloads into the correct local inline_media dictionary
@@ -559,6 +541,56 @@ pub fn extract_markdown_tasks(
     *parent_media = root_media;
 
     (cleaned_root_desc, extracted)
+}
+
+/// Compute the display prefix (`"1."`, `"2."`, `"-"`) for each child in a task list.
+/// A child is numbered when it continues a sequence: it depends on its immediate
+/// predecessor, shares its predecessor's dependencies while the predecessor was
+/// numbered, or a later sibling depends on it.
+fn child_prefixes(children: &[&crate::model::Task]) -> Vec<String> {
+    let mut prefixes = Vec::new();
+    let mut current_number = 1;
+    let mut uses_number_prev = false;
+
+    for i in 0..children.len() {
+        let child = children[i];
+        let mut uses_number = false;
+        if i > 0 {
+            let prev_child = children[i - 1];
+            if child.dependencies.contains(&prev_child.uid) {
+                current_number += 1;
+                uses_number = true;
+            } else if prev_child.dependencies == child.dependencies && uses_number_prev {
+                uses_number = true;
+            } else {
+                current_number = 1;
+                let has_successor = children
+                    .iter()
+                    .skip(i + 1)
+                    .any(|c| c.dependencies.contains(&child.uid));
+                if has_successor {
+                    uses_number = true;
+                }
+            }
+        } else {
+            let has_successor = children
+                .iter()
+                .skip(1)
+                .any(|c| c.dependencies.contains(&child.uid));
+            if has_successor {
+                uses_number = true;
+            }
+        }
+
+        uses_number_prev = uses_number;
+        if uses_number {
+            prefixes.push(format!("{}.", current_number));
+        } else {
+            prefixes.push("-".to_string());
+        }
+    }
+
+    prefixes
 }
 
 pub fn serialize_task_tree(
@@ -581,8 +613,7 @@ pub fn serialize_task_tree(
             if let Some(p) = &t.parent_uid {
                 // Skip trashed/recovered tasks so they don't appear as ghost subtasks,
                 // unless we are explicitly serializing a tree that is ALREADY in the trash.
-                if (t.calendar_href == crate::storage::LOCAL_TRASH_HREF
-                    || t.calendar_href == "local://recovery")
+                if crate::storage::is_system_calendar(&t.calendar_href)
                     && t.calendar_href != root.calendar_href
                 {
                     continue;
@@ -597,7 +628,8 @@ pub fn serialize_task_tree(
     // We pre-sort deterministically (by created date, then summary) to ensure stable
     // git diffs and consistent publication output, rather than volatile priority/status sorting.
     for list in children_map.values_mut() {
-        list.sort_by_cached_key(|t| (t.created_date(), t.summary.clone(), t.uid.clone()));
+        // Key borrows the task data (stable in the store), so no per-task String clones.
+        list.sort_by_cached_key(|t| (t.created_date(), t.summary.as_str(), t.uid.as_str()));
 
         if list.len() <= 1 {
             continue;
@@ -740,9 +772,7 @@ pub fn serialize_task_tree(
             for uid in uids {
                 // Skip trashed/recovered/missing references so they self-heal (disappear) on save
                 if let Some(target_task) = ctx.store.get_task_ref(uid) {
-                    if target_task.calendar_href == crate::storage::LOCAL_TRASH_HREF
-                        || target_task.calendar_href == "local://recovery"
-                    {
+                    if crate::storage::is_system_calendar(&target_task.calendar_href) {
                         continue;
                     }
                 } else {
@@ -786,48 +816,7 @@ pub fn serialize_task_tree(
         }
 
         if let Some(children) = ctx.children_map.get(&task.uid) {
-            let mut prefixes = Vec::new();
-            let mut current_number = 1;
-            let mut uses_number_prev = false;
-
-            for i in 0..children.len() {
-                let child = children[i];
-                let mut uses_number = false;
-                if i > 0 {
-                    let prev_child = children[i - 1];
-                    if child.dependencies.contains(&prev_child.uid) {
-                        current_number += 1;
-                        uses_number = true;
-                    } else if prev_child.dependencies == child.dependencies && uses_number_prev {
-                        uses_number = true;
-                    } else {
-                        current_number = 1;
-                        let has_successor = children
-                            .iter()
-                            .skip(i + 1)
-                            .any(|c| c.dependencies.contains(&child.uid));
-                        if has_successor {
-                            uses_number = true;
-                        }
-                    }
-                } else {
-                    let has_successor = children
-                        .iter()
-                        .skip(1)
-                        .any(|c| c.dependencies.contains(&child.uid));
-                    if has_successor {
-                        uses_number = true;
-                    }
-                }
-
-                uses_number_prev = uses_number;
-                if uses_number {
-                    prefixes.push(format!("{}.", current_number));
-                } else {
-                    prefixes.push("-".to_string());
-                }
-            }
-
+            let prefixes = child_prefixes(children);
             for (child, prefix) in children.iter().zip(prefixes.iter()) {
                 serialize_node(ctx, child, depth + 1, out, prefix, &task.calendar_href);
             }
@@ -846,48 +835,7 @@ pub fn serialize_task_tree(
             out.push('\n');
         }
         if let Some(children) = children_map.get(&root.uid) {
-            let mut prefixes = Vec::new();
-            let mut current_number = 1;
-            let mut uses_number_prev = false;
-
-            for i in 0..children.len() {
-                let child = children[i];
-                let mut uses_number = false;
-                if i > 0 {
-                    let prev_child = children[i - 1];
-                    if child.dependencies.contains(&prev_child.uid) {
-                        current_number += 1;
-                        uses_number = true;
-                    } else if prev_child.dependencies == child.dependencies && uses_number_prev {
-                        uses_number = true;
-                    } else {
-                        current_number = 1;
-                        let has_successor = children
-                            .iter()
-                            .skip(i + 1)
-                            .any(|c| c.dependencies.contains(&child.uid));
-                        if has_successor {
-                            uses_number = true;
-                        }
-                    }
-                } else {
-                    let has_successor = children
-                        .iter()
-                        .skip(1)
-                        .any(|c| c.dependencies.contains(&child.uid));
-                    if has_successor {
-                        uses_number = true;
-                    }
-                }
-
-                uses_number_prev = uses_number;
-                if uses_number {
-                    prefixes.push(format!("{}.", current_number));
-                } else {
-                    prefixes.push("-".to_string());
-                }
-            }
-
+            let prefixes = child_prefixes(children);
             for (child, prefix) in children.iter().zip(prefixes.iter()) {
                 serialize_node(&ctx, child, 0, &mut out, prefix, &root.calendar_href);
             }
