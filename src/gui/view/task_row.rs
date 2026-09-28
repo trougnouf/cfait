@@ -830,7 +830,7 @@ pub fn view_task_row<'a>(
             };
 
             let is_strikethrough = (app.strikethrough_completed && task.status.is_done())
-                || task.calendar_href == "local://trash";
+                || task.calendar_href == crate::storage::LOCAL_TRASH_HREF;
 
             let summary_spans = parse_inline_markdown(
                 &task.summary,

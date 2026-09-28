@@ -8,7 +8,6 @@ use crate::gui::state::{Focus, GuiApp, SidebarMode};
 use crate::gui::update::common;
 use crate::gui::update::network::release_loading;
 use crate::model::{AppIntent, PENDING_REFRESH_ETAG};
-use crate::storage::LOCAL_TRASH_HREF;
 use chrono::NaiveTime;
 use iced::Task;
 use iced::widget::text_editor;
@@ -1966,8 +1965,7 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                     .find(|c| {
                         !app.hidden_calendars.contains(&c.href)
                             && !app.disabled_calendars.contains(&c.href)
-                            && c.href != LOCAL_TRASH_HREF
-                            && c.href != "local://recovery"
+                            && !crate::storage::is_system_calendar(&c.href)
                     })
                     .map(|c| c.href.clone())
             })

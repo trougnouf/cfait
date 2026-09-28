@@ -797,8 +797,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if show_all {
                 app.hidden_calendars.clear();
                 // Explicitly re-hide trash unless it is active
-                if app.active_cal_href.as_deref() != Some("local://trash") {
-                    app.hidden_calendars.insert("local://trash".to_string());
+                if app.active_cal_href.as_deref() != Some(crate::storage::LOCAL_TRASH_HREF) {
+                    app.hidden_calendars
+                        .insert(crate::storage::LOCAL_TRASH_HREF.to_string());
                 }
             } else {
                 for cal in &app.calendars {

@@ -553,8 +553,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 };
                 if state.hidden_calendars.contains(&c.href)
                     || state.disabled_calendars.contains(&c.href)
-                    || c.href == crate::storage::LOCAL_TRASH_HREF
-                    || c.href == "local://recovery"
+                    || crate::storage::is_system_calendar(&c.href)
                     || !supports
                 {
                     continue;
@@ -1136,7 +1135,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                             base_style = base_style.fg(base_color).add_modifier(Modifier::DIM);
                         }
 
-                        let is_trash = t.calendar_href == "local://trash";
+                        let is_trash = t.calendar_href == crate::storage::LOCAL_TRASH_HREF;
 
                         if (t.status.is_done() && state.strikethrough_completed) || is_trash {
                             base_style = base_style.add_modifier(Modifier::CROSSED_OUT);

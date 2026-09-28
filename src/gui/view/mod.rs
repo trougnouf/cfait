@@ -1718,7 +1718,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool, is_expanded: bool) -> Elemen
     let are_all_visible = app
         .get_filtered_calendars()
         .iter()
-        .filter(|c| c.href != crate::storage::LOCAL_TRASH_HREF && c.href != "local://recovery")
+        .filter(|c| !crate::storage::is_system_calendar(&c.href))
         .all(|c| !app.hidden_calendars.contains(&c.href));
 
     // Resolve the actual dynamic message (handles Focus clearing vs Calendar toggling)
@@ -2507,8 +2507,7 @@ fn view_ics_import_overlay<'a>(app: &'a GuiApp) -> Element<'a, Message> {
     let mut calendar_list = column![].spacing(5);
     for cal in &app.calendars {
         if app.disabled_calendars.contains(&cal.href)
-            || cal.href == crate::storage::LOCAL_TRASH_HREF
-            || cal.href == "local://recovery"
+            || crate::storage::is_system_calendar(&cal.href)
         {
             continue;
         }
@@ -2630,8 +2629,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
 
         if !app.hidden_calendars.contains(&c.href)
             && !app.disabled_calendars.contains(&c.href)
-            && c.href != crate::storage::LOCAL_TRASH_HREF
-            && c.href != "local://recovery"
+            && !crate::storage::is_system_calendar(&c.href)
             && supports
         {
             visible_cals_set.insert(c.href.clone());

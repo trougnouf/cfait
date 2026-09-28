@@ -90,8 +90,7 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
         for (href, map) in app.store.calendars.iter() {
             if app.hidden_calendars.contains(href)
                 || app.disabled_calendars.contains(href)
-                || href == crate::storage::LOCAL_TRASH_HREF
-                || href == "local://recovery"
+                || crate::storage::is_system_calendar(href)
             {
                 continue;
             }

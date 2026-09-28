@@ -394,9 +394,7 @@ fn is_ringing_valid(
     let Some(store_task) = store.get_task_ref(&task.uid) else {
         return false;
     };
-    if store_task.status.is_done()
-        || store_task.calendar_href == crate::storage::LOCAL_TRASH_HREF
-        || store_task.calendar_href == "local://recovery"
+    if store_task.status.is_done() || crate::storage::is_system_calendar(&store_task.calendar_href)
     {
         return false;
     }

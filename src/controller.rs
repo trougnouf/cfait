@@ -500,9 +500,7 @@ impl TaskController {
     }
 
     pub async fn create_task(&self, mut task: Task) -> Result<String, String> {
-        if task.calendar_href == crate::storage::LOCAL_TRASH_HREF
-            || task.calendar_href == "local://recovery"
-        {
+        if crate::storage::is_system_calendar(&task.calendar_href) {
             task.calendar_href = crate::storage::LOCAL_CALENDAR_HREF.to_string();
         }
         if !task.calendar_href.starts_with("local://") {

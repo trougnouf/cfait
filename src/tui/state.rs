@@ -358,7 +358,7 @@ impl AppState {
             .filter(|c| self.local_mode_enabled || !c.href.starts_with("local://"))
             .filter(|c| !self.disabled_calendars.contains(&c.href))
             .filter(|c| {
-                if c.href == crate::storage::LOCAL_TRASH_HREF || c.href == "local://recovery" {
+                if crate::storage::is_system_calendar(&c.href) {
                     self.store
                         .calendars
                         .get(&c.href)
@@ -492,8 +492,7 @@ impl AppState {
             for (href, map) in self.store.calendars.iter() {
                 if self.hidden_calendars.contains(href)
                     || self.disabled_calendars.contains(href)
-                    || href == crate::storage::LOCAL_TRASH_HREF
-                    || href == "local://recovery"
+                    || crate::storage::is_system_calendar(href)
                 {
                     continue;
                 }
@@ -890,8 +889,7 @@ impl AppState {
                 };
                 !self.hidden_calendars.contains(&c.href)
                     && !self.disabled_calendars.contains(&c.href)
-                    && c.href != crate::storage::LOCAL_TRASH_HREF
-                    && c.href != "local://recovery"
+                    && !crate::storage::is_system_calendar(&c.href)
                     && supports
             })
             .collect()
@@ -933,8 +931,7 @@ impl AppState {
             .filter(|c| {
                 (include_current || c.href != current_href)
                     && !self.disabled_calendars.contains(&c.href)
-                    && c.href != crate::storage::LOCAL_TRASH_HREF
-                    && c.href != "local://recovery"
+                    && !crate::storage::is_system_calendar(&c.href)
             })
             .cloned()
             .collect()

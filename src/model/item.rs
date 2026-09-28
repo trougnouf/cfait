@@ -887,7 +887,7 @@ impl Task {
         default_reminder_time: NaiveTime,
     ) -> u8 {
         // Trash items are bottom-most
-        if self.calendar_href == "local://trash" {
+        if self.calendar_href == crate::storage::LOCAL_TRASH_HREF {
             return 9;
         }
 

@@ -581,8 +581,7 @@ pub fn serialize_task_tree(
             if let Some(p) = &t.parent_uid {
                 // Skip trashed/recovered tasks so they don't appear as ghost subtasks,
                 // unless we are explicitly serializing a tree that is ALREADY in the trash.
-                if (t.calendar_href == crate::storage::LOCAL_TRASH_HREF
-                    || t.calendar_href == "local://recovery")
+                if crate::storage::is_system_calendar(&t.calendar_href)
                     && t.calendar_href != root.calendar_href
                 {
                     continue;
@@ -740,9 +739,7 @@ pub fn serialize_task_tree(
             for uid in uids {
                 // Skip trashed/recovered/missing references so they self-heal (disappear) on save
                 if let Some(target_task) = ctx.store.get_task_ref(uid) {
-                    if target_task.calendar_href == crate::storage::LOCAL_TRASH_HREF
-                        || target_task.calendar_href == "local://recovery"
-                    {
+                    if crate::storage::is_system_calendar(&target_task.calendar_href) {
                         continue;
                     }
                 } else {

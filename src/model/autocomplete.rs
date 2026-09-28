@@ -180,7 +180,7 @@ pub fn suggest(
 
         let mut matches = Vec::new();
         for cal in calendars {
-            if cal.href == "local://trash" || cal.href == "local://recovery" {
+            if crate::storage::is_system_calendar(&cal.href) {
                 continue;
             }
             if contains_ignore_case(&cal.name, &query_clean) {

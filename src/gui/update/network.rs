@@ -7,9 +7,7 @@ use crate::gui::update::common::{
 };
 use crate::journal::Journal;
 use crate::model::CalendarListEntry;
-use crate::storage::{
-    LOCAL_CALENDAR_HREF, LOCAL_CALENDAR_NAME, LOCAL_TRASH_HREF, LocalCalendarRegistry,
-};
+use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_CALENDAR_NAME, LocalCalendarRegistry};
 use crate::system::SystemEvent;
 use iced::Task;
 
@@ -228,8 +226,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     .find(|c| {
                         !app.hidden_calendars.contains(&c.href)
                             && !app.disabled_calendars.contains(&c.href)
-                            && c.href != LOCAL_TRASH_HREF
-                            && c.href != "local://recovery"
+                            && !crate::storage::is_system_calendar(&c.href)
                     })
                     .map(|c| c.href.clone());
             }

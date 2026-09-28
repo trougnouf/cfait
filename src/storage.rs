@@ -24,8 +24,25 @@ use std::sync::Arc;
 pub const LOCAL_CALENDAR_HREF: &str = "local://default";
 pub const LOCAL_CALENDAR_NAME: &str = "Local";
 pub const LOCAL_TRASH_HREF: &str = "local://trash";
+pub const LOCAL_RECOVERY_HREF: &str = "local://recovery";
 pub const LOCAL_REGISTRY_FILENAME: &str = "local_calendars.json";
 const LOCAL_STORAGE_VERSION: u32 = 10;
+
+/// System calendars (trash and recovery) are internal bookkeeping collections:
+/// they are never user-visible, never synced, and never valid write targets.
+pub fn is_system_calendar(href: &str) -> bool {
+    href == LOCAL_TRASH_HREF || href == LOCAL_RECOVERY_HREF
+}
+
+/// A write target pointing at a system calendar is redirected to the default
+/// local calendar, since trash and recovery are managed internally.
+pub fn safe_target_href(href: &str) -> &str {
+    if is_system_calendar(href) {
+        LOCAL_CALENDAR_HREF
+    } else {
+        href
+    }
+}
 
 /// Files this process recently wrote via `atomic_write`, with the write time.
 /// Used to suppress watcher events caused by our own persistence, so only
@@ -254,12 +271,7 @@ impl LocalStorage {
         ics_content: &str,
     ) -> Result<usize> {
         // Prevent writing to trash or recovery calendars - redirect to default
-        let calendar_href =
-            if calendar_href == LOCAL_TRASH_HREF || calendar_href == "local://recovery" {
-                LOCAL_CALENDAR_HREF
-            } else {
-                calendar_href
-            };
+        let calendar_href = safe_target_href(calendar_href);
 
         let imported_tasks = Self::parse_ics(calendar_href, ics_content)?;
         let count = imported_tasks.len();

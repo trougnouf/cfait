@@ -12,7 +12,7 @@ use crate::config::Config;
 use crate::model::display::random_session_example;
 use crate::model::parser::{extract_inline_aliases, validate_alias_integrity};
 use crate::model::{AppIntent, PENDING_REFRESH_ETAG, Task, TaskStatus};
-use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_TRASH_HREF};
+use crate::storage::LOCAL_CALENDAR_HREF;
 use crate::system::SystemEvent;
 use crate::tui::action::{Action, AppEvent, SidebarMode};
 use crate::tui::state::{AppState, Focus, InputMode};
@@ -583,8 +583,7 @@ async fn execute_task_action(
                 .filter(|c| {
                     c.href != current_href
                         && !state.disabled_calendars.contains(&c.href)
-                        && c.href != crate::storage::LOCAL_TRASH_HREF
-                        && c.href != "local://recovery"
+                        && !crate::storage::is_system_calendar(&c.href)
                 })
                 .cloned()
                 .collect();
@@ -1250,8 +1249,7 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
                     .find(|c| {
                         !state.hidden_calendars.contains(&c.href)
                             && !state.disabled_calendars.contains(&c.href)
-                            && c.href != LOCAL_TRASH_HREF
-                            && c.href != "local://recovery"
+                            && !crate::storage::is_system_calendar(&c.href)
                     })
                     .map(|c| c.href.clone())
                     .or_else(|| {
@@ -3445,10 +3443,7 @@ pub async fn handle_key_event(
                         let are_all_visible = state
                             .get_filtered_calendars()
                             .iter()
-                            .filter(|c| {
-                                c.href != crate::storage::LOCAL_TRASH_HREF
-                                    && c.href != "local://recovery"
-                            })
+                            .filter(|c| !crate::storage::is_system_calendar(&c.href))
                             .all(|c| !state.hidden_calendars.contains(&c.href));
 
                         if are_all_visible {
@@ -3460,13 +3455,19 @@ pub async fn handle_key_event(
                         } else {
                             state.hidden_calendars.clear();
                             // Re-hide system calendars if not active
-                            if state.active_cal_href.as_deref() != Some("local://trash") {
-                                state.hidden_calendars.insert("local://trash".to_string());
-                            }
-                            if state.active_cal_href.as_deref() != Some("local://recovery") {
+                            if state.active_cal_href.as_deref()
+                                != Some(crate::storage::LOCAL_TRASH_HREF)
+                            {
                                 state
                                     .hidden_calendars
-                                    .insert("local://recovery".to_string());
+                                    .insert(crate::storage::LOCAL_TRASH_HREF.to_string());
+                            }
+                            if state.active_cal_href.as_deref()
+                                != Some(crate::storage::LOCAL_RECOVERY_HREF)
+                            {
+                                state
+                                    .hidden_calendars
+                                    .insert(crate::storage::LOCAL_RECOVERY_HREF.to_string());
                             }
                             state.pending_refresh_generation = state.edit_generation;
                             let _ = action_tx.send(Action::Refresh).await;
