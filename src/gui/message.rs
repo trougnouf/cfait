@@ -1,9 +1,6 @@
-// File: ./src/gui/message.rs
 // SPDX-License-Identifier: GPL-3.0-or-later
-/*
-File: cfait/src/gui/message.rs
-Defines all messages used for the Elm architecture in the GUI.
-*/
+// File: ./src/gui/message.rs
+// Messages for the GUI's Elm architecture.
 
 use crate::client::RustyClient;
 use crate::config::{AppTheme, Config, LogLevel};
