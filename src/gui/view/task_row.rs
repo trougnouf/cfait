@@ -982,11 +982,7 @@ pub fn view_task_row<'a>(
                         0,
                     ),
                     TaskAction::Move => (icon::MOVE, Message::StartMoveTask(task.uid.clone()), 0),
-                    TaskAction::Cancel => (
-                        icon::CROSS,
-                        Message::SetTaskStatus(index, crate::model::TaskStatus::Cancelled),
-                        1,
-                    ),
+                    TaskAction::Cancel => (icon::CROSS, Message::CancelTask(index), 1),
                     TaskAction::Delete => (icon::TRASH, Message::DeleteTask(index), 1),
                     TaskAction::DeleteTree => {
                         (icon::TRASH, Message::DeleteTaskTree(task.uid.clone()), 2)

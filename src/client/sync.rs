@@ -5,7 +5,7 @@
 use crate::client::core::{HttpsClient, RustyClient, strip_host};
 use crate::journal::{Action, Journal};
 use crate::model::merge::three_way_merge;
-use crate::model::{CalendarListEntry, IcsAdapter, Task};
+use crate::model::{CalendarListEntry, IcsAdapter, PENDING_REFRESH_ETAG, Task};
 use crate::storage::{LocalCalendarRegistry, LocalStorage};
 
 use http::{Request, StatusCode};
@@ -269,7 +269,7 @@ impl RustyClient {
         };
 
         let ics_string = IcsAdapter::to_ics(task);
-        let etag_val = if task.etag == "pending_refresh" {
+        let etag_val = if task.etag == PENDING_REFRESH_ETAG {
             ""
         } else {
             &task.etag
@@ -429,7 +429,7 @@ impl RustyClient {
         }
         let path = fix_and_encode_path(client, &task.href, None);
 
-        let resp = if !task.etag.is_empty() && task.etag != "pending_refresh" {
+        let resp = if !task.etag.is_empty() && task.etag != PENDING_REFRESH_ETAG {
             client
                 .request(Delete::new(&path).with_etag(&task.etag))
                 .await

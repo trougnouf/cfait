@@ -318,6 +318,9 @@ where
     }
 }
 
+/// Etag placeholder set on tasks that must be re-fetched from the server.
+pub const PENDING_REFRESH_ETAG: &str = "pending_refresh";
+
 /// Virtual state used to represent placeholder/virtual rows in flattened lists.
 /// Primary in-memory Task model. Fields map closely to VTODO/ICS semantics.
 /// Transient/display fields (is_blocked, sort_rank...) are skipped during serialization.
@@ -666,9 +669,9 @@ impl Task {
     }
 
     pub fn inherit_metadata_if_pending(&mut self, other: &Task) {
-        if (self.etag.is_empty() || self.etag == "pending_refresh")
+        if (self.etag.is_empty() || self.etag == PENDING_REFRESH_ETAG)
             && !other.etag.is_empty()
-            && other.etag != "pending_refresh"
+            && other.etag != PENDING_REFRESH_ETAG
         {
             self.etag = other.etag.clone();
             self.href = other.href.clone();

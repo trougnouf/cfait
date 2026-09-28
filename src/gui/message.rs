@@ -111,7 +111,7 @@ pub enum Message {
     EditTaskTree(String),
     CancelEdit,
     ChangePriority(usize, i8),
-    SetTaskStatus(usize, crate::model::TaskStatus),
+    CancelTask(usize),
     StartTask(String),
     PauseTask(String),
     StopTask(String),

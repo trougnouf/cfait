@@ -710,7 +710,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                 ),
                 TaskAction::Cancel => (
                     icon::icon(icon::CROSS).size(14).into(),
-                    Message::SetTaskStatus(idx, crate::model::TaskStatus::Cancelled),
+                    Message::CancelTask(idx),
                     true,
                 ),
                 TaskAction::Delete => (

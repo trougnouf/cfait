@@ -5,7 +5,7 @@ use crate::client::RustyClient;
 use crate::config::Config;
 use crate::context::AppContext;
 use crate::journal::{Action, Journal};
-use crate::model::Task;
+use crate::model::{PENDING_REFRESH_ETAG, Task};
 use crate::storage::{LocalCalendarRegistry, LocalStorage};
 use crate::store::TaskStore;
 use chrono::{DateTime, Utc};
@@ -156,7 +156,7 @@ impl TaskController {
                 if let Some((existing, _)) = store.get_task_mut(uid)
                     && existing.etag.is_empty()
                 {
-                    existing.etag = "pending_refresh".to_string();
+                    existing.etag = PENDING_REFRESH_ETAG.to_string();
                 }
             }
         }

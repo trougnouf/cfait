@@ -16,7 +16,7 @@ use crate::context::{AppContext, StandardContext};
 use crate::controller::TaskController;
 use crate::help::HelpTab;
 use crate::model::parser::{SyntaxType, tokenize_smart_input};
-use crate::model::{AlarmTrigger, DateType, Task};
+use crate::model::{AlarmTrigger, DateType, PENDING_REFRESH_ETAG, Task};
 use crate::storage::{LOCAL_CALENDAR_HREF, LocalCalendarRegistry, LocalStorage};
 use crate::store::{FilterOptions, TaskStore, UNCATEGORIZED_ID};
 use chrono::{DateTime, NaiveTime, Utc};
@@ -1420,7 +1420,7 @@ impl CfaitMobile {
                     format!("{}/{}", cal_path, filename)
                 };
                 task.href = full_href;
-                task.etag = "pending_refresh".to_string();
+                task.etag = PENDING_REFRESH_ETAG.to_string();
 
                 crate::journal::Journal::push(
                     self.ctx.as_ref(),

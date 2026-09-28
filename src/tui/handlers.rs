@@ -11,7 +11,7 @@ and DateTime::<Utc>::from_utc(...) to construct timezone-aware values.
 use crate::config::Config;
 use crate::model::display::random_session_example;
 use crate::model::parser::{extract_inline_aliases, validate_alias_integrity};
-use crate::model::{AppIntent, CalendarListEntry, Task, TaskStatus};
+use crate::model::{AppIntent, CalendarListEntry, PENDING_REFRESH_ETAG, Task, TaskStatus};
 use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_TRASH_HREF};
 use crate::system::SystemEvent;
 use crate::tui::action::{Action, AppEvent, SidebarMode};
@@ -2835,7 +2835,7 @@ pub async fn handle_key_event(
                 let is_shift = key.modifiers.contains(KeyModifiers::SHIFT);
                 if state.active_focus == Focus::Main {
                     if let Some(view_task) = state.get_selected_task() {
-                        if view_task.etag == "pending_refresh" || view_task.is_note {
+                        if view_task.etag == PENDING_REFRESH_ETAG || view_task.is_note {
                             return None;
                         }
                         let uid = view_task.uid.clone();

@@ -116,7 +116,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::CancelEdit
         | Message::DeleteTask(_)
         | Message::ChangePriority(_, _)
-        | Message::SetTaskStatus(_, _)
+        | Message::CancelTask(_)
         | Message::YankTask(_)
         | Message::CopyToClipboard(_)
         | Message::ClearYank

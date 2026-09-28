@@ -14,7 +14,10 @@ pub mod recurrence;
 pub mod session;
 
 // Re-export everything from `item.rs` so `crate::model::Task` and related types work.
-pub use item::{Alarm, AlarmTrigger, CalendarListEntry, DateType, RawProperty, Task, TaskStatus};
+pub use item::{
+    Alarm, AlarmTrigger, CalendarListEntry, DateType, PENDING_REFRESH_ETAG, RawProperty, Task,
+    TaskStatus,
+};
 
 // Re-export specific parser helpers used across the codebase.
 pub use parser::{
