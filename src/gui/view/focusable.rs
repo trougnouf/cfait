@@ -146,11 +146,6 @@ where
             // Register the bounds for this focusable so other code can inspect them later
             // (e.g. for testing, diagnostics, or advanced bring-into-view heuristics).
             register_focus_bounds(id, layout.bounds());
-
-            // Signature based on compiler error: (id, bounds, state)
-            // Arg 1: Option<&Id>
-            // Arg 2: Rectangle
-            // Arg 3: &mut dyn Focusable
             operation.focusable(Some(id), layout.bounds(), state);
         }
 

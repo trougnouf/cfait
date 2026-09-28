@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/gui/mod.rs
-/*
-Entry point and setup for the GUI application.
-*/
+// Entry point and setup for the GUI application.
 
 pub mod async_ops;
 pub mod icon;
@@ -100,8 +98,18 @@ fn alarm_stream() -> impl iced::futures::Stream<Item = Message> {
     })
 }
 
+// The Rusty Dark custom theme (avoids duplicating the palette).
+fn create_rusty_dark_theme() -> Theme {
+    let mut palette = iced::Theme::Dark.palette();
+    palette.background = iced::Color::from_rgb8(0x21, 0x1e, 0x1e);
+    palette.text = iced::Color::WHITE;
+    palette.primary = iced::Color::from_rgb8(0xFF, 0xA5, 0x00); // Orange
+    palette.success = iced::Color::from_rgb8(0xA3, 0xBE, 0x8C); // Muted Green
+    palette.danger = iced::Color::from_rgb8(0xBF, 0x61, 0x6A); // Muted Red
+    Theme::custom("Rusty Dark", palette)
+}
+
 impl GuiApp {
-    // NOTE: new_with_ics signature was updated to accept force_ssd; call sites must match.
     fn new_with_ics(
         ics_file_path: Option<String>,
         override_root: Option<PathBuf>,
@@ -168,17 +176,6 @@ impl GuiApp {
     }
 
     fn theme(&self) -> Theme {
-        // Helper to create the Rusty Dark custom theme (avoids duplicating the palette)
-        fn create_rusty_dark_theme() -> Theme {
-            let mut palette = iced::Theme::Dark.palette();
-            palette.background = iced::Color::from_rgb8(0x21, 0x1e, 0x1e);
-            palette.text = iced::Color::WHITE;
-            palette.primary = iced::Color::from_rgb8(0xFF, 0xA5, 0x00); // Orange
-            palette.success = iced::Color::from_rgb8(0xA3, 0xBE, 0x8C); // Muted Green
-            palette.danger = iced::Color::from_rgb8(0xBF, 0x61, 0x6A); // Muted Red
-            Theme::custom("Rusty Dark", palette)
-        }
-
         // Determine which theme to actually render
         let effective_theme = if self.current_theme == AppTheme::Random {
             self.resolved_random_theme
