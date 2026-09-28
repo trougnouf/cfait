@@ -95,6 +95,65 @@ fn load_daily_note_into(app: &mut GuiApp, href: &str, date: chrono::NaiveDate) {
     }
 }
 
+/// Returns the full text of a text-editor `Content` and the byte offset of
+/// its cursor position within that text.
+fn content_text_and_offset(content: &iced::widget::text_editor::Content) -> (String, usize) {
+    let text = content.text();
+    let line_idx = content.cursor().position.line;
+    let col_idx = content.cursor().position.column;
+    let mut byte_offset = 0;
+    for (current_line, line_str) in text.split('\n').enumerate() {
+        if current_line == line_idx {
+            let col_bytes: usize = line_str.chars().take(col_idx).map(|c| c.len_utf8()).sum();
+            byte_offset += col_bytes;
+            break;
+        }
+        byte_offset += line_str.len() + 1;
+    }
+    (text, byte_offset)
+}
+
+/// Index of the currently selected task in the filtered list (0 if none).
+fn selected_task_idx(app: &GuiApp) -> usize {
+    app.selected_uid
+        .as_ref()
+        .and_then(|uid| app.find_task_index_by_uid(uid))
+        .unwrap_or(0)
+}
+
+/// Snaps the sidebar scrollable so that item `idx` out of `count` is visible.
+fn snap_sidebar_item(app: &GuiApp, idx: usize, count: usize) -> Task<Message> {
+    if count > 1 {
+        let y = idx as f32 / (count - 1) as f32;
+        operation::snap_to(
+            app.sidebar_scrollable_id.clone(),
+            iced::widget::scrollable::RelativeOffset { x: 0.0, y },
+        )
+    } else {
+        Task::none()
+    }
+}
+
+/// Snaps a modal's scrollable (250px viewport, 39px items) so that item `idx`
+/// out of `count` is centered in view.
+fn snap_modal_item(scrollable_id: iced::widget::Id, idx: usize, count: usize) -> Task<Message> {
+    const VIEWPORT_H: f32 = 250.0;
+    const ITEM_H: f32 = 39.0;
+    let content_h = count as f32 * ITEM_H;
+    let item_center = (idx as f32 + 0.5) * ITEM_H;
+    let max_scroll_px = (content_h - VIEWPORT_H).max(0.0);
+    let desired_offset_px = (item_center - VIEWPORT_H / 2.0).clamp(0.0, max_scroll_px);
+    let y = if max_scroll_px > 0.0 {
+        (desired_offset_px / max_scroll_px).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    operation::snap_to(
+        scrollable_id,
+        iced::widget::scrollable::RelativeOffset { x: 0.0, y },
+    )
+}
+
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {
         Message::TaskClick(index, uid) => {
@@ -144,11 +203,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if app.sidebar_mode == SidebarMode::Journal || app.tasks.is_empty() {
                 return Task::none();
             }
-            let current_idx = app
-                .selected_uid
-                .as_ref()
-                .and_then(|uid| app.find_task_index_by_uid(uid))
-                .unwrap_or(0);
+            let current_idx = selected_task_idx(app);
 
             let next_idx = (current_idx + 10).min(app.tasks.len() - 1);
 
@@ -317,11 +372,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if app.tasks.is_empty() {
                 return Task::none();
             }
-            let current_idx = app
-                .selected_uid
-                .as_ref()
-                .and_then(|uid| app.find_task_index_by_uid(uid))
-                .unwrap_or(0);
+            let current_idx = selected_task_idx(app);
 
             let prev_idx = current_idx.saturating_sub(10);
 
@@ -403,37 +454,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::TabPressed(forward) => {
             let is_desc_focused = app.last_edited_field == 1 || app.editing_tree_uid.is_some();
             let (target_text, cursor_pos) = if is_desc_focused {
-                let content = &app.description_value;
-                let text = content.text();
-                let line_idx = content.cursor().position.line;
-                let col_idx = content.cursor().position.column;
-                let mut byte_offset = 0;
-                for (current_line, line_str) in text.split('\n').enumerate() {
-                    if current_line == line_idx {
-                        let col_bytes: usize =
-                            line_str.chars().take(col_idx).map(|c| c.len_utf8()).sum();
-                        byte_offset += col_bytes;
-                        break;
-                    }
-                    byte_offset += line_str.len() + 1;
-                }
-                (text.to_string(), byte_offset)
+                content_text_and_offset(&app.description_value)
             } else {
-                let content = &app.input_value;
-                let text = content.text();
-                let line_idx = content.cursor().position.line;
-                let col_idx = content.cursor().position.column;
-                let mut byte_offset = 0;
-                for (current_line, line_str) in text.split('\n').enumerate() {
-                    if current_line == line_idx {
-                        let col_bytes: usize =
-                            line_str.chars().take(col_idx).map(|c| c.len_utf8()).sum();
-                        byte_offset += col_bytes;
-                        break;
-                    }
-                    byte_offset += line_str.len() + 1;
-                }
-                (text.to_string(), byte_offset)
+                content_text_and_offset(&app.input_value)
             };
 
             if let Some((range, suggs)) = crate::model::autocomplete::suggest(
@@ -498,26 +521,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 crate::gui::state::Focus::Sidebar => {
                     let unfocus =
                         iced::widget::operation::focus(iced::widget::Id::new("dummy_unfocus"));
-                    let max = match app.sidebar_mode {
-                        SidebarMode::Calendars => app.get_filtered_calendars().len(),
-                        SidebarMode::Categories => app.cached_categories.len(),
-                        SidebarMode::Locations => app.cached_locations.len(),
-                        SidebarMode::Journal => 31, // Mini-calendar has ~31 days
-                        SidebarMode::Goals => app.core_config.goals.len(),
-                    };
-                    if max > 0 {
-                        let y_offset = app.sidebar_selection_idx as f32
-                            / (max.saturating_sub(1)).max(1) as f32;
-                        let snap = iced::widget::operation::snap_to(
-                            app.sidebar_scrollable_id.clone(),
-                            iced::widget::scrollable::RelativeOffset {
-                                x: 0.0,
-                                y: y_offset,
-                            },
-                        );
-                        return Task::batch(vec![unfocus, snap]);
-                    }
-                    unfocus
+                    let snap =
+                        snap_sidebar_item(app, app.sidebar_selection_idx, app.get_sidebar_len());
+                    Task::batch(vec![unfocus, snap])
                 }
                 crate::gui::state::Focus::SearchInput => {
                     iced::widget::operation::focus("header_search_input")
@@ -586,15 +592,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 let max = app.get_sidebar_len();
                 if max > 0 {
                     app.sidebar_selection_idx = (app.sidebar_selection_idx + 1) % max;
-                    let y_offset =
-                        app.sidebar_selection_idx as f32 / (max.saturating_sub(1)).max(1) as f32;
-                    return iced::widget::operation::snap_to(
-                        app.sidebar_scrollable_id.clone(),
-                        iced::widget::scrollable::RelativeOffset {
-                            x: 0.0,
-                            y: y_offset,
-                        },
-                    );
+                    return snap_sidebar_item(app, app.sidebar_selection_idx, max);
                 }
                 return Task::none();
             }
@@ -606,22 +604,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     let targets_len = targets.len();
                     if !targets.is_empty() {
                         app.move_target_idx = (app.move_target_idx + 1).min(targets_len - 1);
-
-                        let viewport_h = 250.0;
-                        let item_h = 39.0;
-                        let content_h = targets_len as f32 * item_h;
-                        let item_center = (app.move_target_idx as f32 + 0.5) * item_h;
-                        let max_scroll_px = (content_h - viewport_h).max(0.0);
-                        let desired_offset_px =
-                            (item_center - viewport_h / 2.0).clamp(0.0, max_scroll_px);
-                        let y = if max_scroll_px > 0.0 {
-                            (desired_offset_px / max_scroll_px).clamp(0.0, 1.0)
-                        } else {
-                            0.0
-                        };
-                        return iced::widget::operation::snap_to(
+                        return snap_modal_item(
                             iced::widget::Id::new("move_modal_scrollable"),
-                            iced::widget::scrollable::RelativeOffset { x: 0.0, y },
+                            app.move_target_idx,
+                            targets_len,
                         );
                     }
                 }
@@ -641,22 +627,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         .unwrap_or(0);
                     let next_idx = (current_idx + 1).min(targets.len() - 1);
                     app.ics_import_selected_calendar = Some(targets[next_idx].href.clone());
-
-                    let viewport_h = 250.0;
-                    let item_h = 39.0;
-                    let content_h = targets.len() as f32 * item_h;
-                    let item_center = (next_idx as f32 + 0.5) * item_h;
-                    let max_scroll_px = (content_h - viewport_h).max(0.0);
-                    let desired_offset_px =
-                        (item_center - viewport_h / 2.0).clamp(0.0, max_scroll_px);
-                    let y = if max_scroll_px > 0.0 {
-                        (desired_offset_px / max_scroll_px).clamp(0.0, 1.0)
-                    } else {
-                        0.0
-                    };
-                    return iced::widget::operation::snap_to(
+                    return snap_modal_item(
                         iced::widget::Id::new("ics_import_scrollable"),
-                        iced::widget::scrollable::RelativeOffset { x: 0.0, y },
+                        next_idx,
+                        targets.len(),
                     );
                 }
                 return Task::none();
@@ -667,11 +641,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
 
             // Find current index
-            let current_idx = app
-                .selected_uid
-                .as_ref()
-                .and_then(|uid| app.find_task_index_by_uid(uid))
-                .unwrap_or(0);
+            let current_idx = selected_task_idx(app);
 
             // Calculate next index (wrapping or clamping)
             let next_idx = if current_idx + 1 >= app.tasks.len() {
@@ -694,15 +664,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     } else {
                         app.sidebar_selection_idx -= 1;
                     }
-                    let y_offset =
-                        app.sidebar_selection_idx as f32 / (max.saturating_sub(1)).max(1) as f32;
-                    return iced::widget::operation::snap_to(
-                        app.sidebar_scrollable_id.clone(),
-                        iced::widget::scrollable::RelativeOffset {
-                            x: 0.0,
-                            y: y_offset,
-                        },
-                    );
+                    return snap_sidebar_item(app, app.sidebar_selection_idx, max);
                 }
                 return Task::none();
             }
@@ -717,21 +679,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         app.get_move_targets(&task.calendar_href, app.moving_task_is_tree);
                     let targets_len = targets.len();
 
-                    let viewport_h = 250.0;
-                    let item_h = 39.0;
-                    let content_h = targets_len as f32 * item_h;
-                    let item_center = (app.move_target_idx as f32 + 0.5) * item_h;
-                    let max_scroll_px = (content_h - viewport_h).max(0.0);
-                    let desired_offset_px =
-                        (item_center - viewport_h / 2.0).clamp(0.0, max_scroll_px);
-                    let y = if max_scroll_px > 0.0 {
-                        (desired_offset_px / max_scroll_px).clamp(0.0, 1.0)
-                    } else {
-                        0.0
-                    };
-                    return iced::widget::operation::snap_to(
+                    return snap_modal_item(
                         iced::widget::Id::new("move_modal_scrollable"),
-                        iced::widget::scrollable::RelativeOffset { x: 0.0, y },
+                        app.move_target_idx,
+                        targets_len,
                     );
                 }
 
@@ -751,22 +702,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         .unwrap_or(0);
                     let prev_idx = current_idx.saturating_sub(1);
                     app.ics_import_selected_calendar = Some(targets[prev_idx].href.clone());
-
-                    let viewport_h = 250.0;
-                    let item_h = 39.0;
-                    let content_h = targets.len() as f32 * item_h;
-                    let item_center = (prev_idx as f32 + 0.5) * item_h;
-                    let max_scroll_px = (content_h - viewport_h).max(0.0);
-                    let desired_offset_px =
-                        (item_center - viewport_h / 2.0).clamp(0.0, max_scroll_px);
-                    let y = if max_scroll_px > 0.0 {
-                        (desired_offset_px / max_scroll_px).clamp(0.0, 1.0)
-                    } else {
-                        0.0
-                    };
-                    return iced::widget::operation::snap_to(
+                    return snap_modal_item(
                         iced::widget::Id::new("ics_import_scrollable"),
-                        iced::widget::scrollable::RelativeOffset { x: 0.0, y },
+                        prev_idx,
+                        targets.len(),
                     );
                 }
                 return Task::none();
@@ -775,11 +714,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if app.tasks.is_empty() {
                 return Task::none();
             }
-            let current_idx = app
-                .selected_uid
-                .as_ref()
-                .and_then(|uid| app.find_task_index_by_uid(uid))
-                .unwrap_or(0);
+            let current_idx = selected_task_idx(app);
             let prev_idx = if current_idx == 0 {
                 app.tasks.len() - 1
             } else {
@@ -1599,17 +1534,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 .iter()
                 .position(|item| item.full_key == *scroll_target)
             {
-                let total = all_cats.len();
-                if total > 1 {
-                    let y_offset = index as f32 / (total - 1) as f32;
-                    return iced::widget::operation::snap_to(
-                        app.sidebar_scrollable_id.clone(),
-                        iced::widget::scrollable::RelativeOffset {
-                            x: 0.0,
-                            y: y_offset,
-                        },
-                    );
-                }
+                return snap_sidebar_item(app, index, all_cats.len());
             }
             Task::none()
         }
@@ -1635,17 +1560,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 .iter()
                 .position(|item| item.full_key == *scroll_target)
             {
-                let total = all_locs.len();
-                if total > 1 {
-                    let y_offset = index as f32 / (total - 1) as f32;
-                    return iced::widget::operation::snap_to(
-                        app.sidebar_scrollable_id.clone(),
-                        iced::widget::scrollable::RelativeOffset {
-                            x: 0.0,
-                            y: y_offset,
-                        },
-                    );
-                }
+                return snap_sidebar_item(app, index, all_locs.len());
             }
             Task::none()
         }
