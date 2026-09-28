@@ -5,7 +5,6 @@
 
 use crate::gui::message::Message;
 use crate::gui::state::{Focus, GuiApp, SidebarMode};
-use crate::gui::subscription::ACTIVE_FOCUS;
 use crate::gui::update::common;
 use crate::gui::update::network::release_loading;
 use crate::model::{AppIntent, PENDING_REFRESH_ETAG};
@@ -230,15 +229,6 @@ fn send_batch(app: &mut GuiApp, actions: Vec<crate::journal::Action>) {
     }
 }
 
-/// Set the keyboard focus in both the app state and the global subscription,
-/// keeping the two in sync.
-fn set_active_focus(app: &mut GuiApp, focus: Focus) {
-    app.active_focus = focus;
-    if let Ok(mut g) = ACTIVE_FOCUS.write() {
-        *g = focus;
-    }
-}
-
 /// Show an info message that auto-dismisses after four seconds, scrolling
 /// the list to the selected row.
 fn flash_info_message(app: &mut GuiApp, msg: String) -> Task<Message> {
@@ -423,14 +413,14 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.journal_editor_content
                     .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
 
-                set_active_focus(app, Focus::Journal);
+                common::set_active_focus(app, Focus::Journal);
                 return Task::batch(vec![
                     iced::widget::operation::focus(iced::widget::Id::new("journal_editor")),
                     schedule_journal_save(app),
                 ]);
             }
 
-            set_active_focus(app, Focus::AddTaskInput);
+            common::set_active_focus(app, Focus::AddTaskInput);
 
             let is_desc = app.last_edited_field == 1 || app.editing_tree_uid.is_some();
 
@@ -455,7 +445,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
         }
         Message::InputChanged(action) => {
-            set_active_focus(app, Focus::AddTaskInput);
+            common::set_active_focus(app, Focus::AddTaskInput);
             if let text_editor::Action::Edit(text_editor::Edit::Enter) = action {
                 return handle_submit(app, false);
             }
@@ -567,7 +557,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.desc_history.clear();
             app.last_edited_field = 0;
 
-            set_active_focus(app, Focus::AddTaskInput);
+            common::set_active_focus(app, Focus::AddTaskInput);
 
             iced::widget::operation::focus(iced::widget::Id::new("main_input"))
         }
@@ -575,7 +565,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::StartCreateWithDescription => {
             app.creating_with_desc = true;
 
-            set_active_focus(app, Focus::AddTaskInput);
+            common::set_active_focus(app, Focus::AddTaskInput);
 
             if app.input_value.text().trim().is_empty() {
                 iced::widget::operation::focus(iced::widget::Id::new("main_input"))
@@ -623,7 +613,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.editing_uid = Some(task_uid.clone());
                 app.selected_uid = Some(task_uid);
 
-                set_active_focus(app, Focus::AddTaskInput);
+                common::set_active_focus(app, Focus::AddTaskInput);
 
                 return iced::widget::operation::focus(iced::widget::Id::new("main_input"));
             }
@@ -653,7 +643,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     app.editing_tree_uid = Some(task_uid.clone());
                     app.selected_uid = Some(task_uid);
 
-                    set_active_focus(app, Focus::AddTaskInput);
+                    common::set_active_focus(app, Focus::AddTaskInput);
 
                     return iced::widget::operation::focus(iced::widget::Id::new(
                         "description_input",
@@ -1164,7 +1154,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::EscCaptured => {
-            set_active_focus(app, Focus::MainList);
+            common::set_active_focus(app, Focus::MainList);
             app.info_msg = None;
             if app.editing_uid.is_some()
                 || app.editing_tree_uid.is_some()
@@ -1183,7 +1173,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::EscapePressed => {
-            set_active_focus(app, Focus::MainList);
+            common::set_active_focus(app, Focus::MainList);
             let mut needs_refresh = false;
             let mut captured_action = false;
 
@@ -1482,7 +1472,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.session_input = iced::widget::text_editor::Content::new();
             app.expanded_tasks.insert(uid.clone());
 
-            set_active_focus(app, Focus::AddTaskInput);
+            common::set_active_focus(app, Focus::AddTaskInput);
 
             iced::widget::operation::focus(iced::widget::Id::from(format!("session_input_{}", uid)))
         }
@@ -1530,7 +1520,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     ));
             }
 
-            set_active_focus(app, Focus::AddTaskInput);
+            common::set_active_focus(app, Focus::AddTaskInput);
             iced::widget::operation::focus(iced::widget::Id::from(format!("session_input_{}", uid)))
         }
 

@@ -3,9 +3,9 @@
 use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, Focus, GuiApp, ResizeDirection, SidebarMode};
-use crate::gui::subscription::ACTIVE_FOCUS;
 use crate::gui::update::common::{
     refresh_filtered_tasks, save_config, scroll_to_selected, scroll_to_selected_delayed,
+    set_active_focus,
 };
 use crate::gui::update::tasks;
 use crate::store::select_weighted_random_index;
@@ -154,13 +154,152 @@ fn snap_modal_item(scrollable_id: iced::widget::Id, idx: usize, count: usize) ->
     )
 }
 
+/// Clear the search box, the session search term, and collapsed search tasks.
+fn clear_search(app: &mut GuiApp) {
+    app.search_value = iced::widget::text_editor::Content::new();
+    app.session.search_term.clear();
+    app.session.search_collapsed_tasks.clear();
+}
+
+/// Create a new journal page in the active collection (optionally under
+/// `parent_uid`), send it to the background worker, and open it in the editor.
+fn create_journal_page(app: &mut GuiApp, parent_uid: Option<String>) -> Task<Message> {
+    flush_journal_save(app);
+    let target_href = app
+        .journal_editing_href
+        .clone()
+        .or(app.active_cal_href.clone())
+        .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
+
+    let mut new_page = crate::model::Task::new("", &app.tag_aliases, None);
+    new_page.summary = rust_i18n::t!("untitled_page", default = "Untitled page").to_string();
+    app.journal_title_input = new_page.summary.clone();
+    new_page.is_journal = true;
+    new_page.calendar_href = target_href.clone();
+    new_page.parent_uid = parent_uid;
+    let uid = new_page.uid.clone();
+
+    app.edit_generation = app.edit_generation.wrapping_add(1);
+    app.store.add_task(new_page.clone());
+    if let Some(tx) = &app.bg_tx {
+        let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(vec![
+            crate::journal::Action::Create(new_page),
+        ]));
+    }
+
+    app.active_cal_href = Some(target_href);
+    app.journal_editing_uid = Some(uid);
+    app.journal_editor_content = iced::widget::text_editor::Content::with_text("");
+    app.journal_history.clear();
+    app.editor_maximized = true;
+
+    refresh_filtered_tasks(app);
+    Task::none()
+}
+
+/// Run `f` on the latest window handle, or do nothing if there is none.
+fn on_latest_window(f: impl Fn(window::Id) -> Task<Message> + Send + 'static) -> Task<Message> {
+    window::latest().then(move |id| {
+        if let Some(id) = id {
+            f(id)
+        } else {
+            Task::none()
+        }
+    })
+}
+
+/// Step the sidebar selection forward or back (wrapping), snapping the list.
+fn step_sidebar(app: &mut GuiApp, forward: bool) -> Task<Message> {
+    let max = app.get_sidebar_len();
+    if max == 0 {
+        return Task::none();
+    }
+    app.sidebar_selection_idx = if forward {
+        (app.sidebar_selection_idx + 1) % max
+    } else {
+        (app.sidebar_selection_idx + max - 1) % max
+    };
+    snap_sidebar_item(app, app.sidebar_selection_idx, max)
+}
+
+/// Step the move-target modal selection forward or back, snapping the list.
+fn step_move_target(app: &mut GuiApp, forward: bool) -> Task<Message> {
+    let Some(task) = app
+        .moving_task_uid
+        .as_ref()
+        .and_then(|uid| app.store.get_task_ref(uid))
+    else {
+        return Task::none();
+    };
+    let targets_len = app
+        .get_move_targets(&task.calendar_href, app.moving_task_is_tree)
+        .len();
+    if forward {
+        if targets_len == 0 {
+            return Task::none();
+        }
+        app.move_target_idx = (app.move_target_idx + 1).min(targets_len - 1);
+    } else {
+        app.move_target_idx = app.move_target_idx.saturating_sub(1);
+    }
+    snap_modal_item(
+        iced::widget::Id::new("move_modal_scrollable"),
+        app.move_target_idx,
+        targets_len,
+    )
+}
+
+/// Step the ICS import calendar selection forward or back, snapping the list.
+fn step_ics_import_calendar(app: &mut GuiApp, forward: bool) -> Task<Message> {
+    let targets: Vec<_> = app
+        .calendars
+        .iter()
+        .filter(|c| !app.disabled_calendars.contains(&c.href))
+        .collect();
+    if targets.is_empty() {
+        return Task::none();
+    }
+    let current_idx = targets
+        .iter()
+        .position(|c| Some(&c.href) == app.ics_import_selected_calendar.as_ref())
+        .unwrap_or(0);
+    let next_idx = if forward {
+        (current_idx + 1).min(targets.len() - 1)
+    } else {
+        current_idx.saturating_sub(1)
+    };
+    app.ics_import_selected_calendar = Some(targets[next_idx].href.clone());
+    snap_modal_item(
+        iced::widget::Id::new("ics_import_scrollable"),
+        next_idx,
+        targets.len(),
+    )
+}
+
+/// Step the main-list selection by one row (wrapping), scrolling to it.
+/// Inactive in journal mode, where the task list is not shown.
+fn step_task_list(app: &mut GuiApp, forward: bool) -> Task<Message> {
+    if app.sidebar_mode == SidebarMode::Journal || app.tasks.is_empty() {
+        return Task::none();
+    }
+    let len = app.tasks.len();
+    let current_idx = selected_task_idx(app);
+    let next_idx = if forward {
+        (current_idx + 1) % len
+    } else {
+        (current_idx + len - 1) % len
+    };
+    if let Some(task) = app.get_task_at_index(next_idx) {
+        app.selected_uid = Some(task.uid.clone());
+        return scroll_to_selected(app, true);
+    }
+    Task::none()
+}
+
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {
         Message::TaskClick(index, uid) => {
-            app.active_focus = Focus::MainList;
-            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
-                *focus = Focus::MainList;
-            }
+            set_active_focus(app, Focus::MainList);
             let now = std::time::Instant::now();
             let mut is_double = false;
 
@@ -369,7 +508,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::SelectPrevPage => {
-            if app.tasks.is_empty() {
+            if app.sidebar_mode == SidebarMode::Journal || app.tasks.is_empty() {
                 return Task::none();
             }
             let current_idx = selected_task_idx(app);
@@ -506,10 +645,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             } else {
                 (current_idx + order.len() - 1) % order.len()
             };
-            app.active_focus = order[next_idx];
-            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
-                *focus = order[next_idx];
-            }
+            set_active_focus(app, order[next_idx]);
 
             match app.active_focus {
                 crate::gui::state::Focus::MainList => {
@@ -537,17 +673,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
         }
         Message::FocusInput => {
-            app.active_focus = Focus::AddTaskInput;
-            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
-                *focus = Focus::AddTaskInput;
-            }
+            set_active_focus(app, Focus::AddTaskInput);
             operation::focus("main_input")
         }
         Message::FocusSearch => {
-            app.active_focus = Focus::SearchInput;
-            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
-                *focus = Focus::SearchInput;
-            }
+            set_active_focus(app, Focus::SearchInput);
             operation::focus("header_search_input")
         }
         Message::EnterPressed => {
@@ -589,142 +719,27 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::SelectNext => {
             if app.active_focus == crate::gui::state::Focus::Sidebar {
-                let max = app.get_sidebar_len();
-                if max > 0 {
-                    app.sidebar_selection_idx = (app.sidebar_selection_idx + 1) % max;
-                    return snap_sidebar_item(app, app.sidebar_selection_idx, max);
-                }
-                return Task::none();
+                return step_sidebar(app, true);
             }
-
-            if let Some(uid) = &app.moving_task_uid {
-                if let Some(task) = app.store.get_task_ref(uid) {
-                    let targets =
-                        app.get_move_targets(&task.calendar_href, app.moving_task_is_tree);
-                    let targets_len = targets.len();
-                    if !targets.is_empty() {
-                        app.move_target_idx = (app.move_target_idx + 1).min(targets_len - 1);
-                        return snap_modal_item(
-                            iced::widget::Id::new("move_modal_scrollable"),
-                            app.move_target_idx,
-                            targets_len,
-                        );
-                    }
-                }
-                return Task::none();
+            if app.moving_task_uid.is_some() {
+                return step_move_target(app, true);
             }
-
             if app.ics_import_dialog_open {
-                let targets: Vec<_> = app
-                    .calendars
-                    .iter()
-                    .filter(|c| !app.disabled_calendars.contains(&c.href))
-                    .collect();
-                if !targets.is_empty() {
-                    let current_idx = targets
-                        .iter()
-                        .position(|c| Some(&c.href) == app.ics_import_selected_calendar.as_ref())
-                        .unwrap_or(0);
-                    let next_idx = (current_idx + 1).min(targets.len() - 1);
-                    app.ics_import_selected_calendar = Some(targets[next_idx].href.clone());
-                    return snap_modal_item(
-                        iced::widget::Id::new("ics_import_scrollable"),
-                        next_idx,
-                        targets.len(),
-                    );
-                }
-                return Task::none();
+                return step_ics_import_calendar(app, true);
             }
-
-            if app.sidebar_mode == SidebarMode::Journal || app.tasks.is_empty() {
-                return Task::none();
-            }
-
-            // Find current index
-            let current_idx = selected_task_idx(app);
-
-            // Calculate next index (wrapping or clamping)
-            let next_idx = if current_idx + 1 >= app.tasks.len() {
-                0
-            } else {
-                current_idx + 1
-            };
-            if let Some(task) = app.get_task_at_index(next_idx) {
-                app.selected_uid = Some(task.uid.clone());
-                return scroll_to_selected(app, true);
-            }
-            Task::none()
+            step_task_list(app, true)
         }
         Message::SelectPrev => {
             if app.active_focus == crate::gui::state::Focus::Sidebar {
-                let max = app.get_sidebar_len();
-                if max > 0 {
-                    if app.sidebar_selection_idx == 0 {
-                        app.sidebar_selection_idx = max.saturating_sub(1);
-                    } else {
-                        app.sidebar_selection_idx -= 1;
-                    }
-                    return snap_sidebar_item(app, app.sidebar_selection_idx, max);
-                }
-                return Task::none();
+                return step_sidebar(app, false);
             }
-
             if app.moving_task_uid.is_some() {
-                app.move_target_idx = app.move_target_idx.saturating_sub(1);
-
-                if let Some(uid) = &app.moving_task_uid
-                    && let Some(task) = app.store.get_task_ref(uid)
-                {
-                    let targets =
-                        app.get_move_targets(&task.calendar_href, app.moving_task_is_tree);
-                    let targets_len = targets.len();
-
-                    return snap_modal_item(
-                        iced::widget::Id::new("move_modal_scrollable"),
-                        app.move_target_idx,
-                        targets_len,
-                    );
-                }
-
-                return Task::none();
+                return step_move_target(app, false);
             }
-
             if app.ics_import_dialog_open {
-                let targets: Vec<_> = app
-                    .calendars
-                    .iter()
-                    .filter(|c| !app.disabled_calendars.contains(&c.href))
-                    .collect();
-                if !targets.is_empty() {
-                    let current_idx = targets
-                        .iter()
-                        .position(|c| Some(&c.href) == app.ics_import_selected_calendar.as_ref())
-                        .unwrap_or(0);
-                    let prev_idx = current_idx.saturating_sub(1);
-                    app.ics_import_selected_calendar = Some(targets[prev_idx].href.clone());
-                    return snap_modal_item(
-                        iced::widget::Id::new("ics_import_scrollable"),
-                        prev_idx,
-                        targets.len(),
-                    );
-                }
-                return Task::none();
+                return step_ics_import_calendar(app, false);
             }
-
-            if app.tasks.is_empty() {
-                return Task::none();
-            }
-            let current_idx = selected_task_idx(app);
-            let prev_idx = if current_idx == 0 {
-                app.tasks.len() - 1
-            } else {
-                current_idx - 1
-            };
-            if let Some(task) = app.get_task_at_index(prev_idx) {
-                app.selected_uid = Some(task.uid.clone());
-                return scroll_to_selected(app, true);
-            }
-            Task::none()
+            step_task_list(app, false)
         }
         Message::DeleteSelected => {
             if app.sidebar_mode == SidebarMode::Journal {
@@ -846,10 +861,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             app.sidebar_mode = mode;
             app.sidebar_selection_idx = 0;
-            app.active_focus = Focus::Sidebar;
-            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
-                *focus = Focus::Sidebar;
-            }
+            set_active_focus(app, Focus::Sidebar);
             if mode == SidebarMode::Journal {
                 if app.journal_date_input.is_empty() {
                     app.journal_date_input = app.journal_date.format("%Y-%m-%d").to_string();
@@ -937,73 +949,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
-        Message::CreateJournalPage => {
-            flush_journal_save(app);
-            let target_href = app
-                .journal_editing_href
-                .clone()
-                .or(app.active_cal_href.clone())
-                .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
-
-            let mut new_page = crate::model::Task::new("", &app.tag_aliases, None);
-            new_page.summary =
-                rust_i18n::t!("untitled_page", default = "Untitled page").to_string();
-            app.journal_title_input = new_page.summary.clone();
-            new_page.is_journal = true;
-            new_page.calendar_href = target_href.clone();
-            let uid = new_page.uid.clone();
-
-            app.edit_generation = app.edit_generation.wrapping_add(1);
-            app.store.add_task(new_page.clone());
-            if let Some(tx) = &app.bg_tx {
-                let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(vec![
-                    crate::journal::Action::Create(new_page),
-                ]));
-            }
-
-            app.active_cal_href = Some(target_href);
-            app.journal_editing_uid = Some(uid);
-            app.journal_editor_content = iced::widget::text_editor::Content::with_text("");
-            app.journal_history.clear();
-            app.editor_maximized = true;
-
-            refresh_filtered_tasks(app);
-            Task::none()
-        }
-        Message::CreateJournalSubPage(parent_uid) => {
-            flush_journal_save(app);
-            let target_href = app
-                .journal_editing_href
-                .clone()
-                .or(app.active_cal_href.clone())
-                .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
-
-            let mut new_page = crate::model::Task::new("", &app.tag_aliases, None);
-            new_page.summary =
-                rust_i18n::t!("untitled_page", default = "Untitled page").to_string();
-            app.journal_title_input = new_page.summary.clone();
-            new_page.is_journal = true;
-            new_page.calendar_href = target_href.clone();
-            new_page.parent_uid = Some(parent_uid);
-            let uid = new_page.uid.clone();
-
-            app.edit_generation = app.edit_generation.wrapping_add(1);
-            app.store.add_task(new_page.clone());
-            if let Some(tx) = &app.bg_tx {
-                let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(vec![
-                    crate::journal::Action::Create(new_page),
-                ]));
-            }
-
-            app.active_cal_href = Some(target_href);
-            app.journal_editing_uid = Some(uid);
-            app.journal_editor_content = iced::widget::text_editor::Content::with_text("");
-            app.journal_history.clear();
-            app.editor_maximized = true;
-
-            refresh_filtered_tasks(app);
-            Task::none()
-        }
+        Message::CreateJournalPage => create_journal_page(app, None),
+        Message::CreateJournalSubPage(parent_uid) => create_journal_page(app, Some(parent_uid)),
         Message::JournalDateInputChanged(s) => {
             app.journal_date_input = s;
             Task::none()
@@ -1041,10 +988,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::JournalContentChanged(action) => {
-            app.active_focus = Focus::Journal;
-            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
-                *focus = Focus::Journal;
-            }
+            set_active_focus(app, Focus::Journal);
             let old_text = app.journal_editor_content.text();
             app.journal_editor_content.perform(action);
             if old_text != app.journal_editor_content.text() {
@@ -1060,10 +1004,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::CategoryToggled(cat) => {
-            app.active_focus = Focus::Sidebar;
-            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
-                *focus = Focus::Sidebar;
-            }
+            set_active_focus(app, Focus::Sidebar);
             if let Some(pos) = app
                 .session
                 .selected_categories
@@ -1078,10 +1019,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::LocationToggled(loc) => {
-            app.active_focus = Focus::Sidebar;
-            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
-                *focus = Focus::Sidebar;
-            }
+            set_active_focus(app, Focus::Sidebar);
             if let Some(pos) = app
                 .session
                 .selected_locations
@@ -1108,12 +1046,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::ClearAllFilters => {
             app.session.selected_categories.clear();
             app.session.selected_locations.clear();
-            app.session.search_term.clear();
-            app.session.search_collapsed_tasks.clear();
+            clear_search(app);
             app.session.focused_task_uid = None;
-            if !app.search_value.text().is_empty() {
-                app.search_value = iced::widget::text_editor::Content::new();
-            }
             refresh_filtered_tasks(app);
             if app.show_calendars_tab {
                 app.sidebar_mode = SidebarMode::Calendars;
@@ -1194,10 +1128,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             )
         }
         Message::SelectCalendar(href) => {
-            app.active_focus = Focus::Sidebar;
-            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
-                *focus = Focus::Sidebar;
-            }
+            set_active_focus(app, Focus::Sidebar);
             if app.sidebar_mode == SidebarMode::Categories {
                 app.sidebar_mode = SidebarMode::Calendars;
             }
@@ -1246,10 +1177,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::SearchChanged(action) => {
-            app.active_focus = Focus::SearchInput;
-            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
-                *focus = Focus::SearchInput;
-            }
+            set_active_focus(app, Focus::SearchInput);
             if let iced::widget::text_editor::Action::Edit(
                 iced::widget::text_editor::Edit::Insert('\t'),
             ) = &action
@@ -1281,9 +1209,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::ClearSearch => {
-            app.search_value = iced::widget::text_editor::Content::new();
-            app.session.search_term.clear();
-            app.session.search_collapsed_tasks.clear();
+            clear_search(app);
             refresh_filtered_tasks(app);
             Task::none()
         }
@@ -1399,37 +1325,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             if is_double {
                 app.last_title_click = None;
-                window::latest().then(|id| {
-                    if let Some(id) = id {
-                        window::toggle_maximize(id)
-                    } else {
-                        Task::none()
-                    }
-                })
+                on_latest_window(window::toggle_maximize)
             } else {
-                window::latest().then(|id| {
-                    if let Some(id) = id {
-                        window::drag(id)
-                    } else {
-                        Task::none()
-                    }
-                })
+                on_latest_window(window::drag)
             }
         }
-        Message::MinimizeWindow => window::latest().then(|id| {
-            if let Some(id) = id {
-                window::minimize(id, true)
-            } else {
-                Task::none()
-            }
-        }),
-        Message::CloseWindow => window::latest().then(|id| {
-            if let Some(id) = id {
-                window::close(id)
-            } else {
-                Task::none()
-            }
-        }),
+        Message::MinimizeWindow => on_latest_window(|id| window::minimize(id, true)),
+        Message::CloseWindow => on_latest_window(window::close),
         Message::ResizeStart(direction) => {
             let dir = match direction {
                 ResizeDirection::North => window::Direction::North,
@@ -1441,13 +1343,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 ResizeDirection::SouthEast => window::Direction::SouthEast,
                 ResizeDirection::SouthWest => window::Direction::SouthWest,
             };
-            window::latest().then(move |id| {
-                if let Some(id) = id {
-                    window::drag_resize(id, dir)
-                } else {
-                    Task::none()
-                }
-            })
+            on_latest_window(move |id| window::drag_resize(id, dir))
         }
         Message::WindowFocused(focused) => {
             app.is_window_focused = focused;
@@ -1492,9 +1388,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.session.selected_categories.clear();
             app.session.selected_categories.push(tag.clone());
 
-            app.search_value = iced::widget::text_editor::Content::new();
-            app.session.search_term.clear();
-            app.session.search_collapsed_tasks.clear();
+            clear_search(app);
             refresh_filtered_tasks(app);
             // DO NOT scroll sidebar here, as user just clicked the arrow
             Task::none()
@@ -1504,9 +1398,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.session.selected_locations.clear();
             app.session.selected_locations.push(loc.clone());
 
-            app.search_value = iced::widget::text_editor::Content::new();
-            app.session.search_term.clear();
-            app.session.search_collapsed_tasks.clear();
+            clear_search(app);
             refresh_filtered_tasks(app);
             // DO NOT scroll sidebar here
             Task::none()
@@ -1522,9 +1414,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.session.selected_categories.push(t.clone());
             }
 
-            app.search_value = iced::widget::text_editor::Content::new();
-            app.session.search_term.clear();
-            app.session.search_collapsed_tasks.clear();
+            clear_search(app);
             refresh_filtered_tasks(app);
 
             // Auto-scroll logic is kept for JumpTo...
@@ -1549,9 +1439,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.session.selected_locations.push(l.clone());
             }
 
-            app.search_value = iced::widget::text_editor::Content::new();
-            app.session.search_term.clear();
-            app.session.search_collapsed_tasks.clear();
+            clear_search(app);
             refresh_filtered_tasks(app);
 
             let all_locs = &app.cached_locations;
@@ -1606,9 +1494,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     needs_refresh = true;
                 }
                 if !app.search_value.text().is_empty() {
-                    app.search_value = iced::widget::text_editor::Content::new();
-                    app.session.search_term.clear();
-                    app.session.search_collapsed_tasks.clear();
+                    clear_search(app);
                     needs_refresh = true;
                 }
                 if !app.session.selected_categories.is_empty() {
@@ -1684,10 +1570,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
                 refresh_filtered_tasks(app);
 
-                app.active_focus = Focus::SearchInput;
-                if let Ok(mut focus) = ACTIVE_FOCUS.write() {
-                    *focus = Focus::SearchInput;
-                }
+                set_active_focus(app, Focus::SearchInput);
 
                 iced::widget::operation::focus(iced::widget::Id::new("header_search_input"))
             }

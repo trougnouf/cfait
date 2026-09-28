@@ -21,7 +21,8 @@ use crate::cache::Cache;
 use crate::config::Config;
 use crate::context::AppContext;
 use crate::gui::message::Message;
-use crate::gui::state::GuiApp;
+use crate::gui::state::{Focus, GuiApp};
+use crate::gui::subscription::ACTIVE_FOCUS;
 use crate::gui::view::focusable::{clear_focus_bounds, get_all_focus_bounds, get_focus_bounds};
 use crate::model::CalendarListEntry;
 use crate::storage::{LocalCalendarRegistry, LocalStorage};
@@ -32,6 +33,15 @@ use iced::Task;
 use iced::widget::operation;
 use iced::widget::scrollable::RelativeOffset;
 use std::time::Duration as StdDuration;
+
+/// Set the keyboard focus in both the app state and the global subscription,
+/// keeping the two in sync.
+pub fn set_active_focus(app: &mut GuiApp, focus: Focus) {
+    app.active_focus = focus;
+    if let Ok(mut g) = ACTIVE_FOCUS.write() {
+        *g = focus;
+    }
+}
 
 /// Build the visible task list and update UI caches.
 ///
