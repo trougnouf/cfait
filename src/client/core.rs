@@ -153,6 +153,20 @@ fn is_companion_event_file(uid: &str, filename: &str) -> bool {
     filename == plain || (filename.starts_with(&prefixed) && filename.ends_with(".ics"))
 }
 
+/// Calendar directory (with trailing slash) that holds the companion events
+/// for `task`. Prefers the calendar href; falls back to the parent of the
+/// task href for calendar hrefs without a trailing slash.
+fn companion_event_dir(task: &Task) -> String {
+    if task.calendar_href.ends_with('/') {
+        return task.calendar_href.clone();
+    }
+    let p = strip_host(&task.href);
+    match p.rfind('/') {
+        Some(idx) => p[..=idx].to_string(),
+        None => task.calendar_href.clone(),
+    }
+}
+
 // -----------------------------
 // High-level RustyClient - network construction and high-level APIs.
 // Lower-level sync steps are implemented in src/client/sync.rs (impl RustyClient there).
@@ -857,16 +871,7 @@ impl RustyClient {
         let should_create_events = task.create_event.unwrap_or(config_enabled);
         let base_uid = format!("evt-{}", task.uid);
 
-        let cal_path = if task.calendar_href.ends_with('/') {
-            task.calendar_href.clone()
-        } else {
-            let p = strip_host(&task.href);
-            if let Some(idx) = p.rfind('/') {
-                p[..=idx].to_string()
-            } else {
-                task.calendar_href.clone()
-            }
-        };
+        let cal_path = companion_event_dir(task);
 
         let client = match &self.client {
             Some(c) => c,
@@ -1012,16 +1017,7 @@ impl RustyClient {
         let mut by_calendar: HashMap<String, Vec<&Task>> = HashMap::new();
         for task in tasks {
             if !task.calendar_href.starts_with("local://") {
-                let cal_path = if task.calendar_href.ends_with('/') {
-                    task.calendar_href.clone()
-                } else {
-                    let p = strip_host(&task.href);
-                    if let Some(idx) = p.rfind('/') {
-                        p[..=idx].to_string()
-                    } else {
-                        task.calendar_href.clone()
-                    }
-                };
+                let cal_path = companion_event_dir(task);
                 by_calendar.entry(cal_path).or_default().push(task);
             }
         }
