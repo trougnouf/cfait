@@ -2616,16 +2616,7 @@ pub async fn handle_key_event(
                         target_uid = Some(page.key.clone());
                     }
                 } else if state.sidebar_mode == SidebarMode::Journal {
-                    target_uid = state.journal_editing_uid.clone().or_else(|| {
-                        let target_href = state
-                            .active_cal_href
-                            .clone()
-                            .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
-                        state
-                            .store
-                            .get_journal_entry(&target_href, state.journal_date)
-                            .map(|t| t.uid.clone())
-                    });
+                    target_uid = state.journal_target_uid();
                 } else if let Some(t) = state.get_selected_task() {
                     target_uid = Some(t.uid.clone());
                 }
@@ -2958,18 +2949,7 @@ pub async fn handle_key_event(
             KeyCode::Delete => {
                 if state.active_focus == Focus::Main {
                     if state.sidebar_mode == SidebarMode::Journal {
-                        let uid_opt = if let Some(uid) = &state.journal_editing_uid {
-                            Some(uid.clone())
-                        } else {
-                            let active_href = state
-                                .active_cal_href
-                                .clone()
-                                .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
-                            state
-                                .store
-                                .get_journal_entry(&active_href, state.journal_date)
-                                .map(|t| t.uid.clone())
-                        };
+                        let uid_opt = state.journal_target_uid();
 
                         if let Some(uid) = uid_opt {
                             delete_journal_page(state, uid, action_tx);
@@ -3024,16 +3004,7 @@ pub async fn handle_key_event(
                 let mut target_uid = None;
                 if state.active_focus == Focus::Main {
                     if state.sidebar_mode == SidebarMode::Journal {
-                        target_uid = state.journal_editing_uid.clone().or_else(|| {
-                            let target_href = state
-                                .active_cal_href
-                                .clone()
-                                .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
-                            state
-                                .store
-                                .get_journal_entry(&target_href, state.journal_date)
-                                .map(|t| t.uid.clone())
-                        });
+                        target_uid = state.journal_target_uid();
                     } else if let Some(task) = state.get_selected_task() {
                         target_uid = Some(task.uid.clone());
                     }
@@ -3299,18 +3270,9 @@ pub async fn handle_key_event(
                 let task_opt = if state.sidebar_mode == SidebarMode::Journal
                     && state.active_focus == Focus::Main
                 {
-                    let active_href = state
-                        .active_cal_href
-                        .clone()
-                        .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
-                    if let Some(uid) = &state.journal_editing_uid {
-                        state.store.get_task_ref(uid).cloned()
-                    } else {
-                        state
-                            .store
-                            .get_journal_entry(&active_href, state.journal_date)
-                            .cloned()
-                    }
+                    state
+                        .journal_target_uid()
+                        .and_then(|uid| state.store.get_task_ref(&uid).cloned())
                 } else {
                     state.get_selected_task().cloned()
                 };
@@ -3991,16 +3953,7 @@ pub async fn handle_key_event(
                         target_uid = Some(page.key.clone());
                     }
                 } else if state.sidebar_mode == SidebarMode::Journal {
-                    target_uid = state.journal_editing_uid.clone().or_else(|| {
-                        let target_href = state
-                            .active_cal_href
-                            .clone()
-                            .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
-                        state
-                            .store
-                            .get_journal_entry(&target_href, state.journal_date)
-                            .map(|t| t.uid.clone())
-                    });
+                    target_uid = state.journal_target_uid();
                 } else if let Some(t) = state.get_selected_task() {
                     target_uid = Some(t.uid.clone());
                 }

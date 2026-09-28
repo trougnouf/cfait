@@ -1189,6 +1189,21 @@ impl AppState {
         }
     }
 
+    /// The uid of the journal entry currently in view: the one being edited, or
+    /// the entry of the active calendar's journal date if none is being edited.
+    pub fn journal_target_uid(&self) -> Option<String> {
+        if let Some(uid) = &self.journal_editing_uid {
+            return Some(uid.clone());
+        }
+        let target_href = self
+            .active_cal_href
+            .clone()
+            .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
+        self.store
+            .get_journal_entry(&target_href, self.journal_date)
+            .map(|t| t.uid.clone())
+    }
+
     pub fn verify_sidebar_mode(&mut self) {
         use crate::tui::action::SidebarMode;
         let valid = match self.sidebar_mode {
