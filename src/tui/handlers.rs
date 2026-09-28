@@ -1375,6 +1375,121 @@ fn update_alarms(state: &AppState) {
     }
 }
 
+/// Interpret a submitted buffer as a `:command` (`:undo`, `:redo`,
+/// `:empty-trash`, `:delete-all`, `:login`, `:settings`). Returns `true` when
+/// a command was dispatched and the caller must stop processing. Both the
+/// create and edit flows dispatch commands, mirroring the GUI's shared input.
+fn try_dispatch_command(
+    state: &mut AppState,
+    action_tx: &Sender<Action>,
+    clean_input: &str,
+) -> bool {
+    let trimmed = clean_input.trim();
+    if !(trimmed.starts_with(':') && !trimmed.contains(' ')) {
+        return false;
+    }
+    match trimmed.to_lowercase().as_str() {
+        ":undo" => {
+            if let Some(record) = state.undo_history.pop_undo() {
+                state.edit_generation = state.edit_generation.wrapping_add(1);
+                state.store.apply_actions(&record.reverse);
+                state.undo_history.push_redo(record.clone());
+                state.refresh_filtered_view();
+
+                if let Some(uid) = &record.primary_uid
+                    && let Some(idx) = state.find_task_index_by_uid(uid)
+                {
+                    state.list_state.select(Some(idx));
+                }
+
+                send_persist_batch(action_tx, record.reverse);
+                state.message =
+                    rust_i18n::t!("task_action_undone", desc = record.description).to_string();
+            }
+        }
+        ":redo" => {
+            if let Some(record) = state.undo_history.pop_redo() {
+                state.edit_generation = state.edit_generation.wrapping_add(1);
+                state.store.apply_actions(&record.forward);
+                state.undo_history.push_undo(record.clone());
+                state.refresh_filtered_view();
+
+                if let Some(uid) = &record.primary_uid
+                    && let Some(idx) = state.find_task_index_by_uid(uid)
+                {
+                    state.list_state.select(Some(idx));
+                }
+
+                send_persist_batch(action_tx, record.forward);
+                state.message =
+                    rust_i18n::t!("task_action_redone", desc = record.description).to_string();
+            }
+        }
+        ":empty-trash" => {
+            // Mark the generation now so a full-store reload arriving later is
+            // dropped if the user edits in the meantime (and applied otherwise).
+            state.pending_refresh_generation = state.edit_generation;
+            let tx = action_tx.clone();
+            let ctx = state.ctx.clone();
+            // The controller's in-memory store stays empty on purpose:
+            // `empty_trash` enumerates and purges from disk, and the UI store
+            // is updated by the disk reload the network actor performs next.
+            let ctrl = crate::controller::TaskController::new(
+                std::sync::Arc::new(tokio::sync::Mutex::new(crate::store::TaskStore::new(
+                    ctx.clone(),
+                ))),
+                std::sync::Arc::new(tokio::sync::Mutex::new(None)),
+                ctx,
+            );
+            tokio::spawn(async move {
+                match ctrl.empty_trash().await {
+                    Ok(count) => {
+                        let _ = tx
+                            .send(crate::tui::action::Action::EmptyTrashResult(count, None))
+                            .await;
+                    }
+                    Err(e) => {
+                        let _ = tx
+                            .send(crate::tui::action::Action::EmptyTrashResult(0, Some(e)))
+                            .await;
+                    }
+                }
+            });
+        }
+        ":delete-all" => {
+            state.mode = InputMode::ConfirmDeleteAll;
+            state.reset_input();
+            state.message = rust_i18n::t!("delete_all_title").to_string();
+            return true;
+        }
+        ":login" => {
+            state.message =
+                "Run `cfait login <url> <username>` in your terminal to update credentials."
+                    .to_string();
+        }
+        ":settings" | ":config" => {
+            if let Err(e) = open_config_in_editor(state.ctx.as_ref()) {
+                state.message = e;
+            } else {
+                let tx = action_tx.clone();
+                tokio::spawn(async move {
+                    let _ = tx.send(crate::tui::action::Action::ReloadConfig).await;
+                    let _ = tx.send(crate::tui::action::Action::Refresh).await;
+                });
+                state.message = "Configuration reloaded.".to_string();
+            }
+            state.mode = InputMode::Normal;
+            state.reset_input();
+            state.needs_redraw = true;
+            return true;
+        }
+        _ => {}
+    }
+    state.mode = InputMode::Normal;
+    state.reset_input();
+    true
+}
+
 pub async fn handle_key_event(
     key: KeyEvent,
     state: &mut AppState,
@@ -1771,120 +1886,13 @@ pub async fn handle_key_event(
                     let _ = cfg.save(state.ctx.as_ref());
                 }
 
-                let trimmed = clean_input.trim();
                 // A pure alias/goal definition leaves only the key token behind
                 // (e.g. `#garden := #balcony, #green` -> `#garden`); skip task
                 // creation for it. Mirrors the mobile ALIAS_UPDATED early return.
                 let is_alias_only =
                     crate::model::is_pure_alias_remainder(&clean_input, config_changed);
 
-                if trimmed.starts_with(':') && !trimmed.contains(' ') {
-                    match trimmed.to_lowercase().as_str() {
-                        ":undo" => {
-                            if let Some(record) = state.undo_history.pop_undo() {
-                                state.edit_generation = state.edit_generation.wrapping_add(1);
-                                state.store.apply_actions(&record.reverse);
-                                state.undo_history.push_redo(record.clone());
-                                state.refresh_filtered_view();
-
-                                if let Some(uid) = &record.primary_uid
-                                    && let Some(idx) = state.find_task_index_by_uid(uid)
-                                {
-                                    state.list_state.select(Some(idx));
-                                }
-
-                                send_persist_batch(action_tx, record.reverse);
-                                state.message =
-                                    rust_i18n::t!("task_action_undone", desc = record.description)
-                                        .to_string();
-                            }
-                        }
-                        ":redo" => {
-                            if let Some(record) = state.undo_history.pop_redo() {
-                                state.edit_generation = state.edit_generation.wrapping_add(1);
-                                state.store.apply_actions(&record.forward);
-                                state.undo_history.push_undo(record.clone());
-                                state.refresh_filtered_view();
-
-                                if let Some(uid) = &record.primary_uid
-                                    && let Some(idx) = state.find_task_index_by_uid(uid)
-                                {
-                                    state.list_state.select(Some(idx));
-                                }
-
-                                send_persist_batch(action_tx, record.forward);
-                                state.message =
-                                    rust_i18n::t!("task_action_redone", desc = record.description)
-                                        .to_string();
-                            }
-                        }
-                        ":empty-trash" => {
-                            // Mark the generation now so a full-store reload
-                            // arriving later is dropped if the user edits in
-                            // the meantime (and applied otherwise).
-                            state.pending_refresh_generation = state.edit_generation;
-                            let tx = action_tx.clone();
-                            let ctx = state.ctx.clone();
-                            // The controller's in-memory store stays empty on
-                            // purpose: `empty_trash` enumerates and purges
-                            // from disk, and the UI store is updated by the
-                            // disk reload the network actor performs next.
-                            let ctrl = crate::controller::TaskController::new(
-                                std::sync::Arc::new(tokio::sync::Mutex::new(
-                                    crate::store::TaskStore::new(ctx.clone()),
-                                )),
-                                std::sync::Arc::new(tokio::sync::Mutex::new(None)),
-                                ctx,
-                            );
-                            tokio::spawn(async move {
-                                match ctrl.empty_trash().await {
-                                    Ok(count) => {
-                                        let _ = tx
-                                            .send(crate::tui::action::Action::EmptyTrashResult(
-                                                count, None,
-                                            ))
-                                            .await;
-                                    }
-                                    Err(e) => {
-                                        let _ = tx
-                                            .send(crate::tui::action::Action::EmptyTrashResult(
-                                                0,
-                                                Some(e),
-                                            ))
-                                            .await;
-                                    }
-                                }
-                            });
-                        }
-                        ":delete-all" => {
-                            state.mode = InputMode::ConfirmDeleteAll;
-                            state.reset_input();
-                            state.message = rust_i18n::t!("delete_all_title").to_string();
-                            return None;
-                        }
-                        ":login" => {
-                            state.message = "Run `cfait login <url> <username>` in your terminal to update credentials.".to_string();
-                        }
-                        ":settings" | ":config" => {
-                            if let Err(e) = open_config_in_editor(state.ctx.as_ref()) {
-                                state.message = e;
-                            } else {
-                                let tx = action_tx.clone();
-                                tokio::spawn(async move {
-                                    let _ = tx.send(crate::tui::action::Action::ReloadConfig).await;
-                                    let _ = tx.send(crate::tui::action::Action::Refresh).await;
-                                });
-                                state.message = "Configuration reloaded.".to_string();
-                            }
-                            state.mode = InputMode::Normal;
-                            state.reset_input();
-                            state.needs_redraw = true;
-                            return None;
-                        }
-                        _ => {}
-                    }
-                    state.mode = InputMode::Normal;
-                    state.reset_input();
+                if try_dispatch_command(state, action_tx, &clean_input) {
                     return None;
                 }
 
@@ -1992,7 +2000,7 @@ pub async fn handle_key_event(
             _ => {}
         },
         InputMode::Editing => match key.code {
-            KeyCode::Enter => {
+            KeyCode::Enter if !state.input_buffer.is_empty() => {
                 let (clean_input_1, new_goals) =
                     crate::model::parser::extract_inline_goals(&state.input_buffer);
                 let (clean_input, new_aliases): (String, HashMap<String, Vec<String>>) =
@@ -2033,6 +2041,10 @@ pub async fn handle_key_event(
                     cfg.goals = state.goals.clone();
                     cfg.update_sync_timestamp_if_changed(&old);
                     let _ = cfg.save(state.ctx.as_ref());
+                }
+
+                if try_dispatch_command(state, action_tx, &clean_input) {
+                    return None;
                 }
 
                 let target_uid: Option<String> = state.editing_uid.clone();
@@ -4393,4 +4405,54 @@ pub async fn handle_key_event(
     // also the single place that (re)opens the popup when entering a mode.
     state.refresh_suggestions();
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fresh_state_and_tx() -> (AppState, tokio::sync::mpsc::Sender<Action>) {
+        let mut state = AppState::new();
+        state.mode = InputMode::Editing;
+        let (tx, _rx) = tokio::sync::mpsc::channel::<Action>(16);
+        (state, tx)
+    }
+
+    #[test]
+    fn dispatch_command_ignores_plain_text() {
+        let (mut state, tx) = fresh_state_and_tx();
+        assert!(!try_dispatch_command(&mut state, &tx, "water the roses"));
+        assert!(matches!(state.mode, InputMode::Editing));
+    }
+
+    #[test]
+    fn dispatch_command_ignores_command_with_spaces() {
+        let (mut state, tx) = fresh_state_and_tx();
+        assert!(!try_dispatch_command(&mut state, &tx, ":undo now"));
+        assert!(matches!(state.mode, InputMode::Editing));
+    }
+
+    #[test]
+    fn dispatch_command_unknown_is_consumed() {
+        let (mut state, tx) = fresh_state_and_tx();
+        state.input_buffer = ":mystery".to_string();
+        assert!(try_dispatch_command(&mut state, &tx, ":mystery"));
+        assert!(matches!(state.mode, InputMode::Normal));
+        assert!(state.input_buffer.is_empty());
+    }
+
+    #[test]
+    fn dispatch_command_delete_all_opens_confirm() {
+        let (mut state, tx) = fresh_state_and_tx();
+        assert!(try_dispatch_command(&mut state, &tx, ":delete-all"));
+        assert!(matches!(state.mode, InputMode::ConfirmDeleteAll));
+    }
+
+    #[test]
+    fn dispatch_command_undo_with_empty_history_is_consumed() {
+        let (mut state, tx) = fresh_state_and_tx();
+        assert!(try_dispatch_command(&mut state, &tx, ":undo"));
+        assert!(matches!(state.mode, InputMode::Normal));
+        assert!(state.input_buffer.is_empty());
+    }
 }
