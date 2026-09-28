@@ -3,7 +3,7 @@
 // File: ./src/gui/view/settings.rs
 use crate::config::{AppTheme, LogLevel};
 use crate::gui::icon;
-use crate::gui::message::Message;
+use crate::gui::message::{Message, NumericField};
 use crate::gui::state::{AppState, GuiApp};
 use crate::storage::LOCAL_CALENDAR_HREF;
 
@@ -104,6 +104,69 @@ fn cal_tag<'a>(
             ..Default::default()
         })
         .into()
+}
+
+/// A label + numeric text-input row for the settings form.
+fn numeric_row<'a>(
+    label: impl iced::widget::text::IntoFragment<'a>,
+    label_width: f32,
+    placeholder: &'a str,
+    value: &'a str,
+    field: NumericField,
+) -> Element<'a, Message> {
+    row![
+        text(label).width(Length::Fixed(label_width)),
+        text_input(placeholder, value)
+            .on_input(move |v| Message::SetNumericField(field, v))
+            .width(Length::Fixed(60.0))
+            .padding(5),
+    ]
+    .spacing(10)
+    .align_y(iced::Alignment::Center)
+    .into()
+}
+
+/// A label + pick-list row for the settings form.
+fn pick_row<'a, T>(
+    label: impl iced::widget::text::IntoFragment<'a>,
+    options: Vec<T>,
+    selected: Option<T>,
+    on_select: impl Fn(T) -> Message + 'a,
+    width: Length,
+) -> Element<'a, Message>
+where
+    T: ToString + PartialEq + Clone + 'a,
+{
+    row![
+        text(label).width(Length::Fixed(200.0)),
+        iced::widget::pick_list(options, selected, on_select)
+            .width(width)
+            .padding(5),
+    ]
+    .spacing(10)
+    .align_y(iced::Alignment::Center)
+    .into()
+}
+
+/// The add button, or the check/cancel pair shown while editing a goals or
+/// aliases list row.
+fn add_cancel_buttons(editing: bool, add: Message, cancel: Message) -> Element<'static, Message> {
+    if editing {
+        row![
+            button(icon::icon(icon::CHECK).size(14))
+                .style(button::success)
+                .padding(6)
+                .on_press(add),
+            button(icon::icon(icon::CROSS).size(14))
+                .style(button::danger)
+                .padding(6)
+                .on_press(cancel),
+        ]
+        .spacing(5)
+        .into()
+    } else {
+        row![button(text(rust_i18n::t!("add"))).padding(5).on_press(add)].into()
+    }
 }
 
 pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
@@ -521,45 +584,30 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                         v
                     )),
                 Space::new().height(5),
-                row![
-                    text(rust_i18n::t!("settings_paused_tasks")).width(Length::Fixed(200.0)),
-                    iced::widget::pick_list(
-                        crate::config::PausedSortBehavior::iter().collect::<Vec<_>>(),
-                        Some(app.paused_sort_behavior),
-                        Message::SetPausedSortBehavior
-                    )
-                    .width(Length::Fill)
-                    .padding(5)
-                ]
-                .spacing(10)
-                .align_y(iced::Alignment::Center),
+                pick_row(
+                    rust_i18n::t!("settings_paused_tasks"),
+                    crate::config::PausedSortBehavior::iter().collect(),
+                    Some(app.paused_sort_behavior),
+                    Message::SetPausedSortBehavior,
+                    Length::Fill,
+                ),
                 Space::new().height(5),
-                row![
-                    text(rust_i18n::t!("sorting_preset_label")).width(Length::Fixed(200.0)),
-                    iced::widget::pick_list(
-                        crate::config::SortPreset::iter().collect::<Vec<_>>(),
-                        Some(app.sort_preset),
-                        Message::SetSortPreset
-                    )
-                    .width(Length::Fill)
-                    .padding(5)
-                ]
-                .spacing(10)
-                .align_y(iced::Alignment::Center),
+                pick_row(
+                    rust_i18n::t!("sorting_preset_label"),
+                    crate::config::SortPreset::iter().collect(),
+                    Some(app.sort_preset),
+                    Message::SetSortPreset,
+                    Length::Fill,
+                ),
                 muted_note(rust_i18n::t!("settings_sort_preset_explain")),
                 Space::new().height(10),
-                row![
-                    text(rust_i18n::t!("first_day_of_week")).width(Length::Fixed(200.0)),
-                    iced::widget::pick_list(
-                        crate::config::FirstDayOfWeek::iter().collect::<Vec<_>>(),
-                        Some(app.first_day_of_week),
-                        Message::SetFirstDayOfWeek
-                    )
-                    .width(Length::Fill)
-                    .padding(5)
-                ]
-                .spacing(10)
-                .align_y(iced::Alignment::Center),
+                pick_row(
+                    rust_i18n::t!("first_day_of_week"),
+                    crate::config::FirstDayOfWeek::iter().collect(),
+                    Some(app.first_day_of_week),
+                    Message::SetFirstDayOfWeek,
+                    Length::Fill,
+                ),
                 Space::new().height(10),
                 text(rust_i18n::t!("settings_urgent_and_timeframes"))
                     .size(16)
@@ -567,102 +615,67 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                         color: Some(t.extended_palette().primary.base.color)
                     }),
                 text(rust_i18n::t!("settings_urgent_definition")).size(18),
-                row![
-                    text(rust_i18n::t!("due_within_days")).width(Length::Fixed(150.0)),
-                    text_input("1", &app.ob_urgent_days_input)
-                        .on_input(|v| Message::SetNumericField(
-                            crate::gui::message::NumericField::UrgentDays,
-                            v
-                        ))
-                        .width(Length::Fixed(60.0))
-                        .padding(5)
-                ]
-                .spacing(10)
-                .align_y(iced::Alignment::Center),
-                row![
-                    text(rust_i18n::t!("priority_le")).width(Length::Fixed(150.0)),
-                    text_input("1", &app.ob_urgent_prio_input)
-                        .on_input(|v| Message::SetNumericField(
-                            crate::gui::message::NumericField::UrgentPrio,
-                            v
-                        ))
-                        .width(Length::Fixed(60.0))
-                        .padding(5)
-                ]
-                .spacing(10)
-                .align_y(iced::Alignment::Center),
+                numeric_row(
+                    rust_i18n::t!("due_within_days"),
+                    150.0,
+                    "1",
+                    &app.ob_urgent_days_input,
+                    NumericField::UrgentDays,
+                ),
+                numeric_row(
+                    rust_i18n::t!("priority_le"),
+                    150.0,
+                    "1",
+                    &app.ob_urgent_prio_input,
+                    NumericField::UrgentPrio,
+                ),
                 muted_note(rust_i18n::t!("settings_urgent_explain")),
                 Space::new().height(10),
                 text(rust_i18n::t!("settings_timeframes_cutoffs")).size(18),
-                row![
-                    text(rust_i18n::t!("priority_cutoff_days")).width(Length::Fixed(150.0)),
-                    text_input("30", &app.ob_sort_days_input)
-                        .on_input(|v| Message::SetNumericField(
-                            crate::gui::message::NumericField::SortDays,
-                            v
-                        ))
-                        .width(Length::Fixed(60.0))
-                        .padding(5)
-                ]
-                .spacing(10)
-                .align_y(iced::Alignment::Center),
+                numeric_row(
+                    rust_i18n::t!("priority_cutoff_days"),
+                    150.0,
+                    "30",
+                    &app.ob_sort_days_input,
+                    NumericField::SortDays,
+                ),
                 muted_note(rust_i18n::t!("settings_cutoff_explain")),
-                row![
-                    text(rust_i18n::t!("start_grace_days")).width(Length::Fixed(150.0)),
-                    text_input("1", &app.ob_start_grace_input)
-                        .on_input(|v| Message::SetNumericField(
-                            crate::gui::message::NumericField::StartGrace,
-                            v
-                        ))
-                        .width(Length::Fixed(60.0))
-                        .padding(5)
-                ]
-                .spacing(10)
-                .align_y(iced::Alignment::Center),
+                numeric_row(
+                    rust_i18n::t!("start_grace_days"),
+                    150.0,
+                    "1",
+                    &app.ob_start_grace_input,
+                    NumericField::StartGrace,
+                ),
                 muted_note(rust_i18n::t!("settings_start_grace_explain")),
                 Space::new().height(10),
                 text(rust_i18n::t!("settings_defaults")).size(18),
-                row![
-                    text(rust_i18n::t!("default_priority_label")).width(Length::Fixed(150.0)),
-                    text_input("5", &app.ob_default_priority_input)
-                        .on_input(|v| Message::SetNumericField(
-                            crate::gui::message::NumericField::DefaultPriority,
-                            v
-                        ))
-                        .width(Length::Fixed(60.0))
-                        .padding(5)
-                ]
-                .spacing(10)
-                .align_y(iced::Alignment::Center),
+                numeric_row(
+                    rust_i18n::t!("default_priority_label"),
+                    150.0,
+                    "5",
+                    &app.ob_default_priority_input,
+                    NumericField::DefaultPriority,
+                ),
                 muted_note(rust_i18n::t!("settings_default_prio_explain")),
                 Space::new().height(10),
                 text(rust_i18n::t!("display_limits")).size(18),
-                row![
-                    text(rust_i18n::t!("max_completed_tasks_root")).width(Length::Fixed(200.0)),
-                    text_input("20", &app.ob_max_done_roots_input)
-                        .on_input(|v| Message::SetNumericField(
-                            crate::gui::message::NumericField::MaxDoneRoots,
-                            v
-                        ))
-                        .width(Length::Fixed(60.0))
-                        .padding(5)
-                ]
-                .spacing(10)
-                .align_y(iced::Alignment::Center),
+                numeric_row(
+                    rust_i18n::t!("max_completed_tasks_root"),
+                    200.0,
+                    "20",
+                    &app.ob_max_done_roots_input,
+                    NumericField::MaxDoneRoots,
+                ),
                 muted_note(rust_i18n::t!("max_completed_tasks_root_explain")),
                 Space::new().height(10),
-                row![
-                    text(rust_i18n::t!("max_completed_subtasks")).width(Length::Fixed(200.0)),
-                    text_input("5", &app.ob_max_done_subtasks_input)
-                        .on_input(|v| Message::SetNumericField(
-                            crate::gui::message::NumericField::MaxDoneSubtasks,
-                            v
-                        ))
-                        .width(Length::Fixed(60.0))
-                        .padding(5)
-                ]
-                .spacing(10)
-                .align_y(iced::Alignment::Center),
+                numeric_row(
+                    rust_i18n::t!("max_completed_subtasks"),
+                    200.0,
+                    "5",
+                    &app.ob_max_done_subtasks_input,
+                    NumericField::MaxDoneSubtasks,
+                ),
                 muted_note(rust_i18n::t!("max_completed_subtasks_explain")),
                 Space::new().height(10),
                 text(rust_i18n::t!("pinned_actions_label")).size(18),
@@ -725,32 +738,22 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 },
                 Space::new().height(10),
                 text(rust_i18n::t!("data_management")).size(18),
-                row![
-                    text(rust_i18n::t!("trash_retention_days_label")).width(Length::Fixed(200.0)),
-                    text_input("14", &app.ob_trash_retention_input)
-                        .on_input(|v| Message::SetNumericField(
-                            crate::gui::message::NumericField::TrashRetention,
-                            v
-                        ))
-                        .width(Length::Fixed(60.0))
-                        .padding(5)
-                ]
-                .spacing(10)
-                .align_y(iced::Alignment::Center),
+                numeric_row(
+                    rust_i18n::t!("trash_retention_days_label"),
+                    200.0,
+                    "14",
+                    &app.ob_trash_retention_input,
+                    NumericField::TrashRetention,
+                ),
                 muted_note(rust_i18n::t!("trash_retention_explain")),
                 Space::new().height(10),
-                row![
-                    text(rust_i18n::t!("implicit_goal_duration")).width(Length::Fixed(200.0)),
-                    text_input("60", &app.ob_default_duration_goal_mins_input)
-                        .on_input(|v| Message::SetNumericField(
-                            crate::gui::message::NumericField::DefaultDurationGoal,
-                            v
-                        ))
-                        .width(Length::Fixed(60.0))
-                        .padding(5)
-                ]
-                .spacing(10)
-                .align_y(iced::Alignment::Center),
+                numeric_row(
+                    rust_i18n::t!("implicit_goal_duration"),
+                    200.0,
+                    "60",
+                    &app.ob_default_duration_goal_mins_input,
+                    NumericField::DefaultDurationGoal,
+                ),
                 muted_note(rust_i18n::t!("implicit_goal_duration_explain")),
                 Space::new().height(5),
                 cb(app.sessions_count_as_completions)
@@ -761,18 +764,13 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                     )),
                 Space::new().height(10),
                 text(rust_i18n::t!("logging_label")).size(18),
-                row![
-                    text(rust_i18n::t!("log_level_label")).width(Length::Fixed(200.0)),
-                    iced::widget::pick_list(
-                        LogLevel::ALL.to_vec(),
-                        Some(app.log_level),
-                        Message::SetLogLevel
-                    )
-                    .width(Length::Fixed(120.0))
-                    .padding(5)
-                ]
-                .spacing(10)
-                .align_y(iced::Alignment::Center),
+                pick_row(
+                    rust_i18n::t!("log_level_label"),
+                    LogLevel::ALL.to_vec(),
+                    Some(app.log_level),
+                    Message::SetLogLevel,
+                    Length::Fixed(120.0),
+                ),
                 muted_note(rust_i18n::t!("log_level_explain")),
                 Space::new().height(10),
                 text(rust_i18n::t!("quick_filter_title")).size(18),
@@ -893,25 +891,11 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             )
             .width(Length::FillPortion(2))
             .padding(5),
-            if app.editing_goal_key.is_some() {
-                row![
-                    button(icon::icon(icon::CHECK).size(14))
-                        .style(button::success)
-                        .padding(6)
-                        .on_press(Message::AddGoal),
-                    button(icon::icon(icon::CROSS).size(14))
-                        .style(button::danger)
-                        .padding(6)
-                        .on_press(Message::CancelEditGoal)
-                ]
-                .spacing(5)
-            } else {
-                row![
-                    button(text(rust_i18n::t!("add")))
-                        .padding(5)
-                        .on_press(Message::AddGoal)
-                ]
-            }
+            add_cancel_buttons(
+                app.editing_goal_key.is_some(),
+                Message::AddGoal,
+                Message::CancelEditGoal,
+            ),
         ]
         .spacing(10)
         .align_y(iced::Alignment::Center);
@@ -991,25 +975,11 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 .on_submit(Message::AddAlias)
                 .padding(5)
                 .width(Length::FillPortion(2)),
-            if app.editing_alias_key.is_some() {
-                row![
-                    button(icon::icon(icon::CHECK).size(14))
-                        .style(button::success)
-                        .padding(6)
-                        .on_press(Message::AddAlias),
-                    button(icon::icon(icon::CROSS).size(14))
-                        .style(button::danger)
-                        .padding(6)
-                        .on_press(Message::CancelEditAlias)
-                ]
-                .spacing(5)
-            } else {
-                row![
-                    button(text(rust_i18n::t!("add")))
-                        .padding(5)
-                        .on_press(Message::AddAlias)
-                ]
-            }
+            add_cancel_buttons(
+                app.editing_alias_key.is_some(),
+                Message::AddAlias,
+                Message::CancelEditAlias,
+            ),
         ]
         .spacing(10)
         .align_y(iced::Alignment::Center);
