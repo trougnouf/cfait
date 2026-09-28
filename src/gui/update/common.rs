@@ -1,4 +1,3 @@
-// File: ./src/gui/update/common.rs
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Common utilities for GUI update handlers.
 //!

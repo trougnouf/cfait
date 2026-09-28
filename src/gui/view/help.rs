@@ -1,4 +1,3 @@
-// File: ./src/gui/view/help.rs
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! GUI view component for displaying the help screen.
 
@@ -13,6 +12,73 @@ use iced::{Color, Element, Font, Length, Theme};
 const COL_ACCENT: Color = Color::from_rgb(0.4, 0.7, 1.0);
 const COL_SYNTAX: Color = Color::from_rgb(1.0, 0.85, 0.4);
 const COL_MUTED: Color = Color::from_rgb(0.6, 0.6, 0.6);
+
+fn muted_text_style(_theme: &Theme) -> text::Style {
+    text::Style {
+        color: Some(COL_MUTED),
+    }
+}
+
+fn body_text_style(theme: &Theme) -> text::Style {
+    text::Style {
+        color: Some(theme.extended_palette().background.base.text),
+    }
+}
+
+fn link_text_style(theme: &Theme) -> text::Style {
+    text::Style {
+        color: Some(if theme.extended_palette().is_dark {
+            COL_ACCENT
+        } else {
+            theme.extended_palette().primary.base.color
+        }),
+    }
+}
+
+fn card_style(theme: &Theme) -> container::Style {
+    container::Style {
+        background: Some(
+            Color {
+                a: 0.5,
+                ..theme.extended_palette().background.weak.color
+            }
+            .into(),
+        ),
+        border: iced::Border {
+            radius: 8.0.into(),
+            width: 1.0,
+            color: Color {
+                a: 0.2,
+                ..theme.extended_palette().background.base.text
+            },
+        },
+        ..Default::default()
+    }
+}
+
+/// The bold accent-colored section header (icon glyph + title) shared by all help tabs.
+fn section_header(icon_char: char, title: &str) -> Element<'static, Message> {
+    row![
+        text(icon_char)
+            .font(crate::gui::icon::FONT)
+            .size(28)
+            .style(|_theme: &Theme| text::Style {
+                color: Some(COL_ACCENT)
+            }),
+        text(title.to_string())
+            .size(28)
+            .font(Font {
+                weight: iced::font::Weight::Bold,
+                ..Default::default()
+            })
+            .style(|_theme: &Theme| text::Style {
+                color: Some(COL_ACCENT)
+            })
+    ]
+    .spacing(12)
+    .align_y(iced::Alignment::Center)
+    .into()
+}
 
 // Helper function to create a pretty, colored, rounded tab button
 fn tab_btn(
@@ -96,9 +162,7 @@ pub fn view_help<'a>(tab: HelpTab, app: &'a GuiApp) -> Element<'a, Message> {
             rust_i18n::t!("help_tab_to_switch")
         ))
         .size(28)
-        .style(|theme: &Theme| text::Style {
-            color: Some(theme.extended_palette().background.base.text)
-        }),
+        .style(body_text_style),
         Space::new().width(Length::Fill)
     ]
     .spacing(15)
@@ -147,79 +211,23 @@ pub fn view_help<'a>(tab: HelpTab, app: &'a GuiApp) -> Element<'a, Message> {
 
     match tab {
         HelpTab::Syntax => {
-            let syntax_header = row![
-                text('\u{f1fa}')
-                    .font(crate::gui::icon::FONT)
-                    .size(28)
-                    .style(|_theme: &Theme| text::Style {
-                        color: Some(COL_ACCENT)
-                    }),
-                text(rust_i18n::t!("help_syntax"))
-                    .size(28)
-                    .font(Font {
-                        weight: iced::font::Weight::Bold,
-                        ..Default::default()
-                    })
-                    .style(|_theme: &Theme| text::Style {
-                        color: Some(COL_ACCENT)
-                    })
-            ]
-            .spacing(12)
-            .align_y(iced::Alignment::Center);
-
-            content_col = content_col.push(syntax_header);
+            content_col =
+                content_col.push(section_header('\u{f1fa}', &rust_i18n::t!("help_syntax")));
 
             for section in crate::help::get_syntax_help() {
                 content_col = content_col.push(help_card(&section.title, &section.items));
             }
         }
         HelpTab::Shortcuts => {
-            let shortcuts_header = row![
-                text('\u{f11c}')
-                    .font(crate::gui::icon::FONT)
-                    .size(28)
-                    .style(|_theme: &Theme| text::Style {
-                        color: Some(COL_ACCENT)
-                    }),
-                text(rust_i18n::t!("help_shortcuts"))
-                    .size(28)
-                    .font(Font {
-                        weight: iced::font::Weight::Bold,
-                        ..Default::default()
-                    })
-                    .style(|_theme: &Theme| text::Style {
-                        color: Some(COL_ACCENT)
-                    })
-            ]
-            .spacing(12)
-            .align_y(iced::Alignment::Center);
-
-            content_col = content_col.push(shortcuts_header);
+            content_col =
+                content_col.push(section_header('\u{f11c}', &rust_i18n::t!("help_shortcuts")));
 
             for section in crate::help::get_shortcuts_help(true) {
                 content_col = content_col.push(help_card(&section.title, &section.items));
             }
         }
         HelpTab::About => {
-            let about_header = row![
-                text(support_icon)
-                    .font(crate::gui::icon::FONT)
-                    .size(28)
-                    .style(|_theme: &Theme| text::Style {
-                        color: Some(COL_ACCENT)
-                    }),
-                text(rust_i18n::t!("support_card_title").to_string())
-                    .size(28)
-                    .font(Font {
-                        weight: iced::font::Weight::Bold,
-                        ..Default::default()
-                    })
-                    .style(|_theme: &Theme| text::Style {
-                        color: Some(COL_ACCENT)
-                    })
-            ]
-            .spacing(12)
-            .align_y(iced::Alignment::Center);
+            let about_header = section_header(support_icon, &rust_i18n::t!("support_card_title"));
 
             let version_info = format!(
                 "{} ({})",
@@ -238,9 +246,7 @@ pub fn view_help<'a>(tab: HelpTab, app: &'a GuiApp) -> Element<'a, Message> {
                         .to_string()
                     )
                     .size(14)
-                    .style(|_: &Theme| text::Style {
-                        color: Some(COL_MUTED)
-                    }),
+                    .style(muted_text_style),
                     Space::new().width(8),
                     crate::gui::icon::icon(crate::gui::icon::COPY)
                         .size(14)
@@ -258,14 +264,10 @@ pub fn view_help<'a>(tab: HelpTab, app: &'a GuiApp) -> Element<'a, Message> {
             let footer_links = column![
                 text(rust_i18n::t!("about_title").to_string())
                     .size(14)
-                    .style(|_: &Theme| text::Style {
-                        color: Some(COL_MUTED)
-                    }),
+                    .style(muted_text_style),
                 text(rust_i18n::t!("about_author").to_string())
                     .size(14)
-                    .style(|_: &Theme| text::Style {
-                        color: Some(COL_MUTED)
-                    }),
+                    .style(muted_text_style),
                 tooltip(
                     version_btn,
                     text(rust_i18n::t!("click_to_copy").to_string()).size(12),
@@ -274,9 +276,7 @@ pub fn view_help<'a>(tab: HelpTab, app: &'a GuiApp) -> Element<'a, Message> {
                 .style(crate::gui::view::tooltip_style),
                 text(rust_i18n::t!("about_license").to_string())
                     .size(14)
-                    .style(|_: &Theme| text::Style {
-                        color: Some(COL_MUTED)
-                    }),
+                    .style(muted_text_style),
                 button(
                     text(
                         rust_i18n::t!(
@@ -286,13 +286,7 @@ pub fn view_help<'a>(tab: HelpTab, app: &'a GuiApp) -> Element<'a, Message> {
                         .to_string()
                     )
                     .size(14)
-                    .style(|theme: &Theme| text::Style {
-                        color: Some(if theme.extended_palette().is_dark {
-                            COL_ACCENT
-                        } else {
-                            theme.extended_palette().primary.base.color
-                        })
-                    })
+                    .style(link_text_style)
                 )
                 .padding(0)
                 .style(iced::widget::button::text)
@@ -352,9 +346,7 @@ fn help_card<'a>(title: &str, items: &[crate::help::HelpItem]) -> Element<'a, Me
             weight: iced::font::Weight::Bold,
             ..Default::default()
         })
-        .style(|theme: &Theme| text::Style {
-            color: Some(theme.extended_palette().background.base.text),
-        });
+        .style(body_text_style);
 
     let mut rows = column![header, iced::widget::rule::horizontal(1)].spacing(12);
 
@@ -402,9 +394,7 @@ fn help_card<'a>(title: &str, items: &[crate::help::HelpItem]) -> Element<'a, Me
                     text::<Theme, iced::Renderer>(format!("e.g. {}", item.example))
                         .size(13)
                         .font(Font::MONOSPACE)
-                        .style(|_: &Theme| text::Style {
-                            color: Some(COL_MUTED)
-                        })
+                        .style(muted_text_style)
                 ])
             } else {
                 Element::from(Space::new().height(0))
@@ -417,24 +407,7 @@ fn help_card<'a>(title: &str, items: &[crate::help::HelpItem]) -> Element<'a, Me
 
     container(rows)
         .padding(20)
-        .style(|theme: &Theme| container::Style {
-            background: Some(
-                Color {
-                    a: 0.5,
-                    ..theme.extended_palette().background.weak.color
-                }
-                .into(),
-            ),
-            border: iced::Border {
-                radius: 8.0.into(),
-                width: 1.0,
-                color: Color {
-                    a: 0.2,
-                    ..theme.extended_palette().background.base.text
-                },
-            },
-            ..Default::default()
-        })
+        .style(card_style)
         .width(Length::Fill)
         .into()
 }
@@ -481,24 +454,7 @@ fn support_card<'a>() -> Element<'a, Message> {
 
     container(content)
         .padding(20)
-        .style(|theme: &Theme| container::Style {
-            background: Some(
-                Color {
-                    a: 0.5,
-                    ..theme.extended_palette().background.weak.color
-                }
-                .into(),
-            ),
-            border: iced::Border {
-                radius: 8.0.into(),
-                width: 1.0,
-                color: Color {
-                    a: 0.2,
-                    ..theme.extended_palette().background.base.text
-                },
-            },
-            ..Default::default()
-        })
+        .style(card_style)
         .width(Length::Fill)
         .into()
 }
@@ -512,15 +468,11 @@ fn donation_row<'a>(
     let row_content = row![
         crate::gui::icon::icon(icon_char)
             .size(18)
-            .style(|_: &Theme| text::Style {
-                color: Some(COL_MUTED),
-            }),
+            .style(muted_text_style),
         Space::new().width(12),
         column![
             text(name).size(15),
-            text(value).size(12).style(|_: &Theme| text::Style {
-                color: Some(COL_MUTED),
-            })
+            text(value).size(12).style(muted_text_style)
         ]
         .spacing(4),
         Space::new().width(Length::Fill),
@@ -530,9 +482,7 @@ fn donation_row<'a>(
             crate::gui::icon::EXTERNAL_LINK
         })
         .size(16)
-        .style(|_: &Theme| text::Style {
-            color: Some(COL_MUTED),
-        })
+        .style(muted_text_style)
     ]
     .align_y(iced::Alignment::Center);
 
