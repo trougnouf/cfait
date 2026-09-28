@@ -205,26 +205,161 @@ fn task_clipboard_text(t: &crate::model::Task) -> String {
 fn commit_task_update(app: &mut GuiApp, task: crate::model::Task) {
     app.edit_generation = app.edit_generation.wrapping_add(1);
     common::refresh_filtered_tasks(app);
-    if let Some(tx) = &app.bg_tx {
-        let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(vec![
-            crate::journal::Action::Update(task),
-        ]));
-    }
+    send_batch(app, vec![crate::journal::Action::Update(task)]);
 }
 
 /// Queue a background update for every task touched by a retroactive alias
 /// change, when there are any.
 fn send_retroactive_updates(app: &mut GuiApp, batch: Vec<crate::model::Task>) {
-    if batch.is_empty() {
+    send_batch(
+        app,
+        batch
+            .into_iter()
+            .map(crate::journal::Action::Update)
+            .collect(),
+    );
+}
+
+/// Queue a background update for a batch of journal actions, when non-empty.
+fn send_batch(app: &mut GuiApp, actions: Vec<crate::journal::Action>) {
+    if actions.is_empty() {
         return;
     }
-    let actions: Vec<_> = batch
-        .into_iter()
-        .map(crate::journal::Action::Update)
-        .collect();
     if let Some(tx) = &app.bg_tx {
         let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(actions));
     }
+}
+
+/// Set the keyboard focus in both the app state and the global subscription,
+/// keeping the two in sync.
+fn set_active_focus(app: &mut GuiApp, focus: Focus) {
+    app.active_focus = focus;
+    if let Ok(mut g) = ACTIVE_FOCUS.write() {
+        *g = focus;
+    }
+}
+
+/// Show an info message that auto-dismisses after four seconds, scrolling
+/// the list to the selected row.
+fn flash_info_message(app: &mut GuiApp, msg: String) -> Task<Message> {
+    app.info_msg = Some(msg);
+    app.info_msg_version = app.info_msg_version.wrapping_add(1);
+    app.error_msg = None;
+    let version = app.info_msg_version;
+    Task::batch(vec![
+        common::scroll_to_selected_delayed(app, false),
+        Task::perform(
+            async move {
+                tokio::time::sleep(std::time::Duration::from_secs(4)).await;
+                version
+            },
+            Message::DismissInfo,
+        ),
+    ])
+}
+
+/// Apply an undo/redo record: replay its actions, push it onto the opposite
+/// history stack, refocus the affected task and report the outcome.
+fn apply_history_record(
+    app: &mut GuiApp,
+    record: crate::journal::UndoRecord,
+    is_undo: bool,
+) -> Task<Message> {
+    app.edit_generation = app.edit_generation.wrapping_add(1);
+    let saved = record.clone();
+    let actions = if is_undo {
+        record.reverse
+    } else {
+        record.forward
+    };
+    app.store.apply_actions(&actions);
+    if is_undo {
+        app.undo_history.push_redo(saved);
+    } else {
+        app.undo_history.push_undo(saved);
+    }
+
+    // Prevent jump: focus the task that was modified
+    app.selected_uid = record.primary_uid.clone();
+    common::refresh_filtered_tasks(app);
+
+    if let Some(tx) = &app.bg_tx {
+        let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(actions));
+    }
+
+    let msg = if is_undo {
+        rust_i18n::t!("task_action_undone", desc = record.description).to_string()
+    } else {
+        rust_i18n::t!("task_action_redone", desc = record.description).to_string()
+    };
+    flash_info_message(app, msg)
+}
+
+/// Replace the token at `range` in `current` with `text`, keeping the rest
+/// of the text. When the token is at the end a trailing space is appended so
+/// subsequent input does not stick to the replacement.
+fn apply_text_replacement(current: &str, range: std::ops::Range<usize>, text: &str) -> String {
+    let mut new_text = current[..range.start].to_string();
+    new_text.push_str(text);
+    if range.end < current.len() {
+        new_text.push_str(&current[range.end..]);
+    } else {
+        new_text.push(' ');
+    }
+    new_text
+}
+
+/// Log dependency resolution warnings, if any.
+fn log_dependency_warnings(warnings: Vec<crate::store::DependencyWarning>) {
+    for w in warnings {
+        log::warn!("Dependency resolution: {}", w);
+    }
+}
+
+/// Append `extra` to a description, joining with a blank line.
+fn append_description(target: &mut String, extra: &str) {
+    if extra.is_empty() {
+        return;
+    }
+    if target.is_empty() {
+        *target = extra.to_string();
+    } else {
+        target.push_str("\n\n");
+        target.push_str(extra);
+    }
+}
+
+/// Yank a task: mark it as the pending yank source and copy its text to the
+/// clipboard when it is visible in the list.
+fn yank_task(app: &mut GuiApp, uid: &str) -> Task<Message> {
+    app.yanked_uid = Some(uid.to_string());
+    let mut tasks = vec![common::scroll_to_selected(app, false)];
+    if let Some(idx) = app.find_task_index_by_uid(uid)
+        && let Some(t) = app.get_task_at_index(idx)
+    {
+        tasks.push(iced::clipboard::write(task_clipboard_text(t)));
+    }
+    Task::batch(tasks)
+}
+
+/// Apply an alarm action (snooze or dismiss) to a task and persist it when it
+/// changed.
+fn commit_alarm_update(
+    app: &mut GuiApp,
+    t_uid: &str,
+    update: impl FnOnce(&mut crate::model::Task) -> bool,
+) -> Task<Message> {
+    let updated = app.store.get_task_mut(t_uid).and_then(|(task, _)| {
+        if update(task) {
+            Some(task.clone())
+        } else {
+            None
+        }
+    });
+    if let Some(task) = updated {
+        commit_task_update(app, task);
+    }
+    Task::none()
 }
 
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
@@ -239,36 +374,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
 
             if let Some(record) = app.undo_history.pop_undo() {
-                app.edit_generation = app.edit_generation.wrapping_add(1);
-                app.store.apply_actions(&record.reverse);
-                app.undo_history.push_redo(record.clone());
-
-                // Prevent jump: focus the task that was modified
-                app.selected_uid = record.primary_uid.clone();
-                common::refresh_filtered_tasks(app);
-
-                if let Some(tx) = &app.bg_tx {
-                    let _ =
-                        tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(record.reverse));
-                }
-
-                app.info_msg = Some(
-                    rust_i18n::t!("task_action_undone", desc = record.description).to_string(),
-                );
-                app.info_msg_version = app.info_msg_version.wrapping_add(1);
-                app.error_msg = None;
-
-                let version = app.info_msg_version;
-                return Task::batch(vec![
-                    common::scroll_to_selected_delayed(app, false),
-                    Task::perform(
-                        async move {
-                            tokio::time::sleep(std::time::Duration::from_secs(4)).await;
-                            version
-                        },
-                        Message::DismissInfo,
-                    ),
-                ]);
+                return apply_history_record(app, record, true);
             }
             Task::none()
         }
@@ -282,36 +388,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
 
             if let Some(record) = app.undo_history.pop_redo() {
-                app.edit_generation = app.edit_generation.wrapping_add(1);
-                app.store.apply_actions(&record.forward);
-                app.undo_history.push_undo(record.clone());
-
-                // Prevent jump: focus the task that was modified
-                app.selected_uid = record.primary_uid.clone();
-                common::refresh_filtered_tasks(app);
-
-                if let Some(tx) = &app.bg_tx {
-                    let _ =
-                        tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(record.forward));
-                }
-
-                app.info_msg = Some(
-                    rust_i18n::t!("task_action_redone", desc = record.description).to_string(),
-                );
-                app.info_msg_version = app.info_msg_version.wrapping_add(1);
-                app.error_msg = None;
-
-                let version = app.info_msg_version;
-                return Task::batch(vec![
-                    common::scroll_to_selected_delayed(app, false),
-                    Task::perform(
-                        async move {
-                            tokio::time::sleep(std::time::Duration::from_secs(4)).await;
-                            version
-                        },
-                        Message::DismissInfo,
-                    ),
-                ]);
+                return apply_history_record(app, record, false);
             }
             Task::none()
         }
@@ -323,25 +400,14 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.store.remove(crate::storage::LOCAL_TRASH_HREF);
                 common::refresh_filtered_tasks(app);
             }
-            app.info_msg = Some(if count > 0 {
-                rust_i18n::t!("trash_emptied", count = count).to_string()
-            } else {
-                rust_i18n::t!("trash_is_empty").to_string()
-            });
-            app.info_msg_version = app.info_msg_version.wrapping_add(1);
-            app.error_msg = None;
-
-            let version = app.info_msg_version;
-            Task::batch(vec![
-                common::scroll_to_selected_delayed(app, false),
-                Task::perform(
-                    async move {
-                        tokio::time::sleep(std::time::Duration::from_secs(4)).await;
-                        version
-                    },
-                    Message::DismissInfo,
-                ),
-            ])
+            flash_info_message(
+                app,
+                if count > 0 {
+                    rust_i18n::t!("trash_emptied", count = count).to_string()
+                } else {
+                    rust_i18n::t!("trash_is_empty").to_string()
+                },
+            )
         }
         Message::EmptyTrashResult(Err(e)) => {
             log::error!("Empty trash failed: {}", e);
@@ -352,31 +418,19 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if app.sidebar_mode == SidebarMode::Journal {
                 let current = app.journal_editor_content.text();
                 app.journal_history.push(current.clone());
-                let mut new_text = current[..range.start].to_string();
-                new_text.push_str(&text);
-                if range.end < current.len() {
-                    new_text.push_str(&current[range.end..]);
-                } else {
-                    new_text.push(' ');
-                }
+                let new_text = apply_text_replacement(&current, range, &text);
                 app.journal_editor_content = text_editor::Content::with_text(&new_text);
                 app.journal_editor_content
                     .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
 
-                app.active_focus = Focus::Journal;
-                if let Ok(mut focus) = ACTIVE_FOCUS.write() {
-                    *focus = Focus::Journal;
-                }
+                set_active_focus(app, Focus::Journal);
                 return Task::batch(vec![
                     iced::widget::operation::focus(iced::widget::Id::new("journal_editor")),
                     schedule_journal_save(app),
                 ]);
             }
 
-            app.active_focus = Focus::AddTaskInput;
-            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
-                *focus = Focus::AddTaskInput;
-            }
+            set_active_focus(app, Focus::AddTaskInput);
 
             let is_desc = app.last_edited_field == 1 || app.editing_tree_uid.is_some();
 
@@ -384,13 +438,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 let current = app.description_value.text();
                 app.desc_history.push(current.clone());
 
-                let mut new_text = current[..range.start].to_string();
-                new_text.push_str(&text);
-                if range.end < current.len() {
-                    new_text.push_str(&current[range.end..]);
-                } else {
-                    new_text.push(' ');
-                }
+                let new_text = apply_text_replacement(&current, range, &text);
                 app.description_value = text_editor::Content::with_text(&new_text);
                 app.description_value
                     .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
@@ -399,13 +447,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 let current = app.input_value.text();
                 app.input_history.push(current.clone());
 
-                let mut new_text = current[..range.start].to_string();
-                new_text.push_str(&text);
-                if range.end < current.len() {
-                    new_text.push_str(&current[range.end..]);
-                } else {
-                    new_text.push(' ');
-                }
+                let new_text = apply_text_replacement(&current, range, &text);
                 app.input_value = text_editor::Content::with_text(&new_text);
                 app.input_value
                     .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
@@ -413,10 +455,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
         }
         Message::InputChanged(action) => {
-            app.active_focus = Focus::AddTaskInput;
-            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
-                *focus = Focus::AddTaskInput;
-            }
+            set_active_focus(app, Focus::AddTaskInput);
             if let text_editor::Action::Edit(text_editor::Edit::Enter) = action {
                 return handle_submit(app, false);
             }
@@ -528,10 +567,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.desc_history.clear();
             app.last_edited_field = 0;
 
-            app.active_focus = Focus::AddTaskInput;
-            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
-                *focus = Focus::AddTaskInput;
-            }
+            set_active_focus(app, Focus::AddTaskInput);
 
             iced::widget::operation::focus(iced::widget::Id::new("main_input"))
         }
@@ -539,10 +575,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::StartCreateWithDescription => {
             app.creating_with_desc = true;
 
-            app.active_focus = Focus::AddTaskInput;
-            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
-                *focus = Focus::AddTaskInput;
-            }
+            set_active_focus(app, Focus::AddTaskInput);
 
             if app.input_value.text().trim().is_empty() {
                 iced::widget::operation::focus(iced::widget::Id::new("main_input"))
@@ -590,10 +623,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.editing_uid = Some(task_uid.clone());
                 app.selected_uid = Some(task_uid);
 
-                app.active_focus = Focus::AddTaskInput;
-                if let Ok(mut focus) = ACTIVE_FOCUS.write() {
-                    *focus = Focus::AddTaskInput;
-                }
+                set_active_focus(app, Focus::AddTaskInput);
 
                 return iced::widget::operation::focus(iced::widget::Id::new("main_input"));
             }
@@ -623,10 +653,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     app.editing_tree_uid = Some(task_uid.clone());
                     app.selected_uid = Some(task_uid);
 
-                    app.active_focus = Focus::AddTaskInput;
-                    if let Ok(mut focus) = ACTIVE_FOCUS.write() {
-                        *focus = Focus::AddTaskInput;
-                    }
+                    set_active_focus(app, Focus::AddTaskInput);
 
                     return iced::widget::operation::focus(iced::widget::Id::new(
                         "description_input",
@@ -810,16 +837,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
         Message::YankSelected => {
             if let Some(uid) = app.selected_uid.clone() {
-                app.yanked_uid = Some(uid.clone());
-                let mut tasks = vec![common::scroll_to_selected(app, false)];
-                if let Some(idx) = app.find_task_index_by_uid(&uid)
-                    && let Some(t) = app.get_task_at_index(idx)
-                {
-                    tasks.push(iced::clipboard::write(task_clipboard_text(t)));
-                }
-                return Task::batch(tasks);
+                yank_task(app, &uid)
+            } else {
+                Task::none()
             }
-            Task::none()
         }
 
         Message::KeyboardLinkChild => {
@@ -1118,32 +1139,17 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::YankTask(uid) => {
-            app.yanked_uid = Some(uid.clone());
             app.selected_uid = Some(uid.clone());
-            let mut tasks = vec![common::scroll_to_selected(app, false)];
-            if let Some(idx) = app.find_task_index_by_uid(&uid)
-                && let Some(t) = app.get_task_at_index(idx)
-            {
-                tasks.push(iced::clipboard::write(task_clipboard_text(t)));
-            }
-            Task::batch(tasks)
+            yank_task(app, &uid)
         }
 
         Message::CopyToClipboard(text) => {
-            app.info_msg = Some(rust_i18n::t!("copied_to_clipboard").to_string());
-            app.info_msg_version = app.info_msg_version.wrapping_add(1);
-            app.error_msg = None;
-            let version = app.info_msg_version;
-            Task::batch(vec![
-                iced::clipboard::write(text),
-                Task::perform(
-                    async move {
-                        tokio::time::sleep(std::time::Duration::from_secs(4)).await;
-                        version
-                    },
-                    Message::DismissInfo,
-                ),
-            ])
+            let mut tasks = vec![iced::clipboard::write(text)];
+            tasks.push(flash_info_message(
+                app,
+                rust_i18n::t!("copied_to_clipboard").to_string(),
+            ));
+            Task::batch(tasks)
         }
 
         Message::TogglePin(uid) => {
@@ -1158,10 +1164,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::EscCaptured => {
-            app.active_focus = Focus::MainList;
-            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
-                *focus = Focus::MainList;
-            }
+            set_active_focus(app, Focus::MainList);
             app.info_msg = None;
             if app.editing_uid.is_some()
                 || app.editing_tree_uid.is_some()
@@ -1180,10 +1183,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::EscapePressed => {
-            app.active_focus = Focus::MainList;
-            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
-                *focus = Focus::MainList;
-            }
+            set_active_focus(app, Focus::MainList);
             let mut needs_refresh = false;
             let mut captured_action = false;
 
@@ -1469,39 +1469,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::SnoozeAlarm(t_uid, a_uid, mins) => {
-            let snoozed = match app.store.get_task_mut(&t_uid) {
-                Some((task, _)) => {
-                    if task.handle_snooze(&a_uid, mins) {
-                        task.sequence += 1;
-                        Some(task.clone())
-                    } else {
-                        None
-                    }
-                }
-                None => None,
-            };
-            if let Some(task) = snoozed {
-                commit_task_update(app, task);
-            }
-            Task::none()
+            commit_alarm_update(app, &t_uid, |task| task.handle_snooze(&a_uid, mins))
         }
 
         Message::DismissAlarm(t_uid, a_uid) => {
-            let dismissed = match app.store.get_task_mut(&t_uid) {
-                Some((task, _)) => {
-                    if task.handle_dismiss(&a_uid) {
-                        task.sequence += 1;
-                        Some(task.clone())
-                    } else {
-                        None
-                    }
-                }
-                None => None,
-            };
-            if let Some(task) = dismissed {
-                commit_task_update(app, task);
-            }
-            Task::none()
+            commit_alarm_update(app, &t_uid, |task| task.handle_dismiss(&a_uid))
         }
 
         Message::StartAddSession(uid) => {
@@ -1510,10 +1482,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.session_input = iced::widget::text_editor::Content::new();
             app.expanded_tasks.insert(uid.clone());
 
-            app.active_focus = Focus::AddTaskInput;
-            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
-                *focus = Focus::AddTaskInput;
-            }
+            set_active_focus(app, Focus::AddTaskInput);
 
             iced::widget::operation::focus(iced::widget::Id::from(format!("session_input_{}", uid)))
         }
@@ -1561,10 +1530,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     ));
             }
 
-            app.active_focus = Focus::AddTaskInput;
-            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
-                *focus = Focus::AddTaskInput;
-            }
+            set_active_focus(app, Focus::AddTaskInput);
             iced::widget::operation::focus(iced::widget::Id::from(format!("session_input_{}", uid)))
         }
 
@@ -1834,11 +1800,7 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                 }
             };
 
-        if !warnings.is_empty() {
-            for w in warnings {
-                log::warn!("Dependency resolution: {}", w);
-            }
-        }
+        log_dependency_warnings(warnings);
 
         app.selected_uid = Some(tree_uid.clone());
         if !keep_editing {
@@ -1863,12 +1825,7 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                 .into_iter()
                 .map(crate::journal::Action::Update),
         );
-
-        if !actions.is_empty()
-            && let Some(tx) = &app.bg_tx
-        {
-            let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(actions));
-        }
+        send_batch(app, actions);
 
         return Task::none();
     } else if let Some(edit_uid) = app.editing_uid.clone() {
@@ -1885,12 +1842,7 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
             task.description = cleaned_desc.clone();
             task.apply_smart_input(&clean_input, &app.tag_aliases, config_time);
 
-            let warnings = app.store.resolve_dependencies(&mut task);
-            if !warnings.is_empty() {
-                for w in warnings {
-                    log::warn!("Dependency resolution: {}", w);
-                }
-            }
+            log_dependency_warnings(app.store.resolve_dependencies(&mut task));
 
             if let Some(target) = task.target_collection.take() {
                 task.calendar_href =
@@ -1945,21 +1897,9 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                     (sub.categories.clone(), sub.locations.clone(), sub.priority),
                 );
 
-                let warnings = app.store.resolve_dependencies(&mut sub);
-                if !warnings.is_empty() {
-                    for w in warnings {
-                        log::warn!("Dependency resolution: {}", w);
-                    }
-                }
+                log_dependency_warnings(app.store.resolve_dependencies(&mut sub));
 
-                if !ext.description.is_empty() {
-                    if sub.description.is_empty() {
-                        sub.description = ext.description;
-                    } else {
-                        sub.description
-                            .push_str(&format!("\n\n{}", ext.description));
-                    }
-                }
+                append_description(&mut sub.description, &ext.description);
                 sub.inline_media = ext.inline_media.clone();
 
                 sub.apply_extracted_status(ext.status);
@@ -1988,12 +1928,7 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                     .into_iter()
                     .map(crate::journal::Action::Update),
             );
-
-            if !actions.is_empty()
-                && let Some(tx) = &app.bg_tx
-            {
-                let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(actions));
-            }
+            send_batch(app, actions);
 
             return Task::none();
         }
@@ -2005,12 +1940,7 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
             &mut new_task.inline_media,
         );
 
-        let warnings = app.store.resolve_dependencies(&mut new_task);
-        if !warnings.is_empty() {
-            for w in warnings {
-                log::warn!("Dependency resolution: {}", w);
-            }
-        }
+        log_dependency_warnings(app.store.resolve_dependencies(&mut new_task));
 
         if new_task.summary.trim().is_empty() && cleaned_desc.is_empty() {
             if !keep_editing {
@@ -2022,15 +1952,7 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
             return Task::none();
         }
 
-        if !cleaned_desc.is_empty() {
-            if new_task.description.is_empty() {
-                new_task.description = cleaned_desc.clone();
-            } else {
-                new_task
-                    .description
-                    .push_str(&format!("\n\n{}", cleaned_desc));
-            }
-        }
+        append_description(&mut new_task.description, &cleaned_desc);
 
         let parent = if let Some(parent_uid) = &app.creating_child_of {
             app.store.get_task_ref(parent_uid).cloned()
@@ -2101,21 +2023,9 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                     (sub.categories.clone(), sub.locations.clone(), sub.priority),
                 );
 
-                let warnings = app.store.resolve_dependencies(&mut sub);
-                if !warnings.is_empty() {
-                    for w in warnings {
-                        log::warn!("Dependency resolution: {}", w);
-                    }
-                }
+                log_dependency_warnings(app.store.resolve_dependencies(&mut sub));
 
-                if !ext.description.is_empty() {
-                    if sub.description.is_empty() {
-                        sub.description = ext.description;
-                    } else {
-                        sub.description
-                            .push_str(&format!("\n\n{}", ext.description));
-                    }
-                }
+                append_description(&mut sub.description, &ext.description);
                 sub.inline_media = ext.inline_media.clone();
 
                 sub.apply_extracted_status(ext.status);
@@ -2142,12 +2052,7 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
 
             // Resolve dependencies atomically before mutating store
             for t in &mut tasks_to_create {
-                let warnings = app.store.resolve_dependencies(t);
-                if !warnings.is_empty() {
-                    for w in warnings {
-                        log::warn!("Dependency resolution: {}", w);
-                    }
-                }
+                log_dependency_warnings(app.store.resolve_dependencies(t));
             }
 
             app.task_ids
@@ -2186,12 +2091,7 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                     .into_iter()
                     .map(crate::journal::Action::Update),
             );
-
-            if !actions.is_empty()
-                && let Some(tx) = &app.bg_tx
-            {
-                let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(actions));
-            }
+            send_batch(app, actions);
 
             return Task::batch(vec![scroll_cmd, focus_cmd]);
         }
