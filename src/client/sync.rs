@@ -614,15 +614,9 @@ impl RustyClient {
 
         // 3. Transactional processing loop
         loop {
-            let mut next_action_opt = None;
-
-            // Peek the front of the queue
-            Journal::modify(self.ctx.as_ref(), |queue| {
-                if let Some(first) = queue.first() {
-                    next_action_opt = Some(first.clone());
-                }
-            })
-            .map_err(|e| e.to_string())?;
+            // Peek the front of the queue. Read-only: this must not rewrite the
+            // journal, or a large batch would fsync the whole queue per action.
+            let next_action_opt = Journal::peek(self.ctx.as_ref());
 
             let next_action = match next_action_opt {
                 Some(a) => a,

@@ -155,6 +155,26 @@ impl Journal {
         Self::modify(ctx, |queue| queue.push(action))
     }
 
+    /// Return the front of the journal queue without touching the file.
+    ///
+    /// Unlike [`Self::modify`], this performs no serialization or write, so it
+    /// is cheap enough to call on every iteration of a processing loop. A
+    /// `modify`-based peek would re-serialize and fsync the whole queue even
+    /// though nothing changed, turning a large offline batch into O(n) full
+    /// disk flushes.
+    pub fn peek(ctx: &dyn AppContext) -> Option<Action> {
+        if let Some(path) = Self::get_path(ctx) {
+            LocalStorage::with_lock(&path, || {
+                let journal = Self::load_internal(&path);
+                Ok(journal.queue.first().cloned())
+            })
+            .ok()
+            .flatten()
+        } else {
+            None
+        }
+    }
+
     /// Is the in-memory journal empty?
     pub fn is_empty(&self) -> bool {
         self.queue.is_empty()
