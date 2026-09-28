@@ -309,7 +309,6 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
         pass,
         allow_insecure,
         enable_local_mode,
-        default_cal: default_cal.clone(),
     };
     tokio::spawn(network::run_network_actor(
         ctx.clone(),

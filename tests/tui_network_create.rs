@@ -209,7 +209,6 @@ END:VCALENDAR</cal:calendar-data>
         pass: "pass".into(),
         allow_insecure: true,
         enable_local_mode: true,
-        default_cal: None,
     };
 
     let actor_action_tx = action_tx.clone();

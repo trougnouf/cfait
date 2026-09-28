@@ -27,7 +27,6 @@ pub struct NetworkActorConfig {
     pub pass: String,
     pub allow_insecure: bool,
     pub enable_local_mode: bool,
-    pub default_cal: Option<String>,
 }
 
 fn apply_local_mode_filter(
@@ -37,6 +36,47 @@ fn apply_local_mode_filter(
     if !enable_local_mode {
         calendars.retain(|c| !c.href.starts_with("local://"));
     }
+}
+
+/// Merge the local calendar registry into `calendars` when local mode is on,
+/// skipping any href already present. Shared by the startup and refresh paths.
+fn merge_local_calendars(
+    ctx: &dyn AppContext,
+    enable_local_mode: bool,
+    calendars: &mut Vec<crate::model::CalendarListEntry>,
+) {
+    if !enable_local_mode {
+        return;
+    }
+    if let Ok(locals) = LocalCalendarRegistry::load(ctx) {
+        for loc in locals {
+            if !calendars.iter().any(|c| c.href == loc.href) {
+                calendars.push(loc);
+            }
+        }
+    }
+}
+
+/// Load the on-disk tasks for every calendar (local from storage, remote from
+/// the cache) with pending journal actions applied. Shared by the startup and
+/// refresh paths so both present identical offline state.
+fn load_cached_tasks(
+    ctx: &dyn AppContext,
+    calendars: &[crate::model::CalendarListEntry],
+) -> Vec<(String, Vec<crate::model::Task>)> {
+    let mut results = Vec::new();
+    for cal in calendars {
+        if cal.href.starts_with("local://") {
+            if let Ok(mut tasks) = LocalStorage::load_for_href(ctx, &cal.href) {
+                crate::journal::Journal::apply_to_tasks(ctx, &mut tasks, &cal.href);
+                results.push((cal.href.clone(), tasks));
+            }
+        } else if let Ok((mut tasks, _)) = Cache::load(ctx, &cal.href) {
+            crate::journal::Journal::apply_to_tasks(ctx, &mut tasks, &cal.href);
+            results.push((cal.href.clone(), tasks));
+        }
+    }
+    results
 }
 
 async fn merge_results_into_store(
@@ -138,7 +178,6 @@ pub async fn run_network_actor(
         pass,
         allow_insecure,
         enable_local_mode,
-        default_cal: _default_cal,
     } = config;
 
     // ------------------------------------------------------------------
@@ -165,32 +204,13 @@ pub async fn run_network_actor(
     // instead of wiping it with an empty one.
     let mut cached_cals: Vec<crate::model::CalendarListEntry> = Vec::new();
     if let Ok(mut cals) = Cache::load_calendars(ctx.as_ref()) {
-        // Load local registry and merge
-        if enable_local_mode && let Ok(locals) = LocalCalendarRegistry::load(ctx.as_ref()) {
-            for loc in locals {
-                if !cals.iter().any(|c| c.href == loc.href) {
-                    cals.push(loc);
-                }
-            }
-        }
+        merge_local_calendars(ctx.as_ref(), enable_local_mode, &mut cals);
         apply_local_mode_filter(&mut cals, enable_local_mode);
         cached_cals = cals.clone();
 
         let _ = event_tx.send(AppEvent::CalendarsLoaded(cals)).await;
 
-        let mut cached_tasks = Vec::new();
-        // Load tasks for all local calendars
-        for cal in &cached_cals {
-            if cal.href.starts_with("local://") {
-                if let Ok(mut tasks) = LocalStorage::load_for_href(ctx.as_ref(), &cal.href) {
-                    crate::journal::Journal::apply_to_tasks(ctx.as_ref(), &mut tasks, &cal.href);
-                    cached_tasks.push((cal.href.clone(), tasks));
-                }
-            } else if let Ok((mut tasks, _)) = Cache::load(ctx.as_ref(), &cal.href) {
-                crate::journal::Journal::apply_to_tasks(ctx.as_ref(), &mut tasks, &cal.href);
-                cached_tasks.push((cal.href.clone(), tasks));
-            }
-        }
+        let cached_tasks = load_cached_tasks(ctx.as_ref(), &cached_cals);
 
         if !cached_tasks.is_empty() {
             merge_results_into_store(&store, &cached_tasks).await;
@@ -254,13 +274,7 @@ pub async fn run_network_actor(
     apply_local_mode_filter(&mut calendars, enable_local_mode);
 
     // Merge locals again after network discovery
-    if enable_local_mode && let Ok(locals) = LocalCalendarRegistry::load(ctx.as_ref()) {
-        for loc in locals {
-            if !calendars.iter().any(|c| c.href == loc.href) {
-                calendars.push(loc);
-            }
-        }
-    }
+    merge_local_calendars(ctx.as_ref(), enable_local_mode, &mut calendars);
 
     let _ = event_tx
         .send(AppEvent::CalendarsLoaded(calendars.clone()))
@@ -274,18 +288,7 @@ pub async fn run_network_actor(
         .await;
 
     // Load tasks again with validated calendars list
-    let mut cached_results = Vec::new();
-    for cal in &calendars {
-        if cal.href.starts_with("local://") {
-            if let Ok(mut tasks) = LocalStorage::load_for_href(ctx.as_ref(), &cal.href) {
-                crate::journal::Journal::apply_to_tasks(ctx.as_ref(), &mut tasks, &cal.href);
-                cached_results.push((cal.href.clone(), tasks));
-            }
-        } else if let Ok((mut tasks, _)) = Cache::load(ctx.as_ref(), &cal.href) {
-            crate::journal::Journal::apply_to_tasks(ctx.as_ref(), &mut tasks, &cal.href);
-            cached_results.push((cal.href.clone(), tasks));
-        }
-    }
+    let cached_results = load_cached_tasks(ctx.as_ref(), &calendars);
     let has_cached = !cached_results.is_empty();
     if has_cached {
         merge_results_into_store(&store, &cached_results).await;
@@ -528,13 +531,7 @@ pub async fn run_network_actor(
                         apply_local_mode_filter(&mut calendars, enable_local_mode);
 
                         // Merge local calendars from registry
-                        if enable_local_mode && let Ok(locals) = LocalCalendarRegistry::load(ctx.as_ref()) {
-                            for loc in locals {
-                                if !calendars.iter().any(|c| c.href == loc.href) {
-                                    calendars.push(loc);
-                                }
-                            }
-                        }
+                        merge_local_calendars(ctx.as_ref(), enable_local_mode, &mut calendars);
 
                         let _ = event_tx
                             .send(AppEvent::CalendarsLoaded(calendars.clone()))
