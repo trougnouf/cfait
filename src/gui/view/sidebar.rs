@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// File: ./src/gui/view/sidebar.rs
 // Renders the sidebar (calendars, tags, locations) for the GUI.
 
 use super::tooltip_style;
@@ -405,6 +404,37 @@ fn build_aggregate_item_row<'a>(
     }
 }
 
+/// The "clear all" button in a sidebar header. Red when the active filter
+/// would empty the list, gray when there is nothing to clear.
+fn clear_all_button(
+    has_selection: bool,
+    is_filter_empty: bool,
+    on_press: Message,
+) -> iced::widget::Button<'static, Message> {
+    let icon = icon::icon(icon::CLEAR_ALL).size(16);
+    if has_selection {
+        if is_filter_empty {
+            button(icon.style(move |_| text::Style {
+                color: Some(Color::from_rgb(0.9, 0.2, 0.2)),
+            }))
+            .style(button::text)
+            .padding(5)
+            .on_press(on_press)
+        } else {
+            button(icon)
+                .style(button::text)
+                .padding(5)
+                .on_press(on_press)
+        }
+    } else {
+        button(icon.style(move |_| text::Style {
+            color: Some(Color::from_rgb(0.5, 0.5, 0.5)),
+        }))
+        .style(button::text)
+        .padding(5)
+    }
+}
+
 // --- CATEGORIES ---
 pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
     let all_cats = &app.cached_categories;
@@ -412,35 +442,7 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
     let is_filter_empty = app.tasks.is_empty() && app.store.has_any_tasks();
     let has_selection = !app.session.selected_categories.is_empty();
 
-    let clear_btn = if has_selection {
-        if is_filter_empty {
-            button(
-                icon::icon(icon::CLEAR_ALL)
-                    .size(16)
-                    .style(move |_| text::Style {
-                        color: Some(Color::from_rgb(0.9, 0.2, 0.2)),
-                    }),
-            )
-            .style(button::text)
-            .padding(5)
-            .on_press(Message::ClearAllTags)
-        } else {
-            button(icon::icon(icon::CLEAR_ALL).size(16))
-                .style(button::text)
-                .padding(5)
-                .on_press(Message::ClearAllTags)
-        }
-    } else {
-        button(
-            icon::icon(icon::CLEAR_ALL)
-                .size(16)
-                .style(move |_| text::Style {
-                    color: Some(Color::from_rgb(0.5, 0.5, 0.5)),
-                }),
-        )
-        .style(button::text)
-        .padding(5)
-    };
+    let clear_btn = clear_all_button(has_selection, is_filter_empty, Message::ClearAllTags);
 
     let clear_tooltip = tooltip(
         clear_btn,
@@ -622,35 +624,7 @@ pub fn view_sidebar_locations(app: &GuiApp) -> Element<'_, Message> {
     let has_selection = !app.session.selected_locations.is_empty();
 
     let is_filter_empty = app.tasks.is_empty() && app.store.has_any_tasks();
-    let clear_btn = if has_selection {
-        if is_filter_empty {
-            button(
-                icon::icon(icon::CLEAR_ALL)
-                    .size(16)
-                    .style(move |_| text::Style {
-                        color: Some(Color::from_rgb(0.9, 0.2, 0.2)),
-                    }),
-            )
-            .style(button::text)
-            .padding(5)
-            .on_press(Message::ClearAllLocations)
-        } else {
-            button(icon::icon(icon::CLEAR_ALL).size(16))
-                .style(button::text)
-                .padding(5)
-                .on_press(Message::ClearAllLocations)
-        }
-    } else {
-        button(
-            icon::icon(icon::CLEAR_ALL)
-                .size(16)
-                .style(move |_| text::Style {
-                    color: Some(Color::from_rgb(0.5, 0.5, 0.5)),
-                }),
-        )
-        .style(button::text)
-        .padding(5)
-    };
+    let clear_btn = clear_all_button(has_selection, is_filter_empty, Message::ClearAllLocations);
 
     let clear_tooltip = tooltip(
         clear_btn,
@@ -718,7 +692,7 @@ pub fn view_sidebar_locations(app: &GuiApp) -> Element<'_, Message> {
     column![header, list_content].spacing(0).into()
 }
 
-fn build_heatmap_row<'a>(history: &[f32], theme: &Theme) -> Element<'a, Message> {
+fn build_heatmap_row(history: &[f32], theme: &Theme) -> Element<'static, Message> {
     let mut heatmap_row = row![].spacing(2);
     for &pct in history {
         let color = if pct >= 1.0 {
@@ -753,6 +727,87 @@ fn build_heatmap_row<'a>(history: &[f32], theme: &Theme) -> Element<'a, Message>
     .into()
 }
 
+/// Builds the shared progress display (title, bar, heatmap) for a goal row.
+fn build_goal_content(
+    name: &str,
+    goal: &crate::config::Goal,
+    progress: u32,
+    history: &[f32],
+    theme: &Theme,
+) -> Element<'static, Message> {
+    let target = goal.target;
+    let pct = if target > 0 {
+        (progress as f32 / target as f32).min(1.0)
+    } else {
+        0.0
+    };
+
+    let (cur_str, tar_str) = if goal.goal_type == crate::config::GoalType::Duration {
+        crate::model::parser::format_goal_duration(progress, target)
+    } else {
+        (progress.to_string(), target.to_string())
+    };
+
+    let target_display = goal.format_target_display(&tar_str);
+    let title = text(format!("{} ({})", name, target_display)).size(14);
+
+    let prog_text = text(rust_i18n::t!(
+        "goal_progress",
+        current = cur_str,
+        target = tar_str
+    ))
+    .size(12)
+    .color(Color::from_rgb(0.6, 0.6, 0.6));
+
+    let prog_row = row![
+        prog_text,
+        Space::new().width(Length::Fill),
+        build_heatmap_row(history, theme)
+    ]
+    .align_y(iced::Alignment::Center);
+
+    let bar_bg =
+        container(Space::new().width(Length::Fill).height(6.0)).style(|_| container::Style {
+            background: Some(Color::from_rgb(0.2, 0.2, 0.2).into()),
+            border: iced::Border {
+                radius: 3.0.into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+    let fg_portion = (pct * 1000.0).clamp(0.0, 1000.0) as u16;
+    let bg_portion = 1000 - fg_portion;
+
+    let bar_fg = container(Space::new().height(6.0)).style(move |theme: &Theme| container::Style {
+        background: Some(if pct >= 1.0 {
+            Color::from_rgb(0.2, 0.8, 0.2).into()
+        } else {
+            theme.extended_palette().primary.base.color.into()
+        }),
+        border: iced::Border {
+            radius: 3.0.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+
+    let bar_row = if fg_portion == 0 {
+        row![Space::new().width(Length::Fill)]
+    } else if bg_portion == 0 {
+        row![bar_fg.width(Length::Fill)]
+    } else {
+        row![
+            bar_fg.width(Length::FillPortion(fg_portion)),
+            Space::new().width(Length::FillPortion(bg_portion))
+        ]
+    };
+
+    let bar_container = iced::widget::stack![bar_bg, bar_row];
+
+    column![title, bar_container, prog_row].spacing(4).into()
+}
+
 // --- GOALS ---
 pub fn view_sidebar_goals(app: &GuiApp) -> Element<'_, Message> {
     let mut col = column![].spacing(10);
@@ -774,86 +829,16 @@ pub fn view_sidebar_goals(app: &GuiApp) -> Element<'_, Message> {
         let mut keys: Vec<&String> = app.core_config.goals.keys().collect();
         keys.sort();
 
+        let theme = app.theme();
         for key in keys {
             let goal = &app.core_config.goals[key];
-            let (progress, history) = app
-                .cached_goals_progress
-                .get(key)
-                .cloned()
-                .unwrap_or((0, Vec::new()));
-            let target = goal.target;
-            let pct = if target > 0 {
-                (progress as f32 / target as f32).min(1.0)
-            } else {
-                0.0
+            let (progress, history) = match app.cached_goals_progress.get(key) {
+                Some((p, h)) => (*p, h.as_slice()),
+                None => (0, &[] as &[f32]),
             };
 
-            let (cur_str, tar_str) = if goal.goal_type == crate::config::GoalType::Duration {
-                crate::model::parser::format_goal_duration(progress, target)
-            } else {
-                (progress.to_string(), target.to_string())
-            };
-
-            let target_display = goal.format_target_display(&tar_str);
-            let title = text(format!("{} ({})", key, target_display)).size(14);
-
-            let prog_text = text(rust_i18n::t!(
-                "goal_progress",
-                current = cur_str,
-                target = tar_str
-            ))
-            .size(12)
-            .color(Color::from_rgb(0.6, 0.6, 0.6));
-
-            let prog_row = row![
-                prog_text,
-                Space::new().width(Length::Fill),
-                build_heatmap_row(&history, &app.theme())
-            ]
-            .align_y(iced::Alignment::Center);
-
-            let bar_bg = container(Space::new().width(Length::Fill).height(6.0)).style(|_| {
-                container::Style {
-                    background: Some(Color::from_rgb(0.2, 0.2, 0.2).into()),
-                    border: iced::Border {
-                        radius: 3.0.into(),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                }
-            });
-
-            let fg_portion = (pct * 1000.0).clamp(0.0, 1000.0) as u16;
-            let bg_portion = 1000 - fg_portion;
-
-            let bar_fg =
-                container(Space::new().height(6.0)).style(move |theme: &Theme| container::Style {
-                    background: Some(if pct >= 1.0 {
-                        Color::from_rgb(0.2, 0.8, 0.2).into()
-                    } else {
-                        theme.extended_palette().primary.base.color.into()
-                    }),
-                    border: iced::Border {
-                        radius: 3.0.into(),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                });
-
-            let bar_row = if fg_portion == 0 {
-                row![Space::new().width(Length::Fill)]
-            } else if bg_portion == 0 {
-                row![bar_fg.width(Length::Fill)]
-            } else {
-                row![
-                    bar_fg.width(Length::FillPortion(fg_portion)),
-                    Space::new().width(Length::FillPortion(bg_portion))
-                ]
-            };
-
-            let bar_container = iced::widget::stack![bar_bg, bar_row];
-
-            let content_btn = button(column![title, bar_container, prog_row].spacing(4))
+            let content = build_goal_content(key, goal, progress, history, &theme);
+            let content_btn = button(content)
                 .style(button::text)
                 .width(Length::Fill)
                 .padding(8);
@@ -883,79 +868,8 @@ pub fn view_sidebar_goals(app: &GuiApp) -> Element<'_, Message> {
         }
 
         for (uid, summary, goal, progress, history) in &app.cached_task_goals {
-            let target = goal.target;
-            let pct = if target > 0 {
-                (*progress as f32 / target as f32).min(1.0)
-            } else {
-                0.0
-            };
-
-            let (cur_str, tar_str) = if goal.goal_type == crate::config::GoalType::Duration {
-                crate::model::parser::format_goal_duration(*progress, target)
-            } else {
-                (progress.to_string(), target.to_string())
-            };
-
-            let target_display = goal.format_target_display(&tar_str);
-            let title = text(format!("{} ({})", summary, target_display)).size(14);
-
-            let prog_text = text(rust_i18n::t!(
-                "goal_progress",
-                current = cur_str,
-                target = tar_str
-            ))
-            .size(12)
-            .color(Color::from_rgb(0.6, 0.6, 0.6));
-
-            let prog_row = row![
-                prog_text,
-                Space::new().width(Length::Fill),
-                build_heatmap_row(history, &app.theme())
-            ]
-            .align_y(iced::Alignment::Center);
-
-            let bar_bg = container(Space::new().width(Length::Fill).height(6.0)).style(|_| {
-                container::Style {
-                    background: Some(Color::from_rgb(0.2, 0.2, 0.2).into()),
-                    border: iced::Border {
-                        radius: 3.0.into(),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                }
-            });
-
-            let fg_portion = (pct * 1000.0).clamp(0.0, 1000.0) as u16;
-            let bg_portion = 1000 - fg_portion;
-
-            let bar_fg =
-                container(Space::new().height(6.0)).style(move |theme: &Theme| container::Style {
-                    background: Some(if pct >= 1.0 {
-                        Color::from_rgb(0.2, 0.8, 0.2).into()
-                    } else {
-                        theme.extended_palette().primary.base.color.into()
-                    }),
-                    border: iced::Border {
-                        radius: 3.0.into(),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                });
-
-            let bar_row = if fg_portion == 0 {
-                row![Space::new().width(Length::Fill)]
-            } else if bg_portion == 0 {
-                row![bar_fg.width(Length::Fill)]
-            } else {
-                row![
-                    bar_fg.width(Length::FillPortion(fg_portion)),
-                    Space::new().width(Length::FillPortion(bg_portion))
-                ]
-            };
-
-            let bar_container = iced::widget::stack![bar_bg, bar_row];
-
-            let content_btn = button(column![title, bar_container, prog_row].spacing(4))
+            let content = build_goal_content(summary, goal, *progress, history, &theme);
+            let content_btn = button(content)
                 .style(button::text)
                 .width(Length::Fill)
                 .padding(8)
