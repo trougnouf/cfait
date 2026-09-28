@@ -94,6 +94,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::SetLanguage(_)
         | Message::TogglePinnedAction(_, _)
         | Message::SetLogLevel(_)
+        | Message::SetFirstDayOfWeek(_)
         | Message::AddRemoteCalendar
         | Message::RemoteCalendarNameChanged(_, _)
         | Message::SubmitRemoteCalendar(_)
@@ -177,7 +178,13 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::SetTreeCollapse(_, _)
         | Message::EditTaskTree(_)
         | Message::KeyboardEditTree
-        | Message::EmptyTrashResult(_) => tasks::handle(app, message),
+        | Message::EmptyTrashResult(_)
+        | Message::ToggleTaskShift(_)
+        | Message::CompleteTree(_)
+        | Message::ShiftSpaceSelected
+        | Message::Undo
+        | Message::Redo
+        | Message::ApplySuggestion(..) => tasks::handle(app, message),
 
         Message::FocusInput
         | Message::FocusSearch
@@ -365,76 +372,78 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
                 .retain(|(t, a)| !(t.uid == t_uid && a.uid == a_uid));
             tasks::handle(app, Message::DismissAlarm(t_uid, a_uid))
         }
-        Message::ToggleTaskShift(_)
-        | Message::CompleteTree(_)
-        | Message::ShiftSpaceSelected
-        | Message::Undo
-        | Message::Redo
-        | Message::ApplySuggestion(..) => tasks::handle(app, message),
-        Message::SetFirstDayOfWeek(_) => settings::handle(app, message),
     };
 
     // Prune ringing tasks that are no longer valid (done, canceled, or alarm acknowledged/snoozed/removed)
-    app.ringing_tasks.retain(|(t, alarm)| {
-        if let Some(store_task) = app.store.get_task_ref(&t.uid) {
-            if store_task.status.is_done()
-                || store_task.calendar_href == crate::storage::LOCAL_TRASH_HREF
-                || store_task.calendar_href == "local://recovery"
-            {
-                return false;
-            }
+    app.ringing_tasks
+        .retain(|(t, alarm)| is_ringing_valid(&app.store, &app.default_reminder_time, t, alarm));
 
-            if alarm.uid.starts_with("implicit_") {
-                let parts: Vec<&str> = alarm.uid.split('|').collect();
-                if parts.len() >= 2 {
-                    let type_key_with_colon = parts[0];
-                    let expected_ts = parts[1];
+    update_placeholders(app);
 
-                    let default_time =
-                        chrono::NaiveTime::parse_from_str(&app.default_reminder_time, "%H:%M")
-                            .unwrap_or_else(|_| chrono::NaiveTime::from_hms_opt(9, 0, 0).unwrap());
+    task
+}
 
-                    let mut current_ts = None;
-                    if type_key_with_colon == "implicit_due:" {
-                        if let Some(due) = &store_task.due {
-                            current_ts =
-                                Some(due.to_utc_with_default_time(default_time).to_rfc3339());
-                        }
-                    } else if type_key_with_colon == "implicit_start:"
-                        && let Some(start) = &store_task.dtstart
-                    {
-                        current_ts =
-                            Some(start.to_utc_with_default_time(default_time).to_rfc3339());
-                    }
-                    if current_ts.as_deref() != Some(expected_ts) {
-                        return false;
-                    }
+/// Returns true if a ringing (task, alarm) pair should keep being shown: the
+/// task still exists, is not done or trashed, and the alarm still matches.
+fn is_ringing_valid(
+    store: &crate::store::TaskStore,
+    default_reminder_time: &str,
+    task: &crate::model::Task,
+    alarm: &crate::model::Alarm,
+) -> bool {
+    let Some(store_task) = store.get_task_ref(&task.uid) else {
+        return false;
+    };
+    if store_task.status.is_done()
+        || store_task.calendar_href == crate::storage::LOCAL_TRASH_HREF
+        || store_task.calendar_href == "local://recovery"
+    {
+        return false;
+    }
 
-                    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(expected_ts)
-                        && store_task.has_alarm_at(dt.with_timezone(&chrono::Utc))
-                    {
-                        return false;
-                    }
-                } else {
-                    return false;
-                }
-            } else if let Some(store_alarm) = store_task.alarms.iter().find(|a| a.uid == alarm.uid)
-            {
-                if store_alarm.acknowledged.is_some() {
-                    return false;
-                }
-                if store_alarm.trigger != alarm.trigger {
-                    return false;
-                }
-            } else {
-                return false; // explicit alarm was removed
-            }
-            true
-        } else {
-            false
+    if alarm.uid.starts_with("implicit_") {
+        let parts: Vec<&str> = alarm.uid.split('|').collect();
+        if parts.len() < 2 {
+            return false;
         }
-    });
+        let type_key_with_colon = parts[0];
+        let expected_ts = parts[1];
 
+        let default_time = chrono::NaiveTime::parse_from_str(default_reminder_time, "%H:%M")
+            .unwrap_or_else(|_| chrono::NaiveTime::from_hms_opt(9, 0, 0).unwrap());
+
+        let mut current_ts = None;
+        if type_key_with_colon == "implicit_due:" {
+            if let Some(due) = &store_task.due {
+                current_ts = Some(due.to_utc_with_default_time(default_time).to_rfc3339());
+            }
+        } else if type_key_with_colon == "implicit_start:"
+            && let Some(start) = &store_task.dtstart
+        {
+            current_ts = Some(start.to_utc_with_default_time(default_time).to_rfc3339());
+        }
+        if current_ts.as_deref() != Some(expected_ts) {
+            return false;
+        }
+
+        if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(expected_ts)
+            && store_task.has_alarm_at(dt.with_timezone(&chrono::Utc))
+        {
+            return false;
+        }
+    } else {
+        let Some(store_alarm) = store_task.alarms.iter().find(|a| a.uid == alarm.uid) else {
+            return false; // explicit alarm was removed
+        };
+        if store_alarm.acknowledged.is_some() || store_alarm.trigger != alarm.trigger {
+            return false;
+        }
+    }
+    true
+}
+
+/// Recompute the editor and search placeholder strings.
+fn update_placeholders(app: &mut GuiApp) {
     if app.editing_uid.is_some() {
         app.current_placeholder = rust_i18n::t!("edit_task_title").to_string();
     } else if app.editing_tree_uid.is_some() {
@@ -464,6 +473,4 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
     // Persist search/notes placeholder translations
     app.search_placeholder = rust_i18n::t!("search_placeholder").to_string();
     app.notes_placeholder = rust_i18n::t!("notes_placeholder").to_string();
-
-    task
 }
