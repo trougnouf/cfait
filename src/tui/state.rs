@@ -1421,4 +1421,121 @@ mod tests {
         assert_eq!(state.input_buffer, "abcdef");
         assert_eq!(state.cursor_position, 3);
     }
+
+    fn state_with_tag_popup() -> AppState {
+        let mut state = AppState::new();
+        state.mode = InputMode::Creating;
+        state.input_buffer = "#gard".to_string();
+        state.cursor_position = 5; // end of buffer
+        state.tag_aliases.insert("#garden".to_string(), vec![]);
+        state.tag_aliases.insert("#gardening".to_string(), vec![]);
+        state.refresh_suggestions();
+        state
+    }
+
+    #[test]
+    fn test_suggestions_offered_for_tag_prefix() {
+        let state = state_with_tag_popup();
+
+        let (range, items) = state.suggestions.as_ref().expect("tag suggestions");
+        assert_eq!(*range, 0..5);
+        // Alias-only matches sort alphabetically at equal counts.
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].replacement, "#garden");
+        assert_eq!(items[1].replacement, "#gardening");
+        assert_eq!(state.suggestion_selection, 0);
+    }
+
+    #[test]
+    fn test_suggestions_cleared_outside_input_modes() {
+        let mut state = state_with_tag_popup();
+        assert!(state.suggestions.is_some());
+
+        state.mode = InputMode::Normal;
+        state.refresh_suggestions();
+
+        assert!(state.suggestions.is_none());
+        assert_eq!(state.suggestion_selection, 0);
+    }
+
+    #[test]
+    fn test_apply_suggestion_appends_space_at_buffer_end() {
+        let mut state = state_with_tag_popup();
+
+        assert!(state.apply_suggestion());
+        assert_eq!(state.input_buffer, "#garden ");
+        assert_eq!(state.cursor_position, 8);
+
+        // Undo restores the pre-completion buffer.
+        let restored = state.text_history.pop_undo(state.input_buffer.clone());
+        assert_eq!(restored, Some("#gard".to_string()));
+    }
+
+    #[test]
+    fn test_apply_suggestion_mid_buffer_keeps_rest() {
+        let mut state = state_with_tag_popup();
+        state.input_buffer = "#gard and more".to_string();
+        state.cursor_position = 5;
+        state.refresh_suggestions();
+
+        assert!(state.apply_suggestion());
+        assert_eq!(state.input_buffer, "#garden and more");
+        assert_eq!(state.cursor_position, 7);
+    }
+
+    #[test]
+    fn test_apply_suggestion_without_popup_is_noop() {
+        let mut state = AppState::new();
+        state.mode = InputMode::Creating;
+        state.input_buffer = "water the garden".to_string();
+        state.cursor_position = 0;
+
+        assert!(!state.apply_suggestion());
+        assert_eq!(state.input_buffer, "water the garden");
+    }
+
+    #[test]
+    fn test_move_suggestion_cursor_wraps_and_applies_selection() {
+        let mut state = state_with_tag_popup();
+
+        state.move_suggestion_cursor(false); // down: 0 -> 1
+        assert_eq!(state.suggestion_selection, 1);
+        state.move_suggestion_cursor(false); // down: wraps 1 -> 0
+        assert_eq!(state.suggestion_selection, 0);
+        state.move_suggestion_cursor(true); // up: wraps 0 -> 1
+        assert_eq!(state.suggestion_selection, 1);
+
+        // Applying uses the highlighted entry, not always the first.
+        assert!(state.apply_suggestion());
+        assert_eq!(state.input_buffer, "#gardening ");
+        assert_eq!(state.cursor_position, 11);
+    }
+
+    #[test]
+    fn test_refresh_keeps_selection_within_same_token() {
+        let mut state = state_with_tag_popup();
+        state.suggestion_selection = 1;
+
+        // Moving the cursor inside the same token keeps the selection.
+        state.cursor_position = 3;
+        state.refresh_suggestions();
+        assert_eq!(state.suggestion_selection, 1);
+
+        // A token change resets the selection to the top.
+        state.input_buffer = "#gard more #gard".to_string();
+        state.cursor_position = 14;
+        state.refresh_suggestions();
+        assert_eq!(state.suggestion_selection, 0);
+    }
+
+    #[test]
+    fn test_dismiss_suggestions_clears_state() {
+        let mut state = state_with_tag_popup();
+        assert!(state.suggestions.is_some());
+
+        state.dismiss_suggestions();
+
+        assert!(state.suggestions.is_none());
+        assert_eq!(state.suggestion_selection, 0);
+    }
 }
