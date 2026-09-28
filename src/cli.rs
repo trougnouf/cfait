@@ -32,6 +32,7 @@ pub fn print_help(binary_name: &str) {
             rust_i18n::t!("cli_file_placeholder")
         );
         println!("    {} --help", binary_name);
+        println!("    {} --version", binary_name);
     }
     println!();
 
@@ -70,6 +71,10 @@ pub fn print_help(binary_name: &str) {
         print_cmd("-w, --wait", rust_i18n::t!("cli_desc_wait").to_string());
     }
     print_cmd("-h, --help", rust_i18n::t!("cli_desc_help").to_string());
+    print_cmd(
+        "-V, --version",
+        rust_i18n::t!("cli_desc_version").to_string(),
+    );
 
     println!();
 

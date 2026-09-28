@@ -55,6 +55,12 @@ fn main() -> iced::Result {
         i += 1;
     }
 
+    // Handle version flag (before any config or logging setup)
+    if args.iter().any(|arg| arg == "--version" || arg == "-V") {
+        println!("cfait-gui {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+
     // Handle help flag (before any config or logging setup)
     if args.iter().any(|arg| arg == "--help" || arg == "-h") {
         cfait::cli::print_help(&binary_name);

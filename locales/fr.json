@@ -113,6 +113,7 @@
     "cli_desc_toggle": "Basculer l'état terminé/à faire d'une tâche.",
     "cli_desc_tree": "Afficher l'arbre des tâches à partir de l'UID au format Markdown.",
     "cli_desc_view": "Afficher les détails d'une tâche.",
+    "cli_desc_version": "Afficher la version.",
     "cli_desc_wait": "Forcer la synchronisation réseau après l'action (outrepasse la détection auto).",
     "cli_example_force_cal": "(force la création d'événement au calendrier)",
     "cli_example_loc_alias": "(alias de lieu)",

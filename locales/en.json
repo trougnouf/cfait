@@ -125,6 +125,7 @@
     "cli_desc_sync": "Fetch and push changes, then exit.",
     "cli_desc_toggle": "Toggle task completion status.",
     "cli_desc_view": "View detailed information about a task.",
+    "cli_desc_version": "Show the version.",
     "cli_view_summary": "Summary:",
     "cli_view_status": "Status:",
     "cli_view_uid": "UID:",

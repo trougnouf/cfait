@@ -390,6 +390,12 @@ async fn main() -> Result<()> {
     let mut args: Vec<String> = env::args().collect();
     let binary_name = args.first().cloned().unwrap_or_else(|| "cfait".to_string());
 
+    // Answer --version before any side effects (locale, logging, keyring).
+    if args.iter().any(|arg| arg == "--version" || arg == "-V") {
+        println!("cfait {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+
     // Parse for --root argument before creating the context
     let mut override_root: Option<PathBuf> = None;
     if let Some(pos) = args.iter().position(|arg| arg == "--root" || arg == "-r") {
