@@ -90,13 +90,7 @@ impl RecurrenceEngine {
             let mut exclusion_dates = HashSet::new();
             if !task.exdates.is_empty() {
                 for ex in &task.exdates {
-                    let ex_date = match ex {
-                        DateType::AllDay(d) => *d,
-                        DateType::Specific(dt) => dt.with_timezone(&Local).naive_local().date(),
-                        DateType::Month(y, m) => NaiveDate::from_ymd_opt(*y, *m, 1).unwrap(),
-                        DateType::Year(y) => NaiveDate::from_ymd_opt(*y, 1, 1).unwrap(),
-                    };
-                    exclusion_dates.insert(ex_date);
+                    exclusion_dates.insert(ex.to_date_naive());
                 }
             }
 
@@ -184,7 +178,7 @@ impl RecurrenceEngine {
                     }
                 }
 
-                next_task.exdates.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                next_task.exdates.sort();
                 next_task.exdates.dedup();
 
                 // Keep all EXDATEs to preserve cancellation history for calendar event synchronization
@@ -192,26 +186,11 @@ impl RecurrenceEngine {
 
                 // Calculate duration gap in Naive time to prevent DST shifts from stretching the gap
                 let duration_naive = if let Some(old_due) = &task.due {
-                    match old_due {
-                        DateType::AllDay(d) => {
-                            let due_naive = d.and_hms_opt(0, 0, 0).unwrap();
-                            due_naive - seed_local_naive
-                        }
-                        DateType::Specific(dt) => {
-                            let due_naive = dt.with_timezone(&Local).naive_local();
-                            due_naive - seed_local_naive
-                        }
-                        DateType::Month(y, m) => {
-                            let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
-                            let due_naive = d.and_hms_opt(0, 0, 0).unwrap();
-                            due_naive - seed_local_naive
-                        }
-                        DateType::Year(y) => {
-                            let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
-                            let due_naive = d.and_hms_opt(0, 0, 0).unwrap();
-                            due_naive - seed_local_naive
-                        }
-                    }
+                    let due_naive = match old_due {
+                        DateType::Specific(dt) => dt.with_timezone(&Local).naive_local(),
+                        _ => old_due.to_date_naive().and_hms_opt(0, 0, 0).unwrap(),
+                    };
+                    due_naive - seed_local_naive
                 } else {
                     chrono::Duration::zero()
                 };
