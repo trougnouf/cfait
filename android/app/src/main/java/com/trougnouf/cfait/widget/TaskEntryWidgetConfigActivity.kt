@@ -35,6 +35,8 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.ui.res.stringResource
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.MobileCalendar
@@ -118,8 +120,8 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
                     selectedCalHref = cals.first().href
                 }
             }
-            var searchQuery by remember {
-                mutableStateOf(prefs.getString(KEY_SEARCH_QUERY + s, "is:ready") ?: "is:ready")
+            val searchQueryState = remember {
+                TextFieldState(prefs.getString(KEY_SEARCH_QUERY + s, "is:ready") ?: "is:ready")
             }
             var textColorIndex by remember {
                 mutableIntStateOf(prefs.getInt(KEY_TEXT_COLOR_INDEX + s, 0))
@@ -133,8 +135,8 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
             var useCollectionColor by remember {
                 mutableStateOf(prefs.getBoolean(KEY_USE_COLLECTION_COLOR + s, false))
             }
-            var customLabel by remember {
-                mutableStateOf(prefs.getString(KEY_CUSTOM_LABEL + s, "") ?: "")
+            val customLabelState = remember {
+                TextFieldState(prefs.getString(KEY_CUSTOM_LABEL + s, "") ?: "")
             }
 
             val modeLabels = listOf(
@@ -189,10 +191,9 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
                         if (mode == 2) {
                             Text(stringResource(R.string.widget_search_query), style = MaterialTheme.typography.labelLarge)
                             OutlinedTextField(
-                                value = searchQuery,
-                                onValueChange = { searchQuery = it },
+                                state = searchQueryState,
                                 modifier = Modifier.fillMaxWidth(),
-                                singleLine = true,
+                                lineLimits = TextFieldLineLimits.SingleLine,
                                 placeholder = { Text("is:ready") }
                             )
                         }
@@ -201,10 +202,9 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
 
                         Text(stringResource(R.string.widget_label), style = MaterialTheme.typography.labelLarge)
                         OutlinedTextField(
-                            value = customLabel,
-                            onValueChange = { customLabel = it },
+                            state = customLabelState,
                             modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
+                            lineLimits = TextFieldLineLimits.SingleLine,
                             placeholder = { Text(modeLabels[mode]) }
                         )
 
@@ -300,11 +300,11 @@ class TaskEntryWidgetConfigActivity : ComponentActivity() {
                                 val editor = prefs.edit()
                                     .putInt(KEY_MODE + s, mode)
                                     .putString(KEY_CALENDAR_HREF + s, selectedCalHref)
-                                    .putString(KEY_SEARCH_QUERY + s, searchQuery.ifBlank { "is:ready" })
+                                    .putString(KEY_SEARCH_QUERY + s, searchQueryState.text.toString().ifBlank { "is:ready" })
                                     .putInt(KEY_TEXT_COLOR + s, finalColor)
                                     .putInt(KEY_TEXT_COLOR_INDEX + s, textColorIndex)
                                     .putBoolean(KEY_USE_COLLECTION_COLOR + s, useCollectionColor)
-                                    .putString(KEY_CUSTOM_LABEL + s, customLabel)
+                                    .putString(KEY_CUSTOM_LABEL + s, customLabelState.text.toString())
 
                                 if (hasCustomColor) {
                                     editor.putInt(KEY_CUSTOM_COLOR + s, customColor)

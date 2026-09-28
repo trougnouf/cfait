@@ -12,6 +12,12 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.ClickableText
+import androidx.compose.foundation.text.input.InputTransformation
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
+import androidx.compose.foundation.text.input.then
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.rememberCoroutineScope
@@ -29,7 +35,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.withStyle
@@ -273,16 +279,16 @@ fun JournalMainView(
     onDataChanged: () -> Unit,
     onToggleCollapse: ((String) -> Unit)? = null
 ) {
-    var text by remember { mutableStateOf(TextFieldValue("")) }
+    val text = remember { TextFieldState() }
     var initialText by remember { mutableStateOf("") }
-    var titleInput by remember(journalWikiTitle) { mutableStateOf(journalWikiTitle) }
+    val titleInputState = remember(journalWikiTitle) { TextFieldState(journalWikiTitle) }
     var initialTitle by remember { mutableStateOf("") }
     var uid by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var isSaving by remember { mutableStateOf(false) }
 
-    var undoStack by remember { mutableStateOf(listOf<TextFieldValue>()) }
-    var redoStack by remember { mutableStateOf(listOf<TextFieldValue>()) }
+    var undoStack by remember { mutableStateOf(listOf<FieldSnapshot>()) }
+    var redoStack by remember { mutableStateOf(listOf<FieldSnapshot>()) }
     var showMoveDialog by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
@@ -310,14 +316,14 @@ fun JournalMainView(
             } else {
                 ""
             }
-            val tfv = TextFieldValue(content)
+            val snap = FieldSnapshot(content, TextRange(0))
             withContext(Dispatchers.Main) {
                 uid = targetUid
-                text = tfv
+                text.restore(snap)
                 initialText = content
                 initialTitle = journalWikiTitle
-                titleInput = journalWikiTitle
-                undoStack = listOf(tfv)
+                titleInputState.setTextAndPlaceCursorAtEnd(journalWikiTitle)
+                undoStack = listOf(snap)
                 redoStack = emptyList()
                 isLoading = false
             }
@@ -325,30 +331,30 @@ fun JournalMainView(
     }
 
     suspend fun flushSave() {
-        if (text.text == initialText && titleInput == initialTitle) return
+        if (text.text.toString() == initialText && titleInputState.text.toString() == initialTitle) return
         isSaving = true
         try {
             withContext(Dispatchers.IO) {
                 val targetUid = if (uid != null) uid!! else {
                     if (journalWikiUid != null) {
-                        api.createWikiPage(titleInput, href, null)
+                        api.createWikiPage(titleInputState.text.toString(), href, null)
                     } else {
                         api.getOrCreateDailyNote(journalDateStr, href)
                     }
                 }
-                
+
                 if (journalWikiUid != null) {
                     val t = api.getTaskByUid(targetUid)
-                    if (t != null && t.summary != titleInput) {
-                        api.updateTaskSmart(targetUid, "is:page $titleInput")
+                    if (t != null && t.summary != titleInputState.text.toString()) {
+                        api.updateTaskSmart(targetUid, "is:page ${titleInputState.text.toString()}")
                     }
                 }
-                
-                api.syncTaskTreeFromMarkdown(targetUid, text.text)
+
+                api.syncTaskTreeFromMarkdown(targetUid, text.text.toString())
                 withContext(Dispatchers.Main) {
                     uid = targetUid
-                    initialText = text.text
-                    initialTitle = titleInput
+                    initialText = text.text.toString()
+                    initialTitle = titleInputState.text.toString()
                     onDataChanged()
                 }
             }
@@ -363,9 +369,9 @@ fun JournalMainView(
         scope.launch { flushSave() }
     }
 
-    LaunchedEffect(text.text, titleInput) {
+    LaunchedEffect(text.text.toString(), titleInputState.text.toString()) {
         if (isLoading || isSaving) return@LaunchedEffect
-        if (text.text == initialText && titleInput == initialTitle) return@LaunchedEffect
+        if (text.text.toString() == initialText && titleInputState.text.toString() == initialTitle) return@LaunchedEffect
         delay(1000)
         saveContent()
     }
@@ -423,10 +429,9 @@ fun JournalMainView(
                     NfIcon(NfIcons.JOURNAL, 20.sp, MaterialTheme.colorScheme.primary)
                 }
                 OutlinedTextField(
-                    value = titleInput,
-                    onValueChange = { titleInput = it },
+                    state = titleInputState,
                     modifier = Modifier.weight(1f),
-                    singleLine = true,
+                    lineLimits = TextFieldLineLimits.SingleLine,
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,
                         unfocusedContainerColor = Color.Transparent,
@@ -521,7 +526,7 @@ fun JournalMainView(
                                         api.dispatch(AppIntent.DeleteTaskTree(uid!!))
                                         withContext(Dispatchers.Main) {
                                             onDataChanged()
-                                            text = TextFieldValue("")
+                                            text.clearText()
                                             initialText = ""
                                             uid = null
                                         }
@@ -550,7 +555,7 @@ fun JournalMainView(
                         Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                         }
-                    } else if (text.text != initialText || titleInput != initialTitle) {
+                    } else if (text.text.toString() != initialText || titleInputState.text.toString() != initialTitle) {
                         IconButton(onClick = { saveContent() }, modifier = Modifier.size(40.dp)) {
                             NfIcon(NfIcons.SAVE_AS, 20.sp, MaterialTheme.colorScheme.primary)
                         }
@@ -630,19 +635,15 @@ fun JournalMainView(
             }
         } else {
             OutlinedTextField(
-                value = text,
-                onValueChange = { newValue ->
-                    val finalValue = applyListAutoIndent(text, newValue, api)
-
-                    if (finalValue.text != text.text) {
-                        undoStack = (undoStack + finalValue).takeLast(50)
-                        redoStack = emptyList()
-                    }
-                    text = finalValue
-                },
+                state = text,
                 modifier = Modifier.weight(1f).fillMaxWidth().padding(8.dp),
                 placeholder = { Text(stringResource(R.string.notes_placeholder)) },
-                visualTransformation = remember(isDark) { MarkdownTransformation(isDark, api) },
+                inputTransformation = InputTransformation.listAutoIndent(api)
+                    .then(text.undoPushTransform { snap ->
+                        undoStack = (undoStack + snap).takeLast(50)
+                        redoStack = emptyList()
+                    }),
+                outputTransformation = remember(isDark) { MarkdownTransformation(isDark, api).asOutputTransformation() },
                 textStyle = TextStyle(fontSize = 15.sp),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
@@ -651,7 +652,7 @@ fun JournalMainView(
                     unfocusedIndicatorColor = Color.Transparent
                 )
             )
-            CursorContextBanner(api, text, uid, onNavigate = onTaskClick) { text = it }
+            CursorContextBanner(api, text, uid, onNavigate = onTaskClick)
         }
 
         if (journalWikiUid == null && viewData != null && !hideExtras) {

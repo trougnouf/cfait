@@ -5,6 +5,9 @@ import android.content.ClipData
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.InputTransformation
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.then
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -14,10 +17,10 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.trougnouf.cfait.R
@@ -38,9 +41,9 @@ fun TreeEditorScreen(
     val context = LocalContext.current
     val clipboard = LocalClipboard.current
 
-    var markdownText by remember { mutableStateOf(TextFieldValue("")) }
-    var undoStack by remember { mutableStateOf(listOf<TextFieldValue>()) }
-    var redoStack by remember { mutableStateOf(listOf<TextFieldValue>()) }
+    val markdownText = remember { TextFieldState() }
+    var undoStack by remember { mutableStateOf(listOf<FieldSnapshot>()) }
+    var redoStack by remember { mutableStateOf(listOf<FieldSnapshot>()) }
 
     var isLoading by remember { mutableStateOf(true) }
     var isSaving by remember { mutableStateOf(false) }
@@ -49,12 +52,17 @@ fun TreeEditorScreen(
     LaunchedEffect(uid) {
         scope.launch(Dispatchers.IO) {
             try {
-                val initVal = TextFieldValue(api.getTaskTreeMarkdown(uid))
-                markdownText = initVal
-                undoStack = listOf(initVal)
-                redoStack = emptyList()
+                val initVal = FieldSnapshot(api.getTaskTreeMarkdown(uid), TextRange(0))
+                withContext(Dispatchers.Main) {
+                    markdownText.restore(initVal)
+                    undoStack = listOf(initVal)
+                    redoStack = emptyList()
+                }
             } catch (e: Exception) {
-                markdownText = TextFieldValue(context.getString(R.string.error_general, e.message ?: ""))
+                val errVal = FieldSnapshot(context.getString(R.string.error_general, e.message ?: ""), TextRange(0))
+                withContext(Dispatchers.Main) {
+                    markdownText.restore(errVal)
+                }
             } finally {
                 isLoading = false
             }
@@ -75,7 +83,7 @@ fun TreeEditorScreen(
                                 val current = undoStack.last()
                                 redoStack = (redoStack + current).takeLast(50)
                                 undoStack = undoStack.dropLast(1)
-                                markdownText = undoStack.last()
+                                markdownText.restore(undoStack.last())
                             }
                         }) { NfIcon(NfIcons.UNDO, 20.sp) }
                     }
@@ -86,7 +94,7 @@ fun TreeEditorScreen(
                                 val next = redoStack.last()
                                 redoStack = redoStack.dropLast(1)
                                 undoStack = (undoStack + next).takeLast(50)
-                                markdownText = next
+                                markdownText.restore(next)
                             }
                         }) { NfIcon(NfIcons.REDO, 20.sp) }
                     }
@@ -94,7 +102,7 @@ fun TreeEditorScreen(
                     IconButton(
                         onClick = {
                             scope.launch {
-                                clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("tree_markdown", markdownText.text)))
+                                clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("tree_markdown", markdownText.text.toString())))
                                 Toast.makeText(context, context.getString(R.string.copied_to_clipboard), Toast.LENGTH_SHORT).show()
                             }
                         },
@@ -108,7 +116,7 @@ fun TreeEditorScreen(
                             scope.launch {
                                 try {
                                     withContext(Dispatchers.IO) {
-                                        api.syncTaskTreeFromMarkdown(uid, markdownText.text)
+                                        api.syncTaskTreeFromMarkdown(uid, markdownText.text.toString())
                                     }
                                     triggerBackgroundSync(context, api)
                                     onSaveComplete()
@@ -143,27 +151,23 @@ fun TreeEditorScreen(
                     .padding(16.dp)
             ) {
                 OutlinedTextField(
-                    value = markdownText,
-                    onValueChange = { newValue ->
-                        val finalValue = applyListAutoIndent(markdownText, newValue, api)
-
-                        if (finalValue.text != markdownText.text) {
-                            undoStack = (undoStack + finalValue).takeLast(50)
-                            redoStack = emptyList()
-                        }
-                        markdownText = finalValue
-                    },
+                    state = markdownText,
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     textStyle = TextStyle(fontSize = 14.sp),
-                    visualTransformation = remember(isDark) {
-                        MarkdownTransformation(isDark, api)
+                    inputTransformation = InputTransformation.listAutoIndent(api)
+                        .then(markdownText.undoPushTransform { snap ->
+                            undoStack = (undoStack + snap).takeLast(50)
+                            redoStack = emptyList()
+                        }),
+                    outputTransformation = remember(isDark) {
+                        MarkdownTransformation(isDark, api).asOutputTransformation()
                     },
                     keyboardOptions = KeyboardOptions.Default.copy(
                         keyboardType = KeyboardType.Text,
                         imeAction = ImeAction.None
                     )
                 )
-                CursorContextBanner(api, markdownText, uid, onNavigate = null) { markdownText = it }
+                CursorContextBanner(api, markdownText, uid, onNavigate = null)
             }
         }
     }

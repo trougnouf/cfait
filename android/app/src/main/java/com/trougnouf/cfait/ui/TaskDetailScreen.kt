@@ -17,8 +17,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.InputTransformation
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.byValue
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
+import androidx.compose.foundation.text.input.then
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,7 +41,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 import androidx.core.content.ContextCompat
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.AppIntent
@@ -69,13 +75,13 @@ fun TaskDetailScreen(
 ) {
     var task by remember { mutableStateOf<MobileTask?>(null) }
     val scope = rememberCoroutineScope()
-    var smartInput by remember { mutableStateOf(TextFieldValue("")) }
-    var description by remember { mutableStateOf(TextFieldValue("")) }
+    val smartInput = remember { TextFieldState() }
+    val description = remember { TextFieldState() }
     
-    var smartUndoStack by remember { mutableStateOf(listOf<TextFieldValue>()) }
-    var smartRedoStack by remember { mutableStateOf(listOf<TextFieldValue>()) }
-    var descUndoStack by remember { mutableStateOf(listOf<TextFieldValue>()) }
-    var descRedoStack by remember { mutableStateOf(listOf<TextFieldValue>()) }
+    var smartUndoStack by remember { mutableStateOf(listOf<FieldSnapshot>()) }
+    var smartRedoStack by remember { mutableStateOf(listOf<FieldSnapshot>()) }
+    var descUndoStack by remember { mutableStateOf(listOf<FieldSnapshot>()) }
+    var descRedoStack by remember { mutableStateOf(listOf<FieldSnapshot>()) }
     var lastEdited by remember { mutableStateOf("smart") }
 
     var showMoveDialog by remember { mutableStateOf(false) }
@@ -131,19 +137,23 @@ fun TaskDetailScreen(
         scope.launch(Dispatchers.IO) {
             // Use direct lookup instead of searching in the filtered view list.
             // This ensures completed/hidden tasks can still be opened and edited.
-            task = api.getTaskByUid(uid)
-            task?.let {
-                val newSmart = TextFieldValue(it.smartString)
-                smartInput = newSmart
-                smartUndoStack = listOf(newSmart)
-                smartRedoStack = emptyList()
-
-                val newDesc = TextFieldValue(it.description)
-                description = newDesc
-                descUndoStack = listOf(newDesc)
-                descRedoStack = emptyList()
-                
-                lastEdited = "smart"
+            val t = api.getTaskByUid(uid)
+            if (t != null) {
+                val newSmart = FieldSnapshot(t.smartString, TextRange(0))
+                val newDesc = FieldSnapshot(t.description, TextRange(0))
+                // TextFieldState edits notify the IME, so they must run on the main thread.
+                withContext(Dispatchers.Main) {
+                    task = t
+                    smartInput.restore(newSmart)
+                    smartUndoStack = listOf(newSmart)
+                    smartRedoStack = emptyList()
+                    description.restore(newDesc)
+                    descUndoStack = listOf(newDesc)
+                    descRedoStack = emptyList()
+                    lastEdited = "smart"
+                }
+            } else {
+                task = null
             }
         }
     }
@@ -315,17 +325,17 @@ fun TaskDetailScreen(
                                     val current = smartUndoStack.last()
                                     smartRedoStack = (smartRedoStack + current).takeLast(50)
                                     smartUndoStack = smartUndoStack.dropLast(1)
-                                    smartInput = smartUndoStack.last()
+                                    smartInput.restore(smartUndoStack.last())
                                 } else if (canUndoDesc) {
                                     val current = descUndoStack.last()
                                     descRedoStack = (descRedoStack + current).takeLast(50)
                                     descUndoStack = descUndoStack.dropLast(1)
-                                    description = descUndoStack.last()
+                                    description.restore(descUndoStack.last())
                                 } else if (canUndoSmart) {
                                     val current = smartUndoStack.last()
                                     smartRedoStack = (smartRedoStack + current).takeLast(50)
                                     smartUndoStack = smartUndoStack.dropLast(1)
-                                    smartInput = smartUndoStack.last()
+                                    smartInput.restore(smartUndoStack.last())
                                 }
                             }) { NfIcon(NfIcons.UNDO, 20.sp) }
                         }
@@ -340,17 +350,17 @@ fun TaskDetailScreen(
                                     val next = smartRedoStack.last()
                                     smartRedoStack = smartRedoStack.dropLast(1)
                                     smartUndoStack = (smartUndoStack + next).takeLast(50)
-                                    smartInput = next
+                                    smartInput.restore(next)
                                 } else if (canRedoDesc) {
                                     val next = descRedoStack.last()
                                     descRedoStack = descRedoStack.dropLast(1)
                                     descUndoStack = (descUndoStack + next).takeLast(50)
-                                    description = next
+                                    description.restore(next)
                                 } else if (canRedoSmart) {
                                     val next = smartRedoStack.last()
                                     smartRedoStack = smartRedoStack.dropLast(1)
                                     smartUndoStack = (smartUndoStack + next).takeLast(50)
-                                    smartInput = next
+                                    smartInput.restore(next)
                                 }
                             }) { NfIcon(NfIcons.REDO, 20.sp) }
                         }
@@ -367,7 +377,7 @@ fun TaskDetailScreen(
                             onClick = {
                                 // Save and stay on this screen (like the GUI's
                                 // "Save & Keep Editing" button).
-                                handleSaveWithGeo(smartInput.text, description.text, keepOpen = true)
+                                handleSaveWithGeo(smartInput.text.toString(), description.text.toString(), keepOpen = true)
                             },
                         ) {
                             NfIcon(NfIcons.WRITE_TARGET, 20.sp)
@@ -377,7 +387,7 @@ fun TaskDetailScreen(
                                 // Optimistic Save:
                                 // We delegate the actual async work to the parent (MainActivity)
                                 // so we can leave this screen immediately without killing the save process.
-                                handleSaveWithGeo(smartInput.text, description.text)
+                                handleSaveWithGeo(smartInput.text.toString(), description.text.toString())
                             },
                         ) {
                             NfIcon(NfIcons.SAVE_AS, 20.sp, MaterialTheme.colorScheme.primary)
@@ -399,27 +409,25 @@ fun TaskDetailScreen(
             val isDateBasedJournal = isJournal && task!!.summary.matches(journalDatePattern)
 
             if (!isDateBasedJournal) {
-                CursorContextBanner(api, smartInput, uid, onNavigate = onNavigate) { smartInput = it }
+                CursorContextBanner(api, smartInput, uid, onNavigate = onNavigate)
                 OutlinedTextField(
-                    value = smartInput,
-                    onValueChange = { 
-                        val replaced = it.copy(text = it.text.replace("\n", ""))
-                        if (replaced.text != smartInput.text) {
-                            smartUndoStack = (smartUndoStack + replaced).takeLast(50)
-                            smartRedoStack = emptyList()
-                            lastEdited = "smart"
-                        }
-                        smartInput = replaced
-                    }, // Manually block newlines
+                    state = smartInput,
+                    // Manually block newlines
+                    inputTransformation = InputTransformation.byValue { _, proposed ->
+                        proposed.toString().replace("\n", "")
+                    }.then(smartInput.undoPushTransform { snap ->
+                        smartUndoStack = (smartUndoStack + snap).takeLast(50)
+                        smartRedoStack = emptyList()
+                        lastEdited = "smart"
+                    }),
                     label = { Text(stringResource(R.string.task_smart_syntax_label)) },
                     modifier = Modifier.fillMaxWidth(),
-                    visualTransformation = remember(isDark) { SmartSyntaxTransformation(api, isDark) },
-                    // Removed singleLine = true to avoid cursor handle positioning issues on high DPI tablets
-                    maxLines = 5,
+                    outputTransformation = remember(isDark) { SmartSyntaxTransformation(api, isDark).asOutputTransformation() },
+                    lineLimits = TextFieldLineLimits.MultiLine(1, 5),
                     keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = {
-                        handleSaveWithGeo(smartInput.text, description.text)
-                    }),
+                    onKeyboardAction = { _ ->
+                        handleSaveWithGeo(smartInput.text.toString(), description.text.toString())
+                    },
                 )
                 Text(
                     stringResource(R.string.help_syntax_short),
@@ -699,10 +707,10 @@ fun TaskDetailScreen(
             if (!task!!.isJournal) {
             // --- Work Sessions Block ---
             var showAddSession by remember { mutableStateOf(false) }
-            var sessionInput by remember { mutableStateOf("") }
+            val sessionInputState = remember { TextFieldState() }
             var showAllSessions by remember { mutableStateOf(false) }
             var editingSessionIdx by remember { mutableStateOf<Int?>(null) }
-            var editSessionInput by remember { mutableStateOf("") }
+            val editSessionInputState = remember { TextFieldState() }
 
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp),
@@ -729,23 +737,25 @@ fun TaskDetailScreen(
                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
                 ) {
                     OutlinedTextField(
-                        value = sessionInput,
-                        onValueChange = { sessionInput = it },
+                        state = sessionInputState,
                         placeholder = {
                             val example = remember { randomSessionExample() }
                             Text("${stringResource(R.string.eg)} $example", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
                         },
                         modifier = Modifier.weight(1f),
-                        singleLine = true
+                        lineLimits = TextFieldLineLimits.SingleLine
                     )
                     IconButton(
                         onClick = {
-                            if (sessionInput.isNotBlank()) {
+                            val input = sessionInputState.text.toString()
+                            if (input.isNotBlank()) {
                                 scope.launch(Dispatchers.IO) {
                                     try {
-                                        api.addSession(uid, sessionInput)
-                                        sessionInput = ""
-                                        showAddSession = false
+                                        api.addSession(uid, input)
+                                        withContext(Dispatchers.Main) {
+                                            sessionInputState.clearText()
+                                            showAddSession = false
+                                        }
                                         refreshTaskMeta()
                                         triggerBackgroundSync(context, api)
                                     } catch (e: Exception) {
@@ -762,8 +772,10 @@ fun TaskDetailScreen(
                                             // subsequent network sync encountered an error.
                                             // We gracefully swallow it to keep the UX seamless.
                                             Log.e("CfaitUI", "Sync delayed after session: $msg")
-                                            sessionInput = ""
-                                            showAddSession = false
+                                            withContext(Dispatchers.Main) {
+                                                sessionInputState.clearText()
+                                                showAddSession = false
+                                            }
                                             refreshTaskMeta()
                                         }
                                     }
@@ -793,17 +805,17 @@ fun TaskDetailScreen(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
                     ) {
                         OutlinedTextField(
-                            value = editSessionInput,
-                            onValueChange = { editSessionInput = it },
+                            state = editSessionInputState,
                             modifier = Modifier.weight(1f),
-                            singleLine = true
+                            lineLimits = TextFieldLineLimits.SingleLine
                         )
                         IconButton(
                             onClick = {
-                                if (editSessionInput.isNotBlank()) {
+                                val input = editSessionInputState.text.toString()
+                                if (input.isNotBlank()) {
                                     scope.launch(Dispatchers.IO) {
                                         try {
-                                            api.editSession(uid, absoluteIdx.toUInt(), editSessionInput)
+                                            api.editSession(uid, absoluteIdx.toUInt(), input)
                                             editingSessionIdx = null
                                             refreshTaskMeta()
                                             triggerBackgroundSync(context, api)
@@ -851,7 +863,7 @@ fun TaskDetailScreen(
                             onClick = {
                                 val sDt = Instant.ofEpochMilli(session.startMs).atZone(ZoneId.systemDefault())
                                 val eDt = Instant.ofEpochMilli(session.endMs).atZone(ZoneId.systemDefault())
-                                editSessionInput = "${sDt.format(sessionDateFormatter)} ${sDt.format(sessionTimeFormatter)}-${eDt.format(sessionTimeFormatter)}"
+                                editSessionInputState.setTextAndPlaceCursorAtEnd("${sDt.format(sessionDateFormatter)} ${sDt.format(sessionTimeFormatter)}-${eDt.format(sessionTimeFormatter)}")
                                 editingSessionIdx = absoluteIdx
                             },
                             modifier = Modifier.size(24.dp)
@@ -979,30 +991,25 @@ fun TaskDetailScreen(
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
             }
 
-            CursorContextBanner(api, description, uid, onNavigate = onNavigate) { description = it }
+            CursorContextBanner(api, description, uid, onNavigate = onNavigate)
 
             OutlinedTextField(
-                value = description,
-                onValueChange = { newValue ->
-                    val finalValue = applyListAutoIndent(description, newValue, api)
-
-                    if (finalValue.text != description.text) {
-                        descUndoStack = (descUndoStack + finalValue).takeLast(50)
-                        descRedoStack = emptyList()
-                        lastEdited = "desc"
-                    }
-                    description = finalValue
-                },
+                state = description,
+                inputTransformation = InputTransformation.listAutoIndent(api).then(description.undoPushTransform { snap ->
+                    descUndoStack = (descUndoStack + snap).takeLast(50)
+                    descRedoStack = emptyList()
+                    lastEdited = "desc"
+                }),
                 label = { Text(stringResource(R.string.description_label)) },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 150.dp),
                 textStyle = TextStyle(textAlign = TextAlign.Start),
-                visualTransformation = remember(isDark) { MarkdownTransformation(isDark, api) },
+                outputTransformation = remember(isDark) { MarkdownTransformation(isDark, api).asOutputTransformation() },
                 keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = {
+                onKeyboardAction = { _ ->
                     // Save and keep editing, so the keyboard can stay handy
                     // while iterating on the description.
-                    handleSaveWithGeo(smartInput.text, description.text, keepOpen = true)
-                }),
+                    handleSaveWithGeo(smartInput.text.toString(), description.text.toString(), keepOpen = true)
+                },
             )
 
             if (task!!.createdDateIso != null || task!!.lastModifiedDateIso != null) {

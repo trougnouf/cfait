@@ -37,6 +37,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.InputTransformation
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.byValue
 import androidx.compose.ui.text.input.KeyboardType
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.CfaitApplication
@@ -98,20 +102,20 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
                     try { api.getCalendars().filter { !it.isDisabled } } catch (_: Exception) { emptyList() }
                 }
             }
-            var searchQuery by remember {
-                mutableStateOf(prefs.getString(KEY_SEARCH_QUERY + s, "is:ready") ?: "is:ready")
+            val searchQueryState = remember {
+                TextFieldState(prefs.getString(KEY_SEARCH_QUERY + s, "is:ready") ?: "is:ready")
             }
             var selectedCalHref by remember {
                 mutableStateOf(prefs.getString(KEY_CALENDAR_HREF + s, "") ?: "")
             }
-            var customTitle by remember {
-                mutableStateOf(prefs.getString(KEY_CUSTOM_TITLE + s, "") ?: "")
+            val customTitleState = remember {
+                TextFieldState(prefs.getString(KEY_CUSTOM_TITLE + s, "") ?: "")
             }
             var hideChecked by remember {
                 mutableStateOf(prefs.getBoolean(KEY_HIDE_CHECKED + s, false))
             }
-            var maxTasks by remember {
-                mutableStateOf(prefs.getInt(KEY_MAX_TASKS + s, 8).toString())
+            val maxTasksState = remember {
+                TextFieldState(prefs.getInt(KEY_MAX_TASKS + s, 8).toString())
             }
             val bgColors = listOf(
                 Color.Black to stringResource(R.string.color_black),
@@ -146,10 +150,9 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
                     ) {
                         Text(stringResource(R.string.widget_search_query), style = MaterialTheme.typography.labelLarge)
                         OutlinedTextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
+                            state = searchQueryState,
                             modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
+                            lineLimits = TextFieldLineLimits.SingleLine,
                             placeholder = { Text("is:ready") }
                         )
 
@@ -178,10 +181,9 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
 
                         Text(stringResource(R.string.widget_label), style = MaterialTheme.typography.labelLarge)
                         OutlinedTextField(
-                            value = customTitle,
-                            onValueChange = { customTitle = it },
+                            state = customTitleState,
                             modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
+                            lineLimits = TextFieldLineLimits.SingleLine,
                             placeholder = { Text(stringResource(R.string.widget_label_task_list)) }
                         )
 
@@ -218,10 +220,12 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
                             Text(stringResource(R.string.widget_max_tasks) + ": ")
                             Spacer(modifier = Modifier.width(8.dp))
                             OutlinedTextField(
-                                value = maxTasks,
-                                onValueChange = { maxTasks = it.filter { c -> c.isDigit() } },
+                                state = maxTasksState,
+                                inputTransformation = InputTransformation.byValue { _, proposed ->
+                                    proposed.filter(Char::isDigit).toString()
+                                },
                                 modifier = Modifier.width(80.dp),
-                                singleLine = true,
+                                lineLimits = TextFieldLineLimits.SingleLine,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                             )
                         }
@@ -267,13 +271,13 @@ class TaskListWidgetConfigActivity : ComponentActivity() {
 
                         Button(
                             onClick = {
-                                val max = maxTasks.toIntOrNull()?.coerceIn(1, 20) ?: 8
+                                val max = maxTasksState.text.toString().toIntOrNull()?.coerceIn(1, 20) ?: 8
                                 val bgColor = bgColors.getOrElse(bgColorIndex) { bgColors.first() }.first
                                 val bgColorArgb = (bgColor.copy(alpha = bgOpacity)).toArgb()
                                 prefs.edit()
-                                    .putString(KEY_SEARCH_QUERY + s, searchQuery.ifBlank { "is:ready" })
+                                    .putString(KEY_SEARCH_QUERY + s, searchQueryState.text.toString().ifBlank { "is:ready" })
                                     .putString(KEY_CALENDAR_HREF + s, selectedCalHref)
-                                    .putString(KEY_CUSTOM_TITLE + s, customTitle)
+                                    .putString(KEY_CUSTOM_TITLE + s, customTitleState.text.toString())
                                     .putBoolean(KEY_HIDE_CHECKED + s, hideChecked)
                                     .putBoolean(KEY_RESPECT_COLLAPSE + s, respectCollapse)
                                     .putInt(KEY_MAX_TASKS + s, max)

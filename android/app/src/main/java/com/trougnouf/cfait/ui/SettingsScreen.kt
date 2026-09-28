@@ -28,6 +28,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.material3.*
 import androidx.compose.material3.Slider
 import androidx.compose.runtime.*
@@ -79,9 +83,9 @@ fun SettingsScreen(
     fontScale: Float,
     onFontScaleChange: (Float) -> Unit
 ) {
-    var url by remember { mutableStateOf("") }
-    var user by remember { mutableStateOf("") }
-    var pass by remember { mutableStateOf("") }
+    val urlState = remember { TextFieldState() }
+    val userState = remember { TextFieldState() }
+    val passState = remember { TextFieldState() }
     var passwordVisible by remember { mutableStateOf(false) }
     var insecure by remember { mutableStateOf(false) }
     var hideCompleted by remember { mutableStateOf(false) }
@@ -100,19 +104,19 @@ fun SettingsScreen(
     var disabledSet by remember { mutableStateOf<Set<String>>(emptySet()) }
     var autoRemind by remember { mutableStateOf(true) }
     var showOngoingNotifications by remember { mutableStateOf(true) }
-    var defTime by remember { mutableStateOf("08:00") }
-    var autoRefresh by remember { mutableStateOf("30m") }
+    val defTimeState = remember { TextFieldState("08:00") }
+    val autoRefreshState = remember { TextFieldState("30m") }
     var createEventsForTasks by remember { mutableStateOf(false) }
 
     var aliases by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
-    var newAliasKey by remember { mutableStateOf("") }
-    var newAliasTags by remember { mutableStateOf("") }
+    val newAliasKeyState = remember { TextFieldState() }
+    val newAliasTagsState = remember { TextFieldState() }
 
     var goals by remember { mutableStateOf<Map<String, MobileGoal>>(emptyMap()) }
-    var goalInputKey by remember { mutableStateOf("") }
-    var goalInputTarget by remember { mutableStateOf("") }
+    val goalInputKeyState = remember { TextFieldState() }
+    val goalInputTargetState = remember { TextFieldState() }
     var goalInputType by remember { mutableStateOf(MobileGoalType.COUNT) }
-    var goalInputAmount by remember { mutableStateOf("1") }
+    val goalInputAmountState = remember { TextFieldState("1") }
     var goalInputUnit by remember { mutableStateOf(MobileIntervalUnit.WEEKS) }
     var editingGoalKey by remember { mutableStateOf<String?>(null) }
     var sortCollectionsBySize by remember { mutableStateOf(true) }
@@ -223,9 +227,9 @@ fun SettingsScreen(
 
     suspend fun reload() {
         val cfg = withContext(Dispatchers.IO) { api.getConfig() }
-        url = cfg.url
-        user = cfg.username
-        pass = cfg.password
+        urlState.setTextAndPlaceCursorAtEnd(cfg.url)
+        userState.setTextAndPlaceCursorAtEnd(cfg.username)
+        passState.setTextAndPlaceCursorAtEnd(cfg.password)
         insecure = cfg.allowInsecure
         hideCompleted = cfg.hideCompleted
         syncSettings = cfg.syncSettings
@@ -233,8 +237,8 @@ fun SettingsScreen(
         disabledSet = allCalendars.filter { it.isDisabled }.map { it.href }.toSet()
         autoRemind = cfg.autoReminders
         showOngoingNotifications = cfg.showOngoingNotifications
-        defTime = cfg.defaultReminderTime
-        autoRefresh = formatDuration(cfg.autoRefreshInterval)
+        defTimeState.setTextAndPlaceCursorAtEnd(cfg.defaultReminderTime)
+        autoRefreshState.setTextAndPlaceCursorAtEnd(formatDuration(cfg.autoRefreshInterval))
         createEventsForTasks = cfg.createEventsForTasks
         deleteEventsOnCompletion = cfg.deleteEventsOnCompletion
         aliases = cfg.tagAliases
@@ -282,23 +286,28 @@ fun SettingsScreen(
     // getConfig/saveConfig do disk IO, so keep them off the main thread:
     // checkboxes call this directly on every toggle.
     suspend fun saveToDisk() {
+        val urlStr = urlState.text.toString()
+        val userStr = userState.text.toString()
+        val passStr = passState.text.toString()
+        val defTimeStr = defTimeState.text.toString()
+        val autoRefreshStr = autoRefreshState.text.toString()
         withContext(Dispatchers.IO) {
             // Use the current backend config for defaults when UI input is empty
             val cfg = api.getConfig()
             val sShort = cfg.snoozeShort
-            val aRefresh = api.parseDurationString(autoRefresh) ?: 30u
+            val aRefresh = api.parseDurationString(autoRefreshStr) ?: 30u
 
             val newCfg = cfg.copy(
-                url = url,
-                username = user,
-                password = pass,
+                url = urlStr,
+                username = userStr,
+                password = passStr,
                 allowInsecure = insecure,
                 hideCompleted = hideCompleted,
                 syncSettings = syncSettings,
                 disabledCalendars = disabledSet.toList(),
                 autoReminders = autoRemind,
                 showOngoingNotifications = showOngoingNotifications,
-                defaultReminderTime = defTime,
+                defaultReminderTime = defTimeStr,
                 snoozeShort = sShort,
                 createEventsForTasks = createEventsForTasks,
                 deleteEventsOnCompletion = deleteEventsOnCompletion,
@@ -317,7 +326,7 @@ fun SettingsScreen(
             setStatus(context.getString(R.string.connecting))
             try {
                 saveToDisk()
-                setStatus(api.connect(url, user, pass, insecure))
+                setStatus(api.connect(urlState.text.toString(), userState.text.toString(), passState.text.toString(), insecure))
                 reload()
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
@@ -372,8 +381,7 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.primary,
                 )
                 OutlinedTextField(
-                    value = url,
-                    onValueChange = { url = it },
+                    state = urlState,
                     label = { Text(stringResource(R.string.caldav_url)) },
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(
@@ -381,29 +389,27 @@ fun SettingsScreen(
                         autoCorrect = false,
                         capitalization = KeyboardCapitalization.None
                     ),
-                    singleLine = true
+                    lineLimits = TextFieldLineLimits.SingleLine
                 )
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
-                    value = user,
-                    onValueChange = { user = it },
+                    state = userState,
                     label = { Text(stringResource(R.string.username)) },
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(
                         autoCorrect = false,
                         capitalization = KeyboardCapitalization.None
                     ),
-                    singleLine = true
+                    lineLimits = TextFieldLineLimits.SingleLine
                 )
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
-                    value = pass,
-                    onValueChange = { pass = it },
+                    state = passState,
                     label = { Text(stringResource(R.string.password)) },
-                    visualTransformation = if (passwordVisible) {
-                        VisualTransformation.None
+                    outputTransformation = if (passwordVisible) {
+                        VisualTransformation.None.asOutputTransformation()
                     } else {
-                        PasswordVisualTransformation()
+                        PasswordVisualTransformation().asOutputTransformation()
                     },
                     trailingIcon = {
                         IconButton(onClick = { passwordVisible = !passwordVisible }) {
@@ -419,7 +425,7 @@ fun SettingsScreen(
                         keyboardType = KeyboardType.Password,
                         autoCorrect = false
                     ),
-                    singleLine = true
+                    lineLimits = TextFieldLineLimits.SingleLine
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = insecure, onCheckedChange = { insecure = it })
@@ -671,10 +677,9 @@ fun SettingsScreen(
                         modifier = Modifier.weight(1f)
                     )
                     OutlinedTextField(
-                        value = defTime,
-                        onValueChange = { defTime = it },
+                        state = defTimeState,
                         modifier = Modifier.width(100.dp),
-                        singleLine = true
+                        lineLimits = TextFieldLineLimits.SingleLine
                     )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
@@ -712,10 +717,9 @@ fun SettingsScreen(
                         modifier = Modifier.weight(1f)
                     )
                     OutlinedTextField(
-                        value = autoRefresh,
-                        onValueChange = { autoRefresh = it },
+                        state = autoRefreshState,
                         modifier = Modifier.width(80.dp),
-                        singleLine = true
+                        lineLimits = TextFieldLineLimits.SingleLine
                     )
                 }
                 Text(
@@ -1034,28 +1038,29 @@ fun SettingsScreen(
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                     OutlinedTextField(
-                        value = newAliasKey,
-                        onValueChange = { newAliasKey = it },
+                        state = newAliasKeyState,
                         label = { Text(stringResource(R.string.alias_key_label)) },
                         modifier = Modifier.weight(1f),
                         placeholder = { Text(stringResource(R.string.placeholder_key_tag)) },
                     )
                     Spacer(Modifier.width(8.dp))
                     OutlinedTextField(
-                        value = newAliasTags,
-                        onValueChange = { newAliasTags = it },
+                        state = newAliasTagsState,
                         label = { Text(stringResource(R.string.alias_value_label)) },
                         placeholder = { Text(stringResource(R.string.placeholder_values)) },
                         modifier = Modifier.weight(1f),
                     )
                     IconButton(onClick = {
-                        if (newAliasKey.isNotBlank() && newAliasTags.isNotBlank()) {
-                            val tags = newAliasTags.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                        if (newAliasKeyState.text.isNotBlank() && newAliasTagsState.text.isNotBlank()) {
+                            val tags = newAliasTagsState.text.toString().split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                            val aliasKey = newAliasKeyState.text.toString().trimStart('#')
                             scope.launch(Dispatchers.IO) {
                                 try {
-                                    api.addAlias(newAliasKey.trimStart('#'), tags)
-                                    newAliasKey = ""
-                                    newAliasTags = ""
+                                    api.addAlias(aliasKey, tags)
+                                    withContext(Dispatchers.Main) {
+                                        newAliasKeyState.clearText()
+                                        newAliasTagsState.clearText()
+                                    }
                                     reload()
                                     if (statusIsError) {
                                         status = ""
@@ -1110,18 +1115,18 @@ fun SettingsScreen(
 
                         IconButton(onClick = {
                             editingGoalKey = key
-                            goalInputKey = key
-                            goalInputTarget = goal.target.toString()
+                            goalInputKeyState.setTextAndPlaceCursorAtEnd(key)
+                            goalInputTargetState.setTextAndPlaceCursorAtEnd(goal.target.toString())
                             goalInputType = goal.goalType
-                            goalInputAmount = goal.interval.amount.toString()
+                            goalInputAmountState.setTextAndPlaceCursorAtEnd(goal.interval.amount.toString())
                             goalInputUnit = goal.interval.unit
                         }) { NfIcon(NfIcons.EDIT, 16.sp, MaterialTheme.colorScheme.secondary) }
 
                         IconButton(onClick = {
                             if (editingGoalKey == key) {
                                 editingGoalKey = null
-                                goalInputKey = ""
-                                goalInputTarget = ""
+                                goalInputKeyState.clearText()
+                                goalInputTargetState.clearText()
                             }
                             val newGoals = goals.toMutableMap()
                             newGoals.remove(key)
@@ -1134,11 +1139,10 @@ fun SettingsScreen(
                 Column(modifier = Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(
-                            value = goalInputKey,
-                            onValueChange = { goalInputKey = it },
+                            state = goalInputKeyState,
                             label = { Text(stringResource(R.string.alias_key_label)) },
                             modifier = Modifier.weight(1.5f),
-                            singleLine = true
+                            lineLimits = TextFieldLineLimits.SingleLine
                         )
                         DropdownPicker(
                             label = stringResource(R.string.goal_input_type),
@@ -1153,19 +1157,17 @@ fun SettingsScreen(
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         OutlinedTextField(
-                            value = goalInputTarget,
-                            onValueChange = { goalInputTarget = it },
+                            state = goalInputTargetState,
                             label = { Text(stringResource(R.string.goal_input_target)) },
                             modifier = Modifier.weight(1.5f),
-                            singleLine = true
+                            lineLimits = TextFieldLineLimits.SingleLine
                         )
                         OutlinedTextField(
-                            value = goalInputAmount,
-                            onValueChange = { goalInputAmount = it },
+                            state = goalInputAmountState,
                             label = { Text(stringResource(R.string.goal_input_amount)) },
                             modifier = Modifier.weight(1f),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true
+                            lineLimits = TextFieldLineLimits.SingleLine
                         )
                         DropdownPicker(
                             label = stringResource(R.string.goal_input_unit),
@@ -1181,27 +1183,28 @@ fun SettingsScreen(
                         )
                         if (editingGoalKey != null) {
                             IconButton(onClick = {
-                                if (goalInputKey.isNotBlank() && goalInputTarget.isNotBlank()) {
-                                    var safeKey = goalInputKey.trim()
+                                if (goalInputKeyState.text.isNotBlank() && goalInputTargetState.text.isNotBlank()) {
+                                    var safeKey = goalInputKeyState.text.toString().trim()
                                     if (safeKey.lowercase().startsWith("loc:")) safeKey = "@@" + safeKey.substring(4).trim()
                                     else if (!safeKey.startsWith("#") && !safeKey.startsWith("@@")) safeKey = "#$safeKey"
 
+                                    val targetStr = goalInputTargetState.text.toString()
                                     val targetVal = if (goalInputType == MobileGoalType.DURATION) {
-                                        api.parseDurationString(goalInputTarget)?.toInt() ?: goalInputTarget.toIntOrNull() ?: 0
+                                        api.parseDurationString(targetStr)?.toInt() ?: targetStr.toIntOrNull() ?: 0
                                     } else {
-                                        goalInputTarget.toIntOrNull() ?: 0
+                                        targetStr.toIntOrNull() ?: 0
                                     }
 
                                     if (targetVal > 0) {
                                         val newGoals = goals.toMutableMap()
                                         if (editingGoalKey != safeKey) newGoals.remove(editingGoalKey)
-                                        val amt = goalInputAmount.toUIntOrNull()?.coerceAtLeast(1u) ?: 1u
+                                        val amt = goalInputAmountState.text.toString().toUIntOrNull()?.coerceAtLeast(1u) ?: 1u
                                         newGoals[safeKey] = MobileGoal(goalInputType, targetVal.toUInt(), MobileInterval(amt, goalInputUnit))
                                         goals = newGoals
                                         editingGoalKey = null
-                                        goalInputKey = ""
-                                        goalInputTarget = ""
-                                        goalInputAmount = "1"
+                                        goalInputKeyState.clearText()
+                                        goalInputTargetState.clearText()
+                                        goalInputAmountState.setTextAndPlaceCursorAtEnd("1")
                                         scope.launch { saveToDisk() }
                                     }
                                 }
@@ -1209,31 +1212,32 @@ fun SettingsScreen(
                             
                             IconButton(onClick = {
                                 editingGoalKey = null
-                                goalInputKey = ""
-                                goalInputTarget = ""
-                                goalInputAmount = "1"
+                                goalInputKeyState.clearText()
+                                goalInputTargetState.clearText()
+                                goalInputAmountState.setTextAndPlaceCursorAtEnd("1")
                             }) { NfIcon(NfIcons.CROSS, 20.sp, MaterialTheme.colorScheme.error) }
                         } else {
                             IconButton(onClick = {
-                                if (goalInputKey.isNotBlank() && goalInputTarget.isNotBlank()) {
-                                    var safeKey = goalInputKey.trim()
+                                if (goalInputKeyState.text.isNotBlank() && goalInputTargetState.text.isNotBlank()) {
+                                    var safeKey = goalInputKeyState.text.toString().trim()
                                     if (safeKey.lowercase().startsWith("loc:")) safeKey = "@@" + safeKey.substring(4).trim()
                                     else if (!safeKey.startsWith("#") && !safeKey.startsWith("@@")) safeKey = "#$safeKey"
 
+                                    val targetStr = goalInputTargetState.text.toString()
                                     val targetVal = if (goalInputType == MobileGoalType.DURATION) {
-                                        api.parseDurationString(goalInputTarget)?.toInt() ?: goalInputTarget.toIntOrNull() ?: 0
+                                        api.parseDurationString(targetStr)?.toInt() ?: targetStr.toIntOrNull() ?: 0
                                     } else {
-                                        goalInputTarget.toIntOrNull() ?: 0
+                                        targetStr.toIntOrNull() ?: 0
                                     }
 
                                     if (targetVal > 0) {
                                         val newGoals = goals.toMutableMap()
-                                        val amt = goalInputAmount.toUIntOrNull()?.coerceAtLeast(1u) ?: 1u
+                                        val amt = goalInputAmountState.text.toString().toUIntOrNull()?.coerceAtLeast(1u) ?: 1u
                                         newGoals[safeKey] = MobileGoal(goalInputType, targetVal.toUInt(), MobileInterval(amt, goalInputUnit))
                                         goals = newGoals
-                                        goalInputKey = ""
-                                        goalInputTarget = ""
-                                        goalInputAmount = "1"
+                                        goalInputKeyState.clearText()
+                                        goalInputTargetState.clearText()
+                                        goalInputAmountState.setTextAndPlaceCursorAtEnd("1")
                                         scope.launch { saveToDisk() }
                                     }
                                 }
@@ -1270,10 +1274,10 @@ fun CollectionEditor(
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit
 ) {
-    var name by remember(cal.href) { mutableStateOf(cal.name) }
+    val nameState = remember(cal.href) { TextFieldState(cal.name) }
     var showColorPicker by remember { mutableStateOf(false) }
 
-    val hasChanges = name != cal.name
+    val hasChanges = nameState.text.toString() != cal.name
     val isDefault = cal.href == "local://default"
 
     Card(
@@ -1318,10 +1322,9 @@ fun CollectionEditor(
                 )
 
                 OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
+                    state = nameState,
                     modifier = Modifier.weight(1f),
-                    singleLine = true,
+                    lineLimits = TextFieldLineLimits.SingleLine,
                     textStyle = TextStyle(fontSize = 14.sp)
                 )
 
@@ -1340,7 +1343,7 @@ fun CollectionEditor(
 
                 if (hasChanges) {
                     IconButton(
-                        onClick = { showColorPicker = false; onUpdate(name, cal.color) },
+                        onClick = { showColorPicker = false; onUpdate(nameState.text.toString(), cal.color) },
                         modifier = Modifier.size(32.dp)
                     ) {
                         NfIcon(NfIcons.CHECK, 20.sp, MaterialTheme.colorScheme.primary)
@@ -1380,7 +1383,7 @@ fun CollectionEditor(
                     ColorPickerRow(
                         selectedColor = cal.color,
                         onColorSelected = {
-                            onUpdate(name, it)
+                            onUpdate(nameState.text.toString(), it)
                             showColorPicker = false
                         }
                     )

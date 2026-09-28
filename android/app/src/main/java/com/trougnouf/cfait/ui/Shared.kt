@@ -46,6 +46,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.text.input.InputTransformation
+import androidx.compose.foundation.text.input.OutputTransformation
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.then
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
@@ -63,7 +67,6 @@ import com.trougnouf.cfait.core.MobileSyntaxType
 import com.trougnouf.cfait.core.MobileTaskSummary
 import com.trougnouf.cfait.workers.NotificationActionWorker
 import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
@@ -73,6 +76,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -1104,16 +1108,105 @@ class SmartSyntaxTransformation(
     }
 }
 
+/**
+ * Adapts a legacy [VisualTransformation] to the state-based [OutputTransformation] API used by
+ * [TextFieldState]. The app's highlighters are styling-only and report [OffsetMapping.Identity],
+ * so re-applying their span styles to the output buffer reproduces the previous rendering. The
+ * buffer already holds the raw state text; only a content difference (none of the app's
+ * transformations produce one) would require a replace.
+ */
+fun VisualTransformation.asOutputTransformation(): OutputTransformation = OutputTransformation {
+    val raw = asCharSequence().toString()
+    val transformed = filter(AnnotatedString(raw))
+    if (transformed.text.text != raw) {
+        replace(0, length, transformed.text.text)
+    }
+    for (range in transformed.text.spanStyles) {
+        addStyle(range.item, range.start, range.end)
+    }
+}
+
+/**
+ * A plain copy of a text field's text and cursor/selection, used by the app's custom undo/redo
+ * stacks (the framework's built-in [androidx.compose.foundation.text.input.TextFieldState] undo
+ * history is intentionally not used).
+ */
+data class FieldSnapshot(val text: String, val selection: TextRange)
+
+fun TextFieldState.snapshot(): FieldSnapshot = FieldSnapshot(text.toString(), selection)
+
+/**
+ * Restores [s] into this state. This is a programmatic edit: it does not run the field's
+ * [InputTransformation]s, so restoring from the undo/redo stacks does not re-record history.
+ */
+fun TextFieldState.restore(s: FieldSnapshot) {
+    edit {
+        replace(0, length, s.text)
+        selection = s.selection
+    }
+}
+
+/**
+ * An [InputTransformation] that invokes [onUserEdit] with the field's new [FieldSnapshot] whenever
+ * a user edit changes the text. It observes the buffer after any earlier transformations in the
+ * chain have run, so it sees the final (filtered) text, and it never modifies the buffer itself.
+ *
+ * Because it is an input transformation it only fires for user edits (IME, gestures, hardware
+ * keyboard, paste) — not for programmatic [TextFieldState.edit] calls such as banner taps,
+ * auto-indent, undo/redo, or reloads — which keeps the custom undo/redo stacks clean.
+ */
+fun TextFieldState.undoPushTransform(onUserEdit: (FieldSnapshot) -> Unit): InputTransformation =
+    InputTransformation {
+        val newText = asCharSequence().toString()
+        if (newText != originalText.toString()) {
+            onUserEdit(FieldSnapshot(newText, selection))
+        }
+    }
+
+/**
+ * An [InputTransformation] implementing list auto-indentation on Enter: if the user pressed Enter
+ * at the end of a list item, insert the matching prefix (e.g. "- [ ] " with preserved indentation)
+ * on the new line, or remove an empty item to exit the list. Runs as part of the user edit, so the
+ * indented result is recorded as a single step in the custom undo/redo stacks.
+ */
+fun InputTransformation.listAutoIndent(api: CfaitMobile): InputTransformation =
+    this.then(
+        InputTransformation {
+            val newText = asCharSequence().toString()
+            val oldText = originalText.toString()
+            val oldSel = originalSelection
+            // Only react to a single '\n' inserted exactly at the previous cursor position.
+            if (newText.length != oldText.length + 1) return@InputTransformation
+            if (selection.start != oldSel.start + 1) return@InputTransformation
+            if (newText.getOrNull(oldSel.start) != '\n') return@InputTransformation
+
+            val cursor = oldSel.start
+            val lineStart = oldText.lastIndexOf('\n', cursor - 1).let { if (it == -1) 0 else it + 1 }
+            val prevLine = oldText.substring(lineStart, cursor)
+            val prefix = api.extractListPrefix(prevLine)
+            if (prefix.isEmpty()) return@InputTransformation
+
+            if (prevLine.trim() == prefix.trim()) {
+                // Empty item: remove the newline and the empty item (exit the list).
+                replace(lineStart, cursor + 1, "")
+                selection = TextRange(lineStart)
+            } else {
+                // Auto-indent the next item.
+                replace(cursor + 1, cursor + 1, prefix)
+                selection = TextRange(cursor + 1 + prefix.length)
+            }
+        }
+    )
+
 @Composable
 fun CursorContextBanner(
     api: CfaitMobile,
-    textFieldValue: TextFieldValue,
+    state: TextFieldState,
     contextUid: String? = null,
-    onNavigate: ((String) -> Unit)? = null,
-    onTextChange: (TextFieldValue) -> Unit
+    onNavigate: ((String) -> Unit)? = null
 ) {
-    val cursor = textFieldValue.selection.start
-    val text = textFieldValue.text
+    val cursor = state.selection.start
+    val text = state.text.toString()
 
     var suggestions by remember { mutableStateOf<List<MobileSuggestion>>(emptyList()) }
     var activeToken by remember { mutableStateOf<MobileSyntaxToken?>(null) }
@@ -1121,6 +1214,9 @@ fun CursorContextBanner(
     var rawWord by remember { mutableStateOf("") }
 
     LaunchedEffect(text, cursor) {
+        // Debounce: cursor drags and fast typing restart this effect repeatedly; only run the
+        // (FFI) lookup once the cursor has been still for a moment.
+        delay(300)
         val lineStart = text.lastIndexOf('\n', cursor - 1).let { if (it == -1) 0 else it + 1 }
         val lineEnd = text.indexOf('\n', cursor).let { if (it == -1) text.length else it }
         val currentLine = text.substring(lineStart, lineEnd)
@@ -1140,6 +1236,7 @@ fun CursorContextBanner(
     }
 
     LaunchedEffect(cursor, text) {
+        delay(300)
         try {
             val lineStart = text.lastIndexOf('\n', cursor - 1).let { if (it == -1) 0 else it + 1 }
             val lineEnd = text.indexOf('\n', cursor).let { if (it == -1) text.length else it }
@@ -1201,7 +1298,7 @@ fun CursorContextBanner(
                         if (resolvedDep!!.isFound) {
                             onNavigate(resolvedDep!!.uid)
                         } else {
-                            scope.launch {
+                            scope.launch(Dispatchers.IO) {
                                 try {
                                     val targetUid = api.openWikiLink(rawWord, contextUid, null)
                                     onNavigate(targetUid)
@@ -1252,9 +1349,10 @@ fun CursorContextBanner(
                         val globalStart = s.rangeStart
                         val globalEnd = s.rangeEnd
                         val replacementText = s.replacement + if (globalEnd < text.length) "" else " "
-                        val newText = text.substring(0, globalStart) + replacementText + if (globalEnd < text.length) text.substring(globalEnd) else ""
-                        val newCursor = globalStart + replacementText.length
-                        onTextChange(TextFieldValue(text = newText, selection = TextRange(newCursor)))
+                        state.edit {
+                            replace(globalStart, globalEnd, replacementText)
+                            selection = TextRange(globalStart + replacementText.length)
+                        }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
@@ -1288,37 +1386,4 @@ fun triggerBackgroundSync(context: Context, api: CfaitMobile) {
     }
 }
 
-/// Apply auto-indentation on Enter: if the cursor was at the end of a list item,
-/// insert the matching prefix (e.g. "- [ ] " with preserved indentation) on the new line.
-/// If the previous line was an empty item, remove it instead (exit the list).
-fun applyListAutoIndent(
-    oldValue: TextFieldValue,
-    newValue: TextFieldValue,
-    api: CfaitMobile,
-): TextFieldValue {
-    if (newValue.text.length <= oldValue.text.length ||
-        newValue.selection.start != oldValue.selection.start + 1 ||
-        newValue.text[oldValue.selection.start] != '\n'
-    ) {
-        return newValue
-    }
 
-    val cursor = oldValue.selection.start
-    val lineStart = oldValue.text.lastIndexOf('\n', cursor - 1).let { if (it == -1) 0 else it + 1 }
-    val prevLine = oldValue.text.substring(lineStart, cursor)
-    val prefix = api.extractListPrefix(prevLine)
-
-    if (prefix.isEmpty()) return newValue
-
-    return if (prevLine.trim() == prefix.trim()) {
-        // Empty item: remove the newline and prefix (exit the list)
-        val before = oldValue.text.substring(0, lineStart)
-        val after = newValue.text.substring(newValue.selection.start)
-        TextFieldValue(text = before + after, selection = TextRange(lineStart))
-    } else {
-        // Auto-indent the next item
-        val before = newValue.text.substring(0, newValue.selection.start)
-        val after = newValue.text.substring(newValue.selection.start)
-        TextFieldValue(text = before + prefix + after, selection = TextRange(newValue.selection.start + prefix.length))
-    }
-}

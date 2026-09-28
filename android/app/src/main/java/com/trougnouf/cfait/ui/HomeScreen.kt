@@ -27,8 +27,12 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.InputTransformation
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.material3.*
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.material3.SnackbarDuration
@@ -81,7 +85,6 @@ import kotlinx.coroutines.withContext
 import android.content.Intent
 import androidx.core.content.FileProvider
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.input.TextFieldValue
 import kotlin.math.abs
 import java.io.File
 import java.text.SimpleDateFormat
@@ -341,7 +344,8 @@ fun HomeScreen(
         }
     }
 
-    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val searchQueryState = rememberSaveable(saver = TextFieldState.Saver) { TextFieldState() }
+    val searchQuery = searchQueryState.text.toString()
     var isSearchActive by rememberSaveable { mutableStateOf(false) }
     val searchFocusRequester = remember { FocusRequester() }
     val newTaskFocusRequester = remember { FocusRequester() }
@@ -351,7 +355,7 @@ fun HomeScreen(
             // Switch back to the tasks tab in case we were on the journal tab.
             if (sidebarTab == 4) sidebarTab = 0
             isSearchActive = false
-            searchQuery = ""
+            searchQueryState.clearText()
             if (!quickAddCalHref.isNullOrEmpty()) {
                 customWriteTarget = quickAddCalHref
                 localDefaultCalHref = quickAddCalHref
@@ -392,13 +396,13 @@ fun HomeScreen(
     }
     val highlightColor = if (isDark) Color(0xFFFFFF00) else Color(0xFFFF5500)
 
-    var newTaskText by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue("")) }
-    var newDescriptionText by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue("")) }
+    val newTaskText = rememberSaveable(saver = TextFieldState.Saver) { TextFieldState() }
+    val newDescriptionText = rememberSaveable(saver = TextFieldState.Saver) { TextFieldState() }
     var isCreateExpanded by rememberSaveable { mutableStateOf(false) }
     var showExportSourceDialog by remember { mutableStateOf(false) }
     var showExportDestDialog by remember { mutableStateOf(false) }
     var sessionTaskUid by remember { mutableStateOf<String?>(null) }
-    var sessionInputText by remember { mutableStateOf("") }
+    val sessionInputState = remember { TextFieldState() }
     var exportSourceHref by remember { mutableStateOf<String?>(null) }
 
     var yankedUid by rememberSaveable { mutableStateOf<String?>(null) }
@@ -581,7 +585,7 @@ fun HomeScreen(
                 customWriteTarget = calHref
                 localDefaultCalHref = calHref
             }
-            searchQuery = query
+            searchQueryState.setTextAndPlaceCursorAtEnd(query)
             isSearchActive = true
             updateTaskList()
             onPresetSearchComplete()
@@ -664,7 +668,7 @@ fun HomeScreen(
                             Toast.makeText(context, context.getString(R.string.task_action_undone, desc), Toast.LENGTH_SHORT).show()
                         }
                     }
-                    newTaskText = TextFieldValue("")
+                    newTaskText.clearText()
                     return
                 }
                 ":redo" -> {
@@ -677,7 +681,7 @@ fun HomeScreen(
                             Toast.makeText(context, context.getString(R.string.task_action_redone, desc), Toast.LENGTH_SHORT).show()
                         }
                     }
-                    newTaskText = TextFieldValue("")
+                    newTaskText.clearText()
                     return
                 }
                 ":empty-trash" -> {
@@ -687,12 +691,12 @@ fun HomeScreen(
                         checkSyncStatus()
                         triggerBackgroundSync(context, api)
                     }
-                    newTaskText = TextFieldValue("")
+                    newTaskText.clearText()
                     return
                 }
                 ":delete-all" -> {
                     showDeleteAllDialog = true
-                    newTaskText = TextFieldValue("")
+                    newTaskText.clearText()
                     return
                 }
                 else -> {
@@ -708,7 +712,7 @@ fun HomeScreen(
             scope.launch(Dispatchers.IO) {
                 filterTags = api.resolveSelectionAliases(tag, false).toSet()
                 sidebarTab = 1
-                newTaskText = TextFieldValue("")
+                newTaskText.clearText()
                 updateTaskList()
             }
         } else if ((text.startsWith("@@") || text.startsWith("loc:")) && !text.contains(" ") && !isAliasDef) {
@@ -716,7 +720,7 @@ fun HomeScreen(
             scope.launch(Dispatchers.IO) {
                 filterLocations = api.resolveSelectionAliases(loc.replace("\"", ""), true).toSet()
                 sidebarTab = 2
-                newTaskText = TextFieldValue("")
+                newTaskText.clearText()
                 updateTaskList()
             }
         } else {
@@ -736,8 +740,8 @@ fun HomeScreen(
                     val newUid = api.addTaskWithDescription(text, desc)
                     
                     // Clear inputs ONLY on success to prevent data loss
-                    newTaskText = TextFieldValue("")
-                    newDescriptionText = TextFieldValue("")
+                    newTaskText.clearText()
+                    newDescriptionText.clearText()
                     isCreateExpanded = false
                     if (!childLockActive) {
                         creatingChildUid = null
@@ -909,7 +913,7 @@ fun HomeScreen(
             yankedUid = null
             // For create_child, we need the full task to get categories, locations, etc.
             // We'll set the uid and let the actual creation fetch the full task when needed
-            newTaskText = TextFieldValue("")
+            newTaskText.clearText()
             return
         }
 
@@ -1201,7 +1205,7 @@ fun HomeScreen(
             }
 
             searchQuery.isNotBlank() -> {
-                searchQuery = ""
+                searchQueryState.clearText()
                 updateTaskList()
             }
             filterTags.isNotEmpty() || filterLocations.isNotEmpty() -> {
@@ -1332,26 +1336,25 @@ fun HomeScreen(
 
     if (sessionTaskUid != null) {
         AlertDialog(
-            onDismissRequest = { sessionTaskUid = null; sessionInputText = "" },
+            onDismissRequest = { sessionTaskUid = null; sessionInputState.clearText() },
             title = { Text(stringResource(R.string.help_metadata_log_time)) },
             text = {
                 OutlinedTextField(
-                    value = sessionInputText,
-                    onValueChange = { sessionInputText = it },
+                    state = sessionInputState,
                     placeholder = {
                         val example = remember { randomSessionExample() }
                         Text("${stringResource(R.string.eg)} $example", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
                     },
-                    singleLine = true,
+                    lineLimits = TextFieldLineLimits.SingleLine,
                     modifier = Modifier.fillMaxWidth()
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
                     val uid = sessionTaskUid!!
-                    val input = sessionInputText
+                    val input = sessionInputState.text.toString()
                     sessionTaskUid = null
-                    sessionInputText = ""
+                    sessionInputState.clearText()
                     scope.launch(Dispatchers.IO) {
                         try {
                             api.addSession(uid, input)
@@ -1366,7 +1369,7 @@ fun HomeScreen(
                 }) { Text(stringResource(R.string.add)) }
             },
             dismissButton = {
-                TextButton(onClick = { sessionTaskUid = null; sessionInputText = "" }) {
+                TextButton(onClick = { sessionTaskUid = null; sessionInputState.clearText() }) {
                     Text(stringResource(R.string.cancel))
                 }
             }
@@ -2388,10 +2391,11 @@ fun HomeScreen(
                         IconButton(onClick = {
                             if (sidebarTab == 4) sidebarTab = 0
                             if (isActive) {
-                                searchQuery = searchQuery.replace(quickFilterTerm, "").trim()
+                                searchQueryState.setTextAndPlaceCursorAtEnd(searchQuery.replace(quickFilterTerm, "").trim())
                             } else {
-                                searchQuery =
+                                searchQueryState.setTextAndPlaceCursorAtEnd(
                                     if (searchQuery.isEmpty()) quickFilterTerm else "$quickFilterTerm $searchQuery"
+                                )
                             }
                             isSearchActive = true
                             keyboardController?.hide()
@@ -2404,7 +2408,7 @@ fun HomeScreen(
                         if (sidebarTab == 4) sidebarTab = 0
                         isSearchActive = !isSearchActive
                         if (!isSearchActive) {
-                            searchQuery = ""
+                            searchQueryState.clearText()
                             keyboardController?.hide()
                             updateTaskList()
                         }
@@ -2499,19 +2503,16 @@ fun HomeScreen(
                             }
                         }
                         TextField(
-                            value = searchQuery, onValueChange = {
-                                // The LaunchedEffect(searchQuery, ...) below re-fetches;
-                                // calling updateTaskList() here too would double the work.
-                                searchQuery = it
-                            },
+                            state = searchQueryState,
                             placeholder = { Text(stringResource(R.string.search_placeholder), fontSize = 14.sp) },
-                            singleLine = true, textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
-                            visualTransformation = remember(isDark) {
+                            lineLimits = TextFieldLineLimits.SingleLine,
+                            textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
+                            outputTransformation = remember(isDark) {
                                 SmartSyntaxTransformation(
                                     api,
                                     isDark,
                                     true
-                                )
+                                ).asOutputTransformation()
                             },
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -2633,10 +2634,8 @@ fun HomeScreen(
                                 AnimatedVisibility(visible = isCreateExpanded) {
                                     Column {
                                         OutlinedTextField(
-                                            value = newDescriptionText,
-                                            onValueChange = { newValue ->
-                                                newDescriptionText = applyListAutoIndent(newDescriptionText, newValue, api)
-                                            },
+                                            state = newDescriptionText,
+                                            inputTransformation = InputTransformation.listAutoIndent(api),
                                             placeholder = {
                                                 Text(
                                                     stringResource(R.string.notes_create_subtasks_placeholder),
@@ -2645,9 +2644,9 @@ fun HomeScreen(
                                             },
                                             modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 250.dp),
                                             textStyle = TextStyle(fontSize = 14.sp),
-                                            visualTransformation = remember(isDark) { MarkdownTransformation(isDark, api) },
+                                            outputTransformation = remember(isDark) { MarkdownTransformation(isDark, api).asOutputTransformation() },
                                         )
-                                        CursorContextBanner(api, newDescriptionText, creatingChildUid, onNavigate = onTaskClick) { newDescriptionText = it }
+                                        CursorContextBanner(api, newDescriptionText, creatingChildUid, onNavigate = onTaskClick)
                                         Spacer(Modifier.height(8.dp))
                                     }
                                 }
@@ -2655,33 +2654,34 @@ fun HomeScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         OutlinedTextField(
-                                            value = newTaskText, onValueChange = { newTaskText = it },
+                                            state = newTaskText,
                                             placeholder = { Text("${stringResource(R.string.example_buy_cat_food)} !1 @tomorrow") },
-                                            modifier = Modifier.fillMaxWidth().focusRequester(newTaskFocusRequester), singleLine = true,
-                                            visualTransformation = remember(isDark) {
+                                            modifier = Modifier.fillMaxWidth().focusRequester(newTaskFocusRequester),
+                                            lineLimits = TextFieldLineLimits.SingleLine,
+                                            outputTransformation = remember(isDark) {
                                                 SmartSyntaxTransformation(
                                                     api,
                                                     isDark
-                                                )
+                                                ).asOutputTransformation()
                                             },
                                             keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Send),
-                                            keyboardActions = KeyboardActions(onSend = {
-                                                if (newTaskText.text.isNotBlank()) handleAddTaskWithGeo(
-                                                    newTaskText.text, newDescriptionText.text
+                                            onKeyboardAction = { _ ->
+                                                if (newTaskText.text.toString().isNotBlank()) handleAddTaskWithGeo(
+                                                    newTaskText.text.toString(), newDescriptionText.text.toString()
                                                 )
-                                            }),
+                                            },
                                         )
-                                        CursorContextBanner(api, newTaskText, creatingChildUid, onNavigate = onTaskClick) { newTaskText = it }
+                                        CursorContextBanner(api, newTaskText, creatingChildUid, onNavigate = onTaskClick)
                                     }
 
                                     AnimatedVisibility(visible = isCreateExpanded) {
-                                        val canSave = newTaskText.text.isNotBlank()
+                                        val canSave = newTaskText.text.toString().isNotBlank()
                                         Row {
                                             Spacer(Modifier.width(8.dp))
                                             IconButton(
                                                 onClick = {
                                                     if (canSave) {
-                                                        handleAddTaskWithGeo(newTaskText.text, newDescriptionText.text)
+                                                        handleAddTaskWithGeo(newTaskText.text.toString(), newDescriptionText.text.toString())
                                                     }
                                                 },
                                                 enabled = canSave,

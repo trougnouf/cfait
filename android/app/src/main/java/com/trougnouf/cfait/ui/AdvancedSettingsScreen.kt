@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -48,15 +51,15 @@ fun AdvancedSettingsScreen(
     var debugStatus by remember { mutableStateOf("") }
     var debugIsError by remember { mutableStateOf(false) }
 
-    var maxDoneRoots by remember { mutableStateOf("20") }
-    var maxDoneSubtasks by remember { mutableStateOf("5") }
-    var trashRetention by remember { mutableStateOf("14") }
+    val maxDoneRootsState = remember { TextFieldState("20") }
+    val maxDoneSubtasksState = remember { TextFieldState("5") }
+    val trashRetentionState = remember { TextFieldState("14") }
     var deleteEventsOnCompletion by remember { mutableStateOf(false) }
     var strikethroughCompleted by remember { mutableStateOf(false) }
     var showInlineDescriptions by remember { mutableStateOf(true) }
     var showQuickFilter by remember { mutableStateOf(true) }
-    var quickFilterTerm by remember { mutableStateOf("is:ready") }
-    var quickFilterIcon by remember { mutableStateOf("f0fa9") }
+    val quickFilterTermState = remember { TextFieldState("is:ready") }
+    val quickFilterIconState = remember { TextFieldState("f0fa9") }
 
     var tlsClientCertPath by remember { mutableStateOf("") }
     var tlsClientKeyPath by remember { mutableStateOf("") }
@@ -69,11 +72,11 @@ fun AdvancedSettingsScreen(
     var pausedSortBehavior by remember { mutableStateOf("tiebreak") }
     var sortTiebreakRecent by remember { mutableStateOf(false) }
     var sortPreset by remember { mutableStateOf("Urgent > Ongoing > Due Soon") }
-    var sortDays by remember { mutableStateOf("30") }
-    var urgentDays by remember { mutableStateOf("1") }
-    var urgentPrio by remember { mutableStateOf("1") }
-    var defaultPriority by remember { mutableStateOf("5") }
-    var startGracePeriodDays by remember { mutableStateOf("1") }
+    val sortDaysState = remember { TextFieldState("30") }
+    val urgentDaysState = remember { TextFieldState("1") }
+    val urgentPrioState = remember { TextFieldState("1") }
+    val defaultPriorityState = remember { TextFieldState("5") }
+    val startGracePeriodDaysState = remember { TextFieldState("1") }
     var firstDayOfWeek by remember { mutableStateOf(MobileFirstDayOfWeek.MONDAY) }
     var showTaskGoalsInSidebar by remember { mutableStateOf(true) }
     var showCalendarsTab by remember { mutableStateOf(true) }
@@ -81,24 +84,36 @@ fun AdvancedSettingsScreen(
     var showLocationsTab by remember { mutableStateOf(true) }
     var showGoalsTab by remember { mutableStateOf(true) }
     var showJournalTab by remember { mutableStateOf(true) }
-    var defaultDurationGoalMins by remember { mutableStateOf("60") }
+    val defaultDurationGoalMinsState = remember { TextFieldState("60") }
     var sessionsCountAsCompletions by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
 
-    // getConfig/getCurrentDataDir do disk IO, so keep them off the main thread
+    // getConfig/getCurrentDataDir do disk IO, so keep them off the main thread;
+    // TextFieldState writes must happen on the main thread
     suspend fun reload() {
         try {
+            var newMaxDoneRoots = ""
+            var newMaxDoneSubtasks = ""
+            var newTrashRetention = ""
+            var newQuickFilterTerm = ""
+            var newQuickFilterIcon = ""
+            var newSortDays = ""
+            var newUrgentDays = ""
+            var newUrgentPrio = ""
+            var newDefaultPriority = ""
+            var newStartGracePeriodDays = ""
+            var newDefaultDurationGoalMins = ""
             withContext(Dispatchers.IO) {
                 val cfg = api.getConfig()
-                maxDoneRoots = cfg.maxDoneRoots.toString()
-                maxDoneSubtasks = cfg.maxDoneSubtasks.toString()
-                trashRetention = cfg.trashRetention.toString()
+                newMaxDoneRoots = cfg.maxDoneRoots.toString()
+                newMaxDoneSubtasks = cfg.maxDoneSubtasks.toString()
+                newTrashRetention = cfg.trashRetention.toString()
                 deleteEventsOnCompletion = cfg.deleteEventsOnCompletion
                 strikethroughCompleted = cfg.strikethroughCompleted
                 showInlineDescriptions = cfg.showInlineDescriptions
                 showQuickFilter = cfg.showQuickFilter
-                quickFilterTerm = cfg.quickFilterTerm
-                quickFilterIcon = cfg.quickFilterIcon
+                newQuickFilterTerm = cfg.quickFilterTerm
+                newQuickFilterIcon = cfg.quickFilterIcon
 
                 tlsClientCertPath = cfg.tlsClientCertPath ?: ""
                 tlsClientKeyPath = cfg.tlsClientKeyPath ?: ""
@@ -111,11 +126,11 @@ fun AdvancedSettingsScreen(
                 pausedSortBehavior = cfg.pausedSortBehavior
                 sortTiebreakRecent = cfg.sortTiebreakRecent
                 sortPreset = cfg.sortPreset
-                sortDays = cfg.sortCutoffDays?.toString() ?: ""
-                urgentDays = cfg.urgentDays.toString()
-                urgentPrio = cfg.urgentPrio.toString()
-                defaultPriority = cfg.defaultPriority.toString()
-                startGracePeriodDays = cfg.startGracePeriodDays.toString()
+                newSortDays = cfg.sortCutoffDays?.toString() ?: ""
+                newUrgentDays = cfg.urgentDays.toString()
+                newUrgentPrio = cfg.urgentPrio.toString()
+                newDefaultPriority = cfg.defaultPriority.toString()
+                newStartGracePeriodDays = cfg.startGracePeriodDays.toString()
                 firstDayOfWeek = cfg.firstDayOfWeek
                 showTaskGoalsInSidebar = cfg.showTaskGoalsInSidebar
                 showCalendarsTab = cfg.showCalendarsTab
@@ -123,9 +138,20 @@ fun AdvancedSettingsScreen(
                 showLocationsTab = cfg.showLocationsTab
                 showGoalsTab = cfg.showGoalsTab
                 showJournalTab = cfg.showJournalTab
-                defaultDurationGoalMins = cfg.defaultDurationGoalMins.toString()
+                newDefaultDurationGoalMins = cfg.defaultDurationGoalMins.toString()
                 sessionsCountAsCompletions = cfg.sessionsCountAsCompletions
             }
+            maxDoneRootsState.setTextAndPlaceCursorAtEnd(newMaxDoneRoots)
+            maxDoneSubtasksState.setTextAndPlaceCursorAtEnd(newMaxDoneSubtasks)
+            trashRetentionState.setTextAndPlaceCursorAtEnd(newTrashRetention)
+            quickFilterTermState.setTextAndPlaceCursorAtEnd(newQuickFilterTerm)
+            quickFilterIconState.setTextAndPlaceCursorAtEnd(newQuickFilterIcon)
+            sortDaysState.setTextAndPlaceCursorAtEnd(newSortDays)
+            urgentDaysState.setTextAndPlaceCursorAtEnd(newUrgentDays)
+            urgentPrioState.setTextAndPlaceCursorAtEnd(newUrgentPrio)
+            defaultPriorityState.setTextAndPlaceCursorAtEnd(newDefaultPriority)
+            startGracePeriodDaysState.setTextAndPlaceCursorAtEnd(newStartGracePeriodDays)
+            defaultDurationGoalMinsState.setTextAndPlaceCursorAtEnd(newDefaultDurationGoalMins)
         } catch (e: Exception) {
             // Ignore on load
         }
@@ -136,6 +162,17 @@ fun AdvancedSettingsScreen(
     // getConfig/saveConfig do disk IO, so keep them off the main thread
     suspend fun saveToDisk() {
         try {
+            val maxDoneRootsStr = maxDoneRootsState.text.toString()
+            val maxDoneSubtasksStr = maxDoneSubtasksState.text.toString()
+            val trashRetentionStr = trashRetentionState.text.toString()
+            val quickFilterTermStr = quickFilterTermState.text.toString()
+            val quickFilterIconStr = quickFilterIconState.text.toString()
+            val sortDaysStr = sortDaysState.text.toString()
+            val urgentDaysStr = urgentDaysState.text.toString()
+            val urgentPrioStr = urgentPrioState.text.toString()
+            val defaultPriorityStr = defaultPriorityState.text.toString()
+            val startGracePeriodDaysStr = startGracePeriodDaysState.text.toString()
+            val defaultDurationGoalMinsStr = defaultDurationGoalMinsState.text.toString()
             withContext(Dispatchers.IO) {
                 val cfg = api.getConfig()
                 // Ensure at least one sidebar tab is visible
@@ -147,15 +184,15 @@ fun AdvancedSettingsScreen(
                 val finalShowJournalTab = if (!showJournalTab && !atLeastOneTab) true else showJournalTab
                 @Suppress("DEPRECATION")
                 val newCfg = cfg.copy(
-                    maxDoneRoots = maxDoneRoots.toUIntOrNull() ?: 20u,
-                    maxDoneSubtasks = maxDoneSubtasks.toUIntOrNull() ?: 5u,
-                    trashRetention = trashRetention.toUIntOrNull() ?: 14u,
+                    maxDoneRoots = maxDoneRootsStr.toUIntOrNull() ?: 20u,
+                    maxDoneSubtasks = maxDoneSubtasksStr.toUIntOrNull() ?: 5u,
+                    trashRetention = trashRetentionStr.toUIntOrNull() ?: 14u,
                     deleteEventsOnCompletion = deleteEventsOnCompletion,
                     strikethroughCompleted = strikethroughCompleted,
                     showInlineDescriptions = showInlineDescriptions,
                     showQuickFilter = showQuickFilter,
-                    quickFilterTerm = quickFilterTerm,
-                    quickFilterIcon = quickFilterIcon,
+                    quickFilterTerm = quickFilterTermStr,
+                    quickFilterIcon = quickFilterIconStr,
 
                     tlsClientCertPath = tlsClientCertPath.takeIf { it.isNotBlank() },
                     tlsClientKeyPath = tlsClientKeyPath.takeIf { it.isNotBlank() },
@@ -165,11 +202,11 @@ fun AdvancedSettingsScreen(
                     pausedSortBehavior = pausedSortBehavior,
                     sortTiebreakRecent = sortTiebreakRecent,
                     sortPreset = sortPreset,
-                    sortCutoffDays = sortDays.toUIntOrNull(),
-                    urgentDays = urgentDays.toUIntOrNull() ?: 1u,
-                    urgentPrio = urgentPrio.toUByteOrNull() ?: 1u,
-                    defaultPriority = defaultPriority.toUByteOrNull() ?: 5u,
-                    startGracePeriodDays = startGracePeriodDays.toUIntOrNull() ?: 1u,
+                    sortCutoffDays = sortDaysStr.toUIntOrNull(),
+                    urgentDays = urgentDaysStr.toUIntOrNull() ?: 1u,
+                    urgentPrio = urgentPrioStr.toUByteOrNull() ?: 1u,
+                    defaultPriority = defaultPriorityStr.toUByteOrNull() ?: 5u,
+                    startGracePeriodDays = startGracePeriodDaysStr.toUIntOrNull() ?: 1u,
                     firstDayOfWeek = firstDayOfWeek,
                     showTaskGoalsInSidebar = showTaskGoalsInSidebar,
                     showCalendarsTab = finalShowCalendarsTab,
@@ -177,7 +214,7 @@ fun AdvancedSettingsScreen(
                     showLocationsTab = finalShowLocationsTab,
                     showGoalsTab = finalShowGoalsTab,
                     showJournalTab = finalShowJournalTab,
-                    defaultDurationGoalMins = defaultDurationGoalMins.toUIntOrNull() ?: 60u,
+                    defaultDurationGoalMins = defaultDurationGoalMinsStr.toUIntOrNull() ?: 60u,
                     sessionsCountAsCompletions = sessionsCountAsCompletions
                 )
                 api.saveConfig(newCfg)
@@ -509,21 +546,19 @@ fun AdvancedSettingsScreen(
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                 Text(stringResource(R.string.due_within_days), modifier = Modifier.weight(1f))
                 OutlinedTextField(
-                    value = urgentDays,
-                    onValueChange = { urgentDays = it },
+                    state = urgentDaysState,
                     modifier = Modifier.width(80.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true
+                    lineLimits = TextFieldLineLimits.SingleLine
                 )
             }
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                 Text(stringResource(R.string.priority_le), modifier = Modifier.weight(1f))
                 OutlinedTextField(
-                    value = urgentPrio,
-                    onValueChange = { urgentPrio = it },
+                    state = urgentPrioState,
                     modifier = Modifier.width(80.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true
+                    lineLimits = TextFieldLineLimits.SingleLine
                 )
             }
             Text(
@@ -541,11 +576,10 @@ fun AdvancedSettingsScreen(
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                 Text(stringResource(R.string.priority_cutoff_days), modifier = Modifier.weight(1f))
                 OutlinedTextField(
-                    value = sortDays,
-                    onValueChange = { sortDays = it },
+                    state = sortDaysState,
                     modifier = Modifier.width(80.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true
+                    lineLimits = TextFieldLineLimits.SingleLine
                 )
             }
             Text(
@@ -557,11 +591,10 @@ fun AdvancedSettingsScreen(
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                 Text(stringResource(R.string.start_grace_days), modifier = Modifier.weight(1f))
                 OutlinedTextField(
-                    value = startGracePeriodDays,
-                    onValueChange = { startGracePeriodDays = it },
+                    state = startGracePeriodDaysState,
                     modifier = Modifier.width(80.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true
+                    lineLimits = TextFieldLineLimits.SingleLine
                 )
             }
             Text(
@@ -579,11 +612,10 @@ fun AdvancedSettingsScreen(
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                 Text(stringResource(R.string.default_priority_label), modifier = Modifier.weight(1f))
                 OutlinedTextField(
-                    value = defaultPriority,
-                    onValueChange = { defaultPriority = it },
+                    state = defaultPriorityState,
                     modifier = Modifier.width(80.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true
+                    lineLimits = TextFieldLineLimits.SingleLine
                 )
             }
             Text(
@@ -671,12 +703,11 @@ fun AdvancedSettingsScreen(
             )
 
             OutlinedTextField(
-                value = maxDoneRoots,
-                onValueChange = { maxDoneRoots = it },
+                state = maxDoneRootsState,
                 label = { Text(stringResource(R.string.max_completed_tasks_root)) },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true
+                lineLimits = TextFieldLineLimits.SingleLine
             )
             Text(
                 stringResource(R.string.max_completed_tasks_root_explain),
@@ -686,12 +717,11 @@ fun AdvancedSettingsScreen(
             )
 
             OutlinedTextField(
-                value = maxDoneSubtasks,
-                onValueChange = { maxDoneSubtasks = it },
+                state = maxDoneSubtasksState,
                 label = { Text(stringResource(R.string.max_completed_subtasks)) },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true
+                lineLimits = TextFieldLineLimits.SingleLine
             )
             Text(
                 stringResource(R.string.max_completed_subtasks_explain),
@@ -718,18 +748,16 @@ fun AdvancedSettingsScreen(
                 Text(stringResource(R.string.quick_filter_show_button))
             }
             OutlinedTextField(
-                value = quickFilterTerm,
-                onValueChange = { quickFilterTerm = it },
+                state = quickFilterTermState,
                 label = { Text(stringResource(R.string.quick_filter_search_term)) },
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                singleLine = true
+                lineLimits = TextFieldLineLimits.SingleLine
             )
             OutlinedTextField(
-                value = quickFilterIcon,
-                onValueChange = { quickFilterIcon = it },
+                state = quickFilterIconState,
                 label = { Text(stringResource(R.string.quick_filter_icon)) },
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp),
-                singleLine = true
+                lineLimits = TextFieldLineLimits.SingleLine
             )
             HorizontalDivider(Modifier.padding(vertical = 16.dp))
 
@@ -792,12 +820,11 @@ fun AdvancedSettingsScreen(
                 )
             }
             OutlinedTextField(
-                value = trashRetention,
-                onValueChange = { trashRetention = it },
+                state = trashRetentionState,
                 label = { Text(stringResource(R.string.trash_retention_days_label)) },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true
+                lineLimits = TextFieldLineLimits.SingleLine
             )
             Text(
                 stringResource(R.string.trash_retention_explain),
@@ -828,12 +855,11 @@ fun AdvancedSettingsScreen(
                 Text(stringResource(R.string.show_task_goals_in_sidebar))
             }
             OutlinedTextField(
-                value = defaultDurationGoalMins,
-                onValueChange = { defaultDurationGoalMins = it },
+                state = defaultDurationGoalMinsState,
                 label = { Text(stringResource(R.string.implicit_goal_duration)) },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true
+                lineLimits = TextFieldLineLimits.SingleLine
             )
             Text(
                 stringResource(R.string.implicit_goal_duration_explain),
