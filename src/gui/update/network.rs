@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// File: ./src/gui/update/network.rs
-use crate::cache::Cache;
 use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp};
-use crate::gui::update::common::{refresh_filtered_tasks, scroll_to_selected};
+use crate::gui::update::common::{
+    load_disk_calendars, load_disk_store_data, refresh_filtered_tasks, scroll_to_selected,
+};
 use crate::journal::Journal;
-use crate::model::{CalendarListEntry, Task as TodoTask};
+use crate::model::CalendarListEntry;
 use crate::storage::{
     LOCAL_CALENDAR_HREF, LOCAL_CALENDAR_NAME, LOCAL_TRASH_HREF, LocalCalendarRegistry,
 };
@@ -37,47 +37,20 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.pending_refresh_generation = app.edit_generation;
                 Task::perform(
                     async move {
-                        let mut calendars =
-                            crate::cache::Cache::load_calendars(ctx.as_ref()).unwrap_or_default();
-                        if let Ok(locals) =
-                            crate::storage::LocalCalendarRegistry::load(ctx.as_ref())
+                        // All disk I/O is blocking, so run it on the blocking pool
+                        // (same as trigger_external_reload).
+                        match tokio::task::spawn_blocking(move || {
+                            let calendars = load_disk_calendars(ctx.as_ref());
+                            let store_data = load_disk_store_data(ctx.as_ref(), &calendars);
+                            (calendars, store_data)
+                        })
+                        .await
                         {
-                            for loc in locals {
-                                if !calendars.iter().any(|c| c.href == loc.href) {
-                                    calendars.push(loc);
-                                }
-                            }
+                            Ok((calendars, store_data)) => Ok((calendars, store_data)),
+                            Err(e) => Err(format!("local load failed: {}", e)),
                         }
-
-                        let mut store_data: Vec<(String, Vec<TodoTask>)> = Vec::new();
-                        for cal in &calendars {
-                            if cal.href.starts_with("local://") {
-                                if let Ok(mut tasks) = crate::storage::LocalStorage::load_for_href(
-                                    ctx.as_ref(),
-                                    &cal.href,
-                                ) {
-                                    crate::journal::Journal::apply_to_tasks(
-                                        ctx.as_ref(),
-                                        &mut tasks,
-                                        &cal.href,
-                                    );
-                                    store_data.push((cal.href.clone(), tasks));
-                                }
-                            } else if let Ok((mut tasks, _)) =
-                                crate::cache::Cache::load(ctx.as_ref(), &cal.href)
-                            {
-                                crate::journal::Journal::apply_to_tasks(
-                                    ctx.as_ref(),
-                                    &mut tasks,
-                                    &cal.href,
-                                );
-                                store_data.push((cal.href.clone(), tasks));
-                            }
-                        }
-
-                        Ok::<_, String>((calendars, store_data))
                     },
-                    |res| Message::LocalLoaded(res.map_err(|e| e.to_string())),
+                    Message::LocalLoaded,
                 )
             }
         }
@@ -221,28 +194,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if app.edit_generation == app.pending_refresh_generation {
                 // No user edits during the network fetch: safe to replace the store
                 app.store.clear();
-
-                let mut store_data = Vec::new();
-                for cal in &app.calendars {
-                    if cal.href.starts_with("local://")
-                        && let Ok(mut local_t) =
-                            crate::storage::LocalStorage::load_for_href(app.ctx.as_ref(), &cal.href)
-                    {
-                        Journal::apply_to_tasks(app.ctx.as_ref(), &mut local_t, &cal.href);
-                        store_data.push((cal.href.clone(), local_t));
-                    }
-                }
-
-                for cal in &app.calendars {
-                    if cal.href.starts_with("local://") {
-                        continue;
-                    }
-                    if let Ok((mut cached_tasks, _)) = Cache::load(app.ctx.as_ref(), &cal.href) {
-                        Journal::apply_to_tasks(app.ctx.as_ref(), &mut cached_tasks, &cal.href);
-                        store_data.push((cal.href.clone(), cached_tasks));
-                    }
-                }
-                app.store.insert_many(store_data);
+                app.store
+                    .insert_many(load_disk_store_data(app.ctx.as_ref(), &app.calendars));
             } else {
                 // Edits happened during the fetch: skip store clear to preserve them.
                 // Remote tasks arriving via RefreshedAll will merge via sequence protection.
@@ -348,49 +301,20 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     app.pending_refresh_generation = app.edit_generation;
                     return Task::perform(
                         async move {
-                            let mut calendars = crate::cache::Cache::load_calendars(ctx.as_ref())
-                                .unwrap_or_default();
-                            if let Ok(locals) =
-                                crate::storage::LocalCalendarRegistry::load(ctx.as_ref())
+                            // All disk I/O is blocking, so run it on the blocking pool
+                            // (same as trigger_external_reload).
+                            match tokio::task::spawn_blocking(move || {
+                                let calendars = load_disk_calendars(ctx.as_ref());
+                                let store_data = load_disk_store_data(ctx.as_ref(), &calendars);
+                                (calendars, store_data)
+                            })
+                            .await
                             {
-                                for loc in locals {
-                                    if !calendars.iter().any(|c| c.href == loc.href) {
-                                        calendars.push(loc);
-                                    }
-                                }
+                                Ok((calendars, store_data)) => Ok((calendars, store_data)),
+                                Err(e) => Err(format!("local load failed: {}", e)),
                             }
-
-                            let mut store_data: Vec<(String, Vec<TodoTask>)> = Vec::new();
-                            for cal in &calendars {
-                                if cal.href.starts_with("local://") {
-                                    if let Ok(mut tasks) =
-                                        crate::storage::LocalStorage::load_for_href(
-                                            ctx.as_ref(),
-                                            &cal.href,
-                                        )
-                                    {
-                                        crate::journal::Journal::apply_to_tasks(
-                                            ctx.as_ref(),
-                                            &mut tasks,
-                                            &cal.href,
-                                        );
-                                        store_data.push((cal.href.clone(), tasks));
-                                    }
-                                } else if let Ok((mut tasks, _)) =
-                                    crate::cache::Cache::load(ctx.as_ref(), &cal.href)
-                                {
-                                    crate::journal::Journal::apply_to_tasks(
-                                        ctx.as_ref(),
-                                        &mut tasks,
-                                        &cal.href,
-                                    );
-                                    store_data.push((cal.href.clone(), tasks));
-                                }
-                            }
-
-                            Ok::<_, String>((calendars, store_data))
                         },
-                        |res| Message::LocalLoaded(res.map_err(|e| e.to_string())),
+                        Message::LocalLoaded,
                     );
                 } else {
                     app.state = AppState::Onboarding;

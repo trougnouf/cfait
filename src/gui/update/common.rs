@@ -18,10 +18,14 @@
 //!     widget Id and its layout bounds are available; they fall back to index-based
 //!     heuristics when bounds are not yet registered.
 
+use crate::cache::Cache;
 use crate::config::Config;
+use crate::context::AppContext;
 use crate::gui::message::Message;
 use crate::gui::state::GuiApp;
 use crate::gui::view::focusable::{clear_focus_bounds, get_all_focus_bounds, get_focus_bounds};
+use crate::model::CalendarListEntry;
+use crate::storage::{LocalCalendarRegistry, LocalStorage};
 
 use crate::system::SystemEvent;
 
@@ -469,6 +473,41 @@ pub fn scroll_to_selected_delayed(_app: &GuiApp, focus: bool) -> Task<Message> {
             move |_| Message::SnapToSelected { focus },
         ),
     ])
+}
+
+/// Load the calendar list from disk: cached remote calendars merged with
+/// the local calendar registry (cached entries win on duplicate hrefs).
+pub fn load_disk_calendars(ctx: &dyn AppContext) -> Vec<CalendarListEntry> {
+    let mut calendars = Cache::load_calendars(ctx).unwrap_or_default();
+    if let Ok(locals) = LocalCalendarRegistry::load(ctx) {
+        for loc in locals {
+            if !calendars.iter().any(|c| c.href == loc.href) {
+                calendars.push(loc);
+            }
+        }
+    }
+    calendars
+}
+
+/// Load tasks for the given calendars from disk — local storage for
+/// `local://` hrefs, the HTTP cache otherwise — with journal entries applied.
+pub fn load_disk_store_data(
+    ctx: &dyn AppContext,
+    calendars: &[CalendarListEntry],
+) -> Vec<(String, Vec<crate::model::Task>)> {
+    let mut store_data = Vec::with_capacity(calendars.len());
+    for cal in calendars {
+        if cal.href.starts_with("local://") {
+            if let Ok(mut tasks) = LocalStorage::load_for_href(ctx, &cal.href) {
+                crate::journal::Journal::apply_to_tasks(ctx, &mut tasks, &cal.href);
+                store_data.push((cal.href.clone(), tasks));
+            }
+        } else if let Ok((mut tasks, _)) = Cache::load(ctx, &cal.href) {
+            crate::journal::Journal::apply_to_tasks(ctx, &mut tasks, &cal.href);
+            store_data.push((cal.href.clone(), tasks));
+        }
+    }
+    store_data
 }
 
 use crate::model::AppIntent;
