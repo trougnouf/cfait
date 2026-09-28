@@ -47,6 +47,32 @@ async fn merge_results_into_store(
     s.insert_many(results.to_vec());
 }
 
+/// Fetches one calendar's tasks from the server, merges them into the actor's
+/// store and notifies the UI. Shared by the calendar-switching actions.
+async fn fetch_calendar_tasks(
+    client: &RustyClient,
+    store: &Arc<Mutex<TaskStore>>,
+    event_tx: &Sender<AppEvent>,
+    href: &str,
+) {
+    match client.get_tasks(href).await {
+        Ok(tasks) => {
+            let href_owned = href.to_string();
+            merge_results_into_store(store, &[(href_owned.clone(), tasks.clone())]).await;
+            let _ = event_tx
+                .send(AppEvent::TasksLoaded(vec![(href_owned, tasks)]))
+                .await;
+        }
+        Err(e) => {
+            let _ = event_tx
+                .send(AppEvent::Error(
+                    rust_i18n::t!("error_fetch_failed", error = e.to_string()).to_string(),
+                ))
+                .await;
+        }
+    }
+}
+
 /// Reloads the full disk state (config, calendars, tasks) on the blocking
 /// pool, replaces the actor's store, and emits the matching events. Used for
 /// offline refresh (another instance changed the files) and after
@@ -379,39 +405,11 @@ pub async fn run_network_actor(
                 match action {
                     Action::Quit => break,
 
-                    Action::SwitchCalendar(href) => match client.get_tasks(&href).await {
-                        Ok(t) => {
-                            merge_results_into_store(&store, &[(href.clone(), t.clone())]).await;
-                            let _ = event_tx.send(AppEvent::TasksLoaded(vec![(href, t)])).await;
-                        }
-                        Err(e) => {
-                            let _ = event_tx.send(AppEvent::Error(e.to_string())).await;
-                        }
-                    },
-
-                    Action::IsolateCalendar(href) => match client.get_tasks(&href).await {
-                        Ok(t) => {
-                            merge_results_into_store(&store, &[(href.clone(), t.clone())]).await;
-                            let _ = event_tx.send(AppEvent::TasksLoaded(vec![(href, t)])).await;
-                        }
-                        Err(e) => {
-                            let _ = event_tx.send(AppEvent::Error(e.to_string())).await;
-                        }
-                    },
-
-                    Action::ToggleCalendarVisibility(href) => match client.get_tasks(&href).await {
-                        Ok(t) => {
-                            merge_results_into_store(&store, &[(href.clone(), t.clone())]).await;
-                            let _ = event_tx.send(AppEvent::TasksLoaded(vec![(href, t)])).await;
-                        }
-                        Err(e) => {
-                            let _ = event_tx
-                                .send(AppEvent::Error(
-                                    rust_i18n::t!("error_fetch_failed", error = e.to_string()).to_string(),
-                                ))
-                                .await;
-                        }
-                    },
+                    Action::SwitchCalendar(href)
+                    | Action::IsolateCalendar(href)
+                    | Action::ToggleCalendarVisibility(href) => {
+                        fetch_calendar_tasks(&client, &store, &event_tx, &href).await;
+                    }
 
                     Action::PersistBatch(actions) => {
                         // To keep the network actor's store in sync, apply actions here too
@@ -430,9 +428,6 @@ pub async fn run_network_actor(
                             }
                         }
                         drop(s);
-
-                        let client_container = Arc::new(Mutex::new(Some(client.clone())));
-                        let controller = TaskController::new(store.clone(), client_container, ctx.clone());
 
                         match controller.persist_changes(actions).await {
                             Ok(_) => {
@@ -544,9 +539,6 @@ pub async fn run_network_actor(
                         let _ = event_tx
                             .send(AppEvent::CalendarsLoaded(calendars.clone()))
                             .await;
-
-                        let client_container = Arc::new(tokio::sync::Mutex::new(Some(client.clone())));
-                        let controller = TaskController::new(store.clone(), client_container, ctx.clone());
 
                         if let Ok((_warns, _synced, config_changed)) =
                             controller.sync_and_update_store().await
