@@ -141,6 +141,70 @@ fn description_for_ics(task: &Task) -> String {
     out
 }
 
+/// Insert `content` immediately before the last occurrence of `marker`
+/// (e.g. `END:VTODO`) in a serialized ICS string. Returns a copy of the
+/// input unchanged if the marker is missing.
+fn insert_before(ics: &str, marker: &str, content: &str) -> String {
+    match ics.rfind(marker) {
+        Some(idx) => {
+            let (start, end) = ics.split_at(idx);
+            let mut buffer = String::with_capacity(ics.len() + content.len());
+            buffer.push_str(start);
+            buffer.push_str(content);
+            buffer.push_str(end);
+            buffer
+        }
+        None => ics.to_string(),
+    }
+}
+
+/// Route a single RELATED-TO line into the parent/dependency/sibling
+/// buckets. RELTYPE=DEPENDS-ON goes to dependencies, RELTYPE=SIBLING to
+/// related_to, and the first untyped relation becomes the parent; later
+/// untyped ones also go to related_to (the server may strip RELTYPE).
+fn route_related_to(
+    line: &str,
+    line_upper: &str,
+    parent_uid: &mut Option<String>,
+    dependencies: &mut Vec<String>,
+    related_to: &mut Vec<String>,
+) {
+    if !line_upper.starts_with("RELATED-TO") {
+        return;
+    }
+    let Some((raw_key, val)) = line.split_once(':') else {
+        return;
+    };
+
+    let mut is_dep = false;
+    let mut is_sibling = false;
+    for param in raw_key.split(';').skip(1) {
+        let param_u = param.to_uppercase();
+        if param_u.contains("RELTYPE") {
+            if param_u.contains("DEPENDS-ON") {
+                is_dep = true;
+            } else if param_u.contains("SIBLING") {
+                is_sibling = true;
+            }
+        }
+    }
+
+    let value = val.trim().to_string();
+    if is_dep {
+        if !dependencies.contains(&value) {
+            dependencies.push(value);
+        }
+    } else if is_sibling {
+        if !related_to.contains(&value) {
+            related_to.push(value);
+        }
+    } else if parent_uid.is_none() {
+        *parent_uid = Some(value);
+    } else if !related_to.contains(&value) {
+        related_to.push(value);
+    }
+}
+
 pub struct IcsAdapter;
 
 impl IcsAdapter {
@@ -591,14 +655,7 @@ impl IcsAdapter {
                     session.start, session.end
                 ));
             }
-            if let Some(idx) = ics.rfind("END:VTODO") {
-                let (start, end) = ics.split_at(idx);
-                let mut buffer = String::with_capacity(ics.len() + session_lines.len());
-                buffer.push_str(start);
-                buffer.push_str(&session_lines);
-                buffer.push_str(end);
-                ics = buffer;
-            }
+            ics = insert_before(&ics, "END:VTODO", &session_lines);
         }
 
         if !task.categories.is_empty() {
@@ -612,51 +669,39 @@ impl IcsAdapter {
                         .replace('\r', "")
                 })
                 .collect();
-            let cat_line = format!("CATEGORIES:{}", escaped_cats.join(","));
-            if let Some(idx) = ics.rfind("END:VTODO") {
-                let (start, end) = ics.split_at(idx);
-                let mut buffer = String::with_capacity(ics.len() + cat_line.len() + 2);
-                buffer.push_str(start);
-                buffer.push_str(&cat_line);
-                buffer.push_str("\r\n");
-                buffer.push_str(end);
-                ics = buffer;
-            }
+            let cat_line = format!("CATEGORIES:{}\r\n", escaped_cats.join(","));
+            ics = insert_before(&ics, "END:VTODO", &cat_line);
         }
 
-        if !task.alarms.is_empty()
-            && let Some(idx) = ics.rfind("END:VTODO")
-        {
-            let (start, end) = ics.split_at(idx);
-            let mut buffer = String::with_capacity(ics.len() + 1024);
-            buffer.push_str(start);
+        if !task.alarms.is_empty() {
+            let mut alarm_lines = String::new();
 
             for alarm in &task.alarms {
-                buffer.push_str("BEGIN:VALARM\r\n");
+                alarm_lines.push_str("BEGIN:VALARM\r\n");
 
                 let safe_uid = alarm.uid.replace(['\n', '\r'], "");
-                buffer.push_str(&format!("UID:{}\r\n", safe_uid));
+                alarm_lines.push_str(&format!("UID:{}\r\n", safe_uid));
 
                 let safe_action = alarm.action.replace(['\n', '\r'], "");
-                buffer.push_str(&format!("ACTION:{}\r\n", safe_action));
+                alarm_lines.push_str(&format!("ACTION:{}\r\n", safe_action));
 
                 if let Some(desc) = &alarm.description {
                     let safe_desc = desc
                         .replace('\\', "\\\\")
                         .replace('\n', "\\n")
                         .replace('\r', "");
-                    buffer.push_str(&format!("DESCRIPTION:{}\r\n", safe_desc));
+                    alarm_lines.push_str(&format!("DESCRIPTION:{}\r\n", safe_desc));
                 } else {
-                    buffer.push_str("DESCRIPTION:Reminder\r\n");
+                    alarm_lines.push_str("DESCRIPTION:Reminder\r\n");
                 }
 
                 match alarm.trigger {
                     AlarmTrigger::Relative(mins) => {
                         let sign = if mins < 0 { "-" } else { "" };
-                        buffer.push_str(&format!("TRIGGER:{}PT{}M\r\n", sign, mins.abs()));
+                        alarm_lines.push_str(&format!("TRIGGER:{}PT{}M\r\n", sign, mins.abs()));
                     }
                     AlarmTrigger::Absolute(dt) => {
-                        buffer.push_str(&format!(
+                        alarm_lines.push_str(&format!(
                             "TRIGGER;VALUE=DATE-TIME:{}\r\n",
                             dt.format("%Y%m%dT%H%M%SZ")
                         ));
@@ -665,47 +710,36 @@ impl IcsAdapter {
 
                 if let Some(ack) = alarm.acknowledged {
                     let ack_str: String = ack.format("%Y%m%dT%H%M%SZ").to_string();
-                    buffer.push_str(&format!("ACKNOWLEDGED:{}\r\n", ack_str));
+                    alarm_lines.push_str(&format!("ACKNOWLEDGED:{}\r\n", ack_str));
                 }
 
                 if let Some(rel) = &alarm.related_to_uid {
                     let safe_rel = rel.replace(['\n', '\r'], "");
                     if let Some(rtype) = &alarm.relation_type {
                         let safe_rtype = rtype.replace(['\n', '\r'], "");
-                        buffer.push_str(&format!(
+                        alarm_lines.push_str(&format!(
                             "RELATED-TO;RELTYPE={}:{}\r\n",
                             safe_rtype, safe_rel
                         ));
                     } else {
-                        buffer.push_str(&format!("RELATED-TO:{}\r\n", safe_rel));
+                        alarm_lines.push_str(&format!("RELATED-TO:{}\r\n", safe_rel));
                     }
                 }
 
-                buffer.push_str("END:VALARM\r\n");
+                alarm_lines.push_str("END:VALARM\r\n");
             }
-            buffer.push_str(end);
-            ics = buffer;
+            ics = insert_before(&ics, "END:VTODO", &alarm_lines);
         }
 
         if !task.raw_components.is_empty() {
-            let extra_len: usize = task
-                .raw_components
-                .iter()
-                .map(|s: &String| s.len() + 2)
-                .sum();
-            if let Some(idx) = ics.rfind("END:VCALENDAR") {
-                let (start, end) = ics.split_at(idx);
-                let mut buffer = String::with_capacity(ics.len() + extra_len);
-                buffer.push_str(start);
-                for raw in &task.raw_components {
-                    buffer.push_str(raw);
-                    if !raw.ends_with('\n') {
-                        buffer.push_str("\r\n");
-                    }
+            let mut extra = String::new();
+            for raw in &task.raw_components {
+                extra.push_str(raw);
+                if !raw.ends_with('\n') {
+                    extra.push_str("\r\n");
                 }
-                buffer.push_str(end);
-                ics = buffer;
             }
+            ics = insert_before(&ics, "END:VCALENDAR", &extra);
         }
 
         ics
@@ -895,41 +929,13 @@ impl IcsAdapter {
 
             for line in unfolded.lines() {
                 let line_upper = line.to_uppercase();
-                if line_upper.starts_with("RELATED-TO")
-                    && let Some((raw_key, val)) = line.split_once(':')
-                {
-                    let parts: Vec<&str> = raw_key.split(';').collect();
-                    let mut is_dep = false;
-                    let mut is_sibling = false;
-
-                    for param in parts.iter().skip(1) {
-                        let param_u = param.to_uppercase();
-                        if param_u.contains("RELTYPE") {
-                            if param_u.contains("DEPENDS-ON") {
-                                is_dep = true;
-                            } else if param_u.contains("SIBLING") {
-                                is_sibling = true;
-                            }
-                        }
-                    }
-
-                    let value = val.trim().to_string();
-                    if is_dep {
-                        if !dependencies.contains(&value) {
-                            dependencies.push(value);
-                        }
-                    } else if is_sibling {
-                        if !related_to.contains(&value) {
-                            related_to.push(value);
-                        }
-                    } else {
-                        if parent_uid.is_none() {
-                            parent_uid = Some(value);
-                        } else if !related_to.contains(&value) {
-                            related_to.push(value);
-                        }
-                    }
-                }
+                route_related_to(
+                    line,
+                    &line_upper,
+                    &mut parent_uid,
+                    &mut dependencies,
+                    &mut related_to,
+                );
             }
 
             let locations = extract_prop(&unfolded, "LOCATION")
@@ -1421,44 +1427,13 @@ impl IcsAdapter {
                     continue;
                 }
                 // Case-insensitive checks
-                if line_upper.starts_with("RELATED-TO")
-                    && let Some((raw_key, val)) = line.split_once(':')
-                {
-                    let parts: Vec<&str> = raw_key.split(';').collect();
-                    let mut is_dep = false;
-                    let mut is_sibling = false;
-
-                    for param in parts.iter().skip(1) {
-                        let param_u = param.to_uppercase();
-                        if param_u.contains("RELTYPE") {
-                            if param_u.contains("DEPENDS-ON") {
-                                is_dep = true;
-                            } else if param_u.contains("SIBLING") {
-                                is_sibling = true;
-                            }
-                        }
-                    }
-
-                    let value = val.trim().to_string();
-                    if is_dep {
-                        if !dependencies.contains(&value) {
-                            dependencies.push(value);
-                        }
-                    } else if is_sibling {
-                        if !related_to.contains(&value) {
-                            related_to.push(value);
-                        }
-                    } else {
-                        // FIX: Only assign parent_uid to the first un-typed RELATED-TO.
-                        // If the server stripped RELTYPE=SIBLING from subsequent relations,
-                        // safely route them back to the siblings list.
-                        if parent_uid.is_none() {
-                            parent_uid = Some(value);
-                        } else if !related_to.contains(&value) {
-                            related_to.push(value);
-                        }
-                    }
-                }
+                route_related_to(
+                    line,
+                    &line_upper,
+                    &mut parent_uid,
+                    &mut dependencies,
+                    &mut related_to,
+                );
 
                 // Manual session parsing
                 if line_upper.starts_with("X-CFAIT-SESSION:")
@@ -1709,22 +1684,10 @@ impl IcsAdapter {
         // Returns (start_boundary, due_boundary) as AllDay dates
         fn split_fuzzy_date(dt: &DateType) -> (DateType, DateType) {
             match dt {
-                DateType::Month(y, m) => {
-                    let first_day = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
-                    // Calculate last day of month
-                    let next_m = if *m == 12 { 1 } else { *m + 1 };
-                    let next_y = if *m == 12 { *y + 1 } else { *y };
-                    let last_day = NaiveDate::from_ymd_opt(next_y, next_m, 1)
-                        .unwrap()
-                        .pred_opt()
-                        .unwrap();
-                    (DateType::AllDay(first_day), DateType::AllDay(last_day))
-                }
-                DateType::Year(y) => {
-                    let first_day = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
-                    let last_day = NaiveDate::from_ymd_opt(*y, 12, 31).unwrap();
-                    (DateType::AllDay(first_day), DateType::AllDay(last_day))
-                }
+                DateType::Month(_, _) | DateType::Year(_) => (
+                    DateType::AllDay(dt.to_date_naive()),
+                    DateType::AllDay(dt.end_date_naive()),
+                ),
                 _ => (dt.clone(), dt.clone()),
             }
         }
