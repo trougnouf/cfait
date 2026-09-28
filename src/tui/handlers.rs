@@ -11,7 +11,7 @@ and DateTime::<Utc>::from_utc(...) to construct timezone-aware values.
 use crate::config::Config;
 use crate::model::display::random_session_example;
 use crate::model::parser::{extract_inline_aliases, validate_alias_integrity};
-use crate::model::{AppIntent, CalendarListEntry, PENDING_REFRESH_ETAG, Task, TaskStatus};
+use crate::model::{AppIntent, PENDING_REFRESH_ETAG, Task, TaskStatus};
 use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_TRASH_HREF};
 use crate::system::SystemEvent;
 use crate::tui::action::{Action, AppEvent, SidebarMode};
@@ -2978,15 +2978,7 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Char('c') => {
-                let data = if let Some(parent_uid) = &state.yanked_uid {
-                    state
-                        .get_selected_task()
-                        .map(|view_task| (view_task.uid.clone(), parent_uid.clone()))
-                } else {
-                    None
-                };
-
-                if let Some((child_uid, parent_uid)) = data {
+                if let Some((child_uid, parent_uid)) = state.yank_pair() {
                     dispatch_intent_tui(
                         state,
                         AppIntent::MakeChild {
@@ -3060,36 +3052,12 @@ pub async fn handle_key_event(
             }
             KeyCode::Char('[') => {
                 if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
-                    let visible_cals = state.visible_journal_calendars();
-                    if !visible_cals.is_empty() {
-                        let current_idx = visible_cals
-                            .iter()
-                            .position(|c| Some(&c.href) == state.active_cal_href.as_ref())
-                            .unwrap_or(0);
-                        let prev_idx = if current_idx == 0 {
-                            visible_cals.len() - 1
-                        } else {
-                            current_idx - 1
-                        };
-                        state.active_cal_href = Some(visible_cals[prev_idx].href.clone());
-                        state.journal_editing_uid = None;
-                        state.refresh_filtered_view();
-                    }
+                    state.cycle_journal_calendar(false);
                 }
             }
             KeyCode::Char(']') => {
                 if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
-                    let visible_cals = state.visible_journal_calendars();
-                    if !visible_cals.is_empty() {
-                        let current_idx = visible_cals
-                            .iter()
-                            .position(|c| Some(&c.href) == state.active_cal_href.as_ref())
-                            .unwrap_or(0);
-                        let next_idx = (current_idx + 1) % visible_cals.len();
-                        state.active_cal_href = Some(visible_cals[next_idx].href.clone());
-                        state.journal_editing_uid = None;
-                        state.refresh_filtered_view();
-                    }
+                    state.cycle_journal_calendar(true);
                 }
             }
             KeyCode::Char('Y') => {
@@ -3154,15 +3122,7 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Char('b') => {
-                let data = if let Some(yanked) = &state.yanked_uid {
-                    state
-                        .get_selected_task()
-                        .map(|current| (current.uid.clone(), yanked.clone()))
-                } else {
-                    None
-                };
-
-                if let Some((curr_uid, yanked_uid)) = data {
+                if let Some((curr_uid, yanked_uid)) = state.yank_pair() {
                     if curr_uid == yanked_uid {
                         state.message = rust_i18n::t!("error_cannot_depend_on_self").to_string();
                     } else {
@@ -3185,31 +3145,20 @@ pub async fn handle_key_event(
                     state.journal_date += chrono::Duration::days(1);
                     state.journal_editing_uid = None;
                     state.refresh_filtered_view();
-                } else {
-                    let data = if let Some(yanked) = &state.yanked_uid {
-                        state
-                            .get_selected_task()
-                            .map(|current| (current.uid.clone(), yanked.clone()))
+                } else if let Some((curr_uid, yanked_uid)) = state.yank_pair() {
+                    if curr_uid == yanked_uid {
+                        state.message = rust_i18n::t!("error_cannot_relate_to_self").to_string();
                     } else {
-                        None
-                    };
-
-                    if let Some((curr_uid, yanked_uid)) = data {
-                        if curr_uid == yanked_uid {
-                            state.message =
-                                rust_i18n::t!("error_cannot_relate_to_self").to_string();
-                        } else {
-                            dispatch_intent_tui(
-                                state,
-                                AppIntent::AddRelatedTo {
-                                    uid: curr_uid,
-                                    related_uid: yanked_uid,
-                                },
-                                action_tx,
-                            );
-                            if !state.yank_lock_active {
-                                state.yanked_uid = None;
-                            }
+                        dispatch_intent_tui(
+                            state,
+                            AppIntent::AddRelatedTo {
+                                uid: curr_uid,
+                                related_uid: yanked_uid,
+                            },
+                            action_tx,
+                        );
+                        if !state.yank_lock_active {
+                            state.yanked_uid = None;
                         }
                     }
                 }
@@ -3280,18 +3229,7 @@ pub async fn handle_key_event(
                 if let Some(task) = task_opt {
                     let current_href = task.calendar_href.clone();
                     let has_subtasks = task.has_subtasks;
-                    let include_current = has_subtasks;
-                    let move_targets: Vec<CalendarListEntry> = state
-                        .calendars
-                        .iter()
-                        .filter(|c| {
-                            (include_current || c.href != current_href)
-                                && !state.disabled_calendars.contains(&c.href)
-                                && c.href != crate::storage::LOCAL_TRASH_HREF
-                                && c.href != "local://recovery"
-                        })
-                        .cloned()
-                        .collect();
+                    let move_targets = state.move_targets_for(&current_href, has_subtasks);
                     if !move_targets.is_empty() {
                         state.move_targets = move_targets;
                         state.move_selection_state.select(Some(0));
@@ -3395,16 +3333,7 @@ pub async fn handle_key_event(
                                 && let Some(item) = state.cached_categories.get(idx)
                                 && item.has_children
                             {
-                                let key = item.full_key.clone();
-                                if !state.expanded_tags.remove(&key) {
-                                    state.expanded_tags.insert(key);
-                                }
-                                state.refresh_filtered_view();
-                                if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
-                                    cfg.expanded_tags =
-                                        state.expanded_tags.iter().cloned().collect();
-                                    let _ = cfg.save(state.ctx.as_ref());
-                                }
+                                state.toggle_expanded_tag(item.full_key.clone());
                             }
                         }
                         SidebarMode::Locations => {
@@ -3437,16 +3366,7 @@ pub async fn handle_key_event(
                                         action_tx,
                                     );
                                 } else {
-                                    let key = page.key.clone();
-                                    if !state.expanded_tags.remove(&key) {
-                                        state.expanded_tags.insert(key);
-                                    }
-                                    state.refresh_filtered_view();
-                                    if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
-                                        cfg.expanded_tags =
-                                            state.expanded_tags.iter().cloned().collect();
-                                        let _ = cfg.save(state.ctx.as_ref());
-                                    }
+                                    state.toggle_expanded_tag(page.key.clone());
                                 }
                             }
                         }
@@ -3697,16 +3617,7 @@ pub async fn handle_key_event(
                                         action_tx,
                                     );
                                 } else {
-                                    let key = page.key.clone();
-                                    if !state.expanded_tags.remove(&key) {
-                                        state.expanded_tags.insert(key);
-                                    }
-                                    state.refresh_filtered_view();
-                                    if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
-                                        cfg.expanded_tags =
-                                            state.expanded_tags.iter().cloned().collect();
-                                        let _ = cfg.save(state.ctx.as_ref());
-                                    }
+                                    state.toggle_expanded_tag(page.key.clone());
                                 }
                             }
                         }
@@ -3837,17 +3748,7 @@ pub async fn handle_key_event(
                                     state.details_scroll = 0;
                                     state.refresh_filtered_view();
                                 } else {
-                                    // toggle expansion
-                                    let key = page.key.clone();
-                                    if !state.expanded_tags.remove(&key) {
-                                        state.expanded_tags.insert(key);
-                                    }
-                                    state.refresh_filtered_view();
-                                    if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
-                                        cfg.expanded_tags =
-                                            state.expanded_tags.iter().cloned().collect();
-                                        let _ = cfg.save(state.ctx.as_ref());
-                                    }
+                                    state.toggle_expanded_tag(page.key.clone());
                                 }
                             }
                         }
@@ -4091,22 +3992,8 @@ pub async fn handle_key_event(
                 state.mode = InputMode::Normal;
                 state.message = String::new();
             }
-            KeyCode::Down | KeyCode::Char('j') => {
-                let len = state.session_items.len();
-                if len > 0 {
-                    let current = state.session_selection_state.selected().unwrap_or(0);
-                    let next = if current >= len - 1 { 0 } else { current + 1 };
-                    state.session_selection_state.select(Some(next));
-                }
-            }
-            KeyCode::Up | KeyCode::Char('k') => {
-                let len = state.session_items.len();
-                if len > 0 {
-                    let current = state.session_selection_state.selected().unwrap_or(0);
-                    let prev = if current == 0 { len - 1 } else { current - 1 };
-                    state.session_selection_state.select(Some(prev));
-                }
-            }
+            KeyCode::Down | KeyCode::Char('j') => state.next_session(),
+            KeyCode::Up | KeyCode::Char('k') => state.previous_session(),
             KeyCode::Delete | KeyCode::Char('x') => {
                 if let Some(idx) = state.session_selection_state.selected()
                     && let Some(&(real_idx, _)) = state.session_items.get(idx)
@@ -4195,18 +4082,7 @@ pub async fn handle_key_event(
                 {
                     let current_href = task.calendar_href.clone();
                     let new_moving_tree = !state.moving_tree;
-                    let include_current = new_moving_tree;
-                    let move_targets: Vec<CalendarListEntry> = state
-                        .calendars
-                        .iter()
-                        .filter(|c| {
-                            (include_current || c.href != current_href)
-                                && !state.disabled_calendars.contains(&c.href)
-                                && c.href != crate::storage::LOCAL_TRASH_HREF
-                                && c.href != "local://recovery"
-                        })
-                        .cloned()
-                        .collect();
+                    let move_targets = state.move_targets_for(&current_href, new_moving_tree);
                     state.moving_tree = new_moving_tree;
                     state.move_targets = move_targets;
                     if let Some(idx) = state.move_selection_state.selected()
@@ -4330,22 +4206,8 @@ pub async fn handle_key_event(
                 state.mode = InputMode::Normal;
                 state.message = String::new();
             }
-            KeyCode::Down | KeyCode::Char('j') => {
-                let len = state.relationship_items.len();
-                if len > 0 {
-                    let current = state.relationship_selection_state.selected().unwrap_or(0);
-                    let next = if current >= len - 1 { 0 } else { current + 1 };
-                    state.relationship_selection_state.select(Some(next));
-                }
-            }
-            KeyCode::Up | KeyCode::Char('k') => {
-                let len = state.relationship_items.len();
-                if len > 0 {
-                    let current = state.relationship_selection_state.selected().unwrap_or(0);
-                    let prev = if current == 0 { len - 1 } else { current - 1 };
-                    state.relationship_selection_state.select(Some(prev));
-                }
-            }
+            KeyCode::Down | KeyCode::Char('j') => state.next_relationship(),
+            KeyCode::Up | KeyCode::Char('k') => state.previous_relationship(),
             KeyCode::Delete | KeyCode::Char('x') => {
                 if let Some(idx) = state.relationship_selection_state.selected()
                     && let Some((target_uid, _, rel_type)) = state.relationship_items.get(idx)

@@ -572,6 +572,13 @@ impl AppState {
         }
     }
 
+    /// The (selected task uid, yanked uid) pair, if both exist.
+    pub fn yank_pair(&self) -> Option<(String, String)> {
+        let yanked = self.yanked_uid.as_ref()?;
+        let selected = self.get_selected_task()?;
+        Some((selected.uid.clone(), yanked.clone()))
+    }
+
     /// Find the index of a task by UID, ignoring control items
     pub fn find_task_index_by_uid(&self, uid: &str) -> Option<usize> {
         self.tasks.iter().position(|item| {
@@ -890,6 +897,62 @@ impl AppState {
             .collect()
     }
 
+    /// Cycle the active journal calendar to the next (forward) or previous
+    /// visible one, wrapping around at the ends.
+    pub fn cycle_journal_calendar(&mut self, forward: bool) {
+        let visible = self.visible_journal_calendars();
+        if visible.is_empty() {
+            return;
+        }
+        let current_idx = visible
+            .iter()
+            .position(|c| Some(&c.href) == self.active_cal_href.as_ref())
+            .unwrap_or(0);
+        let next_idx = if forward {
+            (current_idx + 1) % visible.len()
+        } else if current_idx == 0 {
+            visible.len() - 1
+        } else {
+            current_idx - 1
+        };
+        self.active_cal_href = Some(visible[next_idx].href.clone());
+        self.journal_editing_uid = None;
+        self.refresh_filtered_view();
+    }
+
+    /// Calendars a task currently in `current_href` can be moved to. When
+    /// `include_current` is set, the current calendar is offered as well (moving
+    /// a whole tree back to its own calendar is allowed).
+    pub fn move_targets_for(
+        &self,
+        current_href: &str,
+        include_current: bool,
+    ) -> Vec<CalendarListEntry> {
+        self.calendars
+            .iter()
+            .filter(|c| {
+                (include_current || c.href != current_href)
+                    && !self.disabled_calendars.contains(&c.href)
+                    && c.href != crate::storage::LOCAL_TRASH_HREF
+                    && c.href != "local://recovery"
+            })
+            .cloned()
+            .collect()
+    }
+
+    /// Toggles `key` in the expanded-tags set, refreshes the view, and
+    /// persists the change to the config.
+    pub fn toggle_expanded_tag(&mut self, key: String) {
+        if !self.expanded_tags.remove(&key) {
+            self.expanded_tags.insert(key);
+        }
+        self.refresh_filtered_view();
+        if let Ok(mut cfg) = crate::config::Config::load(self.ctx.as_ref()) {
+            cfg.expanded_tags = self.expanded_tags.iter().cloned().collect();
+            let _ = cfg.save(self.ctx.as_ref());
+        }
+    }
+
     // --- HELPER FOR SIDEBAR LENGTH ---
     fn get_sidebar_len(&self) -> usize {
         match self.sidebar_mode {
@@ -1073,105 +1136,109 @@ impl AppState {
             Focus::Sidebar => Focus::Main,
         }
     }
-    pub fn next_move_target(&mut self) {
-        if self.move_targets.is_empty() {
+    /// Steps `selection` to the next (forward) or previous index among `len`
+    /// items, wrapping around at the ends. No-op when the list is empty.
+    fn step_selection(selection: &mut ListState, len: usize, forward: bool) {
+        if len == 0 {
             return;
         }
-        let i = match self.move_selection_state.selected() {
-            Some(i) => {
-                if i >= self.move_targets.len() - 1 {
+        let i = match selection.selected() {
+            Some(i) if forward => {
+                if i >= len - 1 {
                     0
                 } else {
                     i + 1
                 }
             }
+            Some(i) => {
+                if i == 0 {
+                    len - 1
+                } else {
+                    i - 1
+                }
+            }
             None => 0,
         };
-        self.move_selection_state.select(Some(i));
+        selection.select(Some(i));
+    }
+
+    pub fn next_move_target(&mut self) {
+        Self::step_selection(
+            &mut self.move_selection_state,
+            self.move_targets.len(),
+            true,
+        );
     }
 
     pub fn previous_move_target(&mut self) {
-        if self.move_targets.is_empty() {
-            return;
-        }
-        let i = match self.move_selection_state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.move_targets.len() - 1
-                } else {
-                    i - 1
-                }
-            }
-            None => 0,
-        };
-        self.move_selection_state.select(Some(i));
+        Self::step_selection(
+            &mut self.move_selection_state,
+            self.move_targets.len(),
+            false,
+        );
     }
     pub fn next_export_source(&mut self) {
-        if self.export_source_calendars.is_empty() {
-            return;
-        }
-        let i = match self.export_source_selection_state.selected() {
-            Some(i) => {
-                if i >= self.export_source_calendars.len() - 1 {
-                    0
-                } else {
-                    i + 1
-                }
-            }
-            None => 0,
-        };
-        self.export_source_selection_state.select(Some(i));
+        Self::step_selection(
+            &mut self.export_source_selection_state,
+            self.export_source_calendars.len(),
+            true,
+        );
     }
 
     pub fn previous_export_source(&mut self) {
-        if self.export_source_calendars.is_empty() {
-            return;
-        }
-        let i = match self.export_source_selection_state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.export_source_calendars.len() - 1
-                } else {
-                    i - 1
-                }
-            }
-            None => 0,
-        };
-        self.export_source_selection_state.select(Some(i));
+        Self::step_selection(
+            &mut self.export_source_selection_state,
+            self.export_source_calendars.len(),
+            false,
+        );
     }
 
     pub fn next_export_target(&mut self) {
-        if self.export_targets.is_empty() {
-            return;
-        }
-        let i = match self.export_selection_state.selected() {
-            Some(i) => {
-                if i >= self.export_targets.len() - 1 {
-                    0
-                } else {
-                    i + 1
-                }
-            }
-            None => 0,
-        };
-        self.export_selection_state.select(Some(i));
+        Self::step_selection(
+            &mut self.export_selection_state,
+            self.export_targets.len(),
+            true,
+        );
     }
 
     pub fn previous_export_target(&mut self) {
-        if self.export_targets.is_empty() {
-            return;
-        }
-        let i = match self.export_selection_state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.export_targets.len() - 1
-                } else {
-                    i - 1
-                }
-            }
-            None => 0,
-        };
-        self.export_selection_state.select(Some(i));
+        Self::step_selection(
+            &mut self.export_selection_state,
+            self.export_targets.len(),
+            false,
+        );
+    }
+
+    pub fn next_session(&mut self) {
+        Self::step_selection(
+            &mut self.session_selection_state,
+            self.session_items.len(),
+            true,
+        );
+    }
+
+    pub fn previous_session(&mut self) {
+        Self::step_selection(
+            &mut self.session_selection_state,
+            self.session_items.len(),
+            false,
+        );
+    }
+
+    pub fn next_relationship(&mut self) {
+        Self::step_selection(
+            &mut self.relationship_selection_state,
+            self.relationship_items.len(),
+            true,
+        );
+    }
+
+    pub fn previous_relationship(&mut self) {
+        Self::step_selection(
+            &mut self.relationship_selection_state,
+            self.relationship_items.len(),
+            false,
+        );
     }
 
     /// Sets journal_editing_uid to the journal entry UID for the current journal_date,
