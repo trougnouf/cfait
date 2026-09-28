@@ -99,7 +99,7 @@ pub enum Message {
     SubmitTask,
     SaveTaskKeepEditing,
     SaveAndSwitchEditor,
-    ToggleTask(usize, bool),
+    ToggleTask(usize),
     ToggleTaskShift(String),
     ShiftSpaceSelected,
     CompleteTree(String),

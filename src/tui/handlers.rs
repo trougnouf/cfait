@@ -1535,10 +1535,11 @@ pub async fn handle_key_event(
                 } else {
                     let lex_guard = crate::model::parser::LEXICON.read().unwrap();
                     let lower = raw_word.to_lowercase();
-                    if let Some((p_str, _, _)) = lex_guard.match_prefix(&lower) {
-                        crate::model::parser::strip_quotes(&raw_word[p_str.len()..])
-                    } else {
-                        crate::model::parser::strip_quotes(&raw_word)
+                    match lex_guard.extract_prefix(&raw_word, &lower) {
+                        Some((_, _, rem_original)) => {
+                            crate::model::parser::strip_quotes(rem_original)
+                        }
+                        None => crate::model::parser::strip_quotes(&raw_word),
                     }
                 };
 
@@ -2814,10 +2815,10 @@ pub async fn handle_key_event(
                     let mut items = Vec::new();
                     for (i, session) in sessions.iter().enumerate() {
                         let s_dt = chrono::DateTime::from_timestamp(session.start, 0)
-                            .unwrap_or_else(|| chrono::DateTime::from_timestamp(0, 0).unwrap())
+                            .unwrap_or(chrono::DateTime::UNIX_EPOCH)
                             .with_timezone(&chrono::Local);
                         let e_dt = chrono::DateTime::from_timestamp(session.end, 0)
-                            .unwrap_or_else(|| chrono::DateTime::from_timestamp(0, 0).unwrap())
+                            .unwrap_or(chrono::DateTime::UNIX_EPOCH)
                             .with_timezone(&chrono::Local);
                         let dur = (session.end - session.start) / 60;
                         let display = format!(
@@ -4017,10 +4018,10 @@ pub async fn handle_key_event(
                     && let Some(session) = task.sessions.get(real_idx)
                 {
                     let s_dt = chrono::DateTime::from_timestamp(session.start, 0)
-                        .unwrap_or_else(|| chrono::DateTime::from_timestamp(0, 0).unwrap())
+                        .unwrap_or(chrono::DateTime::UNIX_EPOCH)
                         .with_timezone(&chrono::Local);
                     let e_dt = chrono::DateTime::from_timestamp(session.end, 0)
-                        .unwrap_or_else(|| chrono::DateTime::from_timestamp(0, 0).unwrap())
+                        .unwrap_or(chrono::DateTime::UNIX_EPOCH)
                         .with_timezone(&chrono::Local);
                     let prefill = format!(
                         "{} {}-{}",

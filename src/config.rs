@@ -958,20 +958,7 @@ impl Default for Config {
             max_done_subtasks: 5,
             show_ongoing_notifications: true,
             show_priority_numbers: true,
-            pinned_actions: vec![
-                TaskAction::OpenUrl,
-                TaskAction::OpenCoordinates,
-                TaskAction::ToggleDetails,
-                TaskAction::ToggleTimer,
-                TaskAction::IncreasePriority,
-                TaskAction::DecreasePriority,
-                TaskAction::Cancel,
-                TaskAction::Edit,
-                TaskAction::EditTree,
-                TaskAction::Yank,
-                TaskAction::CreateSubtask,
-                TaskAction::Focus,
-            ],
+            pinned_actions: default_pinned_actions(),
             quick_filter_term: "is:ready".to_string(),
             quick_filter_icon: "f0fa9".to_string(),
             show_quick_filter: true,
@@ -1261,11 +1248,6 @@ impl Config {
         if msg.contains("Config file not found") || msg.contains("Config file is empty") {
             return true;
         }
-        if let Some(io_err) = err.downcast_ref::<std::io::Error>()
-            && io_err.kind() == std::io::ErrorKind::NotFound
-        {
-            return true;
-        }
         for cause in err.chain() {
             if let Some(io_err) = cause.downcast_ref::<std::io::Error>()
                 && io_err.kind() == std::io::ErrorKind::NotFound
@@ -1363,6 +1345,458 @@ impl Config {
 
     /// Post-process raw TOML string to add comments and headers.
     fn inject_documentation(raw_toml: &str) -> String {
+        // Documentation for each documented key, in file order: the
+        // section header emitted before the key (if any), a block comment
+        // emitted before the key (if any), and an inline comment emitted
+        // after the key (if any).
+        #[allow(clippy::type_complexity)]
+        const DOC: &[(&str, Option<&str>, Option<&str>, Option<&str>)] = &[
+            (
+                "data_dir =",
+                Some("\n# --- Storage ---\n"),
+                None,
+                Some(
+                    " # String (Optional): Directory for local data files. Overrides the XDG default (~/.local/share/cfait). Tilde (~) is expanded.",
+                ),
+            ),
+            (
+                "url =",
+                Some(concat!(
+                    "\n# --- Connection Settings ---\n",
+                    "# To connect to a CalDAV server (Nextcloud, Fastmail, Radicale, etc.),\n",
+                    "# fill in your `url` and `username`.\n",
+                    "#\n",
+                    "# Because passwords are not stored in plaintext, you have two options to set it:\n",
+                    "# 1. Run `cfait login <url> <username>` in your terminal.\n",
+                    "# 2. Or, temporarily add `password = \"your-password\"` below.\n",
+                    "#    Cfait will vault it into your OS Keyring on the next run and automatically remove it from this file.\n"
+                )),
+                Some(
+                    "# URL: The full address to your CalDAV server endpoint (e.g. https://cloud.example.com/remote.php/dav/).\n",
+                ),
+                None,
+            ),
+            (
+                "default_calendar =",
+                Some("\n# --- UI & Behavior ---\n"),
+                None,
+                Some(
+                    " # String: Target for new tasks. HREF or 'local://default' when local mode is enabled.",
+                ),
+            ),
+            (
+                "sort_cutoff_days =",
+                Some("\n# --- Sorting & Ranking Logic ---\n"),
+                None,
+                Some(" # Integer/None: Tasks due beyond this many days are ranked lower."),
+            ),
+            (
+                "auto_reminders =",
+                Some("\n# --- Notifications & Reminders ---\n"),
+                None,
+                Some(" # Boolean: Auto-remind on Due/Start dates if no explicit alarms exist."),
+            ),
+            (
+                "create_events_for_tasks =",
+                Some("\n# --- Calendar Integration (VEVENT Sync) ---\n"),
+                None,
+                Some(" # Boolean: Create companion VEVENTs on server for tasks with dates."),
+            ),
+            (
+                "max_done_roots =",
+                Some("\n# --- Advanced Settings ---\n"),
+                None,
+                Some(" # Integer: Limit completed root tasks shown before 'Expand' button."),
+            ),
+            (
+                "[tag_aliases]",
+                Some(concat!(
+                    "\n# --- Aliases (Global Templates) ---\n",
+                    "# Map shortcuts to sets of tags/locations/priorities.\n",
+                    "# Example: \"gardening\" = [\"#fun\", \"@@home\"]\n"
+                )),
+                None,
+                None,
+            ),
+            (
+                "[goals]",
+                Some(concat!(
+                    "\n# --- Goals & Habit Tracking ---\n",
+                    "# Set tracking goals for specific tags or locations.\n",
+                    "# Example: [goals.\"#reading\"]\n",
+                    "#          goal_type = \"count\" # or \"duration\"\n",
+                    "#          target = 5\n",
+                    "#          period = \"weekly\" # daily, weekly, monthly, yearly\n"
+                )),
+                None,
+                None,
+            ),
+            ("username =", None, None, None),
+            (
+                "tls_client_cert_path =",
+                None,
+                None,
+                Some(" # String (Optional): Path to PEM-encoded client certificate for mTLS."),
+            ),
+            (
+                "tls_client_key_path =",
+                None,
+                None,
+                Some(" # String (Optional): Path to PEM-encoded private key for mTLS."),
+            ),
+            (
+                "allow_insecure_certs =",
+                None,
+                None,
+                Some(" # Boolean: Set true to bypass SSL verification (e.g. self-signed certs)."),
+            ),
+            (
+                "sync_settings =",
+                None,
+                None,
+                Some(
+                    " # Boolean: If true, sync settings and aliases as a hidden task on the server.",
+                ),
+            ),
+            (
+                "disabled_calendars =",
+                None,
+                Some("# List of calendar HREFs (strings) to completely disable/ignore.\n"),
+                None,
+            ),
+            (
+                "enable_local_mode =",
+                None,
+                None,
+                Some(
+                    " # Boolean: If false, TUI local/offline calendars are hidden and new tasks target remote calendars only.",
+                ),
+            ),
+            (
+                "hide_completed =",
+                None,
+                None,
+                Some(" # Boolean: If true, Completed/Cancelled tasks are hidden globally."),
+            ),
+            (
+                "strikethrough_completed =",
+                None,
+                None,
+                Some(" # Boolean: Apply strikethrough styling to completed task titles."),
+            ),
+            (
+                "hide_fully_completed_tags =",
+                None,
+                None,
+                Some(" # Boolean: Hide tags in sidebar if all their tasks are completed."),
+            ),
+            (
+                "hide_aliases_in_sidebar =",
+                None,
+                None,
+                Some(
+                    " # Boolean: Hide shorthand aliases from the sidebar (showing only their targets).",
+                ),
+            ),
+            (
+                "show_inline_descriptions =",
+                None,
+                None,
+                Some(" # Boolean: Previews up to 3 lines of the description in the list."),
+            ),
+            (
+                "ui_scale =",
+                None,
+                None,
+                Some(" # Float: Global UI scale factor (0.5–3.0). Ctrl+/Ctrl-/scroll to change."),
+            ),
+            (
+                "theme =",
+                None,
+                None,
+                Some(
+                    " # String: App Theme (RustyDark, Light, Dark, etc). In the TUI, light themes adapt text contrast for light terminal backgrounds.",
+                ),
+            ),
+            (
+                "sort_standard_by_priority =",
+                None,
+                None,
+                Some(" # Boolean: If true, regular tasks sort by priority first, then by date."),
+            ),
+            (
+                "paused_sort_behavior =",
+                None,
+                None,
+                Some(" # Enum: Paused tasks behavior (Tiebreak, Top, None)."),
+            ),
+            (
+                "sort_tiebreak_recent =",
+                None,
+                None,
+                Some(
+                    " # Boolean: If true, ties in sorting are broken by recently modified rather than alphabetical.",
+                ),
+            ),
+            (
+                "sort_preset =",
+                None,
+                None,
+                Some(
+                    " # Enum: Order of urgent buckets (UrgentStartedDue, UrgentDueStarted, StartedUrgentDue).",
+                ),
+            ),
+            (
+                "urgent_days_horizon =",
+                None,
+                None,
+                Some(" # Integer: Tasks due within this many days are considered 'Urgent'."),
+            ),
+            (
+                "urgent_priority_threshold =",
+                None,
+                None,
+                Some(" # Integer (1-9): Priorities <= this value are 'Urgent'. (1=High)"),
+            ),
+            (
+                "default_priority =",
+                None,
+                None,
+                Some(" # Integer (1-9): Default priority for new tasks. 0 maps to this."),
+            ),
+            (
+                "start_grace_period_days =",
+                None,
+                None,
+                Some(" # Integer: Future tasks appear in the list this many days before start."),
+            ),
+            (
+                "default_reminder_time =",
+                None,
+                None,
+                Some(" # String (HH:MM): Default time for date-only auto-reminders."),
+            ),
+            (
+                "snooze_short_mins =",
+                None,
+                None,
+                Some(" # Integer: Minutes for the 'Short Snooze' button."),
+            ),
+            (
+                "snooze_long_mins =",
+                None,
+                None,
+                Some(" # Integer: Minutes for the 'Long Snooze' button."),
+            ),
+            (
+                "auto_refresh_interval_mins =",
+                None,
+                None,
+                Some(" # Integer: Background sync interval in minutes. 0 to disable."),
+            ),
+            (
+                "delete_events_on_completion =",
+                None,
+                None,
+                Some(" # Boolean: Remove the companion VEVENT when task is completed."),
+            ),
+            (
+                "max_done_subtasks =",
+                None,
+                None,
+                Some(" # Integer: Limit completed subtasks shown in a parent before 'Expand'."),
+            ),
+            (
+                "show_ongoing_notifications =",
+                None,
+                None,
+                Some(" # Boolean: Display ongoing timer notification for active tasks."),
+            ),
+            (
+                "quick_filter_term =",
+                None,
+                None,
+                Some(" # String: The search term toggled by the quick filter button."),
+            ),
+            (
+                "quick_filter_icon =",
+                None,
+                None,
+                Some(" # String: Hex code or character for the quick filter button icon."),
+            ),
+            (
+                "show_quick_filter =",
+                None,
+                None,
+                Some(" # Boolean: Display the quick filter button in the search bar."),
+            ),
+            (
+                "show_calendars_tab =",
+                None,
+                None,
+                Some(" # Boolean: Display the Calendars tab in the sidebar."),
+            ),
+            (
+                "show_tags_tab =",
+                None,
+                None,
+                Some(" # Boolean: Display the Tags tab in the sidebar."),
+            ),
+            (
+                "show_locations_tab =",
+                None,
+                None,
+                Some(" # Boolean: Display the Locations tab in the sidebar."),
+            ),
+            (
+                "show_goals_tab =",
+                None,
+                None,
+                Some(" # Boolean: Display the Goals tab in the sidebar."),
+            ),
+            (
+                "show_journal_tab =",
+                None,
+                None,
+                Some(" # Boolean: Display the Journal tab in the sidebar."),
+            ),
+            (
+                "show_task_goals_in_sidebar =",
+                None,
+                None,
+                Some(" # Boolean: Display task-specific goals alongside global goals."),
+            ),
+            (
+                "sidebar_is_hidden =",
+                None,
+                None,
+                Some(" # Boolean: Hide the left sidebar collections panel."),
+            ),
+            (
+                "blur_when_unfocused =",
+                None,
+                None,
+                Some(" # Boolean: Hide contents when window is unfocused (Privacy mode)."),
+            ),
+            (
+                "description_editor =",
+                None,
+                None,
+                Some(
+                    " # String: Editor for task descriptions. Empty uses $VISUAL/$EDITOR. 'builtin' forces internal editor.",
+                ),
+            ),
+            (
+                "show_priority_numbers =",
+                None,
+                None,
+                Some(" # Boolean: Render priority numbers (!X) visually next to tags."),
+            ),
+            (
+                "show_undo_snackbar =",
+                None,
+                None,
+                Some(
+                    " # Boolean: Show the transient undo notification after task mutations (Android).",
+                ),
+            ),
+            (
+                "first_day_of_week =",
+                None,
+                None,
+                Some(
+                    " # Enum: First day of the week for calendar/journal views (Monday or Sunday).",
+                ),
+            ),
+            (
+                "pinned_actions =",
+                None,
+                None,
+                Some(
+                    " # Array: Action buttons pinned directly to GUI task rows (e.g. Start, Done, Move).",
+                ),
+            ),
+            (
+                "collection_order =",
+                None,
+                None,
+                Some(
+                    " # Array of HREFs defining the custom display order of collections in the sidebar.",
+                ),
+            ),
+            (
+                "hidden_calendars =",
+                None,
+                Some("# List of calendar HREFs currently toggled 'off' in the sidebar.\n"),
+                None,
+            ),
+            (
+                "sort_collections_by_size =",
+                None,
+                None,
+                Some(" # Boolean: Automatically sort collections from most to least tasks."),
+            ),
+            (
+                "expanded_tags =",
+                None,
+                Some(concat!(
+                    "\n# --- UI Memory State ---\n",
+                    "# Arrays remembering which tree folders are currently expanded.\n"
+                )),
+                None,
+            ),
+            (
+                "trash_retention_days =",
+                None,
+                None,
+                Some(
+                    " # Integer: Days to keep deleted items in local trash before permanent delete. 0 disables trash.",
+                ),
+            ),
+            (
+                "default_duration_goal_mins =",
+                None,
+                None,
+                Some(
+                    " # Integer: Implicit duration added to goals when completing a task without a timer.",
+                ),
+            ),
+            (
+                "sessions_count_as_completions =",
+                None,
+                None,
+                Some(
+                    " # Boolean: If true, logging a time session counts as a completion for 'Count' goals.",
+                ),
+            ),
+            (
+                "log_level =",
+                None,
+                None,
+                Some(
+                    " # String: Logging verbosity level (Error, Warn, Info, Debug, Trace). Applies to both log file and terminal.",
+                ),
+            ),
+            (
+                "window_width =",
+                None,
+                None,
+                Some(" # Float: Last window width (GUI)."),
+            ),
+            (
+                "window_height =",
+                None,
+                None,
+                Some(" # Float: Last window height (GUI)."),
+            ),
+            (
+                "config_version =",
+                None,
+                Some("# Internal version for configuration migrations. Do not edit manually.\n"),
+                None,
+            ),
+        ];
+
         let mut out = String::with_capacity(raw_toml.len() + 2048);
 
         // Header Comment
@@ -1370,271 +1804,20 @@ impl Config {
 
         for line in raw_toml.lines() {
             let trimmed = line.trim();
-
-            // -- Section Headers --
-            if trimmed.starts_with("data_dir =") {
-                out.push_str("\n# --- Storage ---\n");
-            } else if trimmed.starts_with("url =") {
-                out.push_str("\n# --- Connection Settings ---\n");
-                out.push_str(
-                    "# To connect to a CalDAV server (Nextcloud, Fastmail, Radicale, etc.),\n",
-                );
-                out.push_str("# fill in your `url` and `username`.\n");
-                out.push_str("#\n");
-                out.push_str("# Because passwords are not stored in plaintext, you have two options to set it:\n");
-                out.push_str("# 1. Run `cfait login <url> <username>` in your terminal.\n");
-                out.push_str("# 2. Or, temporarily add `password = \"your-password\"` below.\n");
-                out.push_str("#    Cfait will vault it into your OS Keyring on the next run and automatically remove it from this file.\n");
-            } else if trimmed.starts_with("default_calendar =") {
-                out.push_str("\n# --- UI & Behavior ---\n");
-            } else if trimmed.starts_with("sort_cutoff_days =") {
-                out.push_str("\n# --- Sorting & Ranking Logic ---\n");
-            } else if trimmed.starts_with("auto_reminders =") {
-                out.push_str("\n# --- Notifications & Reminders ---\n");
-            } else if trimmed.starts_with("create_events_for_tasks =") {
-                out.push_str("\n# --- Calendar Integration (VEVENT Sync) ---\n");
-            } else if trimmed.starts_with("max_done_roots =") {
-                out.push_str("\n# --- Advanced Settings ---\n");
-            } else if trimmed.starts_with("[tag_aliases]") {
-                out.push_str("\n# --- Aliases (Global Templates) ---\n");
-                out.push_str("# Map shortcuts to sets of tags/locations/priorities.\n");
-                out.push_str("# Example: \"gardening\" = [\"#fun\", \"@@home\"]\n");
-            } else if trimmed.starts_with("[goals]") {
-                out.push_str("\n# --- Goals & Habit Tracking ---\n");
-                out.push_str("# Set tracking goals for specific tags or locations.\n");
-                out.push_str("# Example: [goals.\"#reading\"]\n");
-                out.push_str("#          goal_type = \"count\" # or \"duration\"\n");
-                out.push_str("#          target = 5\n");
-                out.push_str("#          period = \"weekly\" # daily, weekly, monthly, yearly\n");
-            }
-
-            // -- Inline or Block Comments for specific keys --
-
-            if trimmed.starts_with("data_dir =") {
+            if let Some((_, section, pre, post)) = DOC
+                .iter()
+                .find(|(prefix, _, _, _)| trimmed.starts_with(prefix))
+            {
+                if let Some(section) = section {
+                    out.push_str(section);
+                }
+                if let Some(pre) = pre {
+                    out.push_str(pre);
+                }
                 out.push_str(line);
-                out.push_str(
-                    " # String (Optional): Directory for local data files. Overrides the XDG default (~/.local/share/cfait). Tilde (~) is expanded.",
-                );
-            } else if trimmed.starts_with("url =") {
-                out.push_str("# URL: The full address to your CalDAV server endpoint (e.g. https://cloud.example.com/remote.php/dav/).\n");
-                out.push_str(line);
-            } else if trimmed.starts_with("username =") {
-                out.push_str(line);
-            } else if trimmed.starts_with("tls_client_cert_path =") {
-                out.push_str(line);
-                out.push_str(
-                    " # String (Optional): Path to PEM-encoded client certificate for mTLS.",
-                );
-            } else if trimmed.starts_with("tls_client_key_path =") {
-                out.push_str(line);
-                out.push_str(" # String (Optional): Path to PEM-encoded private key for mTLS.");
-            } else if trimmed.starts_with("allow_insecure_certs =") {
-                out.push_str(line);
-                out.push_str(
-                    " # Boolean: Set true to bypass SSL verification (e.g. self-signed certs).",
-                );
-            } else if trimmed.starts_with("sync_settings =") {
-                out.push_str(line);
-                out.push_str(
-                    " # Boolean: If true, sync settings and aliases as a hidden task on the server.",
-                );
-            } else if trimmed.starts_with("disabled_calendars =") {
-                out.push_str("# List of calendar HREFs (strings) to completely disable/ignore.\n");
-                out.push_str(line);
-            } else if trimmed.starts_with("default_calendar =") {
-                out.push_str(line);
-                out.push_str(
-                    " # String: Target for new tasks. HREF or 'local://default' when local mode is enabled.",
-                );
-            } else if trimmed.starts_with("enable_local_mode =") {
-                out.push_str(line);
-                out.push_str(
-                    " # Boolean: If false, TUI local/offline calendars are hidden and new tasks target remote calendars only.",
-                );
-            } else if trimmed.starts_with("hide_completed =") {
-                out.push_str(line);
-                out.push_str(" # Boolean: If true, Completed/Cancelled tasks are hidden globally.");
-            } else if trimmed.starts_with("strikethrough_completed =") {
-                out.push_str(line);
-                out.push_str(" # Boolean: Apply strikethrough styling to completed task titles.");
-            } else if trimmed.starts_with("hide_fully_completed_tags =") {
-                out.push_str(line);
-                out.push_str(" # Boolean: Hide tags in sidebar if all their tasks are completed.");
-            } else if trimmed.starts_with("hide_aliases_in_sidebar =") {
-                out.push_str(line);
-                out.push_str(" # Boolean: Hide shorthand aliases from the sidebar (showing only their targets).");
-            } else if trimmed.starts_with("show_inline_descriptions =") {
-                out.push_str(line);
-                out.push_str(" # Boolean: Previews up to 3 lines of the description in the list.");
-            } else if trimmed.starts_with("ui_scale =") {
-                out.push_str(line);
-                out.push_str(
-                    " # Float: Global UI scale factor (0.5–3.0). Ctrl+/Ctrl-/scroll to change.",
-                );
-            } else if trimmed.starts_with("theme =") {
-                out.push_str(line);
-                out.push_str(" # String: App Theme (RustyDark, Light, Dark, etc). In the TUI, light themes adapt text contrast for light terminal backgrounds.");
-            } else if trimmed.starts_with("sort_cutoff_days =") {
-                out.push_str(line);
-                out.push_str(" # Integer/None: Tasks due beyond this many days are ranked lower.");
-            } else if trimmed.starts_with("sort_standard_by_priority =") {
-                out.push_str(line);
-                out.push_str(
-                    " # Boolean: If true, regular tasks sort by priority first, then by date.",
-                );
-            } else if trimmed.starts_with("paused_sort_behavior =") {
-                out.push_str(line);
-                out.push_str(" # Enum: Paused tasks behavior (Tiebreak, Top, None).");
-            } else if trimmed.starts_with("sort_tiebreak_recent =") {
-                out.push_str(line);
-                out.push_str(
-                    " # Boolean: If true, ties in sorting are broken by recently modified rather than alphabetical.",
-                );
-            } else if trimmed.starts_with("sort_preset =") {
-                out.push_str(line);
-                out.push_str(" # Enum: Order of urgent buckets (UrgentStartedDue, UrgentDueStarted, StartedUrgentDue).");
-            } else if trimmed.starts_with("urgent_days_horizon =") {
-                out.push_str(line);
-                out.push_str(
-                    " # Integer: Tasks due within this many days are considered 'Urgent'.",
-                );
-            } else if trimmed.starts_with("urgent_priority_threshold =") {
-                out.push_str(line);
-                out.push_str(" # Integer (1-9): Priorities <= this value are 'Urgent'. (1=High)");
-            } else if trimmed.starts_with("default_priority =") {
-                out.push_str(line);
-                out.push_str(" # Integer (1-9): Default priority for new tasks. 0 maps to this.");
-            } else if trimmed.starts_with("start_grace_period_days =") {
-                out.push_str(line);
-                out.push_str(
-                    " # Integer: Future tasks appear in the list this many days before start.",
-                );
-            } else if trimmed.starts_with("auto_reminders =") {
-                out.push_str(line);
-                out.push_str(
-                    " # Boolean: Auto-remind on Due/Start dates if no explicit alarms exist.",
-                );
-            } else if trimmed.starts_with("default_reminder_time =") {
-                out.push_str(line);
-                out.push_str(" # String (HH:MM): Default time for date-only auto-reminders.");
-            } else if trimmed.starts_with("snooze_short_mins =") {
-                out.push_str(line);
-                out.push_str(" # Integer: Minutes for the 'Short Snooze' button.");
-            } else if trimmed.starts_with("snooze_long_mins =") {
-                out.push_str(line);
-                out.push_str(" # Integer: Minutes for the 'Long Snooze' button.");
-            } else if trimmed.starts_with("auto_refresh_interval_mins =") {
-                out.push_str(line);
-                out.push_str(" # Integer: Background sync interval in minutes. 0 to disable.");
-            } else if trimmed.starts_with("create_events_for_tasks =") {
-                out.push_str(line);
-                out.push_str(
-                    " # Boolean: Create companion VEVENTs on server for tasks with dates.",
-                );
-            } else if trimmed.starts_with("delete_events_on_completion =") {
-                out.push_str(line);
-                out.push_str(" # Boolean: Remove the companion VEVENT when task is completed.");
-            } else if trimmed.starts_with("max_done_roots =") {
-                out.push_str(line);
-                out.push_str(
-                    " # Integer: Limit completed root tasks shown before 'Expand' button.",
-                );
-            } else if trimmed.starts_with("max_done_subtasks =") {
-                out.push_str(line);
-                out.push_str(
-                    " # Integer: Limit completed subtasks shown in a parent before 'Expand'.",
-                );
-            } else if trimmed.starts_with("show_ongoing_notifications =") {
-                out.push_str(line);
-                out.push_str(" # Boolean: Display ongoing timer notification for active tasks.");
-            } else if trimmed.starts_with("quick_filter_term =") {
-                out.push_str(line);
-                out.push_str(" # String: The search term toggled by the quick filter button.");
-            } else if trimmed.starts_with("quick_filter_icon =") {
-                out.push_str(line);
-                out.push_str(" # String: Hex code or character for the quick filter button icon.");
-            } else if trimmed.starts_with("show_quick_filter =") {
-                out.push_str(line);
-                out.push_str(" # Boolean: Display the quick filter button in the search bar.");
-            } else if trimmed.starts_with("show_calendars_tab =") {
-                out.push_str(line);
-                out.push_str(" # Boolean: Display the Calendars tab in the sidebar.");
-            } else if trimmed.starts_with("show_tags_tab =") {
-                out.push_str(line);
-                out.push_str(" # Boolean: Display the Tags tab in the sidebar.");
-            } else if trimmed.starts_with("show_locations_tab =") {
-                out.push_str(line);
-                out.push_str(" # Boolean: Display the Locations tab in the sidebar.");
-            } else if trimmed.starts_with("show_goals_tab =") {
-                out.push_str(line);
-                out.push_str(" # Boolean: Display the Goals tab in the sidebar.");
-            } else if trimmed.starts_with("show_journal_tab =") {
-                out.push_str(line);
-                out.push_str(" # Boolean: Display the Journal tab in the sidebar.");
-            } else if trimmed.starts_with("show_task_goals_in_sidebar =") {
-                out.push_str(line);
-                out.push_str(" # Boolean: Display task-specific goals alongside global goals.");
-            } else if trimmed.starts_with("sidebar_is_hidden =") {
-                out.push_str(line);
-                out.push_str(" # Boolean: Hide the left sidebar collections panel.");
-            } else if trimmed.starts_with("blur_when_unfocused =") {
-                out.push_str(line);
-                out.push_str(" # Boolean: Hide contents when window is unfocused (Privacy mode).");
-            } else if trimmed.starts_with("description_editor =") {
-                out.push_str(line);
-                out.push_str(" # String: Editor for task descriptions. Empty uses $VISUAL/$EDITOR. 'builtin' forces internal editor.");
-            } else if trimmed.starts_with("show_priority_numbers =") {
-                out.push_str(line);
-                out.push_str(" # Boolean: Render priority numbers (!X) visually next to tags.");
-            } else if trimmed.starts_with("show_undo_snackbar =") {
-                out.push_str(line);
-                out.push_str(" # Boolean: Show the transient undo notification after task mutations (Android).");
-            } else if trimmed.starts_with("first_day_of_week =") {
-                out.push_str(line);
-                out.push_str(
-                    " # Enum: First day of the week for calendar/journal views (Monday or Sunday).",
-                );
-            } else if trimmed.starts_with("pinned_actions =") {
-                out.push_str(line);
-                out.push_str(" # Array: Action buttons pinned directly to GUI task rows (e.g. Start, Done, Move).");
-            } else if trimmed.starts_with("collection_order =") {
-                out.push_str(line);
-                out.push_str(" # Array of HREFs defining the custom display order of collections in the sidebar.");
-            } else if trimmed.starts_with("hidden_calendars =") {
-                out.push_str("# List of calendar HREFs currently toggled 'off' in the sidebar.\n");
-                out.push_str(line);
-            } else if trimmed.starts_with("sort_collections_by_size =") {
-                out.push_str(line);
-                out.push_str(
-                    " # Boolean: Automatically sort collections from most to least tasks.",
-                );
-            } else if trimmed.starts_with("expanded_tags =") {
-                out.push_str("\n# --- UI Memory State ---\n");
-                out.push_str("# Arrays remembering which tree folders are currently expanded.\n");
-                out.push_str(line);
-            } else if trimmed.starts_with("trash_retention_days =") {
-                out.push_str(line);
-                out.push_str(" # Integer: Days to keep deleted items in local trash before permanent delete. 0 disables trash.");
-            } else if trimmed.starts_with("default_duration_goal_mins =") {
-                out.push_str(line);
-                out.push_str(" # Integer: Implicit duration added to goals when completing a task without a timer.");
-            } else if trimmed.starts_with("sessions_count_as_completions =") {
-                out.push_str(line);
-                out.push_str(" # Boolean: If true, logging a time session counts as a completion for 'Count' goals.");
-            } else if trimmed.starts_with("log_level =") {
-                out.push_str(line);
-                out.push_str(" # String: Logging verbosity level (Error, Warn, Info, Debug, Trace). Applies to both log file and terminal.");
-            } else if trimmed.starts_with("window_width =") {
-                out.push_str(line);
-                out.push_str(" # Float: Last window width (GUI).");
-            } else if trimmed.starts_with("window_height =") {
-                out.push_str(line);
-                out.push_str(" # Float: Last window height (GUI).");
-            } else if trimmed.starts_with("config_version =") {
-                out.push_str(
-                    "# Internal version for configuration migrations. Do not edit manually.",
-                );
-                out.push_str(line);
+                if let Some(post) = post {
+                    out.push_str(post);
+                }
             } else {
                 // Pass through unhandled lines
                 out.push_str(line);

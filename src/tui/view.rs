@@ -1773,10 +1773,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 let mut session_lines: Vec<String> = Vec::new();
                 for session in task.sessions.iter().rev().take(3) {
                     let s_dt = chrono::DateTime::from_timestamp(session.start, 0)
-                        .unwrap_or_else(|| chrono::DateTime::from_timestamp(0, 0).unwrap())
+                        .unwrap_or(chrono::DateTime::UNIX_EPOCH)
                         .with_timezone(&chrono::Local);
                     let e_dt = chrono::DateTime::from_timestamp(session.end, 0)
-                        .unwrap_or_else(|| chrono::DateTime::from_timestamp(0, 0).unwrap())
+                        .unwrap_or(chrono::DateTime::UNIX_EPOCH)
                         .with_timezone(&chrono::Local);
                     let dur = (session.end - session.start) / 60;
                     session_lines.push(format!(

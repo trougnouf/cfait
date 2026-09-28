@@ -3494,7 +3494,7 @@ impl TaskStore {
         }
 
         // Parse the search query once; run_pipeline is invoked up to 3 times below.
-        let query = crate::model::matcher::Query::new(options.search_term);
+        let query = crate::model::matcher::Query::new(options.search_term, lex);
 
         // The text-search result for a task is independent of the category/location
         // ignore flags, so compute it once per task and let every pipeline pass reuse
@@ -3503,7 +3503,7 @@ impl TaskStore {
         let search_ok: HashMap<&str, bool> = if search_active {
             all_allowed_refs
                 .iter()
-                .map(|t| (t.uid.as_str(), query.matches(t, lex, self)))
+                .map(|t| (t.uid.as_str(), query.matches(t, self)))
                 .collect()
         } else {
             HashMap::new()

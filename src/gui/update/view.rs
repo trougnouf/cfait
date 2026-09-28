@@ -766,10 +766,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 if task.is_note {
                     return Task::none();
                 }
-                return crate::gui::update::tasks::handle(
-                    app,
-                    Message::ToggleTask(idx, !task.status.is_done()),
-                );
+                return crate::gui::update::tasks::handle(app, Message::ToggleTask(idx));
             }
             Task::none()
         }

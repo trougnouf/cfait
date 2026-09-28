@@ -12,15 +12,72 @@
 //   (A | B) C -> (A OR B) AND C
 //   "foo bar" -> Exact phrase match
 //
-// The evaluation delegates to `matches_primitive` which handles specific filters
-// (e.g. #tag, @date, is:done) and substring matching.
+// Each term is compiled once against the lexicon in `Query::new`; evaluation
+// then handles specific filters (e.g. #tag, @date, is:done) and substring matching.
 
 use crate::model::item::{Task, TaskStatus};
 use chrono::NaiveDate;
 
+/// A search term compiled once at query-parse time, so per-task matching never
+/// re-lowercases it or re-scans it against the lexicon.
+#[derive(Debug, Clone)]
+struct CompiledTerm {
+    /// Lowercased, unquoted term; used for the text fallback and for
+    /// fall-through when a typed filter fails to parse.
+    lower: String,
+    /// Location filter (`@@loc` or `loc:loc`).
+    loc_query: Option<String>,
+    /// Duration filter (`~30m`, `~<1h`); a `None` target means the value
+    /// failed to parse and the term falls through to text search.
+    duration: Option<(Op, Option<u32>)>,
+    /// Priority filter (`!1`, `!<3`).
+    priority: Option<(Op, u8)>,
+    /// Start date filter (`^monday`, `start:monday`); a `None` date means the
+    /// value failed to parse and the term falls through.
+    start: Option<(Op, Option<NaiveDate>, bool)>,
+    /// Due date filter (`@tomorrow`, `due:tomorrow`).
+    due: Option<(Op, Option<NaiveDate>, bool)>,
+    /// Tag filter (`#tag`).
+    tag_query: Option<String>,
+    /// Status filter (`is:done`, ...).
+    status: Option<StatusFilter>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Op {
+    Lt,
+    Gt,
+    Le,
+    Ge,
+    Eq,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StatusFilter {
+    Done,
+    InProcess,
+    Active,
+    Ready,
+    Note,
+    Page,
+    Permanent,
+    Canceled,
+    Pinned,
+}
+
+/// Raw (uncompiled) syntax tree produced by the parser.
+#[derive(Debug, Clone)]
+enum RawExpr {
+    Term(String),
+    And(Box<RawExpr>, Box<RawExpr>),
+    Or(Box<RawExpr>, Box<RawExpr>),
+    Not(Box<RawExpr>),
+}
+
+/// Compiled syntax tree evaluated against tasks.
 #[derive(Debug, Clone)]
 enum SearchExpr {
-    Term(String),
+    Term(CompiledTerm),
     And(Box<SearchExpr>, Box<SearchExpr>),
     Or(Box<SearchExpr>, Box<SearchExpr>),
     Not(Box<SearchExpr>),
@@ -53,8 +110,8 @@ pub fn extract_highlight_terms(query: &str) -> Vec<String> {
             }
 
             let mut clean_term = s.as_str();
-            if let Some((pref, _, _)) = lex_guard.match_prefix(&lower) {
-                clean_term = &s[pref.len()..];
+            if let Some((_, _, rem_original)) = lex_guard.extract_prefix(&s, &lower) {
+                clean_term = rem_original;
             } else if let Some(stripped) = s.strip_prefix('#') {
                 clean_term = stripped;
             } else if let Some(stripped) = s.strip_prefix("@@") {
@@ -77,42 +134,26 @@ pub fn extract_highlight_terms(query: &str) -> Vec<String> {
 }
 
 impl Query {
-    pub fn new(query: &str) -> Self {
+    pub fn new(query: &str, lex: &crate::model::parser::ParserLexicon) -> Self {
         let tokens = tokenize_query(query);
         let mut parser = Parser::new(tokens);
         Self {
-            expr: parser.parse(),
+            expr: compile_expr(parser.parse(), lex),
         }
     }
 
-    pub fn matches(
-        &self,
-        task: &Task,
-        lex: &crate::model::parser::ParserLexicon,
-        store: &crate::store::TaskStore,
-    ) -> bool {
-        self.expr.matches(task, lex, store)
+    pub fn matches(&self, task: &Task, store: &crate::store::TaskStore) -> bool {
+        self.expr.matches(task, store)
     }
 }
 
 impl SearchExpr {
-    fn matches(
-        &self,
-        task: &Task,
-        lex: &crate::model::parser::ParserLexicon,
-        store: &crate::store::TaskStore,
-    ) -> bool {
+    fn matches(&self, task: &Task, store: &crate::store::TaskStore) -> bool {
         match self {
-            SearchExpr::Term(s) => {
-                if s.is_empty() {
-                    true
-                } else {
-                    task.matches_primitive(s, lex, store)
-                }
-            }
-            SearchExpr::And(a, b) => a.matches(task, lex, store) && b.matches(task, lex, store),
-            SearchExpr::Or(a, b) => a.matches(task, lex, store) || b.matches(task, lex, store),
-            SearchExpr::Not(a) => !a.matches(task, lex, store),
+            SearchExpr::Term(t) => t.match_task(task, store),
+            SearchExpr::And(a, b) => a.matches(task, store) && b.matches(task, store),
+            SearchExpr::Or(a, b) => a.matches(task, store) || b.matches(task, store),
+            SearchExpr::Not(a) => !a.matches(task, store),
         }
     }
 }
@@ -150,37 +191,17 @@ fn tokenize_query(input: &str) -> Vec<Token> {
                 chars.next();
             }
             '-' => {
-                // Check if it's a negative number (e.g. !-1, or text like rem:-10m) or a NOT operator.
-                // Heuristic: If followed by a space or another operator, treat as text "-" or implicit term.
-                // But generally, `-` at the start of a term is NOT.
-                // We peek next.
+                // A `-` at the start of a token is the NOT operator when attached to
+                // what follows ("-A", "-5", "-("); a bare "-" (before whitespace, a
+                // closing paren, a pipe, or end of input) is literal text.
                 chars.next(); // Consume '-'
                 if let Some(&next_c) = chars.peek() {
-                    if next_c.is_whitespace() || next_c == '(' || next_c == ')' || next_c == '|' {
-                        // " - " or "-(" -> Treat as text "-" (which might be ignored or matched)
-                        // Actually, standard search engines treat "- (" as NOT ( ... ).
-                        // But for simplicity, we enforce attached NOT: "-term".
-                        // Wait, "-(" should be NotPrefix, LParen.
-                        if next_c == '(' {
-                            tokens.push(Token::NotPrefix);
-                        } else {
-                            tokens.push(Token::Text("-".to_string()));
-                        }
+                    if next_c.is_whitespace() || next_c == ')' || next_c == '|' {
+                        tokens.push(Token::Text("-".to_string()));
                     } else {
-                        // Attached to something, e.g. "-A" or "-5".
-                        // We treat it as NOT operator.
-                        // Exception: if it looks like part of a range or negative number inside a filter?
-                        // E.g. "!-1" (Priority -1).
-                        // Our tokenizer splits operators. So "!-1" is '!' then '-' then '1'?
-                        // No, the catch-all `_` block handles text including punctuation.
-                        // So `!-1` starts with `!`, goes to `_` block, consumes `-`.
-                        // This `-` branch is only hit if `-` is the START of a token.
-                        // So `-5` -> NotPrefix, Text("5"). matches_primitive("5")=true/false. Not(..) inverts it.
-                        // Searching `-5` excludes "5". This is standard.
                         tokens.push(Token::NotPrefix);
                     }
                 } else {
-                    // Trailing dash
                     tokens.push(Token::Text("-".to_string()));
                 }
             }
@@ -236,9 +257,9 @@ impl Parser {
         Self { tokens, pos: 0 }
     }
 
-    fn parse(&mut self) -> SearchExpr {
+    fn parse(&mut self) -> RawExpr {
         if self.tokens.is_empty() {
-            return SearchExpr::Term("".to_string());
+            return RawExpr::Term("".to_string());
         }
         self.parse_or()
     }
@@ -254,19 +275,19 @@ impl Parser {
     }
 
     // OR has lowest precedence
-    fn parse_or(&mut self) -> SearchExpr {
+    fn parse_or(&mut self) -> RawExpr {
         let mut left = self.parse_and();
 
         while let Some(Token::Or) = self.peek() {
             self.advance();
             let right = self.parse_and();
-            left = SearchExpr::Or(Box::new(left), Box::new(right));
+            left = RawExpr::Or(Box::new(left), Box::new(right));
         }
         left
     }
 
     // Implicit AND handles sequences of terms
-    fn parse_and(&mut self) -> SearchExpr {
+    fn parse_and(&mut self) -> RawExpr {
         let mut left = self.parse_unary();
 
         while let Some(token) = self.peek() {
@@ -275,23 +296,23 @@ impl Parser {
             }
             // Implicit AND between adjacent tokens
             let right = self.parse_unary();
-            left = SearchExpr::And(Box::new(left), Box::new(right));
+            left = RawExpr::And(Box::new(left), Box::new(right));
         }
         left
     }
 
     // NOT operator
-    fn parse_unary(&mut self) -> SearchExpr {
+    fn parse_unary(&mut self) -> RawExpr {
         if let Some(Token::NotPrefix) = self.peek() {
             self.advance();
             let expr = self.parse_primary();
-            return SearchExpr::Not(Box::new(expr));
+            return RawExpr::Not(Box::new(expr));
         }
         self.parse_primary()
     }
 
     // Terms or Grouping
-    fn parse_primary(&mut self) -> SearchExpr {
+    fn parse_primary(&mut self) -> RawExpr {
         match self.peek() {
             Some(Token::LParen) => {
                 self.advance();
@@ -304,9 +325,9 @@ impl Parser {
             Some(Token::Text(t)) => {
                 let term = t.clone();
                 self.advance();
-                SearchExpr::Term(term)
+                RawExpr::Term(term)
             }
-            _ => SearchExpr::Term("".to_string()), // Fallback
+            _ => RawExpr::Term("".to_string()), // Fallback
         }
     }
 }
@@ -346,6 +367,303 @@ pub fn starts_with_ignore_case(haystack: &str, prefix_lower: &str) -> bool {
     haystack.to_lowercase().starts_with(prefix_lower)
 }
 
+/// Split a leading comparison operator (`<=`, `>=`, `<`, `>`) off `s`,
+/// defaulting to equality.
+fn split_op(s: &str) -> (Op, &str) {
+    if let Some(v) = s.strip_prefix("<=") {
+        (Op::Le, v)
+    } else if let Some(v) = s.strip_prefix(">=") {
+        (Op::Ge, v)
+    } else if let Some(v) = s.strip_prefix('<') {
+        (Op::Lt, v)
+    } else if let Some(v) = s.strip_prefix('>') {
+        (Op::Gt, v)
+    } else {
+        (Op::Eq, s)
+    }
+}
+
+/// Compile a raw search term once so per-task matching never re-lowercases it
+/// or re-scans it against the lexicon.
+fn compile_term(part: &str, lex: &crate::model::parser::ParserLexicon) -> CompiledTerm {
+    // Trim whitespace and strip surrounding quotes for quoted phrases.
+    // We do this to support searches like "exact phrase" or tag:"my tag".
+    let part = part.trim();
+    let part_unquoted = if part.starts_with('"') && part.ends_with('"') && part.len() >= 2 {
+        &part[1..part.len() - 1]
+    } else {
+        part
+    };
+    let lower = part_unquoted.to_lowercase();
+
+    let extracted = lex.extract_prefix(part_unquoted, &lower);
+    let rem = extracted.map(|(_, r, _)| r).unwrap_or(lower.as_str());
+    let pref = extracted.map(|(p, _, _)| p);
+
+    // --- Location Filter (@@loc or loc:loc) ---
+    let loc_query =
+        if lower.starts_with("@@") || pref == Some(crate::model::parser::PrefixToken::Loc) {
+            Some(if lower.starts_with("@@") {
+                lower.trim_start_matches('@').to_string()
+            } else {
+                rem.to_string()
+            })
+        } else {
+            None
+        };
+
+    // --- Duration Filter (~30m, ~<1h, ~>2h) ---
+    let duration =
+        if lower.starts_with('~') || pref == Some(crate::model::parser::PrefixToken::Duration) {
+            let content = if lower.starts_with('~') {
+                lower.strip_prefix('~').unwrap()
+            } else {
+                rem
+            };
+            let (op, val_str) = if let Some(stripped) = content.strip_prefix('=') {
+                (Op::Eq, stripped)
+            } else {
+                split_op(content)
+            };
+            Some((
+                op,
+                crate::model::parser::parse_duration_with_lex(val_str, lex),
+            ))
+        } else {
+            None
+        };
+
+    // --- Priority Filter (!1, !<3) ---
+    let priority = if let Some(stripped) = lower.strip_prefix('!') {
+        let (op, val_str) = split_op(stripped);
+        val_str.parse::<u8>().ok().map(|v| (op, v))
+    } else {
+        None
+    };
+
+    // --- Date Filters (@due, ^start) ---
+    let compile_date = |target_pref: crate::model::parser::PrefixToken,
+                        prefix_char: char|
+     -> Option<(Op, Option<NaiveDate>, bool)> {
+        if pref != Some(target_pref) && !lower.starts_with(prefix_char) {
+            return None;
+        }
+        let raw_val = if pref == Some(target_pref) {
+            rem
+        } else {
+            lower.strip_prefix(prefix_char).unwrap_or("")
+        };
+        let (val_str_full, include_none) = if let Some(stripped) = raw_val.strip_suffix('!') {
+            (stripped, true)
+        } else {
+            (raw_val, false)
+        };
+        let (op, date_str) = split_op(val_str_full);
+        let target = crate::model::parser::parse_smart_date_with_lex(date_str, lex)
+            .map(|d| d.to_date_naive());
+        Some((op, target, include_none))
+    };
+    let start = compile_date(crate::model::parser::PrefixToken::Start, '^');
+    let due = compile_date(crate::model::parser::PrefixToken::Due, '@');
+
+    // --- Tag Filter ---
+    let tag_query = lower.strip_prefix('#').map(str::to_string);
+
+    // --- Status Filters ---
+    let status = if lower == "is:done" || lex.search_is_done.contains(&lower) {
+        Some(StatusFilter::Done)
+    } else if lower == "is:started"
+        || lower == "is:ongoing"
+        || lex.search_is_started.contains(&lower)
+        || lex.search_is_ongoing.contains(&lower)
+    {
+        Some(StatusFilter::InProcess)
+    } else if lower == "is:active" || lex.search_is_active.contains(&lower) {
+        Some(StatusFilter::Active)
+    } else if lower == "is:ready"
+        || lower == "is:blocked"
+        || lex.search_is_ready.contains(&lower)
+        || lex.search_is_blocked.contains(&lower)
+    {
+        Some(StatusFilter::Ready)
+    } else if lower == "is:note" || lex.search_is_note.contains(&lower) {
+        Some(StatusFilter::Note)
+    } else if lower == "is:page" || lower == "is:journal" || lex.search_is_page.contains(&lower) {
+        Some(StatusFilter::Page)
+    } else if lower == "is:permanent" || lex.search_is_permanent.contains(&lower) {
+        Some(StatusFilter::Permanent)
+    } else if lower == "is:canceled"
+        || lower == "is:cancelled"
+        || lex.search_is_canceled.contains(&lower)
+    {
+        Some(StatusFilter::Canceled)
+    } else if lex.exact.get(&lower) == Some(&crate::model::parser::ExactToken::IsPinned) {
+        Some(StatusFilter::Pinned)
+    } else {
+        None
+    };
+
+    CompiledTerm {
+        lower,
+        loc_query,
+        duration,
+        priority,
+        start,
+        due,
+        tag_query,
+        status,
+    }
+}
+
+fn compile_expr(raw: RawExpr, lex: &crate::model::parser::ParserLexicon) -> SearchExpr {
+    match raw {
+        RawExpr::Term(s) => SearchExpr::Term(compile_term(&s, lex)),
+        RawExpr::And(a, b) => SearchExpr::And(
+            Box::new(compile_expr(*a, lex)),
+            Box::new(compile_expr(*b, lex)),
+        ),
+        RawExpr::Or(a, b) => SearchExpr::Or(
+            Box::new(compile_expr(*a, lex)),
+            Box::new(compile_expr(*b, lex)),
+        ),
+        RawExpr::Not(a) => SearchExpr::Not(Box::new(compile_expr(*a, lex))),
+    }
+}
+
+impl CompiledTerm {
+    /// Evaluate the compiled term against a single task.
+    fn match_task(&self, task: &Task, store: &crate::store::TaskStore) -> bool {
+        if self.lower.is_empty() {
+            return true;
+        }
+
+        // --- Location Filter (@@loc or loc:loc) ---
+        if let Some(loc_query) = &self.loc_query {
+            let is_match = |t: &Task| {
+                t.locations
+                    .iter()
+                    .chain(t.transient_desc_locs.iter())
+                    .any(|l| contains_ignore_case(l, loc_query))
+            };
+            return task.any_ancestor_matches(store, is_match);
+        }
+
+        // --- Duration Filter (~30m, ~<1h, ~>2h) ---
+        if let Some((op, target)) = &self.duration
+            && let Some(target) = target
+        {
+            let t_min = task.estimated_duration.unwrap_or(0);
+            let t_max = task.estimated_duration_max.unwrap_or(t_min);
+
+            if task.estimated_duration.is_none() {
+                return false;
+            }
+
+            return match op {
+                Op::Lt => t_min < *target,
+                Op::Gt => t_max > *target,
+                Op::Le => t_min <= *target,
+                Op::Ge => t_max >= *target,
+                Op::Eq => *target >= t_min && *target <= t_max,
+            };
+        }
+        // Fall through to text match if parsing failed
+
+        // --- Priority Filter (!1, !<3) ---
+        if let Some((op, target)) = self.priority {
+            let p = task.priority;
+            return match op {
+                Op::Lt => p < target,
+                Op::Gt => p > target,
+                Op::Le => p <= target,
+                Op::Ge => p >= target,
+                Op::Eq => p == target,
+            };
+        }
+
+        // Start Date
+        if let Some((op, target, include_none)) = &self.start
+            && let Some(target) = target
+        {
+            return match task.dtstart.as_ref().map(|d| d.to_date_naive()) {
+                Some(t_date) => match op {
+                    Op::Lt => t_date < *target,
+                    Op::Gt => t_date > *target,
+                    Op::Le => t_date <= *target,
+                    Op::Ge => t_date >= *target,
+                    Op::Eq => t_date == *target,
+                },
+                None => *include_none,
+            };
+        }
+        // Unparseable date: fall through
+
+        // Due Date
+        if let Some((op, target, include_none)) = &self.due
+            && let Some(target) = target
+        {
+            return match task.due.as_ref().map(|d| d.to_date_naive()) {
+                Some(t_date) => match op {
+                    Op::Lt => t_date < *target,
+                    Op::Gt => t_date > *target,
+                    Op::Le => t_date <= *target,
+                    Op::Ge => t_date >= *target,
+                    Op::Eq => t_date == *target,
+                },
+                None => *include_none,
+            };
+        }
+
+        // --- Tag Filter ---
+        if let Some(tag_query) = &self.tag_query {
+            let is_match = |t: &Task| {
+                t.categories
+                    .iter()
+                    .chain(t.transient_desc_tags.iter())
+                    .any(|c| contains_ignore_case(c, tag_query))
+            };
+            return task.any_ancestor_matches(store, is_match);
+        }
+
+        // --- Status Filters ---
+        if let Some(status) = self.status {
+            return match status {
+                StatusFilter::Done => task.status.is_done(),
+                StatusFilter::InProcess => task.status == TaskStatus::InProcess,
+                StatusFilter::Active => !task.status.is_done(),
+                // "ready/blocked" states are computed transiently in store.filter()
+                // but for simple text matching here we mostly ignore them or treat as valid.
+                StatusFilter::Ready => true,
+                StatusFilter::Note => task.is_note,
+                StatusFilter::Page => task.is_journal,
+                StatusFilter::Permanent => task.permanent,
+                StatusFilter::Canceled => task.status == TaskStatus::Cancelled,
+                StatusFilter::Pinned => task.pinned,
+            };
+        }
+
+        // --- Fallback: Text Search ---
+        // Matches summary, description, categories, or location.
+        let is_match = |t: &Task| {
+            let summary_match = contains_ignore_case(&t.summary, &self.lower);
+            let desc_match = contains_ignore_case(&t.description, &self.lower);
+            let cat_match = t
+                .categories
+                .iter()
+                .chain(t.transient_desc_tags.iter())
+                .any(|c| contains_ignore_case(c, &self.lower));
+            let loc_match = t
+                .locations
+                .iter()
+                .chain(t.transient_desc_locs.iter())
+                .any(|l| contains_ignore_case(l, &self.lower));
+
+            summary_match || desc_match || cat_match || loc_match
+        };
+        task.any_ancestor_matches(store, is_match)
+    }
+}
+
 impl Task {
     /// Checks if the task matches the given search query using boolean logic.
     /// Supports implicit AND, OR (|), NOT (-), and parentheses.
@@ -354,320 +672,19 @@ impl Task {
             return true;
         }
 
-        let q = Query::new(query);
         let lex_guard = crate::model::parser::LEXICON.read().unwrap();
-        q.matches(self, &lex_guard, store)
+        let q = Query::new(query, &lex_guard);
+        q.matches(self, store)
     }
 
-    /// Evaluates a single primitive search term (e.g., "#tag", "is:done", or "text").
-    /// Returns true if the task matches this specific term.
-    fn matches_primitive(
+    /// Returns true if `self` or any ancestor (walking `parent_uid` upward,
+    /// cycle-guarded) satisfies `matches`.
+    fn any_ancestor_matches(
         &self,
-        part: &str,
-        lex: &crate::model::parser::ParserLexicon,
         store: &crate::store::TaskStore,
+        matches: impl Fn(&Task) -> bool,
     ) -> bool {
-        if part.is_empty() {
-            return true;
-        }
-
-        // Trim whitespace and strip surrounding quotes for quoted phrases.
-        // We do this to support searches like "exact phrase" or tag:"my tag".
-        let part = part.trim();
-        let part_unquoted = if part.starts_with('"') && part.ends_with('"') && part.len() >= 2 {
-            &part[1..part.len() - 1]
-        } else {
-            part
-        };
-        let part_lower = part_unquoted.to_lowercase();
-
-        let extracted = lex.extract_prefix(part_unquoted, &part_lower);
-        let rem = extracted.map(|(_, r, _)| r).unwrap_or(part_lower.as_str());
-        let pref = extracted.map(|(p, _, _)| p);
-
-        // --- Location Filter (@@loc or loc:loc) ---
-        if part_lower.starts_with("@@") || pref == Some(crate::model::parser::PrefixToken::Loc) {
-            let loc_query = if part_lower.starts_with("@@") {
-                part_lower.trim_start_matches('@')
-            } else {
-                rem
-            };
-            let is_match = |t: &Task| {
-                t.locations
-                    .iter()
-                    .chain(t.transient_desc_locs.iter())
-                    .any(|l| contains_ignore_case(l, loc_query))
-            };
-
-            if is_match(self) {
-                return true;
-            }
-            let mut curr = self.parent_uid.as_deref();
-            let mut visited = std::collections::HashSet::new();
-            while let Some(p_uid) = curr {
-                if !visited.insert(p_uid) {
-                    break;
-                }
-                if let Some(p) = store.get_task_ref(p_uid) {
-                    if is_match(p) {
-                        return true;
-                    }
-                    curr = p.parent_uid.as_deref();
-                } else {
-                    break;
-                }
-            }
-            return false;
-        }
-
-        // --- Duration Filter (~30m, ~<1h, ~>2h) ---
-        if part_lower.starts_with('~') || pref == Some(crate::model::parser::PrefixToken::Duration)
-        {
-            let content = if part_lower.starts_with('~') {
-                part_lower.strip_prefix('~').unwrap()
-            } else {
-                rem
-            };
-
-            let (op, val_str) = if let Some(stripped) = content.strip_prefix("<=") {
-                ("<=", stripped)
-            } else if let Some(stripped) = content.strip_prefix(">=") {
-                (">=", stripped)
-            } else if let Some(stripped) = content.strip_prefix('<') {
-                ("<", stripped)
-            } else if let Some(stripped) = content.strip_prefix('>') {
-                (">", stripped)
-            } else if let Some(stripped) = content.strip_prefix('=') {
-                ("=", stripped)
-            } else {
-                ("=", content)
-            };
-
-            if !op.is_empty()
-                && let Some(target) = crate::model::parser::parse_duration_with_lex(val_str, lex)
-            {
-                let t_min = self.estimated_duration.unwrap_or(0);
-                let t_max = self.estimated_duration_max.unwrap_or(t_min);
-
-                if self.estimated_duration.is_none() {
-                    return false;
-                }
-
-                let ok = match op {
-                    "<" => t_min < target,
-                    ">" => t_max > target,
-                    "<=" => t_min <= target,
-                    ">=" => t_max >= target,
-                    _ => target >= t_min && target <= t_max,
-                };
-                return ok;
-            }
-            // Fall through to text match if parsing failed
-        }
-
-        // --- Priority Filter (!1, !<3) ---
-        if part_lower.starts_with('!') {
-            let (op, val_str) = if let Some(stripped) = part_lower.strip_prefix("!<=") {
-                ("<=", stripped)
-            } else if let Some(stripped) = part_lower.strip_prefix("!>=") {
-                (">=", stripped)
-            } else if let Some(stripped) = part_lower.strip_prefix("!<") {
-                ("<", stripped)
-            } else if let Some(stripped) = part_lower.strip_prefix("!>") {
-                (">", stripped)
-            } else if let Some(stripped) = part_lower.strip_prefix('!') {
-                ("=", stripped)
-            } else {
-                ("", "")
-            };
-
-            if !op.is_empty()
-                && let Ok(target) = val_str.parse::<u8>()
-            {
-                let p = self.priority;
-                let ok = match op {
-                    "<" => p < target,
-                    ">" => p > target,
-                    "<=" => p <= target,
-                    ">=" => p >= target,
-                    _ => p == target,
-                };
-                return ok;
-            }
-        }
-
-        // --- Date Filters (@due, ^start) ---
-        let check_date_filter = |target_pref: crate::model::parser::PrefixToken,
-                                 prefix_char: char,
-                                 task_date: Option<NaiveDate>|
-         -> Option<bool> {
-            if pref != Some(target_pref) && !part_lower.starts_with(prefix_char) {
-                return None;
-            }
-
-            let raw_val = if pref == Some(target_pref) {
-                rem
-            } else {
-                part_lower.strip_prefix(prefix_char).unwrap_or("")
-            };
-
-            let (val_str_full, include_none) = if let Some(stripped) = raw_val.strip_suffix('!') {
-                (stripped, true)
-            } else {
-                (raw_val, false)
-            };
-
-            let (op, date_str) = if let Some(s) = val_str_full.strip_prefix("<=") {
-                ("<=", s)
-            } else if let Some(s) = val_str_full.strip_prefix(">=") {
-                (">=", s)
-            } else if let Some(s) = val_str_full.strip_prefix('<') {
-                ("<", s)
-            } else if let Some(s) = val_str_full.strip_prefix('>') {
-                (">", s)
-            } else {
-                ("=", val_str_full)
-            };
-
-            let target_date = crate::model::parser::parse_smart_date_with_lex(date_str, lex)
-                .map(|d| d.to_date_naive());
-
-            if let Some(target) = target_date {
-                match task_date {
-                    Some(t_date) => {
-                        let ok = match op {
-                            "<" => t_date < target,
-                            ">" => t_date > target,
-                            "<=" => t_date <= target,
-                            ">=" => t_date >= target,
-                            _ => t_date == target,
-                        };
-                        return Some(ok);
-                    }
-                    None => {
-                        if include_none {
-                            return Some(true);
-                        } else {
-                            return Some(false);
-                        }
-                    }
-                }
-            }
-            None
-        };
-
-        // Start Date
-        let t_start = self.dtstart.as_ref().map(|d| d.to_date_naive());
-        if let Some(passed) =
-            check_date_filter(crate::model::parser::PrefixToken::Start, '^', t_start)
-        {
-            return passed;
-        }
-
-        // Due Date
-        let t_due = self.due.as_ref().map(|d| d.to_date_naive());
-        if let Some(passed) = check_date_filter(crate::model::parser::PrefixToken::Due, '@', t_due)
-        {
-            return passed;
-        }
-
-        // --- Tag Filter ---
-        if let Some(tag_query) = part_lower.strip_prefix('#') {
-            let is_match = |t: &Task| {
-                t.categories
-                    .iter()
-                    .chain(t.transient_desc_tags.iter())
-                    .any(|c| contains_ignore_case(c, tag_query))
-            };
-
-            if is_match(self) {
-                return true;
-            }
-            let mut curr = self.parent_uid.as_deref();
-            let mut visited = std::collections::HashSet::new();
-            while let Some(p_uid) = curr {
-                if !visited.insert(p_uid) {
-                    break;
-                }
-                if let Some(p) = store.get_task_ref(p_uid) {
-                    if is_match(p) {
-                        return true;
-                    }
-                    curr = p.parent_uid.as_deref();
-                } else {
-                    break;
-                }
-            }
-            return false;
-        }
-
-        // --- Status Filters ---
-        if part_lower == "is:done" || lex.search_is_done.contains(&part_lower) {
-            return self.status.is_done();
-        }
-        if part_lower == "is:started"
-            || part_lower == "is:ongoing"
-            || lex.search_is_started.contains(&part_lower)
-            || lex.search_is_ongoing.contains(&part_lower)
-        {
-            return self.status == TaskStatus::InProcess;
-        }
-        if part_lower == "is:active" || lex.search_is_active.contains(&part_lower) {
-            return !self.status.is_done();
-        }
-        if part_lower == "is:ready"
-            || part_lower == "is:blocked"
-            || lex.search_is_ready.contains(&part_lower)
-            || lex.search_is_blocked.contains(&part_lower)
-        {
-            // "ready/blocked" states are computed transiently in store.filter()
-            // but for simple text matching here we mostly ignore them or treat as valid.
-            // (Note: full filtering support for these requires Context from store)
-            return true;
-        }
-
-        if part_lower == "is:note" || lex.search_is_note.contains(&part_lower) {
-            return self.is_note;
-        }
-        if part_lower == "is:page"
-            || part_lower == "is:journal"
-            || lex.search_is_page.contains(&part_lower)
-        {
-            return self.is_journal;
-        }
-        if part_lower == "is:permanent" || lex.search_is_permanent.contains(&part_lower) {
-            return self.permanent;
-        }
-        if part_lower == "is:canceled"
-            || part_lower == "is:cancelled"
-            || lex.search_is_canceled.contains(&part_lower)
-        {
-            return self.status == TaskStatus::Cancelled;
-        }
-        if lex.exact.get(&part_lower) == Some(&crate::model::parser::ExactToken::IsPinned) {
-            return self.pinned;
-        }
-
-        // --- Fallback: Text Search ---
-        // Matches summary, description, categories, or location.
-        let is_match = |t: &Task| {
-            let summary_match = contains_ignore_case(&t.summary, &part_lower);
-            let desc_match = contains_ignore_case(&t.description, &part_lower);
-            let cat_match = t
-                .categories
-                .iter()
-                .chain(t.transient_desc_tags.iter())
-                .any(|c| contains_ignore_case(c, &part_lower));
-            let loc_match = t
-                .locations
-                .iter()
-                .chain(t.transient_desc_locs.iter())
-                .any(|l| contains_ignore_case(l, &part_lower));
-
-            summary_match || desc_match || cat_match || loc_match
-        };
-
-        if is_match(self) {
+        if matches(self) {
             return true;
         }
         let mut curr = self.parent_uid.as_deref();
@@ -677,7 +694,7 @@ impl Task {
                 break;
             }
             if let Some(p) = store.get_task_ref(p_uid) {
-                if is_match(p) {
+                if matches(p) {
                     return true;
                 }
                 curr = p.parent_uid.as_deref();
@@ -685,7 +702,6 @@ impl Task {
                 break;
             }
         }
-
         false
     }
 }

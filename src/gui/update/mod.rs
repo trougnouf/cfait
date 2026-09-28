@@ -112,7 +112,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::SubmitTask
         | Message::SaveTaskKeepEditing
         | Message::SaveAndSwitchEditor
-        | Message::ToggleTask(_, _)
+        | Message::ToggleTask(_)
         | Message::EditTaskStart(_)
         | Message::CancelEdit
         | Message::DeleteTask(_)

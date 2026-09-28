@@ -198,6 +198,31 @@ fn task_clipboard_text(t: &crate::model::Task) -> String {
     }
 }
 
+/// Resolve the uid a keyboard tree operation should target: the journal
+/// sidebar page under the caret when the sidebar is focused in journal mode,
+/// the journal entry being edited (falling back to the entry for the active
+/// calendar's current date), or the selected task.
+fn keyboard_tree_target_uid(app: &GuiApp) -> Option<String> {
+    if app.active_focus == Focus::Sidebar && app.sidebar_mode == SidebarMode::Journal {
+        app.cached_journal_pages
+            .get(app.sidebar_selection_idx)
+            .filter(|page| page.is_task)
+            .map(|page| page.key.clone())
+    } else if app.sidebar_mode == SidebarMode::Journal {
+        app.journal_editing_uid.clone().or_else(|| {
+            let target_href = app
+                .active_cal_href
+                .clone()
+                .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
+            app.store
+                .get_journal_entry(&target_href, app.journal_date)
+                .map(|t| t.uid.clone())
+        })
+    } else {
+        app.selected_uid.clone()
+    }
+}
+
 /// Bump the edit generation, refresh the visible list, and queue a
 /// background update for a task that was mutated in place.
 fn commit_task_update(app: &mut GuiApp, task: crate::model::Task) {
@@ -653,28 +678,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::KeyboardEditTree => {
-            let mut target_uid = None;
-            if app.active_focus == Focus::Sidebar && app.sidebar_mode == SidebarMode::Journal {
-                if let Some(page) = app.cached_journal_pages.get(app.sidebar_selection_idx)
-                    && page.is_task
-                {
-                    target_uid = Some(page.key.clone());
-                }
-            } else if app.sidebar_mode == SidebarMode::Journal {
-                target_uid = app.journal_editing_uid.clone().or_else(|| {
-                    let target_href = app
-                        .active_cal_href
-                        .clone()
-                        .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
-                    app.store
-                        .get_journal_entry(&target_href, app.journal_date)
-                        .map(|t| t.uid.clone())
-                });
-            } else if let Some(selected_uid) = app.selected_uid.clone() {
-                target_uid = Some(selected_uid);
-            }
-
-            if let Some(uid) = target_uid {
+            if let Some(uid) = keyboard_tree_target_uid(app) {
                 return handle(app, Message::EditTaskTree(uid));
             }
             Task::none()
@@ -725,7 +729,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
 
-        Message::ToggleTask(index, _) => {
+        Message::ToggleTask(index) => {
             let data = app.get_task_at_index(index).map(|t| {
                 (
                     t.uid.clone(),
@@ -850,28 +854,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::KeyboardCreateChild => {
-            let mut target_uid = None;
-            if app.active_focus == Focus::Sidebar && app.sidebar_mode == SidebarMode::Journal {
-                if let Some(page) = app.cached_journal_pages.get(app.sidebar_selection_idx)
-                    && page.is_task
-                {
-                    target_uid = Some(page.key.clone());
-                }
-            } else if app.sidebar_mode == SidebarMode::Journal {
-                target_uid = app.journal_editing_uid.clone().or_else(|| {
-                    let target_href = app
-                        .active_cal_href
-                        .clone()
-                        .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
-                    app.store
-                        .get_journal_entry(&target_href, app.journal_date)
-                        .map(|t| t.uid.clone())
-                });
-            } else if let Some(selected_uid) = app.selected_uid.clone() {
-                target_uid = Some(selected_uid);
-            }
-
-            if let Some(uid) = target_uid {
+            if let Some(uid) = keyboard_tree_target_uid(app) {
                 return handle(app, Message::StartCreateChild(uid));
             }
             Task::none()
@@ -1501,10 +1484,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 && let Some(session) = task.sessions.get(idx)
             {
                 let s_dt = chrono::DateTime::from_timestamp(session.start, 0)
-                    .unwrap_or_else(|| chrono::DateTime::from_timestamp(0, 0).unwrap())
+                    .unwrap_or(chrono::DateTime::UNIX_EPOCH)
                     .with_timezone(&chrono::Local);
                 let e_dt = chrono::DateTime::from_timestamp(session.end, 0)
-                    .unwrap_or_else(|| chrono::DateTime::from_timestamp(0, 0).unwrap())
+                    .unwrap_or(chrono::DateTime::UNIX_EPOCH)
                     .with_timezone(&chrono::Local);
                 let prefill = format!(
                     "{} {}-{}",

@@ -740,10 +740,9 @@ impl CfaitMobile {
         } else {
             let lex_guard = crate::model::parser::LEXICON.read().unwrap();
             let lower = raw_word.to_lowercase();
-            if let Some((p_str, _, _)) = lex_guard.match_prefix(&lower) {
-                crate::model::parser::strip_quotes(&raw_word[p_str.len()..])
-            } else {
-                crate::model::parser::strip_quotes(&raw_word)
+            match lex_guard.extract_prefix(&raw_word, &lower) {
+                Some((_, _, rem_original)) => crate::model::parser::strip_quotes(rem_original),
+                None => crate::model::parser::strip_quotes(&raw_word),
             }
         };
 

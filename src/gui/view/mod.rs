@@ -801,15 +801,6 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             if *action == TaskAction::DuplicateTree && !task.has_subtasks {
                 label = rust_i18n::t!("duplicate_single_task").to_string();
             }
-            if *action == TaskAction::ToggleTimer {
-                label = if task.status == crate::model::TaskStatus::InProcess {
-                    rust_i18n::t!("pause_task").to_string()
-                } else if task.is_paused() {
-                    rust_i18n::t!("resume_task").to_string()
-                } else {
-                    rust_i18n::t!("start_task").to_string()
-                };
-            }
 
             let shortcut = match *action {
                 TaskAction::CompleteAndShift => " (Shift+Space)",
@@ -1051,49 +1042,21 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                 .cloned()
                 .collect();
 
-            // Move OpenUrl to front if present
+            // Move preferred actions to the front, in this order
+            let preferred_order = [
+                TaskAction::OpenUrl,
+                TaskAction::OpenCoordinates,
+                TaskAction::Focus,
+                TaskAction::CompleteAndShift,
+                TaskAction::OpenLocations,
+            ];
             let mut insert_idx = 0;
-            if let Some(pos) = unpinned_actions
-                .iter()
-                .position(|&a| a == TaskAction::OpenUrl)
-            {
-                unpinned_actions.remove(pos);
-                unpinned_actions.insert(insert_idx, TaskAction::OpenUrl);
-                insert_idx += 1;
-            }
-
-            // Move location actions to front if present (OpenCoordinates first, then OpenLocations)
-            if let Some(pos) = unpinned_actions
-                .iter()
-                .position(|&a| a == TaskAction::OpenCoordinates)
-            {
-                unpinned_actions.remove(pos);
-                unpinned_actions.insert(insert_idx, TaskAction::OpenCoordinates);
-                insert_idx += 1;
-            }
-            if let Some(pos) = unpinned_actions
-                .iter()
-                .position(|&a| a == TaskAction::Focus)
-            {
-                unpinned_actions.remove(pos);
-                unpinned_actions.insert(insert_idx, TaskAction::Focus);
-                insert_idx += 1;
-            }
-            if let Some(pos) = unpinned_actions
-                .iter()
-                .position(|&a| a == TaskAction::CompleteAndShift)
-            {
-                unpinned_actions.remove(pos);
-                unpinned_actions.insert(insert_idx, TaskAction::CompleteAndShift);
-                insert_idx += 1;
-            }
-            if let Some(pos) = unpinned_actions
-                .iter()
-                .position(|&a| a == TaskAction::OpenLocations)
-            {
-                unpinned_actions.remove(pos);
-                // Insert after OpenCoordinates if present, otherwise at front
-                unpinned_actions.insert(insert_idx, TaskAction::OpenLocations);
+            for preferred in preferred_order {
+                if let Some(pos) = unpinned_actions.iter().position(|&a| a == preferred) {
+                    unpinned_actions.remove(pos);
+                    unpinned_actions.insert(insert_idx, preferred);
+                    insert_idx += 1;
+                }
             }
             unpinned_actions
         };
@@ -1854,7 +1817,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool, is_expanded: bool) -> Elemen
     }
 
     let is_filter_empty = app.tasks.is_empty() && app.store.has_any_tasks();
-    let is_search_empty = app.search_value.text().is_empty();
+    let is_search_empty = search_text.is_empty();
     let is_search_error = is_filter_empty && !is_search_empty;
 
     let (search_icon_char, icon_color, on_press) = if is_search_empty {
@@ -3067,25 +3030,23 @@ pub fn build_context_banner<'a>(
     content: &text_editor::Content,
 ) -> Option<Element<'a, Message>> {
     use crate::model::parser::{LEXICON, SyntaxType};
-    let get_byte_offset = |content: &iced::widget::text_editor::Content| -> usize {
-        let cursor_pos = content.cursor().position;
-        let line_idx = cursor_pos.line;
-        let col_idx = cursor_pos.column;
-        let text = content.text();
+    let target_text = content.text();
+    let cursor_pos = 'offset: {
+        let cursor = content.cursor().position;
         let mut byte_offset = 0;
-
-        for (current_line, line_str) in text.split('\n').enumerate() {
-            if current_line == line_idx {
-                let col_bytes: usize = line_str.chars().take(col_idx).map(|c| c.len_utf8()).sum();
-                return byte_offset + col_bytes;
+        for (current_line, line_str) in target_text.split('\n').enumerate() {
+            if current_line == cursor.line {
+                let col_bytes: usize = line_str
+                    .chars()
+                    .take(cursor.column)
+                    .map(|c| c.len_utf8())
+                    .sum();
+                break 'offset byte_offset + col_bytes;
             }
             byte_offset += line_str.len() + 1; // +1 for '\n'
         }
         byte_offset
     };
-
-    let target_text = content.text();
-    let cursor_pos = get_byte_offset(content);
 
     if let Some((range, suggs)) = crate::model::autocomplete::suggest(
         &target_text,
@@ -3229,10 +3190,9 @@ pub fn build_context_banner<'a>(
             } else {
                 let lex_guard = LEXICON.read().unwrap();
                 let lower = raw_word.to_lowercase();
-                if let Some((p_str, _, _)) = lex_guard.match_prefix(&lower) {
-                    crate::model::parser::strip_quotes(&raw_word[p_str.len()..])
-                } else {
-                    crate::model::parser::strip_quotes(&raw_word)
+                match lex_guard.extract_prefix(&raw_word, &lower) {
+                    Some((_, _, rem_original)) => crate::model::parser::strip_quotes(rem_original),
+                    None => crate::model::parser::strip_quotes(&raw_word),
                 }
             };
 
