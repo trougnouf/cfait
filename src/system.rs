@@ -62,18 +62,23 @@ pub fn init_logging(ctx: &dyn AppContext, enable_stderr: bool, level: Option<log
         .add_filter_ignore_str("zbus")
         .build();
 
-    // File logger: creates a fresh cfait.log for this session
-    let file_logger = WriteLogger::new(
-        level,
-        log_config.clone(),
-        File::create(&log_path).expect("Failed to create log file"),
-    );
+    // File logger: creates a fresh cfait.log for this session.
+    // If the log file cannot be created (e.g. a read-only cache directory),
+    // continue without file logging instead of panicking.
+    let file_logger = match File::create(&log_path) {
+        Ok(file) => Some(WriteLogger::new(level, log_config.clone(), file)),
+        Err(err) if enable_stderr => {
+            eprintln!("Warning: could not create log file {:?}: {err}", log_path);
+            None
+        }
+        Err(_) => None,
+    };
+    let has_file_logging = file_logger.is_some();
 
     #[cfg(target_os = "android")]
     {
         // On Android, we create a custom logger that splits output between
         // the log file and Android's native Logcat.
-        let _enable_stderr = enable_stderr;
         let android_logger = android_logger::AndroidLogger::new(
             android_logger::Config::default()
                 .with_max_level(level)
@@ -105,22 +110,33 @@ pub fn init_logging(ctx: &dyn AppContext, enable_stderr: bool, level: Option<log
             }
         }
 
-        let logger = DualLogger {
-            file: file_logger,
-            android: android_logger,
+        let logger: Box<dyn log::Log> = match file_logger {
+            Some(file) => Box::new(DualLogger {
+                file,
+                android: android_logger,
+            }),
+            None => Box::new(android_logger),
         };
 
-        let _ = log::set_boxed_logger(Box::new(logger));
+        let _ = log::set_boxed_logger(logger);
         log::set_max_level(level);
-        log::info!(
-            "Cfait logging initialized on Android. Log file at: {:?}",
-            log_path
-        );
+        if has_file_logging {
+            log::info!(
+                "Cfait logging initialized on Android. Log file at: {:?}",
+                log_path
+            );
+        } else {
+            log::info!("Cfait logging initialized on Android (logcat only, log file unavailable).");
+        }
     }
 
     #[cfg(not(target_os = "android"))]
     {
-        let mut loggers: Vec<Box<dyn SharedLogger>> = vec![file_logger];
+        let mut loggers: Vec<Box<dyn SharedLogger>> = Vec::new();
+
+        if let Some(file) = file_logger {
+            loggers.push(file);
+        }
 
         // Terminal logger: only enabled when safe to do so (GUI / CLI)
         if enable_stderr {
@@ -133,9 +149,15 @@ pub fn init_logging(ctx: &dyn AppContext, enable_stderr: bool, level: Option<log
             loggers.push(term_logger);
         }
 
-        let _ = CombinedLogger::init(loggers);
+        if !loggers.is_empty() {
+            let _ = CombinedLogger::init(loggers);
+        }
         log::set_max_level(level);
-        log::info!("Cfait logging initialized. Log file at: {:?}", log_path);
+        if has_file_logging {
+            log::info!("Cfait logging initialized. Log file at: {:?}", log_path);
+        } else {
+            log::info!("Cfait logging initialized (terminal only, log file unavailable).");
+        }
     }
 }
 
