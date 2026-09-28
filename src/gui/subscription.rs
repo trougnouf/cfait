@@ -40,6 +40,41 @@ fn digit_sidebar_message(modified_key: &keyboard::Key) -> Option<Message> {
     Some(Message::SidebarModeChanged(mode))
 }
 
+/// Ctrl/Cmd + character shortcuts that work both with and without a widget
+/// capturing input (save, new with description, settings, undo/redo).
+fn shared_cmd_shortcut(s_lower: &str, shift: bool) -> Option<Message> {
+    match s_lower {
+        "s" => Some(if shift {
+            Message::SaveTaskKeepEditing
+        } else {
+            Message::SubmitTask
+        }),
+        "n" => Some(Message::StartCreateWithDescription),
+        "," => Some(Message::OpenSettings),
+        "z" => Some(if shift { Message::Redo } else { Message::Undo }),
+        "y" => Some(Message::Redo),
+        _ => None,
+    }
+}
+
+/// Arrow/enter/space navigation messages, shared by the captured and normal
+/// hotkey paths.
+fn navigation_key_message(key: &keyboard::Key, shift: bool) -> Option<Message> {
+    match key.as_ref() {
+        keyboard::Key::Named(keyboard::key::Named::ArrowDown) => Some(Message::SelectNext),
+        keyboard::Key::Named(keyboard::key::Named::ArrowUp) => Some(Message::SelectPrev),
+        keyboard::Key::Named(keyboard::key::Named::ArrowRight) => Some(Message::ArrowRight),
+        keyboard::Key::Named(keyboard::key::Named::ArrowLeft) => Some(Message::ArrowLeft),
+        keyboard::Key::Named(keyboard::key::Named::Enter) => Some(Message::EnterPressed),
+        keyboard::Key::Named(keyboard::key::Named::Space) => Some(if shift {
+            Message::ShiftSpaceSelected
+        } else {
+            Message::ToggleSelected
+        }),
+        _ => None,
+    }
+}
+
 pub fn subscription(app: &GuiApp) -> Subscription<Message> {
     let mut subs = Vec::new();
 
@@ -223,26 +258,12 @@ fn handle_hotkey(
             }
             let is_cmd = modifiers.control() || modifiers.command();
             if is_cmd && let keyboard::Key::Character(s) = key.as_ref() {
-                match s.to_lowercase().as_str() {
-                    "s" => {
-                        if modifiers.shift() {
-                            return Some(Message::SaveTaskKeepEditing);
-                        } else {
-                            return Some(Message::SubmitTask);
-                        }
-                    }
-                    "n" => return Some(Message::StartCreateWithDescription),
-                    "e" => return Some(Message::KeyboardEditTree),
-                    "," => return Some(Message::OpenSettings),
-                    "z" => {
-                        if modifiers.shift() {
-                            return Some(Message::Redo);
-                        } else {
-                            return Some(Message::Undo);
-                        }
-                    }
-                    "y" => return Some(Message::Redo),
-                    _ => {}
+                let s_lower = s.to_lowercase();
+                if s_lower == "e" {
+                    return Some(Message::KeyboardEditTree);
+                }
+                if let Some(msg) = shared_cmd_shortcut(&s_lower, modifiers.shift()) {
+                    return Some(msg);
                 }
             }
 
@@ -258,22 +279,9 @@ fn handle_hotkey(
             // from text editors/inputs (which capture them), which is a bug.
             if let Ok(focus) = ACTIVE_FOCUS.read()
                 && (*focus == Focus::MainList || *focus == Focus::Sidebar)
+                && let Some(msg) = navigation_key_message(key, modifiers.shift())
             {
-                match key.as_ref() {
-                    keyboard::Key::Named(Named::ArrowDown) => return Some(Message::SelectNext),
-                    keyboard::Key::Named(Named::ArrowUp) => return Some(Message::SelectPrev),
-                    keyboard::Key::Named(Named::ArrowRight) => return Some(Message::ArrowRight),
-                    keyboard::Key::Named(Named::ArrowLeft) => return Some(Message::ArrowLeft),
-                    keyboard::Key::Named(Named::Enter) => return Some(Message::EnterPressed),
-                    keyboard::Key::Named(Named::Space) => {
-                        if modifiers.shift() {
-                            return Some(Message::ShiftSpaceSelected);
-                        } else {
-                            return Some(Message::ToggleSelected);
-                        }
-                    }
-                    _ => {}
-                }
+                return Some(msg);
             }
         }
         return None;
@@ -291,20 +299,13 @@ fn handle_hotkey(
 
         if is_cmd {
             if let keyboard::Key::Character(s) = key.as_ref() {
-                match s.to_lowercase().as_str() {
+                let s_lower = s.to_lowercase();
+                match s_lower.as_str() {
                     "+" | "=" => return Some(Message::ZoomIn),
                     "-" => return Some(Message::ZoomOut),
                     "0" => return Some(Message::ZoomReset),
                     "b" => return Some(Message::ToggleSidebar),
                     "d" => return Some(Message::KeyboardDuplicateTask),
-                    "s" => {
-                        if modifiers.shift() {
-                            return Some(Message::SaveTaskKeepEditing);
-                        } else {
-                            return Some(Message::SubmitTask);
-                        }
-                    }
-                    "n" => return Some(Message::StartCreateWithDescription),
                     "e" => {
                         if let Ok(focus) = ACTIVE_FOCUS.read()
                             && *focus == Focus::AddTaskInput
@@ -314,17 +315,11 @@ fn handle_hotkey(
                         return Some(Message::KeyboardEditTree);
                     }
                     "m" => return Some(Message::ToggleEditorMaximize),
-                    "," => return Some(Message::OpenSettings),
                     "p" => return Some(Message::ToggleSortStandardByPriorityToggle),
-                    "z" => {
-                        if modifiers.shift() {
-                            return Some(Message::Redo);
-                        } else {
-                            return Some(Message::Undo);
-                        }
-                    }
-                    "y" => return Some(Message::Redo),
                     _ => {}
+                }
+                if let Some(msg) = shared_cmd_shortcut(&s_lower, modifiers.shift()) {
+                    return Some(msg);
                 }
             } else if let keyboard::Key::Named(Named::Delete) = key.as_ref() {
                 return Some(Message::KeyboardDeleteTaskTree);
@@ -399,26 +394,15 @@ fn handle_hotkey(
             }
 
             // 2. Handle Named keys
-            keyboard::Key::Named(Named::ArrowDown) => Some(Message::SelectNext),
-            keyboard::Key::Named(Named::ArrowUp) => Some(Message::SelectPrev),
-            keyboard::Key::Named(Named::ArrowRight) => Some(Message::ArrowRight),
-            keyboard::Key::Named(Named::ArrowLeft) => Some(Message::ArrowLeft),
             keyboard::Key::Named(Named::PageDown) => Some(Message::SelectNextPage),
             keyboard::Key::Named(Named::PageUp) => Some(Message::SelectPrevPage),
-            keyboard::Key::Named(Named::Enter) => Some(Message::EnterPressed),
-            keyboard::Key::Named(Named::Space) => {
-                if modifiers.shift() {
-                    Some(Message::ShiftSpaceSelected)
-                } else {
-                    Some(Message::ToggleSelected)
-                }
-            }
             keyboard::Key::Named(Named::Escape) => Some(Message::EscapePressed),
             keyboard::Key::Named(Named::Delete) => {
                 // Handled in is_cmd block for Ctrl+Delete, so here it's just Delete
                 Some(Message::DeleteSelected)
             }
             keyboard::Key::Named(Named::Tab) => Some(Message::CycleFocus(!modifiers.shift())),
+            keyboard::Key::Named(_) => navigation_key_message(&key, modifiers.shift()),
 
             _ => None,
         }
