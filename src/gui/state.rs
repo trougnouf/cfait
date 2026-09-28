@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// File: ./src/gui/state.rs
 // Manages the application state for the GUI (Iced).
 
 use crate::client::RustyClient;
@@ -384,10 +383,10 @@ impl GuiApp {
     pub fn resolve_journal_href(&self, date: chrono::NaiveDate) -> String {
         if let Some(h) = self
             .journal_editing_href
-            .clone()
-            .or_else(|| self.active_cal_href.clone())
+            .as_ref()
+            .or(self.active_cal_href.as_ref())
         {
-            return h;
+            return h.clone();
         }
         let mut visible: Vec<&CalendarListEntry> = self
             .calendars
@@ -431,7 +430,7 @@ impl GuiApp {
     }
 
     pub fn sort_calendars(&mut self) {
-        let order = self.core_config.collection_order.clone();
+        let order = &self.core_config.collection_order;
         let sort_by_size = self.sort_collections_by_size;
         let mut sizes = HashMap::new();
         if sort_by_size {
@@ -450,10 +449,10 @@ impl GuiApp {
                 let count_a = sizes.get(&a.href).unwrap_or(&0);
                 let count_b = sizes.get(&b.href).unwrap_or(&0);
                 crate::model::compare_calendars_with_size(
-                    &a.href, &a.name, *count_a, &b.href, &b.name, *count_b, &order,
+                    &a.href, &a.name, *count_a, &b.href, &b.name, *count_b, order,
                 )
             } else {
-                crate::model::compare_calendars(&a.href, &a.name, &b.href, &b.name, &order)
+                crate::model::compare_calendars(&a.href, &a.name, &b.href, &b.name, order)
             }
         });
     }
@@ -581,6 +580,7 @@ impl Default for GuiApp {
             AppTheme::RustyDark
         };
 
+        let config = Config::default();
         let ctx = Arc::new(crate::context::StandardContext::new(None));
         let store = TaskStore::new(ctx.clone());
         let client = Arc::new(tokio::sync::Mutex::new(None));
@@ -590,7 +590,7 @@ impl Default for GuiApp {
             ctx.clone(),
         );
         Self {
-            core_config: Config::default(),
+            core_config: config.clone(),
             ctx: ctx.clone(),
             state: AppState::Loading,
             store,
@@ -635,7 +635,7 @@ impl Default for GuiApp {
             sort_cutoff_days: Some(30),
             sort_standard_by_priority: false,
             paused_sort_behavior: crate::config::PausedSortBehavior::default(),
-            sort_tiebreak_recent: Config::default().sort_tiebreak_recent,
+            sort_tiebreak_recent: config.sort_tiebreak_recent,
             sort_preset: crate::config::SortPreset::default(),
             ob_sort_days_input: "30".to_string(),
             current_theme: AppTheme::default(),
@@ -793,7 +793,7 @@ impl Default for GuiApp {
             // Default UI scale
             ui_scale: 1.0,
 
-            pinned_actions: crate::config::Config::default().pinned_actions,
+            pinned_actions: config.pinned_actions,
             active_context_menu: None,
 
             last_click: None,
