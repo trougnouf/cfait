@@ -14,6 +14,7 @@ use rust_i18n::t;
 use std::time::Duration;
 
 use super::tooltip_style;
+use iced::widget::text::IntoFragment;
 use iced::widget::{
     Space, button, column, container, rich_text, row, span, text, text_editor, tooltip,
 };
@@ -162,6 +163,76 @@ fn code_block_spans(line: &str) -> Vec<iced::widget::text::Span<'static, String>
             .color(Color::from_rgb(0.8, 0.6, 0.4))
             .font(iced::Font::MONOSPACE),
     ]
+}
+
+/// One line of a fenced code block as a sized rich-text widget.
+fn code_line(line: &str) -> Element<'static, Message> {
+    rich_text(code_block_spans(line)).size(14).into()
+}
+
+/// Strips a markdown header prefix, returning the level (1-6) and the remaining text.
+fn strip_header_prefix(trimmed: &str) -> Option<(usize, String)> {
+    let level = trimmed.chars().take_while(|c| *c == '#').count();
+    if (1..=6).contains(&level) && trimmed.get(level..level + 1) == Some(" ") {
+        Some((level, trimmed[level + 1..].trim_start().to_string()))
+    } else {
+        None
+    }
+}
+
+/// Forces header (bold) or quote (italic) font styling on every span.
+fn apply_markdown_font(
+    spans: &mut [iced::widget::text::Span<'static, String>],
+    is_header: bool,
+    is_quote: bool,
+) {
+    let font = if is_header {
+        iced::Font {
+            weight: iced::font::Weight::Bold,
+            ..Default::default()
+        }
+    } else if is_quote {
+        iced::Font {
+            style: iced::font::Style::Italic,
+            ..Default::default()
+        }
+    } else {
+        return;
+    };
+    for span in spans.iter_mut() {
+        span.font = Some(font);
+    }
+}
+
+/// A small danger button for removing a relation in the details section.
+fn remove_btn(glyph: char, msg: Message) -> iced::widget::Button<'static, Message> {
+    button(icon::icon(glyph).size(10))
+        .style(button::danger)
+        .padding(2)
+        .on_press(msg)
+}
+
+/// One row in the details section: an optional leading icon or label, a remove
+/// button with tooltip, and a name button that jumps to the related task.
+fn relation_row<'a>(
+    leading: Option<Element<'a, Message>>,
+    remove: iced::widget::Button<'a, Message>,
+    remove_tooltip: impl IntoFragment<'a>,
+    name: impl IntoFragment<'a>,
+    name_color: Color,
+    jump_uid: String,
+) -> iced::widget::Row<'a, Message> {
+    let mut row = row![].spacing(5).align_y(iced::Alignment::Center);
+    if let Some(leading) = leading {
+        row = row.push(leading);
+    }
+    row.push(super::tip(remove, remove_tooltip, tooltip::Position::Top))
+        .push(
+            button(text(name).size(12).color(name_color))
+                .style(button::text)
+                .padding(0)
+                .on_press(Message::JumpToTask(jump_uid)),
+        )
 }
 
 /// Appends a completion marker (and date, when present) to a related task's name.
@@ -1320,10 +1391,8 @@ pub fn view_task_row<'a>(
                     let mut current_paragraph = String::new();
                     let mut in_code_block = false;
 
-                    for line in task.description.lines() {
-                        let trimmed = line.trim_start();
-
-                        if trimmed.starts_with("```") {
+                    macro_rules! flush_paragraph {
+                        () => {
                             if !current_paragraph.is_empty() {
                                 desc_col = push_rich_paragraph(
                                     desc_col,
@@ -1335,28 +1404,24 @@ pub fn view_task_row<'a>(
                                 );
                                 current_paragraph.clear();
                             }
-                            in_code_block = !in_code_block;
-                            desc_col = desc_col.push(rich_text(code_block_spans(line)).size(14));
-                            continue;
-                        }
+                        };
+                    }
 
-                        if in_code_block {
-                            desc_col = desc_col.push(rich_text(code_block_spans(line)).size(14));
+                    for line in task.description.lines() {
+                        let trimmed = line.trim_start();
+
+                        let is_fence = trimmed.starts_with("```");
+                        if is_fence {
+                            flush_paragraph!();
+                            in_code_block = !in_code_block;
+                        }
+                        if is_fence || in_code_block {
+                            desc_col = desc_col.push(code_line(line));
                             continue;
                         }
 
                         if trimmed.is_empty() {
-                            if !current_paragraph.is_empty() {
-                                desc_col = push_rich_paragraph(
-                                    desc_col,
-                                    &current_paragraph,
-                                    base_text_color,
-                                    &highlight_regex,
-                                    highlight_color,
-                                    &task.uid,
-                                );
-                                current_paragraph.clear();
-                            }
+                            flush_paragraph!();
                             desc_col = desc_col.push(Space::new().height(Length::Fixed(4.0)));
                             continue;
                         }
@@ -1392,24 +1457,14 @@ pub fn view_task_row<'a>(
                                 } else {
                                     Color::from_rgb(0.1, 0.4, 0.8)
                                 };
-                                if let Some(stripped) = trimmed.strip_prefix("# ") {
-                                    size = 18;
-                                    stripped.trim_start().to_string()
-                                } else if let Some(stripped) = trimmed.strip_prefix("## ") {
-                                    size = 16;
-                                    stripped.trim_start().to_string()
-                                } else if let Some(stripped) = trimmed.strip_prefix("### ") {
-                                    size = 15;
-                                    stripped.trim_start().to_string()
-                                } else if let Some(stripped) = trimmed.strip_prefix("#### ") {
-                                    size = 14;
-                                    stripped.trim_start().to_string()
-                                } else if let Some(stripped) = trimmed.strip_prefix("##### ") {
-                                    size = 14;
-                                    stripped.trim_start().to_string()
-                                } else if let Some(stripped) = trimmed.strip_prefix("###### ") {
-                                    size = 14;
-                                    stripped.trim_start().to_string()
+                                if let Some((level, text)) = strip_header_prefix(trimmed) {
+                                    size = match level {
+                                        1 => 18,
+                                        2 => 16,
+                                        3 => 15,
+                                        _ => 14,
+                                    };
+                                    text
                                 } else {
                                     trimmed.to_string()
                                 }
@@ -1436,21 +1491,7 @@ pub fn view_task_row<'a>(
                                 highlight_color,
                             );
 
-                            if is_header {
-                                for s in &mut spans {
-                                    s.font = Some(iced::Font {
-                                        weight: iced::font::Weight::Bold,
-                                        ..Default::default()
-                                    });
-                                }
-                            } else if is_quote {
-                                for s in &mut spans {
-                                    s.font = Some(iced::Font {
-                                        style: iced::font::Style::Italic,
-                                        ..Default::default()
-                                    });
-                                }
-                            }
+                            apply_markdown_font(&mut spans, is_header, is_quote);
 
                             desc_col = desc_col.push(rich_text(spans).size(size).on_link_click(
                                 move |target: String| link_message(target, &task.uid),
@@ -1462,16 +1503,7 @@ pub fn view_task_row<'a>(
                             current_paragraph.push_str(line);
                         }
                     }
-                    if !current_paragraph.is_empty() {
-                        desc_col = push_rich_paragraph(
-                            desc_col,
-                            &current_paragraph,
-                            base_text_color,
-                            &highlight_regex,
-                            highlight_color,
-                            &task.uid,
-                        );
-                    }
+                    flush_paragraph!();
                     details_col = details_col.push(desc_col);
                 }
 
@@ -1482,28 +1514,19 @@ pub fn view_task_row<'a>(
                         .get_summary(p_uid)
                         .unwrap_or_else(|| rust_i18n::t!("unknown_parent").to_string());
                     let p_name = truncate_chars(&p_name, 120);
-                    let remove_parent_btn = button(icon::icon(icon::CROSS).size(10))
-                        .style(button::danger)
-                        .padding(2)
-                        .on_press(Message::RemoveParent(task.uid.clone()));
-                    let row = row![
-                        text(rust_i18n::t!("parent"))
-                            .size(12)
-                            .color(Color::from_rgb(0.4, 0.8, 0.4)),
-                        tooltip(
-                            remove_parent_btn,
-                            text(rust_i18n::t!("remove_parent")).size(12),
-                            tooltip::Position::Top
-                        )
-                        .style(crate::gui::view::tooltip_style)
-                        .delay(Duration::from_millis(700)),
-                        button(text(p_name).size(12).color(Color::from_rgb(0.7, 0.7, 0.7)))
-                            .style(button::text)
-                            .padding(0)
-                            .on_press(Message::JumpToTask(p_uid.clone())),
-                    ]
-                    .spacing(5)
-                    .align_y(iced::Alignment::Center);
+                    let row = relation_row(
+                        Some(
+                            text(rust_i18n::t!("parent"))
+                                .size(12)
+                                .color(Color::from_rgb(0.4, 0.8, 0.4))
+                                .into(),
+                        ),
+                        remove_btn(icon::CROSS, Message::RemoveParent(task.uid.clone())),
+                        rust_i18n::t!("remove_parent"),
+                        p_name,
+                        Color::from_rgb(0.7, 0.7, 0.7),
+                        p_uid.clone(),
+                    );
                     details_col = details_col.push(row);
                 }
 
@@ -1521,31 +1544,17 @@ pub fn view_task_row<'a>(
                         let name = truncate_chars(&name, 120);
                         let is_done = app.store.is_task_done(dep_uid).unwrap_or(false);
                         let check = if is_done { "[x]" } else { "[ ]" };
-                        let remove_dep_btn = button(icon::icon(icon::CROSS).size(10))
-                            .style(button::danger)
-                            .padding(2)
-                            .on_press(Message::RemoveDependency(task.uid.clone(), dep_uid.clone()));
-                        let name_btn = button(
-                            text(format!("{} {}", check, name))
-                                .size(12)
-                                .color(Color::from_rgb(0.6, 0.6, 0.6)),
-                        )
-                        .style(button::text)
-                        .padding(0)
-                        .on_press(Message::JumpToTask(dep_uid.clone()));
-
-                        let dep_row = row![
-                            tooltip(
-                                remove_dep_btn,
-                                text(rust_i18n::t!("remove_dependency")).size(12),
-                                tooltip::Position::Top
-                            )
-                            .style(crate::gui::view::tooltip_style)
-                            .delay(Duration::from_millis(700)),
-                            name_btn,
-                        ]
-                        .spacing(5)
-                        .align_y(iced::Alignment::Center);
+                        let dep_row = relation_row(
+                            None,
+                            remove_btn(
+                                icon::CROSS,
+                                Message::RemoveDependency(task.uid.clone(), dep_uid.clone()),
+                            ),
+                            rust_i18n::t!("remove_dependency"),
+                            format!("{} {}", check, name),
+                            Color::from_rgb(0.6, 0.6, 0.6),
+                            dep_uid.clone(),
+                        );
                         details_col = details_col.push(dep_row);
                     }
                 }
@@ -1562,32 +1571,21 @@ pub fn view_task_row<'a>(
                             name = truncate_chars(&rel_task.summary, 120);
                             name = with_completion_marker(name, rel_task);
                         }
-                        let remove_related_btn = button(icon::icon(icon::CROSS).size(10))
-                            .style(button::danger)
-                            .padding(2)
-                            .on_press(Message::RemoveRelatedTo(
-                                task.uid.clone(),
-                                related_uid.clone(),
-                            ));
-                        let name_btn =
-                            button(text(name).size(12).color(Color::from_rgb(0.7, 0.7, 0.7)))
-                                .style(button::text)
-                                .padding(0)
-                                .on_press(Message::JumpToTask(related_uid.clone()));
-
-                        let related_row = row![
-                            icon::icon(random_related_icon(&task.uid, related_uid)).size(12),
-                            tooltip(
-                                remove_related_btn,
-                                text(rust_i18n::t!("remove_relation")).size(12),
-                                tooltip::Position::Top
-                            )
-                            .style(crate::gui::view::tooltip_style)
-                            .delay(Duration::from_millis(700)),
-                            name_btn,
-                        ]
-                        .spacing(5)
-                        .align_y(iced::Alignment::Center);
+                        let related_row = relation_row(
+                            Some(
+                                icon::icon(random_related_icon(&task.uid, related_uid))
+                                    .size(12)
+                                    .into(),
+                            ),
+                            remove_btn(
+                                icon::CROSS,
+                                Message::RemoveRelatedTo(task.uid.clone(), related_uid.clone()),
+                            ),
+                            rust_i18n::t!("remove_relation"),
+                            name,
+                            Color::from_rgb(0.7, 0.7, 0.7),
+                            related_uid.clone(),
+                        );
                         details_col = details_col.push(related_row);
                     }
                 }
@@ -1601,39 +1599,22 @@ pub fn view_task_row<'a>(
                     );
                     for (blocked_uid, blocked_name) in blocking_tasks {
                         let blocked_name = truncate_chars(&blocked_name, 120);
-                        let remove_block_btn = button(icon::icon(icon::UNLINK).size(10))
-                            .style(button::danger)
-                            .padding(2)
-                            .on_press(Message::RemoveDependency(
-                                blocked_uid.clone(),
-                                task.uid.clone(),
-                            ));
-
-                        let name_btn = button(
-                            text(blocked_name)
-                                .size(12)
-                                .color(Color::from_rgb(0.7, 0.7, 0.7)),
-                        )
-                        .style(button::text)
-                        .padding(0)
-                        .on_press(Message::JumpToTask(blocked_uid.clone()));
-
-                        let blocking_row = row![
-                            icon::icon(icon::HAND_STOP)
-                                .size(12)
-                                .color(Color::from_rgb(0.5, 0.5, 0.5)),
-                            tooltip(
-                                remove_block_btn,
-                                text(rust_i18n::t!("unblock_remove_dependency")).size(12),
-                                tooltip::Position::Top
-                            )
-                            .style(crate::gui::view::tooltip_style)
-                            .delay(Duration::from_millis(700)),
-                            name_btn,
-                        ]
-                        .spacing(5)
-                        .align_y(iced::Alignment::Center);
-
+                        let blocking_row = relation_row(
+                            Some(
+                                icon::icon(icon::HAND_STOP)
+                                    .size(12)
+                                    .color(Color::from_rgb(0.5, 0.5, 0.5))
+                                    .into(),
+                            ),
+                            remove_btn(
+                                icon::UNLINK,
+                                Message::RemoveDependency(blocked_uid.clone(), task.uid.clone()),
+                            ),
+                            rust_i18n::t!("unblock_remove_dependency"),
+                            blocked_name,
+                            Color::from_rgb(0.7, 0.7, 0.7),
+                            blocked_uid.clone(),
+                        );
                         details_col = details_col.push(blocking_row);
                     }
                 }
@@ -1650,35 +1631,21 @@ pub fn view_task_row<'a>(
                         if let Some(rel_task) = app.store.get_task_ref(&related_uid) {
                             related_name = with_completion_marker(related_name, rel_task);
                         }
-                        let remove_related_btn = button(icon::icon(icon::CROSS).size(10))
-                            .style(button::danger)
-                            .padding(2)
-                            .on_press(Message::RemoveRelatedTo(
-                                related_uid.clone(),
-                                task.uid.clone(),
-                            ));
-                        let name_btn = button(
-                            text(related_name)
-                                .size(12)
-                                .color(Color::from_rgb(0.7, 0.7, 0.7)),
-                        )
-                        .style(button::text)
-                        .padding(0)
-                        .on_press(Message::JumpToTask(related_uid.clone()));
-
-                        let related_row = row![
-                            icon::icon(random_related_icon(&task.uid, &related_uid)).size(12),
-                            tooltip(
-                                remove_related_btn,
-                                text(rust_i18n::t!("remove_relation")).size(12),
-                                tooltip::Position::Top
-                            )
-                            .style(crate::gui::view::tooltip_style)
-                            .delay(Duration::from_millis(700)),
-                            name_btn,
-                        ]
-                        .spacing(5)
-                        .align_y(iced::Alignment::Center);
+                        let related_row = relation_row(
+                            Some(
+                                icon::icon(random_related_icon(&task.uid, &related_uid))
+                                    .size(12)
+                                    .into(),
+                            ),
+                            remove_btn(
+                                icon::CROSS,
+                                Message::RemoveRelatedTo(related_uid.clone(), task.uid.clone()),
+                            ),
+                            rust_i18n::t!("remove_relation"),
+                            related_name,
+                            Color::from_rgb(0.7, 0.7, 0.7),
+                            related_uid.clone(),
+                        );
                         details_col = details_col.push(related_row);
                     }
                 }
@@ -2004,11 +1971,14 @@ pub fn view_task_row<'a>(
 
                         let trimmed = line.trim_start();
 
-                        if trimmed.starts_with("```") {
+                        let is_fence = trimmed.starts_with("```");
+                        if is_fence {
                             in_code_block = !in_code_block;
+                        }
+                        if is_fence || in_code_block {
                             let inline_desc = row![
                                 Space::new().width(Length::Fixed(indent_size as f32 + 34.0)),
-                                rich_text(code_block_spans(line)).size(14)
+                                code_line(line),
                             ];
                             desc_col = desc_col.push(inline_desc);
                             line_count += 1;
@@ -2018,40 +1988,9 @@ pub fn view_task_row<'a>(
                             continue;
                         }
 
-                        if in_code_block {
-                            let inline_desc = row![
-                                Space::new().width(Length::Fixed(indent_size as f32 + 34.0)),
-                                rich_text(code_block_spans(line)).size(14)
-                            ];
-                            desc_col = desc_col.push(inline_desc);
-                            line_count += 1;
-                            if line_count >= 3 {
-                                break;
-                            }
-                            continue;
-                        }
-
-                        let mut is_header = false;
-                        let mut display_line = if let Some(stripped) = trimmed.strip_prefix("# ") {
-                            is_header = true;
-                            stripped.trim_start().to_string()
-                        } else if let Some(stripped) = trimmed.strip_prefix("## ") {
-                            is_header = true;
-                            stripped.trim_start().to_string()
-                        } else if let Some(stripped) = trimmed.strip_prefix("### ") {
-                            is_header = true;
-                            stripped.trim_start().to_string()
-                        } else if let Some(stripped) = trimmed.strip_prefix("#### ") {
-                            is_header = true;
-                            stripped.trim_start().to_string()
-                        } else if let Some(stripped) = trimmed.strip_prefix("##### ") {
-                            is_header = true;
-                            stripped.trim_start().to_string()
-                        } else if let Some(stripped) = trimmed.strip_prefix("###### ") {
-                            is_header = true;
-                            stripped.trim_start().to_string()
-                        } else {
-                            line.to_string()
+                        let (is_header, mut display_line) = match strip_header_prefix(trimmed) {
+                            Some((_, text)) => (true, text),
+                            None => (false, line.to_string()),
                         };
 
                         if display_line.starts_with("- ") || display_line.starts_with("* ") {
@@ -2089,21 +2028,7 @@ pub fn view_task_row<'a>(
                             highlight_color,
                         );
 
-                        if is_header {
-                            for s in &mut spans {
-                                s.font = Some(iced::Font {
-                                    weight: iced::font::Weight::Bold,
-                                    ..Default::default()
-                                });
-                            }
-                        } else if is_quote {
-                            for s in &mut spans {
-                                s.font = Some(iced::Font {
-                                    style: iced::font::Style::Italic,
-                                    ..Default::default()
-                                });
-                            }
-                        }
+                        apply_markdown_font(&mut spans, is_header, is_quote);
 
                         let inline_desc = row![
                             Space::new().width(Length::Fixed(indent_size as f32 + 34.0)),
