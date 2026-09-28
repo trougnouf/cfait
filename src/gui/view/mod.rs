@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// File: ./src/gui/view/mod.rs
 use std::collections::HashSet;
 use std::time::Duration;
 pub mod focusable;
@@ -18,6 +17,7 @@ use crate::gui::view::task_row::view_task_row;
 use iced::alignment::Horizontal;
 use iced::mouse;
 use iced::widget::scrollable::{Direction, Scrollbar};
+use iced::widget::text::IntoFragment;
 use iced::widget::{
     MouseArea, Space, button, column, container, rich_text, row, scrollable, span, stack, svg,
     text, text_editor, text_input, tooltip,
@@ -115,6 +115,346 @@ pub fn tooltip_style(theme: &Theme) -> container::Style {
     }
 }
 
+fn modal_card_style(bg_alpha: f32, theme: &Theme) -> container::Style {
+    let palette = theme.extended_palette();
+    container::Style {
+        background: Some(
+            Color {
+                a: bg_alpha,
+                ..palette.background.weak.color
+            }
+            .into(),
+        ),
+        border: iced::Border {
+            color: palette.background.strong.color,
+            width: 1.0,
+            radius: 12.0.into(),
+        },
+        shadow: iced::Shadow {
+            color: Color::BLACK.scale_alpha(0.5),
+            offset: Vector::new(0.0, 4.0),
+            blur_radius: 10.0,
+        },
+        ..Default::default()
+    }
+}
+
+fn modal_backdrop<'a>(
+    card: impl Into<Element<'a, Message>>,
+    backdrop_alpha: f32,
+) -> Element<'a, Message> {
+    container(card)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .center_x(Length::Fill)
+        .center_y(Length::Fill)
+        .style(move |_| container::Style {
+            background: Some(Color::from_rgba(0.0, 0.0, 0.0, backdrop_alpha).into()),
+            ..Default::default()
+        })
+        .into()
+}
+
+fn modal_icon_header(icon_char: char, color: Color) -> Element<'static, Message> {
+    container(icon::icon(icon_char).size(30).color(color))
+        .padding(5)
+        .center_x(Length::Fill)
+        .into()
+}
+
+fn modal_title(title: impl IntoFragment<'static>) -> Element<'static, Message> {
+    text(title)
+        .size(24)
+        .font(iced::Font {
+            weight: iced::font::Weight::Bold,
+            ..Default::default()
+        })
+        .width(Length::Fill)
+        .align_x(Horizontal::Center)
+        .into()
+}
+
+fn tip<'a>(
+    content: impl Into<Element<'a, Message>>,
+    label: impl IntoFragment<'a>,
+    position: tooltip::Position,
+) -> Element<'a, Message> {
+    tooltip(content, text(label).size(12), position)
+        .style(tooltip_style)
+        .delay(Duration::from_millis(700))
+        .into()
+}
+
+fn sidebar_tab_active_style(
+    _theme: &Theme,
+    _status: iced::widget::button::Status,
+) -> iced::widget::button::Style {
+    iced::widget::button::Style {
+        background: Some(Color::from_rgb(1.0, 0.6, 0.0).into()),
+        text_color: Color::BLACK,
+        border: iced::Border {
+            radius: 4.0.into(),
+            ..Default::default()
+        },
+        ..iced::widget::button::Style::default()
+    }
+}
+
+fn sidebar_tab_btn(
+    sidebar_mode: SidebarMode,
+    icon_char: char,
+    mode: SidebarMode,
+    label: &str,
+    shortcut: char,
+    error: bool,
+) -> Element<'static, Message> {
+    let icon_el = if error && sidebar_mode != mode {
+        icon::icon(icon_char)
+            .size(18)
+            .color(Color::from_rgb(0.9, 0.2, 0.2))
+    } else {
+        icon::icon(icon_char).size(18)
+    };
+    tip(
+        button(container(icon_el).center_x(Length::Fill))
+            .padding(8)
+            .width(Length::Fill)
+            .style(if sidebar_mode == mode {
+                sidebar_tab_active_style
+            } else {
+                button::text
+            })
+            .on_press(Message::SidebarModeChanged(mode)),
+        format!("{} ({})", label, shortcut),
+        tooltip::Position::Bottom,
+    )
+}
+
+fn sidebar_footer_btn(
+    icon_char: char,
+    width: Length,
+    label: impl IntoFragment<'static>,
+    msg: Message,
+) -> Element<'static, Message> {
+    let mut icon_container = container(icon::icon(icon_char).size(20));
+    if matches!(width, Length::Fill) {
+        icon_container = icon_container.width(Length::Fill);
+    }
+    icon_container = icon_container.center_x(Length::Fill).center_y(Length::Fill);
+    tip(
+        iced::widget::button(icon_container)
+            .padding(0)
+            .height(Length::Fixed(40.0))
+            .width(width)
+            .style(iced::widget::button::secondary)
+            .on_press(msg),
+        label,
+        tooltip::Position::Top,
+    )
+}
+
+fn message_banner<'a>(
+    text_str: &'a str,
+    cross_color: Color,
+    background: impl Fn(&Theme) -> iced::Background + 'a,
+    dismiss: Message,
+) -> Element<'a, Message> {
+    let content = row![
+        text(text_str)
+            .style(|theme: &Theme| text::Style {
+                color: Some(theme.extended_palette().background.base.text)
+            })
+            .size(14)
+            .width(Length::Fill),
+        iced::widget::button(icon::icon(icon::CROSS).size(14).color(cross_color))
+            .style(iced::widget::button::text)
+            .padding(2)
+            .on_press(dismiss),
+    ]
+    .align_y(iced::Alignment::Center);
+    container(content)
+        .width(Length::Fill)
+        .padding(5)
+        .style(move |theme: &Theme| container::Style {
+            background: Some(background(theme)),
+            ..Default::default()
+        })
+        .into()
+}
+
+fn lock_bar(
+    icon_char: char,
+    label: String,
+    summary: Option<String>,
+    lock_icon: char,
+    lock_active: bool,
+    toggle: Message,
+) -> Element<'static, Message> {
+    let label_el = match &summary {
+        Some(_) => text(label).size(14).font(iced::Font {
+            weight: iced::font::Weight::Bold,
+            ..Default::default()
+        }),
+        None => text(label)
+            .size(14)
+            .font(iced::Font {
+                weight: iced::font::Weight::Bold,
+                ..Default::default()
+            })
+            .width(Length::Fill),
+    };
+    let mut row = row![
+        icon::icon(icon_char)
+            .size(16)
+            .style(|theme: &Theme| text::Style {
+                color: Some(theme.extended_palette().primary.base.color)
+            }),
+        label_el,
+    ]
+    .spacing(10)
+    .align_y(iced::Alignment::Center);
+    if let Some(summary) = summary {
+        row = row.push(text(summary).size(14).width(Length::Fill));
+    }
+    row = row
+        .push(
+            button(icon::icon(lock_icon).size(14))
+                .style(move |theme: &Theme, _status| {
+                    if lock_active {
+                        button::Style {
+                            text_color: theme.extended_palette().primary.base.color,
+                            ..button::text(theme, _status)
+                        }
+                    } else {
+                        button::Style {
+                            text_color: Color::from_rgba(0.5, 0.5, 0.5, 0.7),
+                            ..button::text(theme, _status)
+                        }
+                    }
+                })
+                .padding(5)
+                .on_press(toggle),
+        )
+        .push(
+            button(icon::icon(icon::CROSS).size(14))
+                .style(iced::widget::button::text)
+                .padding(5)
+                .on_press(Message::EscapePressed),
+        );
+    container(row)
+        .padding(10)
+        .style(|theme: &Theme| {
+            let palette = theme.extended_palette();
+            container::Style {
+                background: Some(palette.background.weak.color.into()),
+                border: iced::Border {
+                    color: palette.primary.base.color,
+                    width: 1.0,
+                    radius: 4.0.into(),
+                },
+                ..Default::default()
+            }
+        })
+        .into()
+}
+
+fn jump_button(icon_char: char, label: String, msg: Message) -> Element<'static, Message> {
+    container(
+        iced::widget::button(
+            row![icon::icon(icon_char).size(14), text(label).size(14)]
+                .spacing(5)
+                .align_y(iced::Alignment::Center),
+        )
+        .style(iced::widget::button::secondary)
+        .padding(5)
+        .width(Length::Fill)
+        .on_press(msg),
+    )
+    .padding(iced::Padding {
+        left: 10.0,
+        right: 10.0,
+        bottom: 5.0,
+        ..Default::default()
+    })
+    .into()
+}
+
+fn window_controls(force_ssd: bool) -> Element<'static, Message> {
+    if force_ssd {
+        row![].spacing(0).into()
+    } else {
+        row![
+            iced::widget::button(icon::icon(icon::WINDOW_MINIMIZE).size(14))
+                .style(iced::widget::button::text)
+                .padding(8)
+                .on_press(Message::MinimizeWindow),
+            iced::widget::button(icon::icon(icon::CROSS).size(14))
+                .style(iced::widget::button::danger)
+                .padding(8)
+                .on_press(Message::CloseWindow),
+        ]
+        .spacing(0)
+        .into()
+    }
+}
+
+fn drag_area<'a>(el: impl Into<Element<'a, Message>>, force_ssd: bool) -> Element<'a, Message> {
+    if force_ssd {
+        el.into()
+    } else {
+        MouseArea::new(el).on_press(Message::WindowDragged).into()
+    }
+}
+
+fn journal_activity_row(
+    icon_char: char,
+    icon_color: Color,
+    label: String,
+    tasks: &[crate::model::Task],
+) -> Option<Element<'static, Message>> {
+    if tasks.is_empty() {
+        return None;
+    }
+    let mut spans = Vec::new();
+    for (i, t) in tasks.iter().enumerate() {
+        if i > 0 {
+            spans.push(span(", ").color(Color::from_rgb(0.6, 0.6, 0.6)));
+        }
+        spans.push(
+            span(t.summary.clone())
+                .color(Color::from_rgb(0.2, 0.7, 1.0))
+                .link(t.uid.clone()),
+        );
+    }
+    let rt = rich_text(spans).size(13).on_link_click(Message::JumpToTask);
+    Some(
+        column![
+            row![
+                icon::icon(icon_char).size(10).color(icon_color),
+                text(label).size(12).color(Color::from_rgb(0.6, 0.6, 0.6))
+            ]
+            .spacing(4)
+            .align_y(iced::Alignment::Center),
+            rt,
+        ]
+        .spacing(2)
+        .into(),
+    )
+}
+
+fn journal_panel_style(theme: &Theme) -> container::Style {
+    let palette = theme.extended_palette();
+    container::Style {
+        background: Some(palette.background.weak.color.into()),
+        border: iced::Border {
+            width: 1.0,
+            color: palette.background.strong.color,
+            radius: 8.0.into(),
+        },
+        ..Default::default()
+    }
+}
+
 pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
     let is_expanded =
         app.editing_uid.is_some() || app.editing_tree_uid.is_some() || app.creating_with_desc;
@@ -203,22 +543,8 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             })
             .collect();
 
-        let icon_header = container(
-            icon::icon(icon::TRASH)
-                .size(30)
-                .color(Color::from_rgb(0.9, 0.2, 0.2)),
-        )
-        .padding(5)
-        .center_x(Length::Fill);
-
-        let title = text(rust_i18n::t!("delete_all_title"))
-            .size(24)
-            .font(iced::Font {
-                weight: iced::font::Weight::Bold,
-                ..Default::default()
-            })
-            .width(Length::Fill)
-            .align_x(Horizontal::Center);
+        let icon_header = modal_icon_header(icon::TRASH, Color::from_rgb(0.9, 0.2, 0.2));
+        let title = modal_title(rust_i18n::t!("delete_all_title"));
 
         let count = uids.len();
         let prompt = if count == 1 {
@@ -285,61 +611,14 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             .padding(20)
             .width(Length::Fixed(400.0))
             .max_height(600.0)
-            .style(|theme: &Theme| {
-                let palette = theme.extended_palette();
-                container::Style {
-                    background: Some(
-                        Color {
-                            a: 0.98,
-                            ..palette.background.weak.color
-                        }
-                        .into(),
-                    ),
-                    border: iced::Border {
-                        color: palette.background.strong.color,
-                        width: 1.0,
-                        radius: 12.0.into(),
-                    },
-                    shadow: iced::Shadow {
-                        color: Color::BLACK.scale_alpha(0.5),
-                        offset: Vector::new(0.0, 4.0),
-                        blur_radius: 10.0,
-                    },
-                    ..Default::default()
-                }
-            });
+            .style(|theme: &Theme| modal_card_style(0.98, theme));
 
-        stack_children.push(
-            container(modal_card)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .center_x(Length::Fill)
-                .center_y(Length::Fill)
-                .style(|_| container::Style {
-                    background: Some(Color::from_rgba(0.0, 0.0, 0.0, 0.7).into()),
-                    ..Default::default()
-                })
-                .into(),
-        );
+        stack_children.push(modal_backdrop(modal_card, 0.7));
     } else if !app.ringing_tasks.is_empty() {
         let (task, alarm) = &app.ringing_tasks[0];
 
-        let icon_header = container(
-            icon::icon(icon::BELL)
-                .size(30)
-                .color(Color::from_rgb(1.0, 0.4, 0.0)),
-        )
-        .padding(5)
-        .center_x(Length::Fill);
-
-        let title = text(rust_i18n::t!("reminder_title"))
-            .size(24)
-            .font(iced::Font {
-                weight: iced::font::Weight::Bold,
-                ..Default::default()
-            })
-            .width(Length::Fill)
-            .align_x(Horizontal::Center);
+        let icon_header = modal_icon_header(icon::BELL, Color::from_rgb(1.0, 0.4, 0.0));
+        let title = modal_title(rust_i18n::t!("reminder_title"));
 
         let summary = text(&task.summary)
             .size(18)
@@ -459,42 +738,9 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             .padding(20)
             .width(Length::Fixed(380.0))
             .max_height(500.0)
-            .style(|theme: &Theme| {
-                let palette = theme.extended_palette();
-                container::Style {
-                    background: Some(
-                        Color {
-                            a: 0.95,
-                            ..palette.background.weak.color
-                        }
-                        .into(),
-                    ),
-                    border: iced::Border {
-                        color: palette.background.strong.color,
-                        width: 1.0,
-                        radius: 12.0.into(),
-                    },
-                    shadow: iced::Shadow {
-                        color: Color::BLACK.scale_alpha(0.5),
-                        offset: Vector::new(0.0, 4.0),
-                        blur_radius: 10.0,
-                    },
-                    ..Default::default()
-                }
-            });
+            .style(|theme: &Theme| modal_card_style(0.95, theme));
 
-        stack_children.push(
-            container(modal_card)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .center_x(Length::Fill)
-                .center_y(Length::Fill)
-                .style(|_| container::Style {
-                    background: Some(Color::from_rgba(0.0, 0.0, 0.0, 0.6).into()),
-                    ..Default::default()
-                })
-                .into(),
-        );
+        stack_children.push(modal_backdrop(modal_card, 0.6));
     }
 
     // --- CONTEXT MENU OVERLAY ---
@@ -944,26 +1190,12 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
     {
         let targets = app.get_move_targets(&task.calendar_href, app.moving_task_is_tree);
 
-        let icon_header = container(
-            icon::icon(icon::MOVE)
-                .size(30)
-                .color(Color::from_rgb(0.3, 0.7, 1.0)),
-        )
-        .padding(5)
-        .center_x(Length::Fill);
-
-        let title = text(if app.moving_task_is_tree {
+        let icon_header = modal_icon_header(icon::MOVE, Color::from_rgb(0.3, 0.7, 1.0));
+        let title = modal_title(if app.moving_task_is_tree {
             rust_i18n::t!("move_task_tree")
         } else {
             rust_i18n::t!("move_task_title")
-        })
-        .size(24)
-        .font(iced::Font {
-            weight: iced::font::Weight::Bold,
-            ..Default::default()
-        })
-        .width(Length::Fill)
-        .align_x(Horizontal::Center);
+        });
 
         let mut cal_list = column![].spacing(5);
         for (i, cal) in targets.iter().enumerate() {
@@ -1040,42 +1272,9 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             .padding(20)
             .width(Length::Fixed(350.0))
             .max_height(500.0)
-            .style(|theme: &Theme| {
-                let palette = theme.extended_palette();
-                container::Style {
-                    background: Some(
-                        Color {
-                            a: 0.98,
-                            ..palette.background.weak.color
-                        }
-                        .into(),
-                    ),
-                    border: iced::Border {
-                        color: palette.background.strong.color,
-                        width: 1.0,
-                        radius: 12.0.into(),
-                    },
-                    shadow: iced::Shadow {
-                        color: Color::BLACK.scale_alpha(0.5),
-                        offset: Vector::new(0.0, 4.0),
-                        blur_radius: 10.0,
-                    },
-                    ..Default::default()
-                }
-            });
+            .style(|theme: &Theme| modal_card_style(0.98, theme));
 
-        stack_children.push(
-            container(modal_card)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .center_x(Length::Fill)
-                .center_y(Length::Fill)
-                .style(|_| container::Style {
-                    background: Some(Color::from_rgba(0.0, 0.0, 0.0, 0.6).into()),
-                    ..Default::default()
-                })
-                .into(),
-        );
+        stack_children.push(modal_backdrop(modal_card, 0.6));
     }
 
     if app.blur_when_unfocused && !app.is_window_focused {
@@ -1247,88 +1446,34 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
 }
 
 fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
-    let active_style =
-        |_theme: &Theme, _status: iced::widget::button::Status| -> iced::widget::button::Style {
-            iced::widget::button::Style {
-                background: Some(Color::from_rgb(1.0, 0.6, 0.0).into()),
-                text_color: Color::BLACK,
-                border: iced::Border {
-                    radius: 4.0.into(),
-                    ..Default::default()
-                },
-                ..iced::widget::button::Style::default()
-            }
-        };
-
     let is_filter_empty = app.tasks.is_empty() && app.store.has_any_tasks();
     let is_tag_error = is_filter_empty && !app.session.selected_categories.is_empty();
     let is_loc_error = is_filter_empty && !app.session.selected_locations.is_empty();
 
-    let btn_cals = tooltip(
-        button(container(icon::icon(icon::CALENDARS_HEADER).size(18)).center_x(Length::Fill))
-            .padding(8)
-            .width(Length::Fill)
-            .style(if app.sidebar_mode == SidebarMode::Calendars {
-                active_style
-            } else {
-                button::text
-            })
-            .on_press(Message::SidebarModeChanged(SidebarMode::Calendars)),
-        text(format!("{} (1)", rust_i18n::t!("calendars"))).size(12),
-        tooltip::Position::Bottom,
-    )
-    .style(tooltip_style)
-    .delay(Duration::from_millis(700));
-
-    let tag_icon = {
-        if is_tag_error && app.sidebar_mode != SidebarMode::Categories {
-            icon::icon(icon::TAGS_HEADER)
-                .size(18)
-                .color(Color::from_rgb(0.9, 0.2, 0.2))
-        } else {
-            icon::icon(icon::TAGS_HEADER).size(18)
-        }
-    };
-    let btn_tags = tooltip(
-        button(container(tag_icon).center_x(Length::Fill))
-            .padding(8)
-            .width(Length::Fill)
-            .style(if app.sidebar_mode == SidebarMode::Categories {
-                active_style
-            } else {
-                button::text
-            })
-            .on_press(Message::SidebarModeChanged(SidebarMode::Categories)),
-        text(format!("{} (2)", rust_i18n::t!("tags"))).size(12),
-        tooltip::Position::Bottom,
-    )
-    .style(tooltip_style)
-    .delay(Duration::from_millis(700));
-
-    let loc_icon = {
-        if is_loc_error && app.sidebar_mode != SidebarMode::Locations {
-            icon::icon(app.location_tab_icon)
-                .size(18)
-                .color(Color::from_rgb(0.9, 0.2, 0.2))
-        } else {
-            icon::icon(app.location_tab_icon).size(18)
-        }
-    };
-    let btn_locs = tooltip(
-        button(container(loc_icon).center_x(Length::Fill))
-            .padding(8)
-            .width(Length::Fill)
-            .style(if app.sidebar_mode == SidebarMode::Locations {
-                active_style
-            } else {
-                button::text
-            })
-            .on_press(Message::SidebarModeChanged(SidebarMode::Locations)),
-        text(format!("{} (3)", rust_i18n::t!("locations"))).size(12),
-        tooltip::Position::Bottom,
-    )
-    .style(tooltip_style)
-    .delay(Duration::from_millis(700));
+    let btn_cals = sidebar_tab_btn(
+        app.sidebar_mode,
+        icon::CALENDARS_HEADER,
+        SidebarMode::Calendars,
+        &rust_i18n::t!("calendars"),
+        '1',
+        false,
+    );
+    let btn_tags = sidebar_tab_btn(
+        app.sidebar_mode,
+        icon::TAGS_HEADER,
+        SidebarMode::Categories,
+        &rust_i18n::t!("tags"),
+        '2',
+        is_tag_error,
+    );
+    let btn_locs = sidebar_tab_btn(
+        app.sidebar_mode,
+        app.location_tab_icon,
+        SidebarMode::Locations,
+        &rust_i18n::t!("locations"),
+        '3',
+        is_loc_error,
+    );
 
     let mut tabs = row![].spacing(2);
 
@@ -1345,43 +1490,25 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     }
 
     if app.show_goals_tab {
-        let btn_goals = tooltip(
-            button(container(icon::icon(app.goal_icon).size(18)).center_x(Length::Fill))
-                .padding(8)
-                .width(Length::Fill)
-                .style(if app.sidebar_mode == SidebarMode::Goals {
-                    active_style
-                } else {
-                    button::text
-                })
-                .on_press(Message::SidebarModeChanged(SidebarMode::Goals)),
-            text(format!("{} (4)", rust_i18n::t!("goals"))).size(12),
-            tooltip::Position::Bottom,
-        )
-        .style(tooltip_style)
-        .delay(Duration::from_millis(700));
-
-        tabs = tabs.push(btn_goals);
+        tabs = tabs.push(sidebar_tab_btn(
+            app.sidebar_mode,
+            app.goal_icon,
+            SidebarMode::Goals,
+            &rust_i18n::t!("goals"),
+            '4',
+            false,
+        ));
     }
 
     if app.show_journal_tab {
-        let btn_journal = tooltip(
-            button(container(icon::icon(app.journal_icon).size(18)).center_x(Length::Fill))
-                .padding(8)
-                .width(Length::Fill)
-                .style(if app.sidebar_mode == SidebarMode::Journal {
-                    active_style
-                } else {
-                    button::text
-                })
-                .on_press(Message::SidebarModeChanged(SidebarMode::Journal)),
-            text(format!("{} (5)", rust_i18n::t!("journal"))).size(12),
-            tooltip::Position::Bottom,
-        )
-        .style(tooltip_style)
-        .delay(Duration::from_millis(700));
-
-        tabs = tabs.push(btn_journal);
+        tabs = tabs.push(sidebar_tab_btn(
+            app.sidebar_mode,
+            app.journal_icon,
+            SidebarMode::Journal,
+            &rust_i18n::t!("journal"),
+            '5',
+            false,
+        ));
     }
 
     let content = match app.sidebar_mode {
@@ -1392,78 +1519,31 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         SidebarMode::Goals => crate::gui::view::sidebar::view_sidebar_goals(app),
     };
 
-    let settings_btn = iced::widget::button(
-        container(icon::icon(icon::SETTINGS_GEAR).size(20))
-            .width(Length::Fill)
-            .center_x(Length::Fill)
-            .center_y(Length::Fill),
-    )
-    .padding(0)
-    .height(Length::Fixed(40.0))
-    .width(Length::Fill)
-    .style(iced::widget::button::secondary)
-    .on_press(Message::OpenSettings);
-
-    let keyboard_btn = iced::widget::button(
-        container(icon::icon(icon::KEYBOARD).size(20))
-            .center_x(Length::Fill)
-            .center_y(Length::Fill),
-    )
-    .padding(0)
-    .height(Length::Fixed(40.0))
-    .width(Length::Fixed(40.0))
-    .style(iced::widget::button::secondary)
-    .on_press(Message::OpenHelp(crate::help::HelpTab::Shortcuts));
-
-    let help_btn = iced::widget::button(
-        container(icon::icon(icon::HELP_RHOMBUS).size(20))
-            .center_x(Length::Fill)
-            .center_y(Length::Fill),
-    )
-    .padding(0)
-    .height(Length::Fixed(40.0))
-    .width(Length::Fixed(40.0))
-    .style(iced::widget::button::secondary)
-    .on_press(Message::OpenHelp(crate::help::HelpTab::Syntax));
-
     let footer = row![
-        tooltip(
-            settings_btn,
-            text(format!("{} (Ctrl+,)", rust_i18n::t!("settings"))).size(12),
-            tooltip::Position::Top
-        )
-        .style(tooltip_style)
-        .delay(Duration::from_millis(700)),
-        tooltip(
-            keyboard_btn,
-            text(format!("{} (?)", rust_i18n::t!("keyboard_shortcuts"))).size(12),
-            tooltip::Position::Top
-        )
-        .style(tooltip_style)
-        .delay(Duration::from_millis(700)),
-        tooltip(
-            help_btn,
-            text(format!("{} (?)", rust_i18n::t!("syntax_help"))).size(12),
-            tooltip::Position::Top
-        )
-        .style(tooltip_style)
-        .delay(Duration::from_millis(700)),
-        tooltip(
-            iced::widget::button(
-                container(icon::icon(icon::BARS).size(20))
-                    .center_x(Length::Fill)
-                    .center_y(Length::Fill),
-            )
-            .padding(0)
-            .height(Length::Fixed(40.0))
-            .width(Length::Fixed(40.0))
-            .style(iced::widget::button::secondary)
-            .on_press(Message::ToggleSidebar),
-            text(rust_i18n::t!("toggle_sidebar")).size(12),
-            tooltip::Position::Top
-        )
-        .style(tooltip_style)
-        .delay(Duration::from_millis(700)),
+        sidebar_footer_btn(
+            icon::SETTINGS_GEAR,
+            Length::Fill,
+            format!("{} (Ctrl+,)", rust_i18n::t!("settings")),
+            Message::OpenSettings,
+        ),
+        sidebar_footer_btn(
+            icon::KEYBOARD,
+            Length::Fixed(40.0),
+            format!("{} (?)", rust_i18n::t!("keyboard_shortcuts")),
+            Message::OpenHelp(crate::help::HelpTab::Shortcuts),
+        ),
+        sidebar_footer_btn(
+            icon::HELP_RHOMBUS,
+            Length::Fixed(40.0),
+            format!("{} (?)", rust_i18n::t!("syntax_help")),
+            Message::OpenHelp(crate::help::HelpTab::Syntax),
+        ),
+        sidebar_footer_btn(
+            icon::BARS,
+            Length::Fixed(40.0),
+            rust_i18n::t!("toggle_sidebar"),
+            Message::ToggleSidebar,
+        ),
     ]
     .spacing(5);
 
@@ -1615,19 +1695,15 @@ fn view_main_content(app: &GuiApp, show_logo: bool, is_expanded: bool) -> Elemen
     let mut title_group = row![].spacing(0).align_y(iced::Alignment::Center);
 
     if app.sidebar_is_hidden {
-        let sidebar_toggle_btn = tooltip(
-            iced::widget::button(icon::icon(icon::BARS).size(18))
-                .style(iced::widget::button::text)
-                .padding(4)
-                .on_press(Message::ToggleSidebar),
-            text(rust_i18n::t!("toggle_sidebar")).size(12),
-            tooltip::Position::Bottom,
-        )
-        .style(tooltip_style)
-        .delay(Duration::from_millis(700));
-
         title_group = title_group
-            .push(sidebar_toggle_btn)
+            .push(tip(
+                iced::widget::button(icon::icon(icon::BARS).size(18))
+                    .style(iced::widget::button::text)
+                    .padding(4)
+                    .on_press(Message::ToggleSidebar),
+                rust_i18n::t!("toggle_sidebar"),
+                tooltip::Position::Bottom,
+            ))
             .push(Space::new().width(8));
     }
 
@@ -1662,15 +1738,11 @@ fn view_main_content(app: &GuiApp, show_logo: bool, is_expanded: bool) -> Elemen
     .padding(0)
     .on_press(dynamic_msg);
 
-    title_group = title_group.push(
-        tooltip(
-            title_btn,
-            text(format!("{} (*)", rust_i18n::t!("support_clear_filters"))),
-            tooltip::Position::Bottom,
-        )
-        .style(tooltip_style)
-        .delay(Duration::from_millis(700)),
-    );
+    title_group = title_group.push(tip(
+        title_btn,
+        format!("{} (*)", rust_i18n::t!("support_clear_filters")),
+        tooltip::Position::Bottom,
+    ));
 
     for other in other_visible_cals {
         let other_color = other
@@ -1719,15 +1791,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool, is_expanded: bool) -> Elemen
             .padding(4)
             .on_press(Message::Refresh);
 
-    left_section = left_section.push(
-        tooltip(
-            refresh_btn,
-            text(sync_tooltip).size(12),
-            tooltip::Position::Bottom,
-        )
-        .style(tooltip_style)
-        .delay(Duration::from_millis(700)),
-    );
+    left_section = left_section.push(tip(refresh_btn, sync_tooltip, tooltip::Position::Bottom));
 
     let subtitle_text = text(subtitle)
         .size(14)
@@ -1759,19 +1823,11 @@ fn view_main_content(app: &GuiApp, show_logo: bool, is_expanded: bool) -> Elemen
         .padding(6)
         .on_press(Message::JumpToRandomTask);
 
-    search_row = search_row.push(
-        tooltip(
-            random_btn,
-            text(format!(
-                "{} (Shift+R)",
-                rust_i18n::t!("jump_to_random_task")
-            ))
-            .size(12),
-            tooltip::Position::Bottom,
-        )
-        .style(tooltip_style)
-        .delay(Duration::from_millis(700)),
-    );
+    search_row = search_row.push(tip(
+        random_btn,
+        format!("{} (Shift+R)", rust_i18n::t!("jump_to_random_task")),
+        tooltip::Position::Bottom,
+    ));
 
     if app.show_quick_filter {
         let is_active = search_text.contains(&app.quick_filter_term);
@@ -1787,19 +1843,14 @@ fn view_main_content(app: &GuiApp, show_logo: bool, is_expanded: bool) -> Elemen
             .padding(6)
             .on_press(Message::ToggleQuickFilter);
 
-        search_row = search_row.push(
-            tooltip(
-                qf_btn,
-                text(rust_i18n::t!(
-                    "tooltip_toggle_quick_filter",
-                    term = app.quick_filter_term.clone()
-                ))
-                .size(12),
-                tooltip::Position::Bottom,
-            )
-            .style(tooltip_style)
-            .delay(Duration::from_millis(700)),
-        );
+        search_row = search_row.push(tip(
+            qf_btn,
+            rust_i18n::t!(
+                "tooltip_toggle_quick_filter",
+                term = app.quick_filter_term.clone()
+            ),
+            tooltip::Position::Bottom,
+        ));
     }
 
     let is_filter_empty = app.tasks.is_empty() && app.store.has_any_tasks();
@@ -1843,61 +1894,38 @@ fn view_main_content(app: &GuiApp, show_logo: bool, is_expanded: bool) -> Elemen
     search_row = search_row.push(if is_search_empty {
         Element::from(clear_btn)
     } else {
-        tooltip(
+        tip(
             clear_btn,
-            text(rust_i18n::t!("tooltip_clear_esc")).size(12),
+            rust_i18n::t!("tooltip_clear_esc"),
             tooltip::Position::Bottom,
         )
-        .style(tooltip_style)
-        .delay(Duration::from_millis(700))
-        .into()
     });
     search_row = search_row.push(final_search_widget);
 
-    let window_controls = if app.force_ssd {
-        row![].spacing(0)
-    } else {
-        row![
-            iced::widget::button(icon::icon(icon::WINDOW_MINIMIZE).size(14))
-                .style(iced::widget::button::text)
-                .padding(8)
-                .on_press(Message::MinimizeWindow),
-            iced::widget::button(icon::icon(icon::CROSS).size(14))
-                .style(iced::widget::button::danger)
-                .padding(8)
-                .on_press(Message::CloseWindow)
-        ]
-        .spacing(0)
-    };
+    let window_controls = window_controls(app.force_ssd);
 
     let mut right_section = row![search_row]
         .spacing(10)
         .align_y(iced::Alignment::Center);
 
     if app.sidebar_is_hidden {
-        let settings_btn = tooltip(
-            iced::widget::button(icon::icon(icon::SETTINGS_GEAR).size(16))
-                .style(iced::widget::button::text)
-                .padding(4)
-                .on_press(Message::OpenSettings),
-            text(rust_i18n::t!("settings")).size(12),
-            tooltip::Position::Bottom,
-        )
-        .style(tooltip_style)
-        .delay(Duration::from_millis(700));
-
-        let help_btn = tooltip(
-            iced::widget::button(icon::icon(icon::HELP_RHOMBUS).size(16))
-                .style(iced::widget::button::text)
-                .padding(4)
-                .on_press(Message::OpenHelp(crate::help::HelpTab::Syntax)),
-            text(rust_i18n::t!("help")).size(12),
-            tooltip::Position::Bottom,
-        )
-        .style(tooltip_style)
-        .delay(Duration::from_millis(700));
-
-        right_section = right_section.push(settings_btn).push(help_btn);
+        right_section = right_section
+            .push(tip(
+                iced::widget::button(icon::icon(icon::SETTINGS_GEAR).size(16))
+                    .style(iced::widget::button::text)
+                    .padding(4)
+                    .on_press(Message::OpenSettings),
+                rust_i18n::t!("settings"),
+                tooltip::Position::Bottom,
+            ))
+            .push(tip(
+                iced::widget::button(icon::icon(icon::HELP_RHOMBUS).size(16))
+                    .style(iced::widget::button::text)
+                    .padding(4)
+                    .on_press(Message::OpenHelp(crate::help::HelpTab::Syntax)),
+                rust_i18n::t!("help"),
+                tooltip::Position::Bottom,
+            ));
     }
 
     right_section = right_section.push(window_controls);
@@ -1912,13 +1940,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool, is_expanded: bool) -> Elemen
         })
         .align_y(iced::Alignment::Center);
 
-    let header_drag_area = if app.force_ssd {
-        Element::from(header_row)
-    } else {
-        MouseArea::new(header_row)
-            .on_press(Message::WindowDragged)
-            .into()
-    };
+    let header_drag_area = drag_area(header_row, app.force_ssd);
 
     let export_ui: Element<'_, Message>;
     if is_expanded {
@@ -1970,61 +1992,21 @@ fn view_main_content(app: &GuiApp, show_logo: bool, is_expanded: bool) -> Elemen
     let mut main_col = column![header_drag_area, export_ui];
 
     if let Some(err) = &app.error_msg {
-        let error_content = row![
-            text(err)
-                .style(|theme: &Theme| text::Style {
-                    color: Some(theme.extended_palette().background.base.text)
-                })
-                .size(14)
-                .width(Length::Fill),
-            iced::widget::button(
-                icon::icon(icon::CROSS)
-                    .size(14)
-                    .color(app.theme().extended_palette().background.base.text)
-            )
-            .style(iced::widget::button::text)
-            .padding(2)
-            .on_press(Message::DismissError)
-        ]
-        .align_y(iced::Alignment::Center);
-        main_col = main_col.push(
-            container(error_content)
-                .width(Length::Fill)
-                .padding(5)
-                .style(|_| container::Style {
-                    background: Some(Color::from_rgb(0.8, 0.2, 0.2).into()),
-                    ..Default::default()
-                }),
-        );
+        main_col = main_col.push(message_banner(
+            err,
+            app.theme().extended_palette().background.base.text,
+            |_| Color::from_rgb(0.8, 0.2, 0.2).into(),
+            Message::DismissError,
+        ));
     }
 
     if let Some(info) = &app.info_msg {
-        let info_content = row![
-            text(info)
-                .style(|theme: &Theme| text::Style {
-                    color: Some(theme.extended_palette().background.base.text)
-                })
-                .size(14)
-                .width(Length::Fill),
-            iced::widget::button(
-                icon::icon(icon::CROSS)
-                    .size(14)
-                    .color(app.theme().extended_palette().background.base.text)
-            )
-            .style(iced::widget::button::text)
-            .padding(2)
-            .on_press(Message::DismissInfo(app.info_msg_version))
-        ]
-        .align_y(iced::Alignment::Center);
-        main_col = main_col.push(
-            container(info_content)
-                .width(Length::Fill)
-                .padding(5)
-                .style(|theme: &Theme| container::Style {
-                    background: Some(theme.extended_palette().success.base.color.into()),
-                    ..Default::default()
-                }),
-        );
+        main_col = main_col.push(message_banner(
+            info,
+            app.theme().extended_palette().background.base.text,
+            |theme: &Theme| theme.extended_palette().success.base.color.into(),
+            Message::DismissInfo(app.info_msg_version),
+        ));
     }
 
     main_col = main_col.push(input_area);
@@ -2033,58 +2015,14 @@ fn view_main_content(app: &GuiApp, show_logo: bool, is_expanded: bool) -> Elemen
         && let Some(uid) = &app.yanked_uid
         && let Some(summary) = app.store.get_summary(uid)
     {
-        let yank_bar = container(
-            row![
-                icon::icon(icon::LINK)
-                    .size(16)
-                    .style(|theme: &Theme| text::Style {
-                        color: Some(theme.extended_palette().primary.base.color)
-                    }),
-                text(rust_i18n::t!("yanked_label"))
-                    .size(14)
-                    .font(iced::Font {
-                        weight: iced::font::Weight::Bold,
-                        ..Default::default()
-                    }),
-                text(summary).size(14).width(Length::Fill),
-                button(icon::icon(icon::LINK_LOCK).size(14))
-                    .style(move |theme: &Theme, _status| {
-                        if app.yank_lock_active {
-                            iced::widget::button::Style {
-                                text_color: theme.extended_palette().primary.base.color,
-                                ..iced::widget::button::text(theme, _status)
-                            }
-                        } else {
-                            iced::widget::button::Style {
-                                text_color: Color::from_rgba(0.5, 0.5, 0.5, 0.7),
-                                ..iced::widget::button::text(theme, _status)
-                            }
-                        }
-                    })
-                    .padding(5)
-                    .on_press(Message::ToggleYankLock),
-                button(icon::icon(icon::CROSS).size(14))
-                    .style(iced::widget::button::text)
-                    .padding(5)
-                    .on_press(Message::EscapePressed)
-            ]
-            .spacing(10)
-            .align_y(iced::Alignment::Center),
-        )
-        .padding(10)
-        .style(|theme: &Theme| {
-            let palette = theme.extended_palette();
-            container::Style {
-                background: Some(palette.background.weak.color.into()),
-                border: iced::Border {
-                    color: palette.primary.base.color,
-                    width: 1.0,
-                    radius: 4.0.into(),
-                },
-                ..Default::default()
-            }
-        });
-        main_col = main_col.push(yank_bar);
+        main_col = main_col.push(lock_bar(
+            icon::LINK,
+            rust_i18n::t!("yanked_label").to_string(),
+            Some(summary),
+            icon::LINK_LOCK,
+            app.yank_lock_active,
+            Message::ToggleYankLock,
+        ));
     }
 
     if !is_expanded
@@ -2092,85 +2030,24 @@ fn view_main_content(app: &GuiApp, show_logo: bool, is_expanded: bool) -> Elemen
         && let Some(summary) = app.store.get_summary(uid)
     {
         let child_label = rust_i18n::t!("new_child_of", name = summary.clone());
-        let child_bar = container(
-            row![
-                icon::icon(icon::CHILD)
-                    .size(16)
-                    .style(|theme: &Theme| text::Style {
-                        color: Some(theme.extended_palette().primary.base.color)
-                    }),
-                text(child_label)
-                    .size(14)
-                    .font(iced::Font {
-                        weight: iced::font::Weight::Bold,
-                        ..Default::default()
-                    })
-                    .width(Length::Fill),
-                button(icon::icon(icon::PLUS_LOCK).size(14))
-                    .style(move |theme: &Theme, _status| {
-                        if app.child_lock_active {
-                            iced::widget::button::Style {
-                                text_color: theme.extended_palette().primary.base.color,
-                                ..iced::widget::button::text(theme, _status)
-                            }
-                        } else {
-                            iced::widget::button::Style {
-                                text_color: Color::from_rgba(0.5, 0.5, 0.5, 0.7),
-                                ..iced::widget::button::text(theme, _status)
-                            }
-                        }
-                    })
-                    .padding(5)
-                    .on_press(Message::ToggleChildLock),
-                button(icon::icon(icon::CROSS).size(14))
-                    .style(iced::widget::button::text)
-                    .padding(5)
-                    .on_press(Message::EscapePressed)
-            ]
-            .spacing(10)
-            .align_y(iced::Alignment::Center),
-        )
-        .padding(10)
-        .style(|theme: &Theme| {
-            let palette = theme.extended_palette();
-            container::Style {
-                background: Some(palette.background.weak.color.into()),
-                border: iced::Border {
-                    color: palette.primary.base.color,
-                    width: 1.0,
-                    radius: 4.0.into(),
-                },
-                ..Default::default()
-            }
-        });
-        main_col = main_col.push(child_bar);
+        main_col = main_col.push(lock_bar(
+            icon::CHILD,
+            child_label.to_string(),
+            None,
+            icon::PLUS_LOCK,
+            app.child_lock_active,
+            Message::ToggleChildLock,
+        ));
     }
 
     if !is_expanded && search_text.starts_with('#') {
         let tag = search_text.trim_start_matches('#').trim().to_string();
         if !tag.is_empty() {
-            main_col = main_col.push(
-                container(
-                    iced::widget::button(
-                        row![
-                            icon::icon(icon::TAG).size(14),
-                            text(rust_i18n::t!("go_to_tag", tag = tag.clone())).size(14)
-                        ]
-                        .spacing(5)
-                        .align_y(iced::Alignment::Center),
-                    )
-                    .style(iced::widget::button::secondary)
-                    .padding(5)
-                    .width(Length::Fill)
-                    .on_press(Message::JumpToTag(tag)),
-                )
-                .padding(iced::Padding {
-                    left: 10.0,
-                    right: 10.0,
-                    bottom: 5.0,
-                    ..Default::default()
-                }),
-            );
+            main_col = main_col.push(jump_button(
+                icon::TAG,
+                rust_i18n::t!("go_to_tag", tag = tag.clone()).to_string(),
+                Message::JumpToTag(tag),
+            ));
         }
     }
 
@@ -2183,28 +2060,11 @@ fn view_main_content(app: &GuiApp, show_logo: bool, is_expanded: bool) -> Elemen
         let loc = raw.trim().to_string();
 
         if !loc.is_empty() {
-            main_col = main_col.push(
-                container(
-                    iced::widget::button(
-                        row![
-                            icon::icon(icon::LOCATION).size(14),
-                            text(rust_i18n::t!("go_to_location", loc = loc.clone())).size(14)
-                        ]
-                        .spacing(5)
-                        .align_y(iced::Alignment::Center),
-                    )
-                    .style(iced::widget::button::secondary)
-                    .padding(5)
-                    .width(Length::Fill)
-                    .on_press(Message::JumpToLocation(loc)),
-                )
-                .padding(iced::Padding {
-                    left: 10.0,
-                    right: 10.0,
-                    bottom: 5.0,
-                    ..Default::default()
-                }),
-            );
+            main_col = main_col.push(jump_button(
+                icon::LOCATION,
+                rust_i18n::t!("go_to_location", loc = loc.clone()).to_string(),
+                Message::JumpToLocation(loc),
+            ));
         }
     }
 
@@ -2467,50 +2327,41 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
                 }
             });
 
-        let cancel_btn = tooltip(
+        let cancel_btn = tip(
             iced::widget::button(text(rust_i18n::t!("cancel")).size(16))
                 .style(iced::widget::button::secondary)
                 .on_press(Message::CancelEdit),
-            text(rust_i18n::t!("tooltip_cancel_esc")).size(12),
+            rust_i18n::t!("tooltip_cancel_esc"),
             tooltip::Position::Top,
-        )
-        .style(tooltip_style)
-        .delay(Duration::from_millis(700));
+        );
 
-        let save_btn = tooltip(
+        let save_btn = tip(
             iced::widget::button(text(rust_i18n::t!("save")).size(16))
                 .style(iced::widget::button::primary)
                 .on_press(Message::SubmitTask),
-            text(rust_i18n::t!("tooltip_save_ctrl_s")).size(12),
+            rust_i18n::t!("tooltip_save_ctrl_s"),
             tooltip::Position::Top,
-        )
-        .style(tooltip_style)
-        .delay(Duration::from_millis(700));
+        );
 
-        let apply_btn = tooltip(
+        let apply_btn = tip(
             iced::widget::button(icon::icon(icon::CONTENT_SAVE_EDIT).size(16))
                 .style(iced::widget::button::secondary)
                 .on_press(Message::SaveTaskKeepEditing),
-            text(rust_i18n::t!("tooltip_save_keep_editing")).size(12),
+            rust_i18n::t!("tooltip_save_keep_editing"),
             tooltip::Position::Top,
-        )
-        .style(tooltip_style)
-        .delay(Duration::from_millis(700));
+        );
 
-        let maximize_btn = tooltip(
+        let maximize_btn = tip(
             iced::widget::button(icon::icon(icon::MAXIMIZE).size(16))
                 .style(iced::widget::button::secondary)
                 .on_press(Message::ToggleEditorMaximize),
-            text(if app.editor_maximized {
+            if app.editor_maximized {
                 rust_i18n::t!("tooltip_restore_ctrl_m")
             } else {
                 rust_i18n::t!("tooltip_maximize_ctrl_m")
-            })
-            .size(12),
+            },
             tooltip::Position::Top,
-        )
-        .style(tooltip_style)
-        .delay(Duration::from_millis(700));
+        );
 
         let header_label = if app.creating_with_desc {
             rust_i18n::t!("mode_create").into_owned()
@@ -2542,17 +2393,13 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
             };
 
             if icon_char != '\0' {
-                Some(
-                    tooltip(
-                        iced::widget::button(icon::icon(icon_char).size(16))
-                            .style(iced::widget::button::secondary)
-                            .on_press(Message::SaveAndSwitchEditor),
-                        text(label).size(12),
-                        tooltip::Position::Top,
-                    )
-                    .style(tooltip_style)
-                    .delay(Duration::from_millis(700)),
-                )
+                Some(tip(
+                    iced::widget::button(icon::icon(icon_char).size(16))
+                        .style(iced::widget::button::secondary)
+                        .on_press(Message::SaveAndSwitchEditor),
+                    label,
+                    tooltip::Position::Top,
+                ))
             } else {
                 None
             }
@@ -2632,22 +2479,8 @@ fn view_ics_import_overlay<'a>(app: &'a GuiApp) -> Element<'a, Message> {
 
     let task_count = app.ics_import_task_count.unwrap_or(0);
 
-    let icon_header = container(
-        icon::icon(icon::IMPORT)
-            .size(30)
-            .color(Color::from_rgb(0.3, 0.7, 1.0)),
-    )
-    .padding(5)
-    .center_x(Length::Fill);
-
-    let title = text(rust_i18n::t!("ics_import_title"))
-        .size(24)
-        .font(iced::Font {
-            weight: iced::font::Weight::Bold,
-            ..Default::default()
-        })
-        .width(Length::Fill)
-        .align_x(Horizontal::Center);
+    let icon_header = modal_icon_header(icon::IMPORT, Color::from_rgb(0.3, 0.7, 1.0));
+    let title = modal_title(rust_i18n::t!("ics_import_title"));
 
     let file_info = column![
         text(rust_i18n::t!("import_file_name", file = file_name))
@@ -2776,40 +2609,9 @@ fn view_ics_import_overlay<'a>(app: &'a GuiApp) -> Element<'a, Message> {
         .padding(20)
         .width(Length::Fixed(450.0))
         .max_height(600.0)
-        .style(|theme: &Theme| {
-            let palette = theme.extended_palette();
-            container::Style {
-                background: Some(
-                    Color {
-                        a: 0.98,
-                        ..palette.background.weak.color
-                    }
-                    .into(),
-                ),
-                border: iced::Border {
-                    color: palette.background.strong.color,
-                    width: 1.0,
-                    radius: 12.0.into(),
-                },
-                shadow: iced::Shadow {
-                    color: Color::BLACK.scale_alpha(0.5),
-                    offset: Vector::new(0.0, 4.0),
-                    blur_radius: 10.0,
-                },
-                ..Default::default()
-            }
-        });
+        .style(|theme: &Theme| modal_card_style(0.98, theme));
 
-    container(modal_card)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .center_x(Length::Fill)
-        .center_y(Length::Fill)
-        .style(|_| container::Style {
-            background: Some(Color::from_rgba(0.0, 0.0, 0.0, 0.7).into()),
-            ..Default::default()
-        })
-        .into()
+    modal_backdrop(modal_card, 0.7)
 }
 
 fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
@@ -2959,21 +2761,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
         ))
         .width(Length::Fill);
 
-    let window_controls = if app.force_ssd {
-        row![].spacing(0)
-    } else {
-        row![
-            iced::widget::button(icon::icon(icon::WINDOW_MINIMIZE).size(14))
-                .style(iced::widget::button::text)
-                .padding(8)
-                .on_press(Message::MinimizeWindow),
-            iced::widget::button(icon::icon(icon::CROSS).size(14))
-                .style(iced::widget::button::danger)
-                .padding(8)
-                .on_press(Message::CloseWindow)
-        ]
-        .spacing(0)
-    };
+    let window_controls = window_controls(app.force_ssd);
 
     let (header_title, show_activity) = if let Some(uid) = &app.journal_editing_uid {
         let title = app
@@ -3075,13 +2863,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
         right: 10.0,
     });
 
-    let header_drag_area: Element<_> = if app.force_ssd {
-        header_container.into()
-    } else {
-        MouseArea::new(header_container)
-            .on_press(Message::WindowDragged)
-            .into()
-    };
+    let header_drag_area = drag_area(header_container, app.force_ssd);
 
     let top_header = if app.journal_editing_uid.is_some() {
         column![header_drag_area].spacing(0)
@@ -3136,18 +2918,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
     let editor_container = container(editor_col)
         .width(Length::Fill)
         .height(Length::Fill)
-        .style(|theme: &Theme| {
-            let palette = theme.extended_palette();
-            container::Style {
-                background: Some(palette.background.weak.color.into()),
-                border: iced::Border {
-                    width: 1.0,
-                    color: palette.background.strong.color,
-                    radius: 8.0.into(),
-                },
-                ..Default::default()
-            }
-        });
+        .style(journal_panel_style);
 
     let day_ctx = app.store.get_day_context(date, &visible_cals_set);
     let mut activity_col = column![].spacing(6);
@@ -3202,136 +2973,44 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
         }
     }
 
-    if !day_ctx.started_tasks.is_empty() {
+    if let Some(el) = journal_activity_row(
+        icon::PLAY_FA,
+        Color::from_rgb(0.4, 0.8, 0.4),
+        rust_i18n::t!("journal_started_today").to_string(),
+        &day_ctx.started_tasks,
+    ) {
         has_any_activity = true;
-        let mut spans = Vec::new();
-        for (i, t) in day_ctx.started_tasks.iter().enumerate() {
-            if i > 0 {
-                spans.push(span(", ").color(Color::from_rgb(0.6, 0.6, 0.6)));
-            }
-            spans.push(
-                span(t.summary.clone())
-                    .color(Color::from_rgb(0.2, 0.7, 1.0))
-                    .link(t.uid.clone()),
-            );
-        }
-        let rt = rich_text(spans).size(13).on_link_click(Message::JumpToTask);
-
-        activity_col = activity_col.push(
-            column![
-                row![
-                    icon::icon(icon::PLAY_FA)
-                        .size(10)
-                        .color(Color::from_rgb(0.4, 0.8, 0.4)),
-                    text(rust_i18n::t!("journal_started_today"))
-                        .size(12)
-                        .color(Color::from_rgb(0.6, 0.6, 0.6))
-                ]
-                .spacing(4)
-                .align_y(iced::Alignment::Center),
-                rt
-            ]
-            .spacing(2),
-        );
+        activity_col = activity_col.push(el);
     }
 
-    if !worked_on_tasks.is_empty() {
+    if let Some(el) = journal_activity_row(
+        icon::TIMER_SETTINGS,
+        Color::from_rgb(0.4, 0.8, 0.4),
+        rust_i18n::t!("journal_worked_on_today").to_string(),
+        &worked_on_tasks,
+    ) {
         has_any_activity = true;
-        let mut spans = Vec::new();
-        for (i, t) in worked_on_tasks.iter().enumerate() {
-            if i > 0 {
-                spans.push(span(", ").color(Color::from_rgb(0.6, 0.6, 0.6)));
-            }
-            spans.push(
-                span(t.summary.clone())
-                    .color(Color::from_rgb(0.2, 0.7, 1.0))
-                    .link(t.uid.clone()),
-            );
-        }
-        let rt = rich_text(spans).size(13).on_link_click(Message::JumpToTask);
-
-        activity_col = activity_col.push(
-            column![
-                row![
-                    icon::icon(icon::TIMER_SETTINGS)
-                        .size(10)
-                        .color(Color::from_rgb(0.4, 0.8, 0.4)),
-                    text(rust_i18n::t!("journal_worked_on_today"))
-                        .size(12)
-                        .color(Color::from_rgb(0.6, 0.6, 0.6))
-                ]
-                .spacing(4)
-                .align_y(iced::Alignment::Center),
-                rt
-            ]
-            .spacing(2),
-        );
+        activity_col = activity_col.push(el);
     }
 
-    if !day_ctx.completed_tasks.is_empty() {
+    if let Some(el) = journal_activity_row(
+        icon::CHECK,
+        Color::from_rgb(0.2, 0.8, 0.2),
+        rust_i18n::t!("journal_completed_today").to_string(),
+        &day_ctx.completed_tasks,
+    ) {
         has_any_activity = true;
-        let mut spans = Vec::new();
-        for (i, t) in day_ctx.completed_tasks.iter().enumerate() {
-            if i > 0 {
-                spans.push(span(", ").color(Color::from_rgb(0.6, 0.6, 0.6)));
-            }
-            spans.push(
-                span(t.summary.clone())
-                    .color(Color::from_rgb(0.2, 0.7, 1.0))
-                    .link(t.uid.clone()),
-            );
-        }
-        let rt = rich_text(spans).size(13).on_link_click(Message::JumpToTask);
-
-        activity_col = activity_col.push(
-            column![
-                row![
-                    icon::icon(icon::CHECK)
-                        .size(10)
-                        .color(Color::from_rgb(0.2, 0.8, 0.2)),
-                    text(rust_i18n::t!("journal_completed_today"))
-                        .size(12)
-                        .color(Color::from_rgb(0.6, 0.6, 0.6))
-                ]
-                .spacing(4)
-                .align_y(iced::Alignment::Center),
-                rt
-            ]
-            .spacing(2),
-        );
+        activity_col = activity_col.push(el);
     }
 
-    if !day_ctx.due_tasks.is_empty() {
+    if let Some(el) = journal_activity_row(
+        icon::CALENDAR,
+        Color::from_rgb(1.0, 0.6, 0.2),
+        rust_i18n::t!("journal_due_today").to_string(),
+        &day_ctx.due_tasks,
+    ) {
         has_any_activity = true;
-        let mut spans = Vec::new();
-        for (i, t) in day_ctx.due_tasks.iter().enumerate() {
-            if i > 0 {
-                spans.push(span(", ").color(Color::from_rgb(0.6, 0.6, 0.6)));
-            }
-            spans.push(
-                span(t.summary.clone())
-                    .color(Color::from_rgb(0.2, 0.7, 1.0))
-                    .link(t.uid.clone()),
-            );
-        }
-        let rt = rich_text(spans).size(13).on_link_click(Message::JumpToTask);
-
-        activity_col = activity_col.push(
-            column![
-                row![
-                    icon::icon(icon::CALENDAR)
-                        .size(10)
-                        .color(Color::from_rgb(1.0, 0.6, 0.2)),
-                    text(rust_i18n::t!("journal_due_today"))
-                        .size(12)
-                        .color(Color::from_rgb(0.6, 0.6, 0.6))
-                ]
-                .spacing(4)
-                .align_y(iced::Alignment::Center),
-                rt
-            ]
-            .spacing(2),
-        );
+        activity_col = activity_col.push(el);
     }
 
     if !has_any_activity {
@@ -3352,18 +3031,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
         .width(Length::Fill)
         .max_height(250.0)
         .padding(12)
-        .style(|theme: &Theme| {
-            let palette = theme.extended_palette();
-            container::Style {
-                background: Some(palette.background.weak.color.into()),
-                border: iced::Border {
-                    width: 1.0,
-                    color: palette.background.strong.color,
-                    radius: 8.0.into(),
-                },
-                ..Default::default()
-            }
-        });
+        .style(journal_panel_style);
 
     let mut main_col = column![
         top_header,
