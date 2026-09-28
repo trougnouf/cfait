@@ -1440,14 +1440,21 @@ impl RustyClient {
             // Use targeted calendar-query to exclude VEVENTs and fetch only VTODO ETags
             let vtodo_etags = self.get_vtodo_etags(&path_href).await?;
 
+            // Cache entries with an empty href are unsynced ghosts: they can
+            // never match a server href, so keep them aside instead of keying
+            // them (multiple ghosts would collide on the same empty key).
             let mut cache_map: HashMap<String, Task> = HashMap::new();
+            let mut unsynced_cached = Vec::new();
             for t in cached_tasks {
-                cache_map.insert(strip_host(&t.href), t);
+                if t.href.is_empty() {
+                    unsynced_cached.push(t);
+                } else {
+                    cache_map.insert(strip_host(&t.href), t);
+                }
             }
 
             let mut final_tasks = Vec::new();
             let mut to_fetch = Vec::new();
-            let mut server_hrefs = HashSet::new();
 
             // Helper function to clean ETags by removing W/ prefix and surrounding quotes
             fn clean_etag(e: &str) -> String {
@@ -1470,22 +1477,16 @@ impl RustyClient {
                     continue;
                 }
 
-                server_hrefs.insert(res_href_stripped.clone());
-                let remote_etag = Some(raw_etag.clone());
+                let remote_etag_cleaned = clean_etag(&raw_etag);
 
                 // Store RAW ETag for later use in calendar-multiget
                 href_to_raw_etag.insert(res_href_stripped.clone(), raw_etag);
 
-                let remote_etag_cleaned = remote_etag.as_deref().map(clean_etag);
-
                 if let Some(local_task) = cache_map.remove(&res_href_stripped) {
-                    if let Some(r_etag) = remote_etag_cleaned {
-                        let local_etag_cleaned = clean_etag(&local_task.etag);
-                        if !r_etag.is_empty() && r_etag == local_etag_cleaned {
-                            final_tasks.push(local_task);
-                        } else {
-                            to_fetch.push(res_href_stripped);
-                        }
+                    let local_etag_cleaned = clean_etag(&local_task.etag);
+                    if !remote_etag_cleaned.is_empty() && remote_etag_cleaned == local_etag_cleaned
+                    {
+                        final_tasks.push(local_task);
                     } else {
                         to_fetch.push(res_href_stripped);
                     }
@@ -1494,7 +1495,9 @@ impl RustyClient {
                 }
             }
 
-            for (_href, task) in cache_map {
+            // Tasks left in the cache but absent from the server are only kept
+            // if they are unsynced (and, with journaling on, pending in it).
+            for task in cache_map.into_values().chain(unsynced_cached) {
                 let is_unsynced = task.etag.is_empty() || task.href.is_empty();
                 if is_unsynced {
                     if apply_journal && !pending_active.contains(&task.uid) {
