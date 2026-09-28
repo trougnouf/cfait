@@ -9,6 +9,7 @@ use crate::tui::action::SidebarMode;
 use fastrand;
 use ratatui::widgets::ListState;
 use std::collections::{HashMap, HashSet};
+use std::ops::Range;
 use std::sync::Arc;
 use tokio::sync::mpsc; // Add import
 
@@ -168,6 +169,10 @@ pub struct AppState {
     pub new_task_title: String,
     pub tag_aliases: HashMap<String, Vec<String>>,
 
+    // Auto-complete state for the smart-input buffer (Creating/Editing only)
+    pub suggestions: Option<(Range<usize>, Vec<crate::model::autocomplete::Suggestion>)>,
+    pub suggestion_selection: usize,
+
     // Relationship browsing state
     pub relationship_items: Vec<(String, String, String)>, // (uid, display_name, rel_type)
     pub relationship_selection_state: ListState,
@@ -308,6 +313,8 @@ impl AppState {
             new_task_title: String::new(),
 
             tag_aliases: HashMap::new(),
+            suggestions: None,
+            suggestion_selection: 0,
             export_source_selection_state: ListState::default(),
             export_source_calendars: Vec::new(),
             export_selection_state: ListState::default(),
@@ -767,6 +774,100 @@ impl AppState {
     }
     fn clamp_cursor(&self, new_cursor_pos: usize) -> usize {
         new_cursor_pos.clamp(0, self.input_buffer.chars().count())
+    }
+
+    // --- AUTO-COMPLETE ---
+
+    /// Recompute suggestions for the current buffer and cursor. Suggestions
+    /// are only offered while creating or editing a task; any stale popup
+    /// state is cleared in every other mode.
+    pub fn refresh_suggestions(&mut self) {
+        if !matches!(self.mode, InputMode::Creating | InputMode::Editing) {
+            if self.suggestions.is_some() {
+                self.dismiss_suggestions();
+            }
+            return;
+        }
+        // cursor_position is a char count; convert to a byte offset before
+        // slicing so multibyte text can't panic.
+        let cursor_byte = self
+            .input_buffer
+            .char_indices()
+            .map(|(i, _)| i)
+            .nth(self.cursor_position)
+            .unwrap_or(self.input_buffer.len());
+        let result = crate::model::autocomplete::suggest(
+            &self.input_buffer,
+            cursor_byte,
+            &self.store,
+            &self.tag_aliases,
+            &self.calendars,
+        );
+        let range_changed = match (&self.suggestions, &result) {
+            (Some((r, _)), Some((nr, _))) => r != nr,
+            (None, Some(_)) | (Some(_), None) => true,
+            (None, None) => false,
+        };
+        if range_changed {
+            self.suggestion_selection = 0;
+        }
+        if let Some((_, items)) = &result
+            && self.suggestion_selection >= items.len()
+        {
+            self.suggestion_selection = items.len().saturating_sub(1);
+        }
+        self.suggestions = result;
+    }
+
+    /// Dismiss the open suggestion popup without touching the buffer.
+    pub fn dismiss_suggestions(&mut self) {
+        self.suggestions = None;
+        self.suggestion_selection = 0;
+    }
+
+    /// Move the highlighted suggestion up or down, wrapping around.
+    pub fn move_suggestion_cursor(&mut self, up: bool) {
+        if let Some((_, items)) = &self.suggestions
+            && !items.is_empty()
+        {
+            self.suggestion_selection = if up {
+                (self.suggestion_selection + items.len() - 1) % items.len()
+            } else {
+                (self.suggestion_selection + 1) % items.len()
+            };
+        }
+    }
+
+    /// Replace the current token with the highlighted suggestion and move the
+    /// cursor past it. Pushes the previous buffer onto the undo history.
+    pub fn apply_suggestion(&mut self) -> bool {
+        let Some((range, items)) = self.suggestions.take() else {
+            return false;
+        };
+        let Some(suggestion) = items.get(self.suggestion_selection) else {
+            self.suggestions = Some((range, items));
+            return false;
+        };
+        let old = self.input_buffer.clone();
+        // Range is not Copy in this toolchain, so capture what we need before
+        // moving it into replace_range.
+        let range_start = range.start;
+        let at_end = range.end == old.len();
+        let mut buffer = old.clone();
+        buffer.replace_range(range, &suggestion.replacement);
+        let mut cursor_chars =
+            old[..range_start].chars().count() + suggestion.replacement.chars().count();
+        // Append a space when completing at the end of the buffer so the next
+        // typed character starts a new token (matches the GUI).
+        if at_end {
+            buffer.push(' ');
+            cursor_chars += 1;
+        }
+        self.input_buffer = buffer;
+        self.cursor_position = cursor_chars;
+        self.text_history.push(old);
+        self.refresh_suggestions();
+        true
     }
 
     /// Journal-capable calendars that are currently visible (not hidden,

@@ -2275,6 +2275,72 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         }
     }
 
+    // Auto-complete popup, anchored directly above the input line
+    if matches!(state.mode, InputMode::Creating | InputMode::Editing)
+        && let Some((_, suggestions)) = &state.suggestions
+    {
+        // Leave at least one row of main content visible above the popup.
+        let available = footer_area.y.saturating_sub(1);
+        let height = (suggestions.len() as u16 + 2).min(available);
+        if height > 2 {
+            let area = Rect::new(
+                footer_area.x,
+                footer_area.y.saturating_sub(height),
+                footer_area.width,
+                height,
+            );
+            let inner_height = height.saturating_sub(2) as usize;
+            let selected = state
+                .suggestion_selection
+                .min(suggestions.len().saturating_sub(1));
+            let start = if suggestions.len() > inner_height {
+                selected.saturating_sub(inner_height - 1)
+            } else {
+                0
+            };
+            let items: Vec<ListItem> = suggestions[start..]
+                .iter()
+                .enumerate()
+                .map(|(i, s)| {
+                    let label = if s.description.is_empty() {
+                        s.display.clone()
+                    } else {
+                        format!("{}  ({})", s.display, s.description)
+                    };
+                    let mut item = ListItem::new(label);
+                    if start + i == selected {
+                        item = item.style(
+                            Style::default()
+                                .bg(if is_dark_theme {
+                                    Color::Blue
+                                } else {
+                                    Color::Rgb(255, 200, 100)
+                                })
+                                .fg(Color::Black),
+                        );
+                    }
+                    item
+                })
+                .collect();
+            let popup = List::new(items).block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(format!(
+                        " {} ({}) ",
+                        t!("suggestions"),
+                        t!("suggestions_hint")
+                    ))
+                    .border_style(Style::default().fg(if is_dark_theme {
+                        Color::Yellow
+                    } else {
+                        Color::Rgb(200, 100, 0)
+                    })),
+            );
+            f.render_widget(Clear, area);
+            f.render_widget(popup, area);
+        }
+    }
+
     // Modal popups, rendered on top of the main layout when their mode is active.
 
     if state.mode == InputMode::Moving {

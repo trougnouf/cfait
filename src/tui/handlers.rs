@@ -1480,10 +1480,12 @@ pub async fn handle_key_event(
     if is_text_undo_mode {
         if is_undo(&key) {
             handle_text_undo(state);
+            state.refresh_suggestions();
             return None;
         }
         if is_redo(&key) {
             handle_text_redo(state);
+            state.refresh_suggestions();
             return None;
         }
         if matches!(key.code, KeyCode::Char('o') | KeyCode::Char('O'))
@@ -1967,13 +1969,22 @@ pub async fn handle_key_event(
                 state.mode = InputMode::Normal;
                 state.reset_input();
             }
+            KeyCode::Tab if state.suggestions.is_some() => {
+                state.apply_suggestion();
+            }
+            KeyCode::Up if state.suggestions.is_some() => state.move_suggestion_cursor(true),
+            KeyCode::Down if state.suggestions.is_some() => state.move_suggestion_cursor(false),
             KeyCode::Esc => {
-                state.mode = InputMode::Normal;
-                state.reset_input();
-                state.creating_with_desc = false;
-                state.new_task_title.clear();
-                state.creating_child_of = None;
-                state.message = rust_i18n::t!("editing_cancelled").to_string();
+                if state.suggestions.is_some() {
+                    state.dismiss_suggestions();
+                } else {
+                    state.mode = InputMode::Normal;
+                    state.reset_input();
+                    state.creating_with_desc = false;
+                    state.new_task_title.clear();
+                    state.creating_child_of = None;
+                    state.message = rust_i18n::t!("editing_cancelled").to_string();
+                }
             }
             KeyCode::Char(c) => state.enter_char(c),
             KeyCode::Backspace => state.delete_char(),
@@ -2062,10 +2073,19 @@ pub async fn handle_key_event(
                 }
                 state.mode = InputMode::Normal;
             }
+            KeyCode::Tab if state.suggestions.is_some() => {
+                state.apply_suggestion();
+            }
+            KeyCode::Up if state.suggestions.is_some() => state.move_suggestion_cursor(true),
+            KeyCode::Down if state.suggestions.is_some() => state.move_suggestion_cursor(false),
             KeyCode::Esc => {
-                state.mode = InputMode::Normal;
-                state.reset_input();
-                state.editing_uid = None;
+                if state.suggestions.is_some() {
+                    state.dismiss_suggestions();
+                } else {
+                    state.mode = InputMode::Normal;
+                    state.reset_input();
+                    state.editing_uid = None;
+                }
             }
             // Word-level editing (UAX#29 boundaries, same as the GUI)
             KeyCode::Backspace if key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -4552,5 +4572,8 @@ pub async fn handle_key_event(
             _ => {}
         },
     }
+    // Keep suggestions in sync with any buffer/cursor/mode change made above;
+    // also the single place that (re)opens the popup when entering a mode.
+    state.refresh_suggestions();
     None
 }
