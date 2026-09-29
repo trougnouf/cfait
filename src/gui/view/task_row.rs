@@ -117,7 +117,10 @@ pub fn parse_inline_markdown(
 /// Truncates `s` to at most `max` characters, appending "..." when cut.
 fn truncate_chars(s: &str, max: usize) -> String {
     if s.chars().count() > max {
-        format!("{}...", s.chars().take(max - 3).collect::<String>())
+        format!(
+            "{}...",
+            s.chars().take(max.saturating_sub(3)).collect::<String>()
+        )
     } else {
         s.to_string()
     }
@@ -1100,7 +1103,7 @@ pub fn view_task_row<'a>(
                     TaskAction::Cancel => (icon::CROSS, Message::CancelTask(index), 1),
                     TaskAction::Delete => (icon::TRASH, Message::DeleteTask(index), 1),
                     TaskAction::DeleteTree => {
-                        (icon::TRASH, Message::DeleteTaskTree(task.uid.clone()), 2)
+                        (icon::TRASH, Message::DeleteTaskTree(task.uid.clone()), 1)
                     }
                     TaskAction::OpenCoordinates => (
                         icon::MAP_LOCATION_DOT,
@@ -1140,9 +1143,8 @@ pub fn view_task_row<'a>(
                     icon::icon(icon_char).size(14).into()
                 };
 
-                let style_mode_mapped = if style_mode == 2 { 1 } else { style_mode };
                 let btn = button(icon_element)
-                    .style(move |theme, status| action_style(theme, status, style_mode_mapped))
+                    .style(move |theme, status| action_style(theme, status, style_mode))
                     .padding(4)
                     .on_press(msg);
 
