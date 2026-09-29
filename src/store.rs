@@ -2922,11 +2922,17 @@ impl TaskStore {
     /// aggregated time shown in the duration badge — a parent displays the
     /// total time worked across its entire subtree.
     pub fn get_aggregated_time_seconds(&self, uid: &str) -> u64 {
+        let task = self.get_task_ref(uid);
+        if task.is_none_or(|t| t.sessions.is_empty() && t.last_started_at.is_none())
+            && !self.children_index.contains_key(uid)
+        {
+            return 0;
+        }
         let now_ts = chrono::Utc::now().timestamp();
         let mut intervals: Vec<(i64, i64)> = Vec::new();
 
         // This task's own sessions and running timer.
-        if let Some(t) = self.get_task_ref(uid) {
+        if let Some(t) = task {
             for s in &t.sessions {
                 intervals.push((s.start, s.end));
             }
