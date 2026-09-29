@@ -688,8 +688,10 @@ fun CfaitNavHost(
                             } catch (e: Exception) {
                                 // Ignore
                             }
-                            autoScrollUid = targetUid
-                            navController.popBackStack("home", inclusive = false)
+                            withContext(Dispatchers.Main) {
+                                autoScrollUid = targetUid
+                                navController.popBackStack("home", inclusive = false)
+                            }
                         }
                     },
                     onEditTree = { targetUid ->
@@ -764,10 +766,10 @@ fun CfaitNavHost(
                             try {
                                 val result = api.importLocalIcs(calendarHref, content)
                                 Toast.makeText(context, result, Toast.LENGTH_LONG).show()
-                                icsContentToImport = null
-                                refreshLists()
-                                navController.navigate("home") {
-                                    popUpTo("home") { inclusive = false }
+                                withContext(Dispatchers.Main) {
+                                    icsContentToImport = null
+                                    refreshLists()
+                                    navController.popBackStack("home", inclusive = false)
                                 }
                                 triggerBackgroundSync(context, api)
                             } catch (e: Exception) {
@@ -782,9 +784,7 @@ fun CfaitNavHost(
                     },
                     onCancel = {
                         icsContentToImport = null
-                        navController.navigate("home") {
-                            popUpTo("home") { inclusive = false }
-                        }
+                        navController.popBackStack("home", inclusive = false)
                     }
                 )
             }
