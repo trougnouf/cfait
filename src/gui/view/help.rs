@@ -391,10 +391,13 @@ fn help_card<'a>(title: &str, items: &[crate::help::HelpItem]) -> Element<'a, Me
             if !item.example.is_empty() {
                 Element::from(row![
                     Space::new().width(Length::Fixed(255.0)),
-                    text::<Theme, iced::Renderer>(format!("e.g. {}", item.example))
-                        .size(13)
-                        .font(Font::MONOSPACE)
-                        .style(muted_text_style)
+                    text::<Theme, iced::Renderer>(rust_i18n::t!(
+                        "help_example",
+                        example = item.example
+                    ))
+                    .size(13)
+                    .font(Font::MONOSPACE)
+                    .style(muted_text_style)
                 ])
             } else {
                 Element::from(Space::new().height(0))

@@ -2780,7 +2780,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         lines.push(Line::from(vec![Span::raw("  "), keys_span, desc_span]));
                     } else {
                         let example_span = Span::styled(
-                            format!(" (e.g. {})", item.example),
+                            format!(
+                                " ({})",
+                                rust_i18n::t!("help_example", example = item.example)
+                            ),
                             Style::default().fg(Color::DarkGray),
                         );
                         lines.push(Line::from(vec![

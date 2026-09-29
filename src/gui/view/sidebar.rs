@@ -717,7 +717,7 @@ fn build_heatmap_row(history: &[f32], theme: &Theme) -> Element<'static, Message
 
     tooltip(
         heatmap_row,
-        text("Consistency (Past 7 periods)").size(12),
+        text(rust_i18n::t!("goal_consistency_tooltip")).size(12),
         tooltip::Position::Bottom,
     )
     .style(crate::gui::view::tooltip_style)
@@ -1122,7 +1122,7 @@ pub fn view_sidebar_journal(app: &GuiApp) -> Element<'_, Message> {
                     .style(button::secondary)
                     .padding([2, 6])
                     .on_press(Message::CreateJournalPage),
-                text("New Page").size(12),
+                text(rust_i18n::t!("journal_new_page")).size(12),
                 tooltip::Position::Left
             )
             .style(crate::gui::view::tooltip_style)
