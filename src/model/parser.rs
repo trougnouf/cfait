@@ -1593,7 +1593,7 @@ pub fn split_input_respecting_quotes(input: &str) -> Vec<(usize, usize, String)>
 
 pub fn expand_braces(input: &str) -> Vec<String> {
     let mut results = Vec::new();
-    expand_braces_recursive("", input.trim(), &mut results);
+    expand_braces_recursive("", input.trim(), 0, &mut results);
     results
 }
 
@@ -1632,7 +1632,12 @@ fn split_by_comma_at_depth_zero(input: &str) -> Vec<&str> {
     parts
 }
 
-fn expand_braces_recursive(prefix: &str, input: &str, results: &mut Vec<String>) {
+fn expand_braces_recursive(prefix: &str, input: &str, depth: usize, results: &mut Vec<String>) {
+    // Hard limit to prevent stack overflows from deeply nested braces
+    if depth > 10 {
+        return;
+    }
+
     let parts = split_by_comma_at_depth_zero(input);
     for part in parts {
         let part = part.trim();
@@ -1641,7 +1646,7 @@ fn expand_braces_recursive(prefix: &str, input: &str, results: &mut Vec<String>)
         }
 
         let mut brace_start = None;
-        let mut depth = 0;
+        let mut brace_depth = 0;
         let mut in_quote = false;
         let mut escaped = false;
         for (i, c) in part.char_indices() {
@@ -1658,13 +1663,13 @@ fn expand_braces_recursive(prefix: &str, input: &str, results: &mut Vec<String>)
             }
             if !in_quote {
                 if c == '{' {
-                    if depth == 0 {
+                    if brace_depth == 0 {
                         brace_start = Some(i);
                         break;
                     }
-                    depth += 1;
-                } else if c == '}' && depth > 0 {
-                    depth -= 1;
+                    brace_depth += 1;
+                } else if c == '}' && brace_depth > 0 {
+                    brace_depth -= 1;
                 }
             }
         }
@@ -1698,7 +1703,7 @@ fn expand_braces_recursive(prefix: &str, input: &str, results: &mut Vec<String>)
                 format!("{}:", new_prefix)
             };
 
-            expand_braces_recursive(&pass_prefix, inner, results);
+            expand_braces_recursive(&pass_prefix, inner, depth + 1, results);
             continue;
         }
 
@@ -4351,5 +4356,28 @@ mod done_roundtrip_tests {
                 .to_string(),
             "completion datetime lost its time on round-trip"
         );
+    }
+}
+
+#[cfg(test)]
+mod brace_expansion_tests {
+    use super::*;
+
+    #[test]
+    fn nested_braces_expand() {
+        assert_eq!(
+            expand_braces("home{inside,outside}"),
+            vec!["home:inside", "home:outside"]
+        );
+        assert_eq!(expand_braces("a{b{c,d},e}"), vec!["a:b:c", "a:b:d", "a:e"]);
+    }
+
+    #[test]
+    fn pathologically_deep_nesting_terminates() {
+        // Far beyond the depth cap: the branch is dropped instead of
+        // recursing until the stack overflows. Without the cap this input
+        // overflows the default 8MB stack and aborts the process.
+        let deep = format!("a{}x{}", "{{{{".repeat(50_000), "}}}}".repeat(50_000));
+        let _ = expand_braces(&deep);
     }
 }
