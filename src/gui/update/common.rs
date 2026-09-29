@@ -25,7 +25,9 @@ use crate::gui::state::{Focus, GuiApp};
 use crate::gui::subscription::ACTIVE_FOCUS;
 use crate::gui::view::focusable::{clear_focus_bounds, get_all_focus_bounds, get_focus_bounds};
 use crate::model::CalendarListEntry;
-use crate::storage::{LocalCalendarRegistry, LocalStorage};
+use crate::storage::{
+    LOCAL_CALENDAR_HREF, LOCAL_CALENDAR_NAME, LocalCalendarRegistry, LocalStorage,
+};
 
 use crate::system::SystemEvent;
 
@@ -532,6 +534,30 @@ pub fn load_disk_store_data(
         }
     }
     store_data
+}
+
+/// Merge the local calendar registry (and the built-in local calendar) into a
+/// calendar list, skipping duplicate hrefs.
+pub fn merge_local_calendars(
+    mut cals: Vec<CalendarListEntry>,
+    ctx: &dyn AppContext,
+) -> Vec<CalendarListEntry> {
+    if let Ok(local_cals) = LocalCalendarRegistry::load(ctx) {
+        for local_cal in local_cals {
+            if !cals.iter().any(|c| c.href == local_cal.href) {
+                cals.push(local_cal);
+            }
+        }
+    }
+    if !cals.iter().any(|c| c.href == LOCAL_CALENDAR_HREF) {
+        cals.push(CalendarListEntry {
+            name: LOCAL_CALENDAR_NAME.to_string(),
+            href: LOCAL_CALENDAR_HREF.to_string(),
+            color: None,
+            supports_vjournal: Some(true),
+        });
+    }
+    cals
 }
 
 use crate::model::AppIntent;

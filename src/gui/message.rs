@@ -18,6 +18,7 @@ pub type LoadedResult = Result<
         Vec<TodoTask>,
         Option<String>,
         Option<String>,
+        Vec<(String, Vec<TodoTask>)>,
     ),
     String,
 >;

@@ -6,8 +6,7 @@ use crate::gui::update::common::{
     load_disk_calendars, load_disk_store_data, refresh_filtered_tasks, scroll_to_selected,
 };
 use crate::journal::Journal;
-use crate::model::CalendarListEntry;
-use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_CALENDAR_NAME, LocalCalendarRegistry};
+use crate::storage::LOCAL_CALENDAR_HREF;
 use crate::system::SystemEvent;
 use iced::Task;
 
@@ -149,7 +148,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             crate::gui::update::common::update_journal_state(app);
             Task::none()
         }
-        Message::Loaded(Ok((client, mut cals, mut tasks, active, warning))) => {
+        Message::Loaded(Ok((client, cals, mut tasks, active, warning, store_data))) => {
             app.client = Some(client.clone());
 
             if let Some(tx) = &app.bg_tx {
@@ -168,32 +167,15 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             crate::gui::update::common::update_journal_state(app);
 
-            let local_cals = LocalCalendarRegistry::load(app.ctx.as_ref()).unwrap_or_default();
-
-            for local_cal in local_cals {
-                if !cals.iter().any(|c| c.href == local_cal.href) {
-                    cals.push(local_cal);
-                }
-            }
-
-            if !cals.iter().any(|c| c.href == LOCAL_CALENDAR_HREF) {
-                let local_entry = CalendarListEntry {
-                    name: LOCAL_CALENDAR_NAME.to_string(),
-                    href: LOCAL_CALENDAR_HREF.to_string(),
-                    color: None,
-                    supports_vjournal: Some(true),
-                };
-                cals.push(local_entry);
-            }
-
+            // `cals` already includes the local calendars and `store_data` was
+            // loaded from disk on the blocking pool by the wrapper.
             app.calendars = cals.clone();
             app.sort_calendars();
 
             if app.edit_generation == app.pending_refresh_generation {
                 // No user edits during the network fetch: safe to replace the store
                 app.store.clear();
-                app.store
-                    .insert_many(load_disk_store_data(app.ctx.as_ref(), &app.calendars));
+                app.store.insert_many(store_data);
             } else {
                 // Edits happened during the fetch: skip store clear to preserve them.
                 // Remote tasks arriving via RefreshedAll will merge via sequence protection.

@@ -38,19 +38,33 @@ pub async fn connect_and_fetch_wrapper(
     Vec<TodoTask>,
     Option<String>,
     Option<String>,
+    Vec<(String, Vec<TodoTask>)>,
 )> {
-    let ctx_clone = ctx.clone();
-    let config_clone = config.clone();
-    match tokio::time::timeout(
+    let ctx_connect = ctx.clone();
+    let config_connect = config.clone();
+    let (client, cals, tasks, active, warning) = match tokio::time::timeout(
         std::time::Duration::from_secs(120),
-        RustyClient::connect_with_fallback(ctx, config, Some("GUI")),
+        RustyClient::connect_with_fallback(ctx_connect, config_connect, Some("GUI")),
     )
     .await
     {
-        Ok(res) => res,
+        Ok(res) => res?,
         // Timeout occurred. Return offline fallback to avoid kicking user out.
-        Err(_) => Ok(offline_fallback(ctx_clone, config_clone)),
-    }
+        Err(_) => offline_fallback(ctx.clone(), config.clone()),
+    };
+
+    // Merge in the local calendars, then load their cached tasks on the
+    // blocking pool so the Loaded handler can update the store without
+    // stalling the UI thread.
+    let cals = crate::gui::update::common::merge_local_calendars(cals, ctx.as_ref());
+    let cals_for_load = cals.clone();
+    let store_data = tokio::task::spawn_blocking(move || {
+        crate::gui::update::common::load_disk_store_data(ctx.as_ref(), &cals_for_load)
+    })
+    .await
+    .unwrap_or_default();
+
+    Ok((client, cals, tasks, active, warning, store_data))
 }
 
 /// Builds the offline fallback returned when the initial connection times out:
