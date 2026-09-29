@@ -2,7 +2,7 @@
 //! Regression tests for recurrence bug reproduction.
 // Updated recurrence tests to use the `recycle` method which mirrors how the
 // application/store handles recurring task completion/cancellation.
-use cfait::model::{DateType, Task, TaskStatus};
+use cfait::model::{DateType, Task, TaskStatus, item::WorkSession};
 use chrono::{Duration, Utc};
 use std::collections::HashMap;
 
@@ -157,4 +157,33 @@ fn test_scenario_3_cancel_loop() {
         t.due.as_ref().unwrap().to_date_naive(),
         initial_due + Duration::days(28)
     );
+}
+
+#[test]
+fn test_recycle_starts_next_occurrence_with_fresh_time_tracking() {
+    let mut t = create_weekly_task("recycle_sessions_test", 0);
+
+    // Track a work session on the current occurrence.
+    let now = Utc::now().timestamp();
+    t.add_session(WorkSession {
+        start: now - 3600,
+        end: now,
+    });
+    assert_eq!(t.sessions.len(), 1);
+    assert_eq!(t.time_spent_seconds, 3600);
+
+    let (history, secondary) = t.recycle(TaskStatus::Completed, false);
+
+    // The history snapshot represents the completed instance and keeps its sessions.
+    assert_eq!(history.sessions.len(), 1);
+    assert_eq!(history.time_spent_seconds, 3600);
+
+    // The next occurrence must start with fresh time tracking.
+    let next = secondary.expect("recurring task should advance");
+    assert!(
+        next.sessions.is_empty(),
+        "next occurrence must not inherit sessions from the completed instance"
+    );
+    assert_eq!(next.time_spent_seconds, 0);
+    assert!(next.last_started_at.is_none());
 }

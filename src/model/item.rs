@@ -1096,11 +1096,6 @@ impl Task {
         })
     }
 
-    /// Build a flattened, display-ordered list that respects parent/child hierarchy
-    /// and injects "virtual" expand/collapse rows when completed-subtask groups are truncated.
-    /// This function keeps complexity manageable by:
-    ///  - Sorting first using stable compare_for_sort
-    ///
     /// Parse an implicit alarm uid of the form `implicit_<due|start>:|<rfc3339>|<uid>`
     /// into its trigger time and a short description ("Due now" / "Starting"). Implicit
     /// alarms are synthesized, so they can be dismissed/snoozed without a stored Alarm.
@@ -1396,7 +1391,8 @@ impl Task {
     ///  - If the task is already in the target done state and target is done, toggle back.
     ///  - If an RRULE exists and target is done:
     ///      * create a history snapshot (new UID) representing the completed instance,
-    ///      * advance the master recurring task to the next occurrence and reset timing,
+    ///      * advance the master recurring task to the next occurrence, which starts
+    ///        with fresh time tracking (no carried-over sessions),
     ///      * return (history, Some(next_task)) on success.
     ///  - Otherwise produce an updated in-place task reflecting the new status.
     ///
@@ -1495,9 +1491,12 @@ impl Task {
                 next_task.exdates.dedup();
             }
 
-            // Reset time-tracking for next occurrence.
+            // Reset time-tracking for next occurrence. Sessions belong to the
+            // completed instance (kept on the history snapshot), so the next
+            // occurrence starts with a clean slate.
             next_task.time_spent_seconds = 0;
             next_task.last_started_at = None;
+            next_task.sessions.clear();
 
             let advanced = crate::model::RecurrenceEngine::advance(&mut next_task);
 
