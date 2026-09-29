@@ -1076,7 +1076,11 @@ fun SettingsScreen(
                     }) { NfIcon(NfIcons.ADD) }
                 }
                 if (status.isNotEmpty()) {
-                    Text(status, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        status,
+                        color = if (statusIsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
             }
 
