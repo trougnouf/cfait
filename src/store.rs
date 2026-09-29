@@ -5082,68 +5082,85 @@ impl TaskStore {
             AppIntent::ToggleTask { uid } | AppIntent::ToggleTaskShift { uid } => {
                 if let Some(old) = old_states.get(uid) {
                     if old.status.is_done() {
-                        "Marked as pending"
+                        rust_i18n::t!("intent_desc_marked_pending").to_string()
                     } else {
-                        "Marked as completed"
+                        rust_i18n::t!("intent_desc_marked_completed").to_string()
                     }
                 } else {
-                    "Status change"
+                    rust_i18n::t!("intent_desc_status_change").to_string()
                 }
             }
-            AppIntent::CompleteTree { .. } => "Completed tree",
-            AppIntent::CancelTask { .. } => "Cancelled",
-            AppIntent::DeleteTask { .. } => "Deleted task",
+            AppIntent::CompleteTree { .. } => {
+                rust_i18n::t!("intent_desc_completed_tree").to_string()
+            }
+            AppIntent::CancelTask { .. } => rust_i18n::t!("intent_desc_cancelled").to_string(),
+            AppIntent::DeleteTask { .. } => rust_i18n::t!("intent_desc_deleted_task").to_string(),
             AppIntent::DeleteTasks { uids } => {
                 if uids.len() == 1 {
-                    "Deleted task"
+                    rust_i18n::t!("intent_desc_deleted_task").to_string()
                 } else {
-                    "Deleted multiple tasks"
+                    rust_i18n::t!("intent_desc_deleted_tasks").to_string()
                 }
             }
-            AppIntent::DeleteTaskTree { .. } => "Deleted tree",
-            AppIntent::MoveTask { .. } => "Moved task",
-            AppIntent::MoveTaskTree { .. } => "Moved tree",
+            AppIntent::DeleteTaskTree { .. } => {
+                rust_i18n::t!("intent_desc_deleted_tree").to_string()
+            }
+            AppIntent::MoveTask { .. } => rust_i18n::t!("intent_desc_moved_task").to_string(),
+            AppIntent::MoveTaskTree { .. } => rust_i18n::t!("intent_desc_moved_tree").to_string(),
             AppIntent::ChangePriority { delta, .. } => {
                 if *delta > 0 {
-                    "Increased priority"
+                    rust_i18n::t!("intent_desc_increased_priority").to_string()
                 } else {
-                    "Decreased priority"
+                    rust_i18n::t!("intent_desc_decreased_priority").to_string()
                 }
             }
-            AppIntent::StartTask { .. } => "Started timer",
-            AppIntent::PauseTask { .. } => "Paused timer",
-            AppIntent::StopTask { .. } => "Stopped timer",
-            AppIntent::MakeChild { .. } => "Indented",
-            AppIntent::RemoveParent { .. } => "Outdented",
-            AppIntent::AddDependency { .. } => "Added dependency",
-            AppIntent::RemoveDependency { .. } => "Removed dependency",
-            AppIntent::AddRelatedTo { .. } => "Added relation",
-            AppIntent::RemoveRelatedTo { .. } => "Removed relation",
+            AppIntent::StartTask { .. } => rust_i18n::t!("intent_desc_started_timer").to_string(),
+            AppIntent::PauseTask { .. } => rust_i18n::t!("intent_desc_paused_timer").to_string(),
+            AppIntent::StopTask { .. } => rust_i18n::t!("intent_desc_stopped_timer").to_string(),
+            AppIntent::MakeChild { .. } => rust_i18n::t!("intent_desc_indented").to_string(),
+            AppIntent::RemoveParent { .. } => rust_i18n::t!("intent_desc_outdented").to_string(),
+            AppIntent::AddDependency { .. } => {
+                rust_i18n::t!("intent_desc_added_dependency").to_string()
+            }
+            AppIntent::RemoveDependency { .. } => {
+                rust_i18n::t!("intent_desc_removed_dependency").to_string()
+            }
+            AppIntent::AddRelatedTo { .. } => {
+                rust_i18n::t!("intent_desc_added_relation").to_string()
+            }
+            AppIntent::RemoveRelatedTo { .. } => {
+                rust_i18n::t!("intent_desc_removed_relation").to_string()
+            }
             AppIntent::TogglePin { uid } => {
                 if let Some(old) = old_states.get(uid) {
-                    if old.pinned { "Unpinned" } else { "Pinned" }
+                    if old.pinned {
+                        rust_i18n::t!("intent_desc_unpinned").to_string()
+                    } else {
+                        rust_i18n::t!("intent_desc_pinned").to_string()
+                    }
                 } else {
-                    "Toggled pin"
+                    rust_i18n::t!("intent_desc_toggled_pin").to_string()
                 }
             }
             AppIntent::ToggleTreeCollapse { uid } | AppIntent::SetTreeCollapse { uid, .. } => {
                 if let Some(old) = old_states.get(uid) {
                     if old.collapsed {
-                        "Expanded tree"
+                        rust_i18n::t!("intent_desc_expanded_tree").to_string()
                     } else {
-                        "Collapsed tree"
+                        rust_i18n::t!("intent_desc_collapsed_tree").to_string()
                     }
                 } else {
-                    "Toggled tree"
+                    rust_i18n::t!("intent_desc_toggled_tree").to_string()
                 }
             }
-            AppIntent::DuplicateTaskTree { .. } => "Duplicated",
-            AppIntent::ReplaceDependency { .. } | AppIntent::ReplaceRelation { .. } => {
-                "Fixed relationship"
+            AppIntent::DuplicateTaskTree { .. } => {
+                rust_i18n::t!("intent_desc_duplicated").to_string()
             }
-            _ => "Action",
-        }
-        .to_string();
+            AppIntent::ReplaceDependency { .. } | AppIntent::ReplaceRelation { .. } => {
+                rust_i18n::t!("intent_desc_fixed_relationship").to_string()
+            }
+            _ => rust_i18n::t!("intent_desc_action").to_string(),
+        };
 
         let full_desc = if summary_text.is_empty() {
             desc
