@@ -318,7 +318,8 @@ impl IcsAdapter {
                 .summary
                 .replace('\\', "\\\\")
                 .replace(',', "\\,")
-                .replace(';', "\\;");
+                .replace(';', "\\;")
+                .replace('\n', "\\n");
             append_folded(&format!("SUMMARY:{}", escaped_summary));
 
             let escaped_desc = desc
@@ -665,6 +666,7 @@ impl IcsAdapter {
                 .map(|c: &String| {
                     c.replace('\\', "\\\\")
                         .replace(',', "\\,")
+                        .replace(';', "\\;")
                         .replace('\n', "\\n")
                         .replace('\r', "")
                 })
@@ -688,6 +690,8 @@ impl IcsAdapter {
                 if let Some(desc) = &alarm.description {
                     let safe_desc = desc
                         .replace('\\', "\\\\")
+                        .replace(',', "\\,")
+                        .replace(';', "\\;")
                         .replace('\n', "\\n")
                         .replace('\r', "");
                     alarm_lines.push_str(&format!("DESCRIPTION:{}\r\n", safe_desc));
