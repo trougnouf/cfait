@@ -225,7 +225,9 @@ async fn apply_markdown_update(
             sub.apply_extracted_status(ext.status);
 
             sub.parent_uid = Some(p_uid_str);
-            sub.dependencies = ext.dependencies;
+            sub.dependencies.extend(ext.dependencies);
+            sub.dependencies.sort();
+            sub.dependencies.dedup();
             sub.calendar_href = task.calendar_href.clone();
             sub.percent_complete = ext.percent_complete;
             sub.is_note = ext.is_note;

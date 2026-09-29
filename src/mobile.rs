@@ -3151,7 +3151,9 @@ impl CfaitMobile {
             sub.apply_extracted_status(ext.status);
 
             sub.parent_uid = Some(ext.parent_uid.unwrap_or(parent_uid.clone()));
-            sub.dependencies = ext.dependencies;
+            sub.dependencies.extend(ext.dependencies);
+            sub.dependencies.sort();
+            sub.dependencies.dedup();
             if let Some(pc) = ext.percent_complete {
                 sub.percent_complete = Some(pc);
             }
@@ -3332,7 +3334,9 @@ impl CfaitMobile {
             sub.apply_extracted_status(ext.status);
 
             sub.parent_uid = Some(ext.parent_uid.unwrap_or(uid.clone()));
-            sub.dependencies = ext.dependencies;
+            sub.dependencies.extend(ext.dependencies);
+            sub.dependencies.sort();
+            sub.dependencies.dedup();
             sub.calendar_href = if let Some(target) = sub.target_collection.take() {
                 crate::model::resolve_collection(&target, &sub_calendars, &parent_href)
             } else {
@@ -4221,6 +4225,66 @@ mod tests {
         assert_eq!(
             moved.calendar_href, balcony_href,
             "a subtask's own col: should override the inherited collection"
+        );
+        drop(store);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn description_subtask_preserves_explicit_dep_alongside_numbering() {
+        let root = std::env::temp_dir().join(format!("cfait-mobile-test-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&root).unwrap();
+
+        let mobile = CfaitMobile::new(root.to_string_lossy().to_string());
+
+        // A blocker that the subtask will reference by short uid via dep:.
+        let blocker_uid =
+            futures::executor::block_on(mobile.add_task_smart("mix the potting soil".to_string()))
+                .unwrap();
+        assert!(!blocker_uid.is_empty());
+
+        // "water the seedlings" is numbered (so it depends on "loosen the soil")
+        // AND carries an explicit dep: on the blocker. Both must survive.
+        let parent_uid = futures::executor::block_on(mobile.add_task_with_description(
+            "pot up the seedlings".to_string(),
+            format!(
+                "1. [ ] loosen the soil\n2. [ ] water the seedlings dep:{}",
+                &blocker_uid[..8]
+            ),
+        ))
+        .unwrap();
+        assert!(!parent_uid.is_empty());
+
+        let store = mobile.controller.store.blocking_lock();
+        let subtasks: Vec<&crate::model::Task> = store
+            .calendars
+            .values()
+            .flat_map(|tasks| tasks.values())
+            .filter(|t| t.parent_uid.as_deref() == Some(parent_uid.as_str()))
+            .collect();
+        assert_eq!(subtasks.len(), 2);
+
+        let loosened_uid = subtasks
+            .iter()
+            .copied()
+            .find(|t| t.summary.contains("loosen the soil"))
+            .expect("first subtask should exist")
+            .uid
+            .clone();
+        let watered = subtasks
+            .iter()
+            .copied()
+            .find(|t| t.summary.contains("water the seedlings"))
+            .expect("numbered subtask should exist");
+
+        assert!(
+            watered.dependencies.contains(&loosened_uid),
+            "numbering-derived dependency should be preserved"
+        );
+        assert!(
+            watered.dependencies.contains(&blocker_uid),
+            "explicit dep: token should be preserved alongside numbering"
         );
         drop(store);
 

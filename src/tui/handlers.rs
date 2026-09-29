@@ -1107,7 +1107,9 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
                 sub.apply_extracted_status(ext.status);
 
                 sub.parent_uid = Some(ext.parent_uid.unwrap_or(uid.clone()));
-                sub.dependencies = ext.dependencies;
+                sub.dependencies.extend(ext.dependencies);
+                sub.dependencies.sort();
+                sub.dependencies.dedup();
                 sub.calendar_href = if let Some(target) = sub.target_collection.take() {
                     crate::model::resolve_collection(&target, &state.calendars, &parent_href)
                 } else {

@@ -1855,7 +1855,9 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                 sub.apply_extracted_status(ext.status);
 
                 sub.parent_uid = Some(ext.parent_uid.unwrap_or(edit_uid.clone()));
-                sub.dependencies = ext.dependencies;
+                sub.dependencies.extend(ext.dependencies);
+                sub.dependencies.sort();
+                sub.dependencies.dedup();
                 if let Some(target) = sub.target_collection.take() {
                     sub.calendar_href =
                         crate::model::resolve_collection(&target, &app.calendars, &new_href);
