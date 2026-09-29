@@ -2,6 +2,18 @@
 // File: ./src/cli.rs
 //! Shared command-line interface logic, like printing help.
 
+/// Full version string: semver plus the short git commit hash, matching the
+/// about dialog format. Falls back to the semver alone when the build has no
+/// git metadata (e.g. a source tarball).
+pub fn version_string() -> String {
+    let hash = env!("GIT_COMMIT_HASH");
+    if hash.is_empty() {
+        env!("CARGO_PKG_VERSION").to_string()
+    } else {
+        format!("{} ({})", env!("CARGO_PKG_VERSION"), hash)
+    }
+}
+
 pub fn print_help(binary_name: &str) {
     let is_gui = binary_name.contains("gui");
 

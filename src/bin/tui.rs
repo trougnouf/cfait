@@ -394,7 +394,7 @@ async fn main() -> Result<()> {
 
     // Answer --version before any side effects (locale, logging, keyring).
     if args.iter().any(|arg| arg == "--version" || arg == "-V") {
-        println!("cfait {}", env!("CARGO_PKG_VERSION"));
+        println!("cfait {}", cfait::cli::version_string());
         return Ok(());
     }
 

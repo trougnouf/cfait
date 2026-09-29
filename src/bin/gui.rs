@@ -57,7 +57,7 @@ fn main() -> iced::Result {
 
     // Handle version flag (before any config or logging setup)
     if args.iter().any(|arg| arg == "--version" || arg == "-V") {
-        println!("cfait-gui {}", env!("CARGO_PKG_VERSION"));
+        println!("cfait-gui {}", cfait::cli::version_string());
         return Ok(());
     }
 
