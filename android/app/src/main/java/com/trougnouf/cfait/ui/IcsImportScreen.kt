@@ -11,7 +11,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.text.input.InputTransformation
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.TextFieldState
@@ -33,11 +32,13 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import com.trougnouf.cfait.core.AppIntent
 import com.trougnouf.cfait.core.CfaitMobile
@@ -692,11 +693,11 @@ fun JournalMainView(
                                 }
                                 val styledText = buildAnnotatedString {
                                     items.forEachIndexed { index, task ->
-                                        pushStringAnnotation("UID", task.uid)
-                                        withStyle(SpanStyle(color = Color(0xFF2196F3))) {
+                                        withLink(LinkAnnotation.Clickable(tag = "task", linkInteractionListener = { onTaskClick(task.uid) })) {
+                                            pushStyle(SpanStyle(color = Color(0xFF2196F3)))
                                             append(task.summary)
+                                            pop()
                                         }
-                                        pop()
                                         if (index < items.size - 1) {
                                             withStyle(SpanStyle(color = Color.Gray)) {
                                                 append(", ")
@@ -704,15 +705,7 @@ fun JournalMainView(
                                         }
                                     }
                                 }
-                                ClickableText(
-                                    text = styledText,
-                                    style = TextStyle(fontSize = 13.sp),
-                                    onClick = { offset ->
-                                        styledText.getStringAnnotations("UID", offset, offset).firstOrNull()?.let {
-                                            onTaskClick(it.item)
-                                        }
-                                    }
-                                )
+                                Text(styledText, style = TextStyle(fontSize = 13.sp))
                             }
                         }
                     }

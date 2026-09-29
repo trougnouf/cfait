@@ -38,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontStyle
@@ -53,6 +54,7 @@ import androidx.compose.foundation.text.input.then
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.style.TextDecoration
@@ -121,11 +123,12 @@ fun appendHighlighted(
 }
 
 fun parseInlineMarkdown(
-    textStr: String, 
-    baseColor: Color, 
+    textStr: String,
+    baseColor: Color,
     isStrikethrough: Boolean,
     highlightRegex: Regex? = null,
-    highlightColor: Color = Color.Unspecified
+    highlightColor: Color = Color.Unspecified,
+    onWikiLink: ((String) -> Unit)? = null
 ): AnnotatedString {
     val builder = AnnotatedString.Builder()
     val baseDecoration = if (isStrikethrough) TextDecoration.LineThrough else null
@@ -302,28 +305,28 @@ fun parseInlineMarkdown(
                     val mid = chunk.indexOf("](")
                     val display = chunk.substring(1, mid)
                     val url = chunk.substring(mid + 2, chunk.length - 1)
-                    builder.pushStringAnnotation("url_link", url)
-                    builder.pushStyle(SpanStyle(color = Color(0xFF33B5E5), textDecoration = baseDecoration))
-                    appendHighlighted(builder, display, highlightRegex, highlightColor)
-                    builder.pop()
-                    builder.pop()
+                    builder.withLink(LinkAnnotation.Url(url)) {
+                        pushStyle(SpanStyle(color = Color(0xFF33B5E5), textDecoration = baseDecoration))
+                        appendHighlighted(this, display, highlightRegex, highlightColor)
+                        pop()
+                    }
                 }
                 "[[" -> {
                     val split = innerChunk.indexOf('|')
                     val display = if (split != -1) innerChunk.substring(split + 1) else innerChunk
                     val target = if (split != -1) innerChunk.substring(0, split) else innerChunk
-                    builder.pushStringAnnotation("wiki_link", target)
-                    builder.pushStyle(SpanStyle(color = Color(0xFF33B5E5), textDecoration = baseDecoration))
-                    appendHighlighted(builder, display, highlightRegex, highlightColor)
-                    builder.pop()
-                    builder.pop()
+                    builder.withLink(LinkAnnotation.Clickable(tag = "wiki", linkInteractionListener = { onWikiLink?.invoke(target) })) {
+                        pushStyle(SpanStyle(color = Color(0xFF33B5E5), textDecoration = baseDecoration))
+                        appendHighlighted(this, display, highlightRegex, highlightColor)
+                        pop()
+                    }
                 }
                 "http" -> {
-                    builder.pushStringAnnotation("url_link", chunk)
-                    builder.pushStyle(SpanStyle(color = Color(0xFF33B5E5), textDecoration = baseDecoration))
-                    appendHighlighted(builder, chunk, highlightRegex, highlightColor)
-                    builder.pop()
-                    builder.pop()
+                    builder.withLink(LinkAnnotation.Url(chunk)) {
+                        pushStyle(SpanStyle(color = Color(0xFF33B5E5), textDecoration = baseDecoration))
+                        appendHighlighted(this, chunk, highlightRegex, highlightColor)
+                        pop()
+                    }
                 }
             }
             currentIdx = absEnd

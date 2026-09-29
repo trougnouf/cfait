@@ -13,7 +13,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -115,8 +114,8 @@ fun TaskRow(
     // Determine dark mode from the current MaterialTheme background
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
 
-    // ClickableText (unlike Text) won't resolve Unspecified span colors against LocalContentColor,
-    // so resolve to a concrete color or bold/italic spans render black in dark themes.
+    // Resolve Unspecified to a concrete color so spans without an explicit color
+    // inherit a sensible default instead of falling back to black in dark themes.
     val textColor = getTaskTextColor(task.task.priority.toInt(), task.task.isDone, isDark)
         .let { if (it == Color.Unspecified) MaterialTheme.colorScheme.onSurface else it }
     val rowHighlightColor = Color(0xFFffe600).copy(alpha = 0.1f)
@@ -153,38 +152,29 @@ fun TaskRow(
                     fontWeight = if (task.task.priority > 0.toUByte()) FontWeight.Medium else FontWeight.Normal,
                     lineHeight = 18.sp
                 )
-                val annotatedSummary = remember(task.task.summary, textColor, isStrikethrough, highlightRegex, highlightColor) {
-                    parseInlineMarkdown(task.task.summary, textColor, isStrikethrough, highlightRegex, highlightColor)
+                val wikiHandler = { target: String -> onWikiLink(target, task.task.uid) }
+                val annotatedSummary = remember(task.task.uid, task.task.summary, textColor, isStrikethrough, highlightRegex, highlightColor) {
+                    parseInlineMarkdown(task.task.summary, textColor, isStrikethrough, highlightRegex, highlightColor, wikiHandler)
                 }
 
-                ClickableText(
+                Text(
                     text = annotatedSummary,
-                    style = baseStyle,
-                    onClick = { offset ->
-                        annotatedSummary.getStringAnnotations("url_link", offset, offset).firstOrNull()?.let {
-                            uriHandler.openUri(it.item)
-                            return@ClickableText
-                        }
-                        annotatedSummary.getStringAnnotations("wiki_link", offset, offset).firstOrNull()?.let {
-                            onWikiLink(it.item, task.task.uid)
-                            return@ClickableText
-                        }
-                        onClick(task.task.uid)
-                    }
+                    style = baseStyle
                 )
 
                 if (showInlineDescriptions && task.task.descriptionInline.isNotEmpty() && !expanded && !task.task.isCollapsed) {
                     val descColor = if (isDark) Color(0xFFAAAAAA) else Color(0xFF666666)
-                    val descSpans = remember(task.task.descriptionInline, descColor, highlightRegex, highlightColor) {
+                    val descSpans = remember(task.task.uid, task.task.descriptionInline, descColor, highlightRegex, highlightColor) {
                         parseInlineMarkdown(
                             task.task.descriptionInline,
                             descColor,
                             false,
                             highlightRegex,
-                            highlightColor
+                            highlightColor,
+                            wikiHandler
                         )
                     }
-                    ClickableText(
+                    Text(
                         text = descSpans,
                         modifier = Modifier.padding(top = 2.dp, bottom = 2.dp),
                         style = TextStyle(
@@ -193,18 +183,7 @@ fun TaskRow(
                             color = descColor
                         ),
                         maxLines = 3,
-                        overflow = TextOverflow.Ellipsis,
-                        onClick = { offset ->
-                            descSpans.getStringAnnotations("url_link", offset, offset).firstOrNull()?.let {
-                                uriHandler.openUri(it.item)
-                                return@ClickableText
-                            }
-                            descSpans.getStringAnnotations("wiki_link", offset, offset).firstOrNull()?.let {
-                                onWikiLink(it.item, task.task.uid)
-                                return@ClickableText
-                            }
-                            onClick(task.task.uid)
-                        }
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
