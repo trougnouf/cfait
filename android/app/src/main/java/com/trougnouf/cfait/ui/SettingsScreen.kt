@@ -386,7 +386,7 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Uri,
-                        autoCorrect = false,
+                        autoCorrectEnabled = false,
                         capitalization = KeyboardCapitalization.None
                     ),
                     lineLimits = TextFieldLineLimits.SingleLine
@@ -397,7 +397,7 @@ fun SettingsScreen(
                     label = { Text(stringResource(R.string.username)) },
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(
-                        autoCorrect = false,
+                        autoCorrectEnabled = false,
                         capitalization = KeyboardCapitalization.None
                     ),
                     lineLimits = TextFieldLineLimits.SingleLine
@@ -423,7 +423,7 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Password,
-                        autoCorrect = false
+                        autoCorrectEnabled = false
                     ),
                     lineLimits = TextFieldLineLimits.SingleLine
                 )

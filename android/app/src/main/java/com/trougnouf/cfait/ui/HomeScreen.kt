@@ -39,7 +39,6 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -570,7 +569,7 @@ fun HomeScreen(
             journalDateStr = today
             journalWikiUid = null
             journalWikiTitle = ""
-            if (journalTodayHref!!.isNotEmpty()) {
+            if (journalTodayHref.isNotEmpty()) {
                 journalSelectedHref = journalTodayHref
             }
             scope.launch(Dispatchers.IO) {
@@ -589,7 +588,7 @@ fun HomeScreen(
 
     LaunchedEffect(presetSearch) {
         if (presetSearch != null) {
-            val (query, calHref) = presetSearch!!
+            val (query, calHref) = presetSearch
             if (!calHref.isNullOrEmpty()) {
                 customWriteTarget = calHref
                 localDefaultCalHref = calHref
@@ -1656,7 +1655,7 @@ fun HomeScreen(
                                                     currentTab != null && currentTab.id != "ALL" && currentTab.id != "CUSTOM"
                                                 val isTogglingOn = !cal.isVisible
 
-                                                if (isIsolated && isTogglingOn && currentTab!!.id != cal.href) {
+                                                if (isIsolated && isTogglingOn && currentTab.id != cal.href) {
                                                     // User is focused on one collection and enables another -> create a custom view
                                                     val isolatedHref = currentTab.id
                                                     val newCustomHrefs = setOf(isolatedHref, cal.href)
@@ -1720,7 +1719,7 @@ fun HomeScreen(
                                                 localDefaultCalHref = cal.href
                                                 customWriteTarget = cal.href
 
-                                                if (isIsolated && currentTab!!.id != cal.href) {
+                                                if (isIsolated && currentTab.id != cal.href) {
                                                     // We are on a single collection, and selected a DIFFERENT one as write target.
                                                     // Overwrite custom selection with exactly these two.
                                                     val isolatedHref = currentTab.id
@@ -2025,13 +2024,13 @@ fun HomeScreen(
                                                     val day = cellIdx - calData.startOffset + 1
                                                     val isSelected = day == calData.currentDay
                                                     val isToday = day == calData.todayDay
-                                                    val dayData = ctxData.journalDaysInMonth.find { it.day.toUInt() == day.toUInt() }
+                                                    val dayData = ctxData.journalDaysInMonth.find { it.day == day.toUInt() }
                                                     val hasEntry = dayData != null
 
                                                     val bgColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
                                                     val contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary 
                                                                        else if (hasEntry) {
-                                                                           if (dayData!!.colors.size == 1) parseHexColor(dayData.colors[0])
+                                                                           if (dayData.colors.size == 1) parseHexColor(dayData.colors[0])
                                                                            else Color(0xFFE91E63)
                                                                        }
                                                                        else if (isToday) MaterialTheme.colorScheme.primary 
@@ -2248,19 +2247,20 @@ fun HomeScreen(
                         // Scrollable individual calendars
                         val firstScrollableIdx = tabs.indexOfFirst { it.id != "CUSTOM" && it.id != "ALL" }
                         if (firstScrollableIdx >= 0) {
-                            ScrollableTabRow(
+                            PrimaryScrollableTabRow(
                                 selectedTabIndex = if (pagerState.currentPage >= firstScrollableIdx) pagerState.currentPage - firstScrollableIdx else 0,
                                 edgePadding = 0.dp,
                                 containerColor = Color.Transparent,
                                 modifier = Modifier.weight(1f),
                                 divider = {},
-                                indicator = { tabPositions ->
+                                indicator = {
+                                    val scrollableCount = tabs.size - firstScrollableIdx
                                     val indicatorIndex = (pagerState.currentPage - firstScrollableIdx).coerceIn(
                                         0,
-                                        tabPositions.lastIndex
+                                        scrollableCount - 1
                                     )
                                     TabRowDefaults.PrimaryIndicator(
-                                        modifier = Modifier.tabIndicatorOffset(tabPositions[indicatorIndex]),
+                                        modifier = Modifier.tabIndicatorOffset(indicatorIndex),
                                         color = tabs.getOrNull(pagerState.currentPage)?.color ?: activeColor
                                     )
                                 }
@@ -2384,7 +2384,7 @@ fun HomeScreen(
                         Text(text = displayName, maxLines = 1, overflow = TextOverflow.Ellipsis, color = headerColor)
 
                         // Render the colored +++ for Custom tab
-                        if (isCustom && currentTab != null && sidebarTab != 4) {
+                        if (isCustom && sidebarTab != 4) {
                             val otherVisible =
                                 calendars.filter { it.href in currentTab.hrefs && it.href != writeCalHref }
                             if (otherVisible.isNotEmpty()) {
@@ -2612,7 +2612,7 @@ fun HomeScreen(
                                     NfIcon(NfIcons.CHILD, 16.sp, MaterialTheme.colorScheme.onTertiaryContainer)
                                     Spacer(Modifier.width(8.dp))
                                     Text(
-                                        stringResource(R.string.new_child_of, creatingChildTask?.task?.summary ?: ""),
+                                        stringResource(R.string.new_child_of, creatingChildTask.task.summary),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onTertiaryContainer,
                                         maxLines = 1,
@@ -2647,7 +2647,7 @@ fun HomeScreen(
                                     NfIcon(NfIcons.LINK, 16.sp, MaterialTheme.colorScheme.onSecondaryContainer)
                                     Spacer(Modifier.width(8.dp))
                                     Text(
-                                        stringResource(R.string.yanked_label) + " " + (yankedTask?.task?.summary ?: ""),
+                                        stringResource(R.string.yanked_label) + " " + yankedTask.task.summary,
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                                         maxLines = 1,

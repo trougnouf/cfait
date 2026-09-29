@@ -370,6 +370,9 @@ tailrec fun Context.findActivity(): Activity? = when (this) {
     else -> null
 }
 
+// The pre-API-30 branch uses the deprecated LocationListener APIs because the
+// LocationCallback overloads require API 30 while minSdk is 28.
+@Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
 suspend fun fetchCurrentLocation(context: Context): Location? {
     val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
     var bestLocation: Location? = null

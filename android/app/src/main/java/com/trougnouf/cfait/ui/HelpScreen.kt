@@ -68,7 +68,7 @@ fun HelpScreen(api: CfaitMobile, onBack: () -> Unit) {
                 }
             } else {
                 // Swipeable Tab Row for Categories
-                ScrollableTabRow(
+                PrimaryScrollableTabRow(
                     selectedTabIndex = pagerState.currentPage,
                     edgePadding = 8.dp,
                     containerColor = MaterialTheme.colorScheme.surface,
