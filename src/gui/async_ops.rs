@@ -278,7 +278,9 @@ pub fn spawn_background_worker(
                             *client_container.lock().await = c;
                         }
                         Some(WorkerCommand::Batch(actions)) => {
-                            let _ = controller.persist_changes(actions).await;
+                            if let Err(e) = controller.persist_changes(actions).await {
+                                log::error!("Failed to persist changes: {e}");
+                            }
                             sync_pending = true;
                             let _ = ui_tx.send(crate::gui::message::Message::JournalSaved).await;
                         }
@@ -406,12 +408,27 @@ pub async fn async_delete_all_events_wrapper(
 ) -> anyhow::Result<usize> {
     with_timeout(30, anyhow::anyhow!("Deleting events timed out"), async {
         let mut total = 0;
+        let mut failed = 0;
+        let mut first_err = None;
         for cal_href in calendars {
-            if let Ok(count) = client.delete_all_companion_events(&cal_href).await {
-                total += count;
+            match client.delete_all_companion_events(&cal_href).await {
+                Ok(count) => total += count,
+                Err(e) => {
+                    failed += 1;
+                    if first_err.is_none() {
+                        first_err = Some(e.to_string());
+                    }
+                }
             }
         }
-        Ok::<usize, anyhow::Error>(total)
+        match first_err {
+            // Report partial or total failure so the UI doesn't claim a
+            // successful deletion that never happened.
+            Some(e) => Err(anyhow::anyhow!(
+                "deleted {total} events, but {failed} calendar(s) failed: {e}"
+            )),
+            None => Ok(total),
+        }
     })
     .await
 }

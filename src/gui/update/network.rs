@@ -376,11 +376,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             release_loading(app)
         }
         Message::MigrationComplete(Ok(count)) => {
-            app.loading = false;
             app.error_msg =
                 Some(rust_i18n::t!("migration_complete_moved", count = count).to_string());
             refresh_filtered_tasks(app);
-            Task::perform(async { Ok::<(), String>(()) }, |_| Message::Refresh)
+            Task::batch(vec![
+                release_loading(app),
+                Task::perform(async { Ok::<(), String>(()) }, |_| Message::Refresh),
+            ])
         }
         Message::MigrationComplete(Err(e)) => {
             log::error!("Migration failed: {}", e);
