@@ -970,55 +970,29 @@ pub fn view_sidebar_journal(app: &GuiApp) -> Element<'_, Message> {
     ]
     .align_y(iced::Alignment::Center);
 
-    let weekdays_row = if is_monday_first {
-        row![
-            container(text("Mo").size(10))
+    // Day cells hold 2-digit numbers, so keep each header at 2 chars.
+    let mut weekdays = [
+        rust_i18n::t!("cal_weekday_mo"),
+        rust_i18n::t!("cal_weekday_tu"),
+        rust_i18n::t!("cal_weekday_we"),
+        rust_i18n::t!("cal_weekday_th"),
+        rust_i18n::t!("cal_weekday_fr"),
+        rust_i18n::t!("cal_weekday_sa"),
+        rust_i18n::t!("cal_weekday_su"),
+    ]
+    .map(|d| d.chars().take(2).collect::<String>())
+    .to_vec();
+    if !is_monday_first {
+        weekdays.rotate_right(1);
+    }
+    let mut weekdays_row = row![];
+    for day in weekdays {
+        weekdays_row = weekdays_row.push(
+            container(text(day).size(10))
                 .width(Length::Fill)
                 .align_x(iced::alignment::Horizontal::Center),
-            container(text("Tu").size(10))
-                .width(Length::Fill)
-                .align_x(iced::alignment::Horizontal::Center),
-            container(text("We").size(10))
-                .width(Length::Fill)
-                .align_x(iced::alignment::Horizontal::Center),
-            container(text("Th").size(10))
-                .width(Length::Fill)
-                .align_x(iced::alignment::Horizontal::Center),
-            container(text("Fr").size(10))
-                .width(Length::Fill)
-                .align_x(iced::alignment::Horizontal::Center),
-            container(text("Sa").size(10))
-                .width(Length::Fill)
-                .align_x(iced::alignment::Horizontal::Center),
-            container(text("Su").size(10))
-                .width(Length::Fill)
-                .align_x(iced::alignment::Horizontal::Center),
-        ]
-    } else {
-        row![
-            container(text("Su").size(10))
-                .width(Length::Fill)
-                .align_x(iced::alignment::Horizontal::Center),
-            container(text("Mo").size(10))
-                .width(Length::Fill)
-                .align_x(iced::alignment::Horizontal::Center),
-            container(text("Tu").size(10))
-                .width(Length::Fill)
-                .align_x(iced::alignment::Horizontal::Center),
-            container(text("We").size(10))
-                .width(Length::Fill)
-                .align_x(iced::alignment::Horizontal::Center),
-            container(text("Th").size(10))
-                .width(Length::Fill)
-                .align_x(iced::alignment::Horizontal::Center),
-            container(text("Fr").size(10))
-                .width(Length::Fill)
-                .align_x(iced::alignment::Horizontal::Center),
-            container(text("Sa").size(10))
-                .width(Length::Fill)
-                .align_x(iced::alignment::Horizontal::Center),
-        ]
-    };
+        );
+    }
 
     let mut days_grid = column![].spacing(2);
     let mut current_row = row![].spacing(2);

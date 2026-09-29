@@ -513,11 +513,22 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 Style::default().add_modifier(Modifier::BOLD),
             )]));
 
-            if is_monday_first {
-                cal_lines.push(Line::from(" Mo Tu We Th Fr Sa Su"));
-            } else {
-                cal_lines.push(Line::from(" Su Mo Tu We Th Fr Sa"));
+            // Day cells are 3 columns wide, so keep each header at 2 chars.
+            let mut weekdays = [
+                t!("cal_weekday_mo"),
+                t!("cal_weekday_tu"),
+                t!("cal_weekday_we"),
+                t!("cal_weekday_th"),
+                t!("cal_weekday_fr"),
+                t!("cal_weekday_sa"),
+                t!("cal_weekday_su"),
+            ]
+            .map(|d| d.chars().take(2).collect::<String>())
+            .to_vec();
+            if !is_monday_first {
+                weekdays.rotate_right(1);
             }
+            cal_lines.push(Line::from(format!(" {}", weekdays.join(" "))));
 
             let first_day = chrono::NaiveDate::from_ymd_opt(date.year(), date.month(), 1).unwrap();
             let start_offset = if is_monday_first {

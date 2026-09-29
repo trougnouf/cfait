@@ -101,9 +101,6 @@ data class TabInfo(
     val isWriteTarget: String?
 )
 
-private val weekDaysMondayFirst = listOf("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su")
-private val weekDaysSundayFirst = listOf("Su", "Mo", "Tu", "We", "Th", "Fr", "Sa")
-
 data class JournalCalendarData(
     val parsedDate: Date,
     val currentDay: Int,
@@ -1997,7 +1994,16 @@ fun HomeScreen(
                                     }) { NfIcon(NfIcons.ARROW_RIGHT) }
                                 }
 
-                                val weekDays = if (calData.isMondayFirst) weekDaysMondayFirst else weekDaysSundayFirst
+                                val weekDaysMondayFirst = listOf(
+                                    stringResource(R.string.cal_weekday_mo),
+                                    stringResource(R.string.cal_weekday_tu),
+                                    stringResource(R.string.cal_weekday_we),
+                                    stringResource(R.string.cal_weekday_th),
+                                    stringResource(R.string.cal_weekday_fr),
+                                    stringResource(R.string.cal_weekday_sa),
+                                    stringResource(R.string.cal_weekday_su)
+                                )
+                                val weekDays = if (calData.isMondayFirst) weekDaysMondayFirst else listOf(weekDaysMondayFirst[6]) + weekDaysMondayFirst.take(6)
                                 Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                                     weekDays.forEach {
                                         Text(it, fontSize = 12.sp, color = Color.Gray, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
