@@ -267,6 +267,9 @@ pub fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task>
             merged_alarms.push(a);
         }
     }
+    // The UID set iterates non-deterministically; sort so the merge output
+    // (and the ICS it serializes to) is reproducible for a given input triple.
+    merged_alarms.sort_by(|a, b| a.uid.cmp(&b.uid));
     merged.alarms = merged_alarms;
 
     // Unmapped properties
