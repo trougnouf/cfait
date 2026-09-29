@@ -1057,24 +1057,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             refresh_filtered_tasks(app);
             Task::none()
         }
-        Message::ToggleHideCompleted(val) => {
-            app.hide_completed = val;
-            save_config(app);
-            refresh_filtered_tasks(app);
-            Task::none()
-        }
-        Message::ToggleHideFullyCompletedTags(val) => {
-            app.hide_fully_completed_tags = val;
-            save_config(app);
-            refresh_filtered_tasks(app);
-            Task::none()
-        }
-        Message::ToggleHideAliasesInSidebar(val) => {
-            app.hide_aliases_in_sidebar = val;
-            save_config(app);
-            refresh_filtered_tasks(app);
-            Task::none()
-        }
         Message::ToggleTagCollapse(tag) => {
             crate::gui::update::common::dispatch_intent(
                 app,
@@ -1091,20 +1073,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             save_config(app);
             Task::none()
         }
-        Message::ToggleSortStandardByPriority(val) => {
-            app.sort_standard_by_priority = val;
-            save_config(app);
-            refresh_filtered_tasks(app);
-            Task::none()
-        }
         Message::SetPausedSortBehavior(val) => {
             app.paused_sort_behavior = val;
-            save_config(app);
-            refresh_filtered_tasks(app);
-            Task::none()
-        }
-        Message::ToggleSortTiebreakRecent(val) => {
-            app.sort_tiebreak_recent = val;
             save_config(app);
             refresh_filtered_tasks(app);
             Task::none()

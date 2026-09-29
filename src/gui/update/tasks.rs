@@ -771,15 +771,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             common::dispatch_intent(app, AppIntent::SetTreeCollapse { uid, collapsed });
             Task::none()
         }
-        Message::ToggleHelpSection(title) => {
-            if app.help_expanded_sections.contains(&title) {
-                app.help_expanded_sections.remove(&title);
-            } else {
-                app.help_expanded_sections.insert(title);
-            }
-            Task::none()
-        }
-
         Message::DeleteTask(index) => {
             if let Some(uid) = app.get_task_at_index(index).map(|t| t.uid.clone()) {
                 app.selected_uid = Some(uid.clone());
@@ -874,13 +865,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 && let Some(uid) = app.selected_uid.clone()
             {
                 common::dispatch_intent(app, AppIntent::AddRelatedTo { uid, related_uid });
-            }
-            Task::none()
-        }
-
-        Message::KeyboardOpenContextMenu => {
-            if let Some(uid) = app.selected_uid.clone() {
-                return crate::gui::update::view::handle(app, Message::OpenContextMenu(uid, true));
             }
             Task::none()
         }
@@ -1126,12 +1110,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
         Message::TogglePin(uid) => {
             common::dispatch_intent(app, AppIntent::TogglePin { uid });
-            Task::none()
-        }
-
-        Message::ClearYank => {
-            app.yanked_uid = None;
-            app.yank_lock_active = false;
             Task::none()
         }
 

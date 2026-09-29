@@ -120,7 +120,6 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::CancelTask(_)
         | Message::YankTask(_)
         | Message::CopyToClipboard(_)
-        | Message::ClearYank
         | Message::EscapePressed
         | Message::EscCaptured
         | Message::MakeChild(_)
@@ -158,7 +157,6 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::CancelTaskFromAlarm(_, _)
         | Message::ToggleDoneGroup(_)
         | Message::ToggleTreeCollapse(_)
-        | Message::ToggleHelpSection(_)
         | Message::StartAddSession(_)
         | Message::StartEditSession(_, _)
         | Message::SessionInputChanged(_)
@@ -169,7 +167,6 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::KeyboardAddSession
         | Message::KeyboardToggleSessions
         | Message::KeyboardToggleTreeCollapse
-        | Message::KeyboardOpenContextMenu
         | Message::KeyboardToggleDetails
         | Message::StartMoveTask(_)
         | Message::CancelMoveTask
@@ -200,12 +197,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ClearAllLocations
         | Message::ClearAllFilters
         | Message::CategoryMatchModeChanged(_)
-        | Message::ToggleHideCompleted(_)
-        | Message::ToggleHideFullyCompletedTags(_)
-        | Message::ToggleHideAliasesInSidebar(_)
-        | Message::ToggleSortStandardByPriority(_)
         | Message::SetPausedSortBehavior(_)
-        | Message::ToggleSortTiebreakRecent(_)
         | Message::SetSortPreset(_)
         | Message::ToggleSortStandardByPriorityToggle
         | Message::SelectCalendar(_)
