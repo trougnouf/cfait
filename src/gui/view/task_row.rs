@@ -1986,8 +1986,11 @@ pub fn view_task_row<'a>(
                             None => (false, line.to_string()),
                         };
 
-                        if display_line.starts_with("- ") || display_line.starts_with("* ") {
-                            display_line.replace_range(0..2, "• ");
+                        let is_list = trimmed.starts_with("- ") || trimmed.starts_with("* ");
+                        if is_list
+                            && let Some(idx) = display_line.find("- ").or(display_line.find("* "))
+                        {
+                            display_line.replace_range(idx..idx + 2, "• ");
                         }
 
                         let display_line_str = display_line.as_str();
