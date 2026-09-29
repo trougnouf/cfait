@@ -187,6 +187,7 @@ fun HomeScreen(
     val tags = viewData?.tags ?: emptyList()
     val locations = viewData?.locations ?: emptyList()
     val viewGoals = viewData?.goals ?: emptyList()
+    val sortedGoals = remember(viewGoals) { viewGoals.sortedBy { it.key } }
     val focusedTaskUid = viewData?.focusedTaskUid
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -382,7 +383,7 @@ fun HomeScreen(
     var highlightTerms by remember { mutableStateOf<List<String>>(emptyList()) }
     LaunchedEffect(searchQuery) {
         try {
-            highlightTerms = api.extractHighlightTerms(searchQuery)
+            highlightTerms = withContext(Dispatchers.IO) { api.extractHighlightTerms(searchQuery) }
         } catch (e: Exception) {
             highlightTerms = emptyList()
         }
@@ -453,7 +454,6 @@ fun HomeScreen(
     val calColorMap = remember(calendars) {
         calendars.associate { it.href to (it.color?.let { hex -> parseHexColor(hex) } ?: Color.Gray) }
     }
-    val taskMap = remember(tasks) { tasks.associateBy { it.task.uid } }
 
     var hasSetDefaultTab by rememberSaveable { mutableStateOf(false) }
 
@@ -502,13 +502,29 @@ fun HomeScreen(
         }
     }
 
+    fun checkSyncStatus() {
+        scope.launch(Dispatchers.IO) {
+            try {
+                localHasUnsynced = api.hasUnsyncedChanges()
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
+        }
+    }
+
     fun selectJournalDate(newDate: String) {
         journalDateStr = newDate
         // Try to find the journal page for this date
         journalWikiUid = viewData?.journalPages?.firstOrNull { it.title == newDate }?.uid
         scope.launch(Dispatchers.IO) {
-            api.setJournalDate(newDate)
-            updateTaskList()
+            activeOpCount++
+            try {
+                api.setJournalDate(newDate)
+                updateTaskList()
+            } finally {
+                checkSyncStatus()
+                activeOpCount--
+            }
         }
     }
 
@@ -517,16 +533,6 @@ fun HomeScreen(
         scope.launch(Dispatchers.IO) {
             api.dispatch(AppIntent.ToggleTagCollapse(tag))
             updateTaskList()
-        }
-    }
-
-    fun checkSyncStatus() {
-        scope.launch(Dispatchers.IO) {
-            try {
-                localHasUnsynced = api.hasUnsyncedChanges()
-            } catch (e: Exception) {
-                if (e is CancellationException) throw e
-            }
         }
     }
 
@@ -571,8 +577,14 @@ fun HomeScreen(
                 journalSelectedHref = journalTodayHref
             }
             scope.launch(Dispatchers.IO) {
-                api.setJournalDate(today)
-                updateTaskList()
+                activeOpCount++
+                try {
+                    api.setJournalDate(today)
+                    updateTaskList()
+                } finally {
+                    checkSyncStatus()
+                    activeOpCount--
+                }
             }
             onJournalTodayComplete()
         }
@@ -660,12 +672,17 @@ fun HomeScreen(
             when (text.lowercase()) {
                 ":undo" -> {
                     scope.launch(Dispatchers.IO) {
-                        val desc = api.undo()
-                        updateTaskList()
-                        checkSyncStatus()
-                        triggerBackgroundSync(context, api)
-                        if (desc != null) {
-                            Toast.makeText(context, context.getString(R.string.task_action_undone, desc), Toast.LENGTH_SHORT).show()
+                        activeOpCount++
+                        try {
+                            val desc = api.undo()
+                            updateTaskList()
+                            checkSyncStatus()
+                            triggerBackgroundSync(context, api)
+                            if (desc != null) {
+                                Toast.makeText(context, context.getString(R.string.task_action_undone, desc), Toast.LENGTH_SHORT).show()
+                            }
+                        } finally {
+                            activeOpCount--
                         }
                     }
                     newTaskText.clearText()
@@ -673,12 +690,17 @@ fun HomeScreen(
                 }
                 ":redo" -> {
                     scope.launch(Dispatchers.IO) {
-                        val desc = api.redo()
-                        updateTaskList()
-                        checkSyncStatus()
-                        triggerBackgroundSync(context, api)
-                        if (desc != null) {
-                            Toast.makeText(context, context.getString(R.string.task_action_redone, desc), Toast.LENGTH_SHORT).show()
+                        activeOpCount++
+                        try {
+                            val desc = api.redo()
+                            updateTaskList()
+                            checkSyncStatus()
+                            triggerBackgroundSync(context, api)
+                            if (desc != null) {
+                                Toast.makeText(context, context.getString(R.string.task_action_redone, desc), Toast.LENGTH_SHORT).show()
+                            }
+                        } finally {
+                            activeOpCount--
                         }
                     }
                     newTaskText.clearText()
@@ -686,10 +708,15 @@ fun HomeScreen(
                 }
                 ":empty-trash" -> {
                     scope.launch(Dispatchers.IO) {
-                        api.emptyTrash()
-                        updateTaskList()
-                        checkSyncStatus()
-                        triggerBackgroundSync(context, api)
+                        activeOpCount++
+                        try {
+                            api.emptyTrash()
+                            updateTaskList()
+                            checkSyncStatus()
+                            triggerBackgroundSync(context, api)
+                        } finally {
+                            activeOpCount--
+                        }
                     }
                     newTaskText.clearText()
                     return
@@ -764,6 +791,7 @@ fun HomeScreen(
                     
                     // Await the task list update before triggering the scroll to avoid race conditions
                     try {
+                        val gen = updateTaskGen.incrementAndGet()
                         val options = MobileFilterOptions(
                             filterTags = filterTags.toList(),
                             filterLocations = filterLocations.toList(),
@@ -777,7 +805,9 @@ fun HomeScreen(
                             respectTreeCollapse = false
                         )
                         val newViewData = api.getViewTasks(options)
-                        onUpdateViewData(newViewData, tagAliases)
+                        if (gen == updateTaskGen.get()) {
+                            onUpdateViewData(newViewData, tagAliases)
+                        }
                     } catch (e: Exception) {
                         if (e !is CancellationException) {
                             // Ignored
@@ -1129,9 +1159,11 @@ fun HomeScreen(
         // Only run if an explicit jump or intent was just requested
         if (scrollTrigger == 0L && autoScrollUid == null) return@LaunchedEffect
 
-        try {
-            val targetTask = tasks.find { it.task.uid == highlightedUid } ?: return@LaunchedEffect
+        // The task may not be in the list yet (e.g. right after creation); bail
+        // without consuming the triggers so this effect re-runs when the list updates.
+        val targetTask = tasks.find { it.task.uid == highlightedUid } ?: return@LaunchedEffect
 
+        try {
             val currentTab = tabs.getOrNull(pagerState.currentPage)
             val needsTabSwitch = currentTab != null && !currentTab.hrefs.contains(targetTask.task.calendarHref)
 
@@ -1197,7 +1229,16 @@ fun HomeScreen(
     ) {
         when {
             focusedTaskUid != null -> {
-                scope.launch(Dispatchers.IO) { api.dispatch(AppIntent.FocusTaskTree(null)); updateTaskList() }
+                scope.launch(Dispatchers.IO) {
+                    activeOpCount++
+                    try {
+                        api.dispatch(AppIntent.FocusTaskTree(null))
+                        updateTaskList()
+                    } finally {
+                        checkSyncStatus()
+                        activeOpCount--
+                    }
+                }
             }
             isSearchActive -> isSearchActive = false
             yankedUid != null -> {
@@ -1758,7 +1799,7 @@ fun HomeScreen(
                                 val isUncat = tag.isUncategorized
                                 val rawDisplay = tag.displayName
                                 val displayTag = if (rawDisplay.contains("=")) rawDisplay else "#$rawDisplay"
-                                val displayName = if (isUncat) "Uncategorized" else displayTag
+                                val displayName = if (isUncat) stringResource(R.string.uncategorized) else displayTag
                                 val targetKey = if (isUncat) ":::uncategorized:::" else tag.name
                                 val isSelected = filterTags.contains(targetKey)
                                 val color = if (isUncat) Color.Gray else getTagColor(tag.name, isDark)
@@ -1777,7 +1818,7 @@ fun HomeScreen(
                                     isExpanded = tag.isExpanded,
                                     onToggleCollapse = {
                                         expandedTags = if (expandedTags.contains(tag.name)) expandedTags - tag.name else expandedTags + tag.name
-                                        scope.launch {
+                                        scope.launch(Dispatchers.IO) {
                                             api.dispatch(AppIntent.ToggleTagCollapse(tag.name))
                                         }
                                     }
@@ -1827,7 +1868,6 @@ fun HomeScreen(
                                     }
                                 }
                             } else {
-                                val sortedGoals = viewGoals.sortedBy { it.key }
                                 items(sortedGoals) { goal ->
                                     val progText = stringResource(R.string.goal_progress, goal.progressStr, goal.targetStr)
                                     val isTag = goal.key.startsWith("#")
@@ -1933,7 +1973,7 @@ fun HomeScreen(
 
                                     JournalCalendarData(parsedDate, currentDay, startOffset, daysInMonth, isMondayFirst, todayDay, monthStr)
                                 }
-                                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                                val sdf = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
 
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(8.dp),
@@ -2789,7 +2829,7 @@ fun HomeScreen(
                         }
 
                         PullToRefreshBox(
-                            isRefreshing = false,
+                            isRefreshing = isPullRefreshing,
                             onRefresh = { handlePullRefresh() },
                             modifier = Modifier.weight(1f),
                         ) {
