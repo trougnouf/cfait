@@ -331,13 +331,17 @@ fun JournalMainView(
     }
 
     suspend fun flushSave() {
+        if (isSaving) return
         if (text.text.toString() == initialText && titleInputState.text.toString() == initialTitle) return
         isSaving = true
+        var saved = false
         try {
             withContext(Dispatchers.IO) {
+                val savedText = text.text.toString()
+                val savedTitle = titleInputState.text.toString()
                 val targetUid = if (uid != null) uid!! else {
                     if (journalWikiUid != null) {
-                        api.createWikiPage(titleInputState.text.toString(), href, null)
+                        api.createWikiPage(savedTitle, href, null)
                     } else {
                         api.getOrCreateDailyNote(journalDateStr, href)
                     }
@@ -345,16 +349,17 @@ fun JournalMainView(
 
                 if (journalWikiUid != null) {
                     val t = api.getTaskByUid(targetUid)
-                    if (t != null && t.summary != titleInputState.text.toString()) {
-                        api.updateTaskSmart(targetUid, "is:page ${titleInputState.text.toString()}")
+                    if (t != null && t.summary != savedTitle) {
+                        api.updateTaskSmart(targetUid, "is:page $savedTitle")
                     }
                 }
 
-                api.syncTaskTreeFromMarkdown(targetUid, text.text.toString())
+                api.syncTaskTreeFromMarkdown(targetUid, savedText)
+                saved = true
                 withContext(Dispatchers.Main) {
                     uid = targetUid
-                    initialText = text.text.toString()
-                    initialTitle = titleInputState.text.toString()
+                    initialText = savedText
+                    initialTitle = savedTitle
                     onDataChanged()
                 }
             }
@@ -362,6 +367,10 @@ fun JournalMainView(
             // Ignore
         } finally {
             isSaving = false
+            // A keystroke can land between the IO read and the Main write above; resave so it is not lost.
+            if (saved && (text.text.toString() != initialText || titleInputState.text.toString() != initialTitle)) {
+                scope.launch { flushSave() }
+            }
         }
     }
 
