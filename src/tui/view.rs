@@ -1074,7 +1074,11 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 match task_item {
                     TaskListItem::ExpandGroup(_, depth) => {
                         let indent = "  ".repeat(*depth);
-                        let content = format!("{}  \u{f0796} Expand completed tasks", indent);
+                        let content = format!(
+                            "{}  \u{f0796} {}",
+                            indent,
+                            rust_i18n::t!("expand_completed_tasks")
+                        );
                         ListItem::new(Line::from(Span::styled(
                             content,
                             Style::default().fg(if is_dark_theme {
@@ -1086,7 +1090,11 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     }
                     TaskListItem::CollapseGroup(_, depth) => {
                         let indent = "  ".repeat(*depth);
-                        let content = format!("{}  \u{f0799} Collapse completed tasks", indent);
+                        let content = format!(
+                            "{}  \u{f0799} {}",
+                            indent,
+                            rust_i18n::t!("collapse_completed_tasks")
+                        );
                         ListItem::new(Line::from(Span::styled(
                             content,
                             Style::default().fg(if is_dark_theme {

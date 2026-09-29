@@ -314,9 +314,15 @@ pub fn view_task_row<'a>(
             };
             let indent = Space::new().width(Length::Fixed(indent_size as f32));
             let (icon_char, label) = if is_expand {
-                (icon::ARROW_EXPAND_DOWN, "Expand completed tasks")
+                (
+                    icon::ARROW_EXPAND_DOWN,
+                    rust_i18n::t!("expand_completed_tasks"),
+                )
             } else {
-                (icon::ARROW_EXPAND_UP, "Collapse completed tasks")
+                (
+                    icon::ARROW_EXPAND_UP,
+                    rust_i18n::t!("collapse_completed_tasks"),
+                )
             };
             let btn = button(
                 row![
