@@ -4,8 +4,8 @@ use crate::model::{CalendarListEntry, Task};
 use crate::storage::LocalStorage;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
@@ -54,18 +54,18 @@ impl Cache {
     }
 
     fn get_settings_meta_path(ctx: &dyn AppContext) -> Option<PathBuf> {
-        ctx.get_cache_dir().ok().map(|p| p.join("settings_meta.json"))
+        ctx.get_cache_dir()
+            .ok()
+            .map(|p| p.join("settings_meta.json"))
     }
 
     pub fn load_settings_meta(ctx: &dyn AppContext) -> SettingsMeta {
         if let Some(path) = Self::get_settings_meta_path(ctx)
             && path.exists()
+            && let Ok(json) = fs::read_to_string(&path)
+            && let Ok(meta) = serde_json::from_str::<SettingsMeta>(&json)
         {
-            if let Ok(json) = fs::read_to_string(&path)
-                && let Ok(meta) = serde_json::from_str::<SettingsMeta>(&json)
-            {
-                return meta;
-            }
+            return meta;
         }
         SettingsMeta::default()
     }

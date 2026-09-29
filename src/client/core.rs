@@ -158,7 +158,10 @@ fn build_propertyupdate_body(sets: &[(String, String)], removes: &[String]) -> S
     let remove_block = if remove_props.is_empty() {
         String::new()
     } else {
-        format!("<D:remove><D:prop>{}</D:prop></D:remove>", remove_props.join(""))
+        format!(
+            "<D:remove><D:prop>{}</D:prop></D:remove>",
+            remove_props.join("")
+        )
     };
     format!(
         r#"<?xml version="1.0" encoding="utf-8" ?>
@@ -171,7 +174,10 @@ fn build_propertyupdate_body(sets: &[(String, String)], removes: &[String]) -> S
 
 /// Extract the numeric HTTP status from a propstat status line (e.g. "HTTP/1.1 200 OK").
 fn propstat_http_code(status_text: &str) -> Option<u16> {
-    status_text.split_whitespace().nth(1).and_then(|c| c.parse().ok())
+    status_text
+        .split_whitespace()
+        .nth(1)
+        .and_then(|c| c.parse().ok())
 }
 
 pub(crate) fn strip_host(href: &str) -> String {
@@ -1990,13 +1996,14 @@ impl RustyClient {
             )
             .header("Content-Type", "application/xml; charset=utf-8")
             .body(body)
-            .map_err(|e| PropWriteError::Transient(format!("PROPPATCH request build failed: {}", e)))?;
+            .map_err(|e| {
+                PropWriteError::Transient(format!("PROPPATCH request build failed: {}", e))
+            })?;
 
-        let (parts, body_bytes) = client
-            .webdav_client
-            .request_raw(req)
-            .await
-            .map_err(|e| PropWriteError::Transient(format!("PROPPATCH request failed: {:?}", e)))?;
+        let (parts, body_bytes) =
+            client.webdav_client.request_raw(req).await.map_err(|e| {
+                PropWriteError::Transient(format!("PROPPATCH request failed: {:?}", e))
+            })?;
 
         let status = parts.status;
         if status.is_client_error() {
@@ -2049,10 +2056,7 @@ impl RustyClient {
         href: &str,
         names: &[&str],
     ) -> Result<Option<HashMap<String, String>>, String> {
-        let client = self
-            .client
-            .as_ref()
-            .ok_or_else(|| "Offline".to_string())?;
+        let client = self.client.as_ref().ok_or_else(|| "Offline".to_string())?;
 
         let props_xml: Vec<String> = names.iter().map(|n| format!("<CF:{n}/>")).collect();
         let body = format!(
@@ -2130,7 +2134,10 @@ impl RustyClient {
         match self
             .proppatch_custom_props(
                 href,
-                &[(crate::config::CFAIT_PROBE_PROP.to_string(), probe_value.clone())],
+                &[(
+                    crate::config::CFAIT_PROBE_PROP.to_string(),
+                    probe_value.clone(),
+                )],
                 &[],
             )
             .await
@@ -2150,7 +2157,9 @@ impl RustyClient {
             .await;
 
         // Best-effort cleanup of the probe property.
-        let _ = self.remove_property(href, crate::config::CFAIT_PROBE_PROP).await;
+        let _ = self
+            .remove_property(href, crate::config::CFAIT_PROBE_PROP)
+            .await;
 
         match readback {
             Ok(Some(props)) => {
@@ -2257,9 +2266,8 @@ impl RustyClient {
                 } else {
                     "/"
                 };
-                let req = GetCalendarResources::new(parent_path).with_hrefs(vec![
-                    path_href.clone(),
-                ]);
+                let req =
+                    GetCalendarResources::new(parent_path).with_hrefs(vec![path_href.clone()]);
                 match client.request(req).await {
                     Ok(resp) => {
                         if let Some(item) = resp.resources.into_iter().next()
@@ -2275,12 +2283,8 @@ impl RustyClient {
                             .map_err(|e| format!("Failed to parse settings object: {}", e));
                         }
                     }
-                    Err(WebDavError::BadStatusCode(StatusCode::NOT_FOUND)) => {
-                        return Ok(None)
-                    }
-                    Err(e) => {
-                        return Err(format!("Failed to fetch settings object: {:?}", e))
-                    }
+                    Err(WebDavError::BadStatusCode(StatusCode::NOT_FOUND)) => return Ok(None),
+                    Err(e) => return Err(format!("Failed to fetch settings object: {:?}", e)),
                 }
             }
         }

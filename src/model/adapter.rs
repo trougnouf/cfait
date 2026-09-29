@@ -1105,7 +1105,7 @@ impl IcsAdapter {
                 for (key, props) in event.multi_properties() {
                     if key.eq_ignore_ascii_case("CATEGORIES") {
                         for p in props {
-                            categories.extend(split_ics_list(&p.value().to_string()));
+                            categories.extend(split_ics_list(p.value()));
                         }
                     }
                 }

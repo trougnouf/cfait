@@ -19,7 +19,7 @@
 use cfait::cache::Cache;
 use cfait::client::core::RustyClient;
 use cfait::config::{
-    Config, SettingsPayload, CFAIT_NS, SETTINGS_CATEGORY, SETTINGS_SUMMARY, SETTINGS_UID,
+    CFAIT_NS, Config, SETTINGS_CATEGORY, SETTINGS_SUMMARY, SETTINGS_UID, SettingsPayload,
 };
 use cfait::context::{AppContext, TestContext};
 use cfait::controller::TaskController;
@@ -43,10 +43,12 @@ async fn build_client(ctx: &Arc<dyn AppContext>, url: &str) -> RustyClient {
 }
 
 fn save_config(ctx: &Arc<dyn AppContext>, default_calendar: Option<&str>, updated_at: i64) {
-    let mut config = Config::default();
-    config.sync_settings = true;
-    config.default_calendar = default_calendar.map(|s| s.to_string());
-    config.settings_updated_at = updated_at;
+    let config = Config {
+        sync_settings: true,
+        default_calendar: default_calendar.map(|s| s.to_string()),
+        settings_updated_at: updated_at,
+        ..Default::default()
+    };
     config.save(ctx.as_ref()).expect("save config");
 }
 
@@ -61,7 +63,11 @@ async fn harness(ctx: Arc<dyn AppContext>, client: Option<RustyClient>) -> Harne
     let store = Arc::new(TokioMutex::new(TaskStore::new(ctx.clone())));
     let slot = Arc::new(TokioMutex::new(client));
     let controller = TaskController::new(store.clone(), slot, ctx.clone());
-    Harness { ctx, store, controller }
+    Harness {
+        ctx,
+        store,
+        controller,
+    }
 }
 
 /// Register the three mocks that make a custom-property probe succeed on `path`:
@@ -207,10 +213,17 @@ async fn property_mode_first_sync_writes_property_not_carrier() {
 
     // The settings PROPPATCH carried a well-formed payload matching the config.
     m_settings_write.assert();
-    let body = settings_body.lock().unwrap().clone().expect("settings PROPPATCH captured");
+    let body = settings_body
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("settings PROPPATCH captured");
     let json = extract_prop(&body, "settings").expect("settings property present");
     let payload: SettingsPayload = serde_json::from_str(&json).expect("payload is valid JSON");
-    assert!(payload.updated_at > 0, "payload must carry a stamped revision");
+    assert!(
+        payload.updated_at > 0,
+        "payload must carry a stamped revision"
+    );
     assert_eq!(payload.config.default_calendar.as_deref(), Some(TARGET));
 
     _m_settings_read.assert();
@@ -251,23 +264,24 @@ async fn probe_rejected_falls_back_to_vevent_carrier() {
     // A VEVENT carrier was created in the store…
     let task = {
         let s = h.store.lock().await;
-        s.get_task_ref(SETTINGS_UID).cloned().expect("carrier in store")
+        s.get_task_ref(SETTINGS_UID)
+            .cloned()
+            .expect("carrier in store")
     };
     assert!(task.is_event, "carrier must be a VEVENT");
     assert_eq!(task.status, TaskStatus::Cancelled);
-    assert!(task
-        .categories
-        .iter()
-        .any(|c| c == SETTINGS_CATEGORY));
+    assert!(task.categories.iter().any(|c| c == SETTINGS_CATEGORY));
     let payload: SettingsPayload =
         serde_json::from_str(&task.description).expect("carrier description is a payload");
     assert!(payload.updated_at > 0);
 
     // …and journaled as a Create.
-    assert!(Journal::load(h.ctx.as_ref())
-        .queue
-        .iter()
-        .any(|a| matches!(a, Action::Create(t) if t.uid == SETTINGS_UID)));
+    assert!(
+        Journal::load(h.ctx.as_ref())
+            .queue
+            .iter()
+            .any(|a| matches!(a, Action::Create(t) if t.uid == SETTINGS_UID))
+    );
 
     m_probe.assert();
 }
@@ -284,8 +298,10 @@ async fn collection_deleted_reprovisions_on_new_target() {
     // Default moved to a new collection.
     save_config(&ctx, Some(TARGET), 0);
     // The settings property currently lives on the (now gone) old collection.
-    let mut meta = cfait::cache::SettingsMeta::default();
-    meta.property_href = Some(OLD_TARGET.to_string());
+    let meta = cfait::cache::SettingsMeta {
+        property_href: Some(OLD_TARGET.to_string()),
+        ..Default::default()
+    };
     Cache::save_settings_meta(ctx.as_ref(), &meta).expect("save meta");
 
     // Best-effort removal of the two stale properties from the old collection.
@@ -346,16 +362,20 @@ async fn in_sync_property_mode_is_a_noop() {
     let url = server.url();
 
     let ctx: Arc<dyn AppContext> = Arc::new(TestContext::new());
-    let mut config = Config::default();
-    config.sync_settings = true;
-    config.default_calendar = Some(TARGET.to_string());
-    config.settings_updated_at = 1000;
+    let config = Config {
+        sync_settings: true,
+        default_calendar: Some(TARGET.to_string()),
+        settings_updated_at: 1000,
+        ..Default::default()
+    };
     let local_syncable = config.get_syncable();
     config.save(ctx.as_ref()).expect("save config");
 
     // Already in property mode for this target → no probe is issued.
-    let mut meta = cfait::cache::SettingsMeta::default();
-    meta.property_href = Some(TARGET.to_string());
+    let meta = cfait::cache::SettingsMeta {
+        property_href: Some(TARGET.to_string()),
+        ..Default::default()
+    };
     Cache::save_settings_meta(ctx.as_ref(), &meta).expect("save meta");
 
     // The server holds a payload identical to the local one.
@@ -405,8 +425,10 @@ async fn offline_property_mode_is_a_noop() {
     let ctx: Arc<dyn AppContext> = Arc::new(TestContext::new());
     save_config(&ctx, Some(TARGET), 0);
 
-    let mut meta = cfait::cache::SettingsMeta::default();
-    meta.property_href = Some(TARGET.to_string());
+    let meta = cfait::cache::SettingsMeta {
+        property_href: Some(TARGET.to_string()),
+        ..Default::default()
+    };
     Cache::save_settings_meta(ctx.as_ref(), &meta).expect("save meta");
 
     // No client → offline.
@@ -423,10 +445,12 @@ async fn offline_property_mode_is_a_noop() {
 async fn offline_object_mode_journals_carrier_update() {
     let ctx: Arc<dyn AppContext> = Arc::new(TestContext::new());
 
-    let mut config = Config::default();
-    config.sync_settings = true;
-    config.default_calendar = Some(TARGET.to_string());
-    config.settings_updated_at = 1000;
+    let config = Config {
+        sync_settings: true,
+        default_calendar: Some(TARGET.to_string()),
+        settings_updated_at: 1000,
+        ..Default::default()
+    };
     let local_syncable = config.get_syncable();
     config.save(ctx.as_ref()).expect("save config");
 
@@ -460,15 +484,19 @@ async fn offline_object_mode_journals_carrier_update() {
     assert!(changed, "offline object-mode update should report a change");
 
     // The carrier was journaled as an Update (not a fresh Create).
-    assert!(Journal::load(h.ctx.as_ref())
-        .queue
-        .iter()
-        .any(|a| matches!(a, Action::Update(t) if t.uid == SETTINGS_UID)));
+    assert!(
+        Journal::load(h.ctx.as_ref())
+            .queue
+            .iter()
+            .any(|a| matches!(a, Action::Update(t) if t.uid == SETTINGS_UID))
+    );
 
     // The store copy was re-anchored with the newer revision.
     let task = {
         let s = h.store.lock().await;
-        s.get_task_ref(SETTINGS_UID).cloned().expect("carrier in store")
+        s.get_task_ref(SETTINGS_UID)
+            .cloned()
+            .expect("carrier in store")
     };
     let payload: SettingsPayload =
         serde_json::from_str(&task.description).expect("carrier description is a payload");

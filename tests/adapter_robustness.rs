@@ -416,21 +416,21 @@ fn settings_vevent_carrier_roundtrips() {
     assert!(ics.contains("DTSTART:19700101T000000Z"));
     assert!(ics.contains("DTEND:19700101T000001Z"));
 
-    let parsed =
-        Task::from_ics(&ics, "etag".into(), "href".into(), "cal".into()).unwrap();
+    let parsed = Task::from_ics(&ics, "etag".into(), "href".into(), "cal".into()).unwrap();
     assert!(parsed.is_event);
     assert!(!parsed.is_journal);
     assert_eq!(parsed.uid, cfait::config::SETTINGS_UID);
     assert_eq!(parsed.status, cfait::model::TaskStatus::Cancelled);
     assert_eq!(parsed.summary, cfait::config::SETTINGS_SUMMARY);
     assert_eq!(parsed.description, json);
-    assert_eq!(parsed.categories, vec![cfait::config::SETTINGS_CATEGORY.to_string()]);
+    assert_eq!(
+        parsed.categories,
+        vec![cfait::config::SETTINGS_CATEGORY.to_string()]
+    );
     assert_eq!(parsed.sequence, 7);
     assert_eq!(
         parsed.dtstart,
-        Some(DateType::Specific(
-            DateTime::from_timestamp(0, 0).unwrap()
-        ))
+        Some(DateType::Specific(DateTime::from_timestamp(0, 0).unwrap()))
     );
 }
 

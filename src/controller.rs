@@ -2,16 +2,16 @@
 //! Central logic controller for Task operations.
 //! This is the single source of truth for background persistence orchestration.
 use crate::cache::{Cache, SettingsMeta};
-use crate::client::core::{ProbeResult, PropWriteError};
 use crate::client::RustyClient;
+use crate::client::core::{ProbeResult, PropWriteError};
 use crate::config::{
-    Config, SettingsPayload, SyncableConfig, CFAIT_SETTINGS_PROP, CFAIT_SETTINGS_REV_PROP,
-    PROBE_TTL_SECS, SETTINGS_CATEGORY, SETTINGS_SUMMARY, SETTINGS_UID,
+    CFAIT_SETTINGS_PROP, CFAIT_SETTINGS_REV_PROP, Config, PROBE_TTL_SECS, SETTINGS_CATEGORY,
+    SETTINGS_SUMMARY, SETTINGS_UID, SettingsPayload, SyncableConfig,
 };
 use crate::context::AppContext;
 use crate::journal::{Action, Journal};
 use crate::model::{PENDING_REFRESH_ETAG, Task, TaskStatus};
-use crate::storage::{LocalCalendarRegistry, LocalStorage, LOCAL_CALENDAR_HREF};
+use crate::storage::{LOCAL_CALENDAR_HREF, LocalCalendarRegistry, LocalStorage};
 use crate::store::TaskStore;
 use chrono::{DateTime, Utc};
 use serde_json;
@@ -688,7 +688,9 @@ impl TaskController {
             let mut store = self.store.lock().await;
             store.delete_task(&stale.uid);
             drop(store);
-            let _ = self.persist_changes(vec![Action::Delete(stale.clone())]).await;
+            let _ = self
+                .persist_changes(vec![Action::Delete(stale.clone())])
+                .await;
         }
 
         let remote_object = match client.fetch_settings_object(target).await {
@@ -699,8 +701,9 @@ impl TaskController {
             }
         };
 
-        let remote_payload =
-            remote_object.as_ref().and_then(|t| parse_settings_payload(&t.description));
+        let remote_payload = remote_object
+            .as_ref()
+            .and_then(|t| parse_settings_payload(&t.description));
         let local_syncable = config.get_syncable();
         let decision = decide_settings_sync(
             config.settings_updated_at,
@@ -731,14 +734,8 @@ impl TaskController {
                         config: remote_payload.config,
                     })
                     .unwrap_or_default();
-                    self.push_carrier(
-                        existing_task,
-                        remote_object.as_ref(),
-                        false,
-                        target,
-                        &json,
-                    )
-                    .await?;
+                    self.push_carrier(existing_task, remote_object.as_ref(), false, target, &json)
+                        .await?;
                 }
                 Ok(true)
             }
@@ -800,8 +797,9 @@ impl TaskController {
         config: &mut Config,
         existing_task: Option<Task>,
     ) -> Result<bool, String> {
-        let remote_payload =
-            existing_task.as_ref().and_then(|t| parse_settings_payload(&t.description));
+        let remote_payload = existing_task
+            .as_ref()
+            .and_then(|t| parse_settings_payload(&t.description));
         let local_syncable = config.get_syncable();
         let target = settings_target_calendar(config, self.ctx.as_ref());
 
@@ -1083,8 +1081,10 @@ mod tests {
     use crate::model::CalendarListEntry;
 
     fn payload(updated_at: i64, calendar: Option<&str>) -> SettingsPayload {
-        let mut config = SyncableConfig::default();
-        config.default_calendar = calendar.map(|c| c.to_string());
+        let config = SyncableConfig {
+            default_calendar: calendar.map(|c| c.to_string()),
+            ..Default::default()
+        };
         SettingsPayload { updated_at, config }
     }
 
@@ -1151,14 +1151,8 @@ mod tests {
     fn newer_payload_picks_higher_revision() {
         let a = payload(5, None);
         let b = payload(9, None);
-        assert_eq!(
-            newer_payload(Some(&a), Some(&b)).unwrap().updated_at,
-            9
-        );
-        assert_eq!(
-            newer_payload(Some(&b), Some(&a)).unwrap().updated_at,
-            9
-        );
+        assert_eq!(newer_payload(Some(&a), Some(&b)).unwrap().updated_at, 9);
+        assert_eq!(newer_payload(Some(&b), Some(&a)).unwrap().updated_at, 9);
     }
 
     #[test]
@@ -1208,8 +1202,10 @@ mod tests {
     #[test]
     fn target_calendar_prefers_remote_default() {
         let ctx = Arc::new(TestContext::new());
-        let mut config = Config::default();
-        config.default_calendar = Some("/calendars/u/main".into());
+        let config = Config {
+            default_calendar: Some("/calendars/u/main".into()),
+            ..Default::default()
+        };
         assert_eq!(
             settings_target_calendar(&config, ctx.as_ref()),
             "/calendars/u/main"
@@ -1219,8 +1215,10 @@ mod tests {
     #[test]
     fn target_calendar_falls_back_to_first_cached_remote() {
         let ctx = Arc::new(TestContext::new());
-        let mut config = Config::default();
-        config.default_calendar = Some(LOCAL_CALENDAR_HREF.to_string());
+        let config = Config {
+            default_calendar: Some(LOCAL_CALENDAR_HREF.to_string()),
+            ..Default::default()
+        };
         let cals = vec![
             CalendarListEntry {
                 name: "Trash".into(),
@@ -1309,8 +1307,7 @@ mod tests {
     #[test]
     fn build_carrier_prefers_remote_object() {
         let remote = existing_in("/calendars/u/cal", true);
-        let (t, is_new) =
-            build_carrier_task(None, Some(&remote), false, "/calendars/u/cal", "{}");
+        let (t, is_new) = build_carrier_task(None, Some(&remote), false, "/calendars/u/cal", "{}");
         assert!(!is_new);
         assert_eq!(t.uid, SETTINGS_UID);
         assert_eq!(t.href, remote.href);
@@ -1320,8 +1317,7 @@ mod tests {
     #[test]
     fn build_carrier_recreates_when_remote_known_absent() {
         let existing = existing_in("/calendars/u/cal", true);
-        let (t, is_new) =
-            build_carrier_task(Some(&existing), None, true, "/calendars/u/cal", "{}");
+        let (t, is_new) = build_carrier_task(Some(&existing), None, true, "/calendars/u/cal", "{}");
         assert!(is_new);
         assert!(t.href.is_empty());
         assert!(t.etag.is_empty());
