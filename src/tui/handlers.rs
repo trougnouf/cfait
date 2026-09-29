@@ -4308,6 +4308,7 @@ pub async fn handle_key_event(
                                     state.active_cal_href.clone(),
                                 );
                                 if !actions.is_empty() {
+                                    state.edit_generation = state.edit_generation.wrapping_add(1);
                                     send_persist_batch(action_tx, actions);
                                 }
                                 final_uid
