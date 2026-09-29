@@ -16,6 +16,34 @@ use strum::EnumIter;
 static CONFIG_CACHE: LazyLock<RwLock<Option<(PathBuf, Config)>>> =
     LazyLock::new(|| RwLock::new(None));
 
+// -----------------------------
+// Settings synchronization constants
+//
+// Settings are primarily stored as custom WebDAV properties on the default
+// calendar collection, in a Cfait-owned namespace. Standard CalDAV clients
+// never request or display these properties, so the settings stay invisible
+// to them. Servers that do not support arbitrary custom properties fall back
+// to a 1970 CANCELLED VEVENT (see SETTINGS_UID) which most clients filter
+// out by time range.
+// -----------------------------
+
+/// Custom WebDAV property namespace used for Cfait's settings properties.
+pub const CFAIT_NS: &str = "http://trougnouf.com/ns/cfait/";
+/// Property holding the full settings payload (JSON `SettingsPayload`).
+pub const CFAIT_SETTINGS_PROP: &str = "settings";
+/// Property holding the `updated_at` revision (unix seconds, decimal string).
+pub const CFAIT_SETTINGS_REV_PROP: &str = "settings-rev";
+/// Property used by the capability probe (written with a UUID, read back, removed).
+pub const CFAIT_PROBE_PROP: &str = "probe";
+/// TTL for cached probe results (30 days).
+pub const PROBE_TTL_SECS: i64 = 30 * 24 * 3600;
+/// UID of the settings object (legacy VTODO / 1970 VEVENT fallback).
+pub const SETTINGS_UID: &str = "cfait-global-settings-v1";
+/// Summary of the settings object.
+pub const SETTINGS_SUMMARY: &str = "⚙ Cfait Settings (Do not delete)";
+/// Category marker applied to the settings object.
+pub const SETTINGS_CATEGORY: &str = "cfait-internal";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, EnumIter)]
 #[serde(rename_all = "lowercase")]
 pub enum FirstDayOfWeek {

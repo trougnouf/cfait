@@ -306,7 +306,7 @@ impl RustyClient {
             }
             Err(WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED))
             | Err(WebDavError::PreconditionFailed(_)) => {
-                if task.uid == "cfait-global-settings-v1"
+                if task.uid == crate::config::SETTINGS_UID
                     && let Ok(Some(server_task)) = self.fetch_remote_task(&path).await
                 {
                     return Ok(

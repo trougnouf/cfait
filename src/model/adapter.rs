@@ -396,6 +396,30 @@ impl IcsAdapter {
             return buffer;
         }
 
+        if task.is_event {
+            // Fallback carrier for settings when the server does not support
+            // custom WebDAV properties: a CANCELLED event anchored at the Unix
+            // epoch. Most clients filter past events by time range, so it is
+            // effectively invisible.
+            let mut event = Event::new();
+            event.add_property("UID", &task.uid);
+            event.summary(&task.summary);
+            if !desc.is_empty() {
+                event.description(&desc);
+            }
+            event.timestamp(Utc::now());
+            event.add_property("SEQUENCE", task.sequence.to_string());
+            event.add_property("STATUS", "CANCELLED");
+            event.add_property("DTSTART", "19700101T000000Z");
+            event.add_property("DTEND", "19700101T000001Z");
+            if !task.categories.is_empty() {
+                event.add_property("CATEGORIES", task.categories.join(","));
+            }
+            let mut calendar = Calendar::new();
+            calendar.push(event);
+            return calendar.to_string();
+        }
+
         let mut todo = Todo::new();
         todo.add_property("UID", &task.uid);
         todo.summary(&task.summary);
@@ -838,6 +862,7 @@ impl IcsAdapter {
 
         let mut master_todo: Option<&Todo> = None;
         let mut master_journal_raw: Option<String> = None;
+        let mut master_event: Option<&Event> = None;
         let mut raw_components: Vec<String> = Vec::new();
 
         for component in &calendar.components {
@@ -854,7 +879,21 @@ impl IcsAdapter {
                         raw_components.push(t.to_string());
                     }
                 }
-                CalendarComponent::Event(e) => raw_components.push(e.to_string()),
+                CalendarComponent::Event(e) => {
+                    // The settings fallback carrier is a VEVENT with a fixed
+                    // UID; recognize it so it can be parsed as a Task.
+                    let is_settings_event = e
+                        .properties()
+                        .iter()
+                        .find(|(k, _)| k.eq_ignore_ascii_case("UID"))
+                        .map(|(_, p)| p.value().eq_ignore_ascii_case(crate::config::SETTINGS_UID))
+                        .unwrap_or(false);
+                    if is_settings_event && master_event.is_none() {
+                        master_event = Some(e);
+                    } else {
+                        raw_components.push(e.to_string());
+                    }
+                }
                 CalendarComponent::Venue(v) => raw_components.push(v.to_string()),
                 CalendarComponent::Other(o) => {
                     let comp_str = o.to_string();
@@ -1004,6 +1043,7 @@ impl IcsAdapter {
                 manual_block: false,
                 permanent: false,
                 is_journal: true,
+                is_event: false,
                 time_spent_seconds: 0,
                 last_started_at: None,
                 sessions: Vec::new(),
@@ -1014,6 +1054,119 @@ impl IcsAdapter {
                 create_event: None,
                 goal: None,
                 inline_media,
+                target_collection: None,
+                is_blocked: false,
+                is_implicitly_blocked: false,
+                is_implicitly_future: false,
+                has_subtasks: false,
+                has_visible_subtasks: false,
+                sort_rank: 0,
+                effective_priority: 0,
+                effective_due: None,
+                effective_dtstart: None,
+                visible_categories: Vec::new(),
+                visible_locations: Vec::new(),
+                has_blocking_tasks: false,
+                has_related_tasks: false,
+                is_future_start: false,
+                is_overdue: false,
+                is_due_today: false,
+                tree_location_count: 0,
+                is_search_context: false,
+                transient_is_paused: false,
+                transient_recent_ts: 0,
+                transient_desc_tags: Vec::new(),
+                transient_desc_locs: Vec::new(),
+                cached_has_subtasks: None,
+            });
+        }
+
+        if let Some(event) = master_event {
+            let get_ev_prop = |key: &str| -> Option<String> {
+                event
+                    .properties()
+                    .iter()
+                    .find(|(k, _)| k.eq_ignore_ascii_case(key))
+                    .map(|(_, p)| p.value().to_string())
+            };
+
+            let uid = get_ev_prop("UID").unwrap_or_default();
+            let summary = get_ev_prop("SUMMARY").unwrap_or_default();
+            let description = get_ev_prop("DESCRIPTION").unwrap_or_default();
+            let sequence = get_ev_prop("SEQUENCE")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0);
+            let mut categories = get_ev_prop("CATEGORIES")
+                .map(|s| split_ics_list(&s))
+                .unwrap_or_default();
+            // The parser routes CATEGORIES (multi-valued per RFC 5545) into
+            // multi_properties(), so it is not visible via properties().
+            if categories.is_empty() {
+                for (key, props) in event.multi_properties() {
+                    if key.eq_ignore_ascii_case("CATEGORIES") {
+                        for p in props {
+                            categories.extend(split_ics_list(&p.value().to_string()));
+                        }
+                    }
+                }
+            }
+            let dtstart = get_ev_prop("DTSTART").and_then(|v| {
+                NaiveDateTime::parse_from_str(&v, "%Y%m%dT%H%M%SZ")
+                    .ok()
+                    .map(|d| DateType::Specific(Utc.from_utc_datetime(&d)))
+            });
+            let status = get_ev_prop("STATUS")
+                .map(|s| {
+                    if s.eq_ignore_ascii_case("CANCELLED") {
+                        TaskStatus::Cancelled
+                    } else {
+                        TaskStatus::NeedsAction
+                    }
+                })
+                .unwrap_or(TaskStatus::Cancelled);
+
+            return Ok(Task {
+                uid,
+                summary,
+                description,
+                status,
+                estimated_duration: None,
+                estimated_duration_max: None,
+                due: None,
+                dtstart,
+                alarms: Vec::new(),
+                exdates: Vec::new(),
+                priority: 0,
+                percent_complete: None,
+                parent_uid: None,
+                dependencies: Vec::new(),
+                related_to: Vec::new(),
+                etag,
+                href,
+                calendar_href,
+                categories,
+                depth: 0,
+                rrule: None,
+                locations: Vec::new(),
+                url: None,
+                geo: None,
+                collapsed: false,
+                pinned: false,
+                is_note: false,
+                manual_block: false,
+                permanent: false,
+                is_journal: false,
+                is_event: true,
+                time_spent_seconds: 0,
+                last_started_at: None,
+                sessions: Vec::new(),
+                unmapped_properties: Vec::new(),
+                sequence,
+                raw_alarms: Vec::new(),
+                raw_components,
+                create_event: None,
+                goal: None,
+                inline_media: std::collections::HashMap::new(),
                 target_collection: None,
                 is_blocked: false,
                 is_implicitly_blocked: false,
@@ -1637,6 +1790,7 @@ impl IcsAdapter {
             manual_block,
             permanent,
             is_journal: false,
+            is_event: false,
             time_spent_seconds,
             last_started_at,
             sessions: manual_sessions, // Use manual parsing result
@@ -1675,7 +1829,8 @@ impl IcsAdapter {
     }
 
     pub fn to_event_ics(task: &Task) -> Vec<(String, String)> {
-        if task.is_journal {
+        // Journals and the settings carrier (is_event) never spawn companion events.
+        if task.is_journal || task.is_event {
             return vec![];
         }
 

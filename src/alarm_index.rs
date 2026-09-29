@@ -484,6 +484,7 @@ mod tests {
             manual_block: false,
             permanent: false,
             is_journal: false,
+            is_event: false,
             time_spent_seconds: 0,
             last_started_at: None,
             sessions: vec![],

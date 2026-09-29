@@ -122,6 +122,57 @@ pub use test_hooks::{
 };
 
 // -----------------------------
+// Settings sync: custom WebDAV properties (namespace http://trougnouf.com/ns/cfait/)
+// -----------------------------
+
+/// Failure classification for a PROPPATCH of custom properties.
+#[derive(Debug)]
+pub(crate) enum PropWriteError {
+    /// The server rejected the write (4xx). Custom properties are not
+    /// supported on this calendar; callers should fall back to object storage.
+    Rejected(StatusCode, String),
+    /// Transient failure (network error, 5xx). Retry on the next sync cycle.
+    Transient(String),
+}
+
+/// Outcome of the custom-property support probe.
+#[derive(Debug)]
+pub(crate) enum ProbeResult {
+    Supported,
+    Unsupported(String),
+    Transient(String),
+}
+
+/// Build a D:propertyupdate body with properties in the Cfait namespace.
+fn build_propertyupdate_body(sets: &[(String, String)], removes: &[String]) -> String {
+    let set_props: Vec<String> = sets
+        .iter()
+        .map(|(name, value)| format!("<CF:{name}>{}</CF:{name}>", xml_escape(value)))
+        .collect();
+    let set_block = if set_props.is_empty() {
+        String::new()
+    } else {
+        format!("<D:set><D:prop>{}</D:prop></D:set>", set_props.join(""))
+    };
+    let remove_props: Vec<String> = removes.iter().map(|name| format!("<CF:{name}/>")).collect();
+    let remove_block = if remove_props.is_empty() {
+        String::new()
+    } else {
+        format!("<D:remove><D:prop>{}</D:prop></D:remove>", remove_props.join(""))
+    };
+    format!(
+        r#"<?xml version="1.0" encoding="utf-8" ?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:CF="{}">{}{}</D:propertyupdate>"#,
+        crate::config::CFAIT_NS,
+        set_block,
+        remove_block
+    )
+}
+
+/// Extract the numeric HTTP status from a propstat status line (e.g. "HTTP/1.1 200 OK").
+fn propstat_http_code(status_text: &str) -> Option<u16> {
+    status_text.split_whitespace().nth(1).and_then(|c| c.parse().ok())
+}
 
 pub(crate) fn strip_host(href: &str) -> String {
     if href.starts_with("local://") {
@@ -864,7 +915,9 @@ impl RustyClient {
         is_create_intent: bool,
     ) -> bool {
         // Local calendars don't have server-side events, and Journals don't get events.
-        if task.calendar_href.starts_with("local://") || task.is_journal {
+        // is_event marks the settings carrier (a VEVENT), which is managed by
+        // sync_settings and must never spawn companion events of its own.
+        if task.calendar_href.starts_with("local://") || task.is_journal || task.is_event {
             return false;
         }
 
@@ -1909,6 +1962,329 @@ impl RustyClient {
                 err_body
             ))
         }
+    }
+
+    /// PROPPATCH custom properties (Cfait namespace) on a calendar collection.
+    pub(crate) async fn proppatch_custom_props(
+        &self,
+        href: &str,
+        sets: &[(String, String)],
+        removes: &[String],
+    ) -> Result<(), PropWriteError> {
+        let client = self
+            .client
+            .as_ref()
+            .ok_or_else(|| PropWriteError::Transient("Offline".to_string()))?;
+
+        let body = build_propertyupdate_body(sets, removes);
+
+        let req = http::Request::builder()
+            .method("PROPPATCH")
+            .uri(
+                client
+                    .webdav_client
+                    .relative_uri(&strip_host(href))
+                    .map_err(|e| {
+                        PropWriteError::Transient(format!("PROPPATCH URI build failed: {}", e))
+                    })?,
+            )
+            .header("Content-Type", "application/xml; charset=utf-8")
+            .body(body)
+            .map_err(|e| PropWriteError::Transient(format!("PROPPATCH request build failed: {}", e)))?;
+
+        let (parts, body_bytes) = client
+            .webdav_client
+            .request_raw(req)
+            .await
+            .map_err(|e| PropWriteError::Transient(format!("PROPPATCH request failed: {:?}", e)))?;
+
+        let status = parts.status;
+        if status.is_client_error() {
+            let err_body = String::from_utf8_lossy(&body_bytes);
+            return Err(PropWriteError::Rejected(status, err_body.to_string()));
+        }
+        if !(status.is_success() || status == StatusCode::MULTI_STATUS) {
+            return Err(PropWriteError::Transient(format!(
+                "PROPPATCH returned {}",
+                status
+            )));
+        }
+
+        // A 207 can still contain per-property rejections; inspect each propstat.
+        let xml_str = String::from_utf8_lossy(&body_bytes);
+        if let Ok(doc) = roxmltree::Document::parse(&xml_str) {
+            for propstat in doc
+                .descendants()
+                .filter(|n| n.tag_name().name().eq_ignore_ascii_case("propstat"))
+            {
+                if let Some(status_node) = propstat
+                    .children()
+                    .find(|n| n.tag_name().name().eq_ignore_ascii_case("status"))
+                    && let Some(text) = status_node.text()
+                    && let Some(code) = propstat_http_code(text)
+                    && (400..500).contains(&code)
+                {
+                    let st = StatusCode::from_u16(code).unwrap_or(StatusCode::FORBIDDEN);
+                    return Err(PropWriteError::Rejected(st, text.to_string()));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Remove a single custom property (best-effort).
+    pub(crate) async fn remove_property(
+        &self,
+        href: &str,
+        prop: &str,
+    ) -> Result<(), PropWriteError> {
+        self.proppatch_custom_props(href, &[], &[prop.to_string()])
+            .await
+    }
+
+    /// PROPFIND custom properties on a calendar collection (depth 0).
+    /// Returns `Ok(None)` when the calendar itself is gone (404).
+    pub(crate) async fn propfind_custom_props(
+        &self,
+        href: &str,
+        names: &[&str],
+    ) -> Result<Option<HashMap<String, String>>, String> {
+        let client = self
+            .client
+            .as_ref()
+            .ok_or_else(|| "Offline".to_string())?;
+
+        let props_xml: Vec<String> = names.iter().map(|n| format!("<CF:{n}/>")).collect();
+        let body = format!(
+            r#"<?xml version="1.0" encoding="utf-8" ?>
+<D:propfind xmlns:D="DAV:" xmlns:CF="{}"><D:prop>{}</D:prop></D:propfind>"#,
+            crate::config::CFAIT_NS,
+            props_xml.join("")
+        );
+
+        let req = http::Request::builder()
+            .method("PROPFIND")
+            .uri(
+                client
+                    .webdav_client
+                    .relative_uri(&strip_host(href))
+                    .map_err(|e| format!("PROPFIND URI build failed: {}", e))?,
+            )
+            .header("Content-Type", "application/xml; charset=utf-8")
+            .header("Depth", "0")
+            .body(body)
+            .map_err(|e| format!("PROPFIND request build failed: {}", e))?;
+
+        let (parts, body_bytes) = client
+            .webdav_client
+            .request_raw(req)
+            .await
+            .map_err(|e| format!("PROPFIND request failed: {:?}", e))?;
+
+        let status = parts.status;
+        if status == StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
+        if !(status.is_success() || status == StatusCode::MULTI_STATUS) {
+            return Err(format!("PROPFIND returned {}", status));
+        }
+
+        let xml_str = String::from_utf8_lossy(&body_bytes);
+        let mut found = HashMap::new();
+        if let Ok(doc) = roxmltree::Document::parse(&xml_str) {
+            for propstat in doc
+                .descendants()
+                .filter(|n| n.tag_name().name().eq_ignore_ascii_case("propstat"))
+            {
+                let code = propstat
+                    .children()
+                    .find(|n| n.tag_name().name().eq_ignore_ascii_case("status"))
+                    .and_then(|s| s.text())
+                    .and_then(propstat_http_code);
+                if code != Some(200) && code != Some(204) {
+                    continue; // property not found (404) or other status
+                }
+                let prop_node = propstat
+                    .children()
+                    .find(|n| n.tag_name().name().eq_ignore_ascii_case("prop"));
+                if let Some(prop_node) = prop_node {
+                    for child in prop_node.children() {
+                        let name = child.tag_name().name();
+                        if names.iter().any(|n| n.eq_ignore_ascii_case(name))
+                            && let Some(text) = child.text()
+                        {
+                            found.insert(name.to_string(), text.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        Ok(Some(found))
+    }
+
+    /// Probe whether the server supports custom-namespaced properties on a
+    /// calendar collection (set a random value, read it back, remove it).
+    pub(crate) async fn probe_custom_property_support(&self, href: &str) -> ProbeResult {
+        let probe_value = uuid::Uuid::new_v4().to_string();
+
+        match self
+            .proppatch_custom_props(
+                href,
+                &[(crate::config::CFAIT_PROBE_PROP.to_string(), probe_value.clone())],
+                &[],
+            )
+            .await
+        {
+            Ok(()) => {}
+            Err(PropWriteError::Rejected(status, body)) => {
+                return ProbeResult::Unsupported(format!(
+                    "PROPPATCH rejected ({}): {}",
+                    status, body
+                ));
+            }
+            Err(PropWriteError::Transient(e)) => return ProbeResult::Transient(e),
+        }
+
+        let readback = self
+            .propfind_custom_props(href, &[crate::config::CFAIT_PROBE_PROP])
+            .await;
+
+        // Best-effort cleanup of the probe property.
+        let _ = self.remove_property(href, crate::config::CFAIT_PROBE_PROP).await;
+
+        match readback {
+            Ok(Some(props)) => {
+                if props
+                    .get(crate::config::CFAIT_PROBE_PROP)
+                    .map(|v| v == &probe_value)
+                    .unwrap_or(false)
+                {
+                    ProbeResult::Supported
+                } else {
+                    ProbeResult::Unsupported(
+                        "probe property value mismatch on read-back".to_string(),
+                    )
+                }
+            }
+            Ok(None) => ProbeResult::Unsupported("calendar not found during probe".to_string()),
+            Err(e) => ProbeResult::Transient(e),
+        }
+    }
+
+    /// Locate the settings carrier object (VEVENT, or the legacy VTODO) in a
+    /// calendar and fetch it as a Task. Returns `Ok(None)` when absent.
+    pub(crate) async fn fetch_settings_object(
+        &self,
+        calendar_href: &str,
+    ) -> Result<Option<Task>, String> {
+        let Some(client) = &self.client else {
+            return Ok(None);
+        };
+
+        let base = client.base_url();
+        let scheme = base.scheme_str().unwrap_or("https");
+        let authority = base.authority().map(|a| a.as_str()).unwrap_or("");
+        let path = strip_host(calendar_href);
+        let clean_path = if path.starts_with('/') {
+            path.clone()
+        } else {
+            format!("/{}", path)
+        };
+        let absolute_destination = format!("{}://{}{}", scheme, authority, clean_path);
+
+        for component in ["VEVENT", "VTODO"] {
+            let body = format!(
+                r#"<?xml version="1.0" encoding="utf-8" ?>
+<C:calendar-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:prop><D:getetag/></D:prop>
+  <C:filter>
+    <C:comp-filter name="VCALENDAR">
+      <C:comp-filter name="{component}">
+        <C:prop-filter name="UID">
+          <C:text-match collation="i;ascii-casemap">{}</C:text-match>
+        </C:prop-filter>
+      </C:comp-filter>
+    </C:comp-filter>
+  </C:filter>
+</C:calendar-query>"#,
+                xml_escape(crate::config::SETTINGS_UID)
+            );
+
+            let req = Request::builder()
+                .method("REPORT")
+                .uri(&absolute_destination)
+                .header("Content-Type", "application/xml; charset=utf-8")
+                .header("Depth", "1")
+                .body(body)
+                .map_err(|e| format!("REPORT build failed: {}", e))?;
+
+            let (parts, body_bytes) = client
+                .webdav_client
+                .request_raw(req)
+                .await
+                .map_err(|e| format!("REPORT failed: {:?}", e))?;
+
+            if parts.status == StatusCode::NOT_FOUND {
+                return Ok(None);
+            }
+            if !parts.status.is_success() && parts.status != StatusCode::MULTI_STATUS {
+                // The server rejected the query (e.g. no prop-filter support);
+                // the object cannot be located this way.
+                continue;
+            }
+
+            let xml_str = String::from_utf8_lossy(&body_bytes);
+            let hrefs: Vec<String> = if let Ok(doc) = roxmltree::Document::parse(&xml_str) {
+                doc.descendants()
+                    .filter(|n| n.tag_name().name().eq_ignore_ascii_case("response"))
+                    .filter_map(|response| {
+                        response
+                            .descendants()
+                            .find(|n| n.tag_name().name().eq_ignore_ascii_case("href"))
+                            .and_then(|n| n.text())
+                            .map(|t| t.to_string())
+                    })
+                    .filter(|h| h.ends_with(".ics"))
+                    .collect()
+            } else {
+                Vec::new()
+            };
+
+            if let Some(href) = hrefs.into_iter().next() {
+                let path_href = strip_host(&href);
+                let parent_path = if let Some(idx) = path_href.rfind('/') {
+                    &path_href[..=idx]
+                } else {
+                    "/"
+                };
+                let req = GetCalendarResources::new(parent_path).with_hrefs(vec![
+                    path_href.clone(),
+                ]);
+                match client.request(req).await {
+                    Ok(resp) => {
+                        if let Some(item) = resp.resources.into_iter().next()
+                            && let Ok(content) = item.content
+                        {
+                            return IcsAdapter::from_ics(
+                                &content.data,
+                                content.etag,
+                                item.href,
+                                parent_path.to_string(),
+                            )
+                            .map(Some)
+                            .map_err(|e| format!("Failed to parse settings object: {}", e));
+                        }
+                    }
+                    Err(WebDavError::BadStatusCode(StatusCode::NOT_FOUND)) => {
+                        return Ok(None)
+                    }
+                    Err(e) => {
+                        return Err(format!("Failed to fetch settings object: {:?}", e))
+                    }
+                }
+            }
+        }
+        Ok(None)
     }
 
     // Note: The following methods are implemented in src/client/sync.rs:

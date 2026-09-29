@@ -5,11 +5,29 @@ use crate::storage::LocalStorage;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 
 const CACHE_VERSION: u32 = 12;
+
+/// Metadata for the settings-sync feature: where the settings live on the
+/// server and which calendars were probed for custom-property support.
+#[derive(Serialize, Deserialize, Default, Clone, Debug)]
+pub struct SettingsMeta {
+    /// Calendar href where the settings property is currently stored.
+    /// `None` means the settings are not (yet) stored as a property, i.e.
+    /// the app is in fallback (VEVENT/VTODO object) mode.
+    #[serde(default)]
+    pub property_href: Option<String>,
+    /// Calendar href -> whether the server accepted custom properties.
+    #[serde(default)]
+    pub probed: HashMap<String, bool>,
+    /// Calendar href -> unix seconds of the last probe for that calendar.
+    #[serde(default)]
+    pub probed_at: HashMap<String, i64>,
+}
 
 #[derive(Serialize, Deserialize)]
 struct CalendarCache {
@@ -33,6 +51,34 @@ impl Cache {
             let filename = format!("tasks_{:x}.json", hasher.finish());
             dir.join(filename)
         })
+    }
+
+    fn get_settings_meta_path(ctx: &dyn AppContext) -> Option<PathBuf> {
+        ctx.get_cache_dir().ok().map(|p| p.join("settings_meta.json"))
+    }
+
+    pub fn load_settings_meta(ctx: &dyn AppContext) -> SettingsMeta {
+        if let Some(path) = Self::get_settings_meta_path(ctx)
+            && path.exists()
+        {
+            if let Ok(json) = fs::read_to_string(&path)
+                && let Ok(meta) = serde_json::from_str::<SettingsMeta>(&json)
+            {
+                return meta;
+            }
+        }
+        SettingsMeta::default()
+    }
+
+    pub fn save_settings_meta(ctx: &dyn AppContext, meta: &SettingsMeta) -> Result<()> {
+        if let Some(path) = Self::get_settings_meta_path(ctx) {
+            LocalStorage::with_lock(&path, || {
+                let json = serde_json::to_string(meta)?;
+                LocalStorage::atomic_write(&path, json)?;
+                Ok(())
+            })?;
+        }
+        Ok(())
     }
 
     pub fn save(

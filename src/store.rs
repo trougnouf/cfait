@@ -3600,7 +3600,7 @@ impl TaskStore {
                     {
                         return false;
                     }
-                    if t.uid == "cfait-global-settings-v1"
+                    if t.uid == crate::config::SETTINGS_UID
                         || t.summary.starts_with("⚙ Cfait Settings")
                     {
                         return false;
@@ -5284,6 +5284,7 @@ mod tests {
             manual_block: false,
             permanent: false,
             is_journal: false,
+            is_event: false,
             time_spent_seconds: 0,
             last_started_at: None,
             sessions: vec![],

@@ -382,3 +382,97 @@ fn multiple_categories_lines_merge() {
         vec!["gardening".to_string(), "reading".to_string()]
     );
 }
+
+// --- Settings carrier (1970 CANCELLED VEVENT) ---
+
+fn settings_carrier(description: &str) -> Task {
+    let mut t = Task::new(
+        cfait::config::SETTINGS_SUMMARY,
+        &std::collections::HashMap::new(),
+        None,
+    );
+    t.uid = cfait::config::SETTINGS_UID.to_string();
+    t.status = cfait::model::TaskStatus::Cancelled;
+    t.description = description.to_string();
+    t.categories = vec![cfait::config::SETTINGS_CATEGORY.to_string()];
+    t.is_event = true;
+    t
+}
+
+/// The settings fallback carrier must serialize as a CANCELLED VEVENT pinned
+/// at the Unix epoch so time-range filters hide it, and the payload must
+/// survive the round trip losslessly (JSON is full of commas and quotes).
+#[test]
+fn settings_vevent_carrier_roundtrips() {
+    let json = r#"{"updated_at":1759000000,"config":{"default_calendar":"/calendars/u/main","tag_aliases":{"work":["work, home"]},"goals":{"g1":{"label":"Read, a lot"}}}}"#;
+    let mut t = settings_carrier(json);
+    t.sequence = 7;
+    let ics = t.to_ics();
+    assert!(ics.contains("BEGIN:VEVENT"), "carrier must be a VEVENT");
+    assert!(ics.contains("END:VEVENT"));
+    assert!(!ics.contains("VTODO"), "carrier must not be a VTODO");
+    assert!(ics.contains("UID:cfait-global-settings-v1"));
+    assert!(ics.contains("STATUS:CANCELLED"));
+    assert!(ics.contains("DTSTART:19700101T000000Z"));
+    assert!(ics.contains("DTEND:19700101T000001Z"));
+
+    let parsed =
+        Task::from_ics(&ics, "etag".into(), "href".into(), "cal".into()).unwrap();
+    assert!(parsed.is_event);
+    assert!(!parsed.is_journal);
+    assert_eq!(parsed.uid, cfait::config::SETTINGS_UID);
+    assert_eq!(parsed.status, cfait::model::TaskStatus::Cancelled);
+    assert_eq!(parsed.summary, cfait::config::SETTINGS_SUMMARY);
+    assert_eq!(parsed.description, json);
+    assert_eq!(parsed.categories, vec![cfait::config::SETTINGS_CATEGORY.to_string()]);
+    assert_eq!(parsed.sequence, 7);
+    assert_eq!(
+        parsed.dtstart,
+        Some(DateType::Specific(
+            DateTime::from_timestamp(0, 0).unwrap()
+        ))
+    );
+}
+
+/// A hand-written 1970 CANCELLED VEVENT (as stored by another device) parses
+/// back into an event carrier with the epoch start.
+#[test]
+fn settings_vevent_carrier_parses_from_wire() {
+    let t = parse(
+        "BEGIN:VEVENT\r\n\
+            UID:cfait-global-settings-v1\r\n\
+            SUMMARY:⚙ Cfait Settings (Do not delete)\r\n\
+            DTSTAMP:20260929T000000Z\r\n\
+            SEQUENCE:3\r\n\
+            STATUS:CANCELLED\r\n\
+            DTSTART:19700101T000000Z\r\n\
+            DTEND:19700101T000001Z\r\n\
+            CATEGORIES:cfait-internal\r\n\
+            END:VEVENT",
+    );
+    assert!(t.is_event);
+    assert_eq!(t.uid, "cfait-global-settings-v1");
+    assert_eq!(t.status, cfait::model::TaskStatus::Cancelled);
+    assert_eq!(
+        t.dtstart,
+        Some(DateType::Specific(DateTime::from_timestamp(0, 0).unwrap()))
+    );
+    assert_eq!(t.sequence, 3);
+    assert_eq!(t.categories, vec!["cfait-internal".to_string()]);
+}
+
+/// A VEVENT without STATUS is still treated as the cancelled carrier (the
+/// summary marker is what identifies it).
+#[test]
+fn settings_vevent_without_status_defaults_cancelled() {
+    let t = parse(
+        "BEGIN:VEVENT\r\n\
+            UID:cfait-global-settings-v1\r\n\
+            SUMMARY:⚙ Cfait Settings (Do not delete)\r\n\
+            DTSTART:19700101T000000Z\r\n\
+            DTEND:19700101T000001Z\r\n\
+            END:VEVENT",
+    );
+    assert_eq!(t.status, cfait::model::TaskStatus::Cancelled);
+    assert!(t.is_event);
+}

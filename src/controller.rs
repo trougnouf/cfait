@@ -1,12 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Central logic controller for Task operations.
 //! This is the single source of truth for background persistence orchestration.
+use crate::cache::{Cache, SettingsMeta};
+use crate::client::core::{ProbeResult, PropWriteError};
 use crate::client::RustyClient;
-use crate::config::Config;
+use crate::config::{
+    Config, SettingsPayload, SyncableConfig, CFAIT_SETTINGS_PROP, CFAIT_SETTINGS_REV_PROP,
+    PROBE_TTL_SECS, SETTINGS_CATEGORY, SETTINGS_SUMMARY, SETTINGS_UID,
+};
 use crate::context::AppContext;
 use crate::journal::{Action, Journal};
-use crate::model::{PENDING_REFRESH_ETAG, Task};
-use crate::storage::{LocalCalendarRegistry, LocalStorage};
+use crate::model::{PENDING_REFRESH_ETAG, Task, TaskStatus};
+use crate::storage::{LocalCalendarRegistry, LocalStorage, LOCAL_CALENDAR_HREF};
 use crate::store::TaskStore;
 use chrono::{DateTime, Utc};
 use serde_json;
@@ -17,6 +22,233 @@ static PERSIST_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 pub fn get_persist_lock() -> &'static Mutex<()> {
     PERSIST_LOCK.get_or_init(|| Mutex::new(()))
+}
+
+// -----------------------------
+// Settings synchronization helpers
+//
+// Settings are synced either as custom WebDAV properties on the default
+// calendar collection (preferred; standard CalDAV clients never request or
+// display them) or, as a fallback for servers without custom-property
+// support, as a CANCELLED VEVENT carrier anchored at the Unix epoch.
+// -----------------------------
+
+/// Outcome of comparing the local settings against the remote ones.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SettingsDecision {
+    /// Remote and local agree; nothing to do.
+    InSync,
+    /// Remote is newer; apply it to the local config.
+    SyncDown,
+    /// Local is newer (or there is no remote); push it to the remote.
+    SyncUp,
+}
+
+/// Outcome of a property-based settings sync attempt.
+enum PropertySync {
+    /// The property path finished. `true` when a remote write happened.
+    Done(bool),
+    /// The server rejected the property write; fall back to object storage.
+    Demoted,
+}
+
+/// Decide which way the settings need to flow.
+fn decide_settings_sync(
+    local_updated_at: i64,
+    local_config: &SyncableConfig,
+    remote: Option<&SettingsPayload>,
+) -> SettingsDecision {
+    let Some(remote) = remote else {
+        return SettingsDecision::SyncUp;
+    };
+    if remote.updated_at > local_updated_at
+        || (local_updated_at == 0 && remote.config != *local_config)
+    {
+        SettingsDecision::SyncDown
+    } else if local_updated_at > remote.updated_at
+        || (local_updated_at > 0 && *local_config != remote.config)
+    {
+        SettingsDecision::SyncUp
+    } else {
+        SettingsDecision::InSync
+    }
+}
+
+/// Pick the payload with the higher `updated_at`. Used to reconcile the
+/// property payload against a leftover object carrier during migration.
+fn newer_payload(
+    a: Option<&SettingsPayload>,
+    b: Option<&SettingsPayload>,
+) -> Option<SettingsPayload> {
+    match (a, b) {
+        (Some(x), Some(y)) => {
+            if y.updated_at > x.updated_at {
+                Some(y.clone())
+            } else {
+                Some(x.clone())
+            }
+        }
+        (Some(x), None) => Some(x.clone()),
+        (None, Some(y)) => Some(y.clone()),
+        (None, None) => None,
+    }
+}
+
+/// Parse a JSON `SettingsPayload`, returning `None` on any error.
+fn parse_settings_payload(json: &str) -> Option<SettingsPayload> {
+    serde_json::from_str::<SettingsPayload>(json).ok()
+}
+
+/// Determine the calendar that should host the settings: the configured
+/// default calendar when it is a remote collection, otherwise the first
+/// cached remote calendar, otherwise the local default calendar.
+fn settings_target_calendar(config: &Config, ctx: &dyn AppContext) -> String {
+    let first_remote = || {
+        Cache::load_calendars(ctx)
+            .unwrap_or_default()
+            .into_iter()
+            .find(|c| !c.href.starts_with("local://"))
+            .map(|c| c.href)
+    };
+    match &config.default_calendar {
+        Some(def) if !def.starts_with("local://") => def.clone(),
+        _ => first_remote().unwrap_or_else(|| LOCAL_CALENDAR_HREF.to_string()),
+    }
+}
+
+/// Load the last known settings carrier from the in-memory store and the
+/// disk cache, preferring the higher `sequence`.
+fn load_settings_task(ctx: &dyn AppContext, store: &TaskStore) -> Option<Task> {
+    let mut from_disk = None;
+    if let Ok(cals) = Cache::load_calendars(ctx) {
+        for cal in cals {
+            if let Ok((tasks, _)) = Cache::load(ctx, &cal.href)
+                && let Some(t) = tasks.into_iter().find(|t| t.uid == SETTINGS_UID)
+            {
+                from_disk = Some(t);
+                break;
+            }
+        }
+    }
+    let from_store = store.get_task_ref(SETTINGS_UID).cloned();
+    match (from_store, from_disk) {
+        (Some(mut s), Some(d)) => {
+            if d.sequence > s.sequence {
+                s = d;
+            }
+            Some(s)
+        }
+        (Some(s), None) => Some(s),
+        (None, d) => d,
+    }
+}
+
+/// Build a fresh settings carrier task for the given calendar.
+fn settings_carrier_task(href: &str, json: &str) -> Task {
+    let mut task = Task::new(SETTINGS_SUMMARY, &std::collections::HashMap::new(), None);
+    task.uid = SETTINGS_UID.to_string();
+    task.status = TaskStatus::Cancelled;
+    task.description = json.to_string();
+    task.categories = vec![SETTINGS_CATEGORY.to_string()];
+    task.calendar_href = href.to_string();
+    task.is_event = true;
+    task
+}
+
+/// Apply the carrier markers that keep the settings object hidden and
+/// recognizable: cancelled status, VEVENT serialization, internal category.
+fn normalize_carrier(task: &mut Task) {
+    task.uid = SETTINGS_UID.to_string();
+    task.status = TaskStatus::Cancelled;
+    task.is_event = true;
+    task.is_journal = false;
+    if !task.summary.starts_with("⚙ Cfait Settings") {
+        task.summary = SETTINGS_SUMMARY.to_string();
+    }
+    if !task.categories.iter().any(|c| c == SETTINGS_CATEGORY) {
+        task.categories.push(SETTINGS_CATEGORY.to_string());
+    }
+}
+
+/// Build the carrier task to push and whether it is a fresh Create.
+///
+/// Prefers the remote object (carries the server href/etag) as the base.
+/// Without one, falls back to the local store copy when it lives in the
+/// target calendar; `remote_known_absent` (an online fetch that found
+/// nothing) forces a fresh Create, while an offline call keeps the existing
+/// href/etag so the update can use If-Match (a 404 self-heals to a Create).
+fn build_carrier_task(
+    existing_task: Option<&Task>,
+    remote_object: Option<&Task>,
+    remote_known_absent: bool,
+    target: &str,
+    json: &str,
+) -> (Task, bool) {
+    let (mut t, is_new) = match remote_object {
+        Some(remote) => (remote.clone(), false),
+        None => match existing_task {
+            Some(existing) if existing.calendar_href == target => {
+                if remote_known_absent || existing.href.is_empty() {
+                    let mut fresh = existing.clone();
+                    fresh.href = String::new();
+                    fresh.etag = String::new();
+                    (fresh, true)
+                } else {
+                    (existing.clone(), false)
+                }
+            }
+            _ => (settings_carrier_task(target, json), true),
+        },
+    };
+    t.uid = SETTINGS_UID.to_string();
+    t.description = json.to_string();
+    t.sequence += 1;
+    normalize_carrier(&mut t);
+    (t, is_new)
+}
+
+/// Resolve whether the target calendar supports custom properties, using the
+/// cached probe result when fresh and probing otherwise. Returns
+/// `Some(bool)` for a definitive answer and `None` when the probe was
+/// transient and no prior information exists (caller should skip the cycle).
+async fn resolve_property_support(
+    client: &RustyClient,
+    meta: &mut SettingsMeta,
+    target: &str,
+    now: i64,
+) -> Option<bool> {
+    let cached = meta.probed.get(target).copied();
+    let fresh = match (cached, meta.probed_at.get(target)) {
+        (Some(_), Some(&at)) => now - at < PROBE_TTL_SECS,
+        _ => false,
+    };
+    if let Some(c) = cached
+        && fresh
+    {
+        return Some(c);
+    }
+
+    match client.probe_custom_property_support(target).await {
+        ProbeResult::Supported => {
+            meta.probed.insert(target.to_string(), true);
+            meta.probed_at.insert(target.to_string(), now);
+            Some(true)
+        }
+        ProbeResult::Unsupported(reason) => {
+            log::info!(
+                "Settings sync: custom properties unsupported on {}: {}",
+                target,
+                reason
+            );
+            meta.probed.insert(target.to_string(), false);
+            meta.probed_at.insert(target.to_string(), now);
+            Some(false)
+        }
+        ProbeResult::Transient(reason) => {
+            log::warn!("Settings sync: property probe transient error: {}", reason);
+            cached // fall back to the (stale) cache, if any
+        }
+    }
 }
 
 /// Central logic controller for Task operations.
@@ -176,206 +408,447 @@ impl TaskController {
         first_local_err.map(Err).unwrap_or(Ok(()))
     }
 
-    /// Synchronizes the configuration and aliases via a hidden CalDAV VTODO.
+    /// Synchronizes the configuration and aliases.
+    ///
+    /// Preferred: custom WebDAV properties on the default calendar collection
+    /// (standard CalDAV clients never request or display them). Fallback for
+    /// servers without custom-property support: a 1970 CANCELLED VEVENT
+    /// carrier that most clients filter out by time range. The target
+    /// calendar is re-derived on every call, so a deleted or changed default
+    /// collection heals itself on the next cycle.
     pub async fn sync_settings(&self) -> Result<bool, String> {
         let mut config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         if !config.sync_settings {
             return Ok(false);
         }
 
-        let settings_uid = "cfait-global-settings-v1";
+        let mut meta = Cache::load_settings_meta(self.ctx.as_ref());
+        let target = settings_target_calendar(&config, self.ctx.as_ref());
+        let client = self.client.lock().await.clone();
+        let now = Utc::now().timestamp();
 
-        // Load from disk cache first to get the freshest settings task
-        // The background worker uses an isolated TaskStore which might be stale.
-        let mut existing_task_from_disk = None;
-        if let Ok(cals) = crate::cache::Cache::load_calendars(self.ctx.as_ref()) {
-            for cal in cals {
-                if let Ok((tasks, _)) = crate::cache::Cache::load(self.ctx.as_ref(), &cal.href)
-                    && let Some(t) = tasks.into_iter().find(|t| t.uid == settings_uid)
-                {
-                    existing_task_from_disk = Some(t);
-                    break;
+        let existing_task = {
+            let store = self.store.lock().await;
+            load_settings_task(self.ctx.as_ref(), &store)
+        };
+
+        // Local-only target: keep the settings in the local carrier object.
+        if target.starts_with("local://") {
+            return self
+                .push_local_settings_to_carrier(&mut config, existing_task)
+                .await;
+        }
+
+        // Offline: in property mode the settings already live on the server;
+        // otherwise keep the carrier object up to date so it is journaled on
+        // reconnect.
+        let Some(client) = client else {
+            let property_mode = meta.property_href.as_deref() == Some(target.as_str())
+                || meta.probed.get(&target) == Some(&true);
+            if property_mode {
+                return Ok(false);
+            }
+            return self
+                .push_local_settings_to_carrier(&mut config, existing_task)
+                .await;
+        };
+
+        // The settings property may live on a calendar that is no longer the
+        // target (collection deleted, default changed): remove it best-effort.
+        if let Some(old) = meta.property_href.clone()
+            && old != target
+        {
+            let _ = client.remove_property(&old, CFAIT_SETTINGS_PROP).await;
+            let _ = client.remove_property(&old, CFAIT_SETTINGS_REV_PROP).await;
+            meta.property_href = None;
+        }
+
+        let mut use_property = meta.property_href.as_deref() == Some(target.as_str());
+        if !use_property {
+            match resolve_property_support(&client, &mut meta, &target, now).await {
+                Some(supported) => use_property = supported,
+                None => {
+                    // Transient probe with no prior information: skip the cycle.
+                    return Ok(false);
                 }
             }
         }
 
-        // Now acquire the store lock to check in-memory state
-        let mut store = self.store.lock().await;
-        let mut existing_task = store.get_task_ref(settings_uid).cloned();
+        let changed = if use_property {
+            match self
+                .sync_settings_property(
+                    &client,
+                    &mut config,
+                    existing_task.clone(),
+                    &target,
+                    &mut meta,
+                )
+                .await
+            {
+                PropertySync::Done(did_write) => did_write,
+                PropertySync::Demoted => {
+                    // The server rejected the property write: fall back to the
+                    // carrier object within this same cycle.
+                    meta.property_href = None;
+                    meta.probed.insert(target.clone(), false);
+                    meta.probed_at.insert(target.clone(), now);
+                    self.sync_settings_object(&client, &mut config, existing_task, &target)
+                        .await?
+                }
+            }
+        } else {
+            self.sync_settings_object(&client, &mut config, existing_task, &target)
+                .await?
+        };
 
-        // Prefer the disk version if it's newer
-        if let Some(ref disk_task) = existing_task_from_disk
-            && (existing_task.is_none()
-                || existing_task.as_ref().unwrap().sequence < disk_task.sequence)
+        let _ = Cache::save_settings_meta(self.ctx.as_ref(), &meta);
+        Ok(changed)
+    }
+
+    /// Settings sync via custom WebDAV properties on the target calendar.
+    async fn sync_settings_property(
+        &self,
+        client: &RustyClient,
+        config: &mut Config,
+        existing_task: Option<Task>,
+        target: &str,
+        meta: &mut SettingsMeta,
+    ) -> PropertySync {
+        // Read the current property payload (None when the calendar or the
+        // property is gone).
+        let remote_payload = match client
+            .propfind_custom_props(target, &[CFAIT_SETTINGS_PROP, CFAIT_SETTINGS_REV_PROP])
+            .await
         {
-            existing_task = existing_task_from_disk;
-        }
+            Err(e) => {
+                log::warn!("Settings sync: PROPFIND failed on {}: {}", target, e);
+                return PropertySync::Done(false);
+            }
+            Ok(None) => None,
+            Ok(Some(props)) => props
+                .get(CFAIT_SETTINGS_PROP)
+                .and_then(|json| parse_settings_payload(json)),
+        };
+
+        // Migration guard: a leftover carrier object (legacy VTODO or a
+        // VEVENT from an earlier version) may hold a newer payload; take the
+        // newer of the two.
+        let remote = match client.fetch_settings_object(target).await {
+            Ok(Some(obj)) => {
+                let obj_payload = parse_settings_payload(&obj.description);
+                newer_payload(remote_payload.as_ref(), obj_payload.as_ref())
+            }
+            Ok(None) => remote_payload,
+            Err(e) => {
+                log::warn!("Settings sync: failed to fetch settings object: {}", e);
+                remote_payload
+            }
+        };
 
         let local_syncable = config.get_syncable();
+        let decision =
+            decide_settings_sync(config.settings_updated_at, &local_syncable, remote.as_ref());
 
-        match existing_task {
-            Some(mut task) => {
-                let parsed_payload =
-                    serde_json::from_str::<crate::config::SettingsPayload>(&task.description);
-                if parsed_payload.is_err() {
-                    log::warn!(
-                        "Settings sync failed: Invalid JSON in settings task. Overwriting with local. Error: {:?}. Raw description: {}",
-                        parsed_payload.as_ref().err(),
-                        task.description
-                    );
-                }
-
-                if let Ok(remote_payload) = parsed_payload {
-                    if remote_payload.updated_at > config.settings_updated_at
-                        || (config.settings_updated_at == 0
-                            && remote_payload.config != local_syncable)
-                    {
-                        // Remote is newer! Sync down.
-                        config.apply_syncable(remote_payload.config.clone());
-
-                        let mut needs_upstream_fix = false;
-                        if remote_payload.updated_at == 0 {
-                            config.settings_updated_at = chrono::Utc::now().timestamp();
-                            needs_upstream_fix = true;
-                        } else {
-                            config.settings_updated_at = remote_payload.updated_at;
-                        }
-                        let _ = config.save(self.ctx.as_ref());
-
-                        // Drop the store lock before applying aliases (which may need to load from disk)
-                        drop(store);
-
-                        // Re-acquire the lock for alias application and task updates
-                        let mut store = self.store.lock().await;
-                        let mut modified_tasks = Vec::new();
-                        for (key, values) in &remote_payload.config.tag_aliases {
-                            modified_tasks.extend(store.apply_alias_retroactively(key, values));
-                        }
-
-                        if needs_upstream_fix {
-                            let fixed_payload = crate::config::SettingsPayload {
-                                updated_at: config.settings_updated_at,
-                                config: remote_payload.config,
-                            };
-                            task.description =
-                                serde_json::to_string_pretty(&fixed_payload).unwrap_or_default();
-                            task.sequence += 1;
-                            store.update_or_add_task(task.clone());
-                            drop(store);
-
-                            let mut actions = modified_tasks
-                                .into_iter()
-                                .map(Action::Update)
-                                .collect::<Vec<_>>();
-                            actions.push(Action::Update(task));
-                            let _ = self.persist_changes(actions).await;
-                        } else {
-                            // Ensure the isolated store caches the latest task
-                            store.update_or_add_task(task.clone());
-                            drop(store);
-
-                            if !modified_tasks.is_empty() {
-                                let actions =
-                                    modified_tasks.into_iter().map(Action::Update).collect();
-                                let _ = self.persist_changes(actions).await;
-                            }
-                        }
-
-                        return Ok(true);
-                    } else if config.settings_updated_at > remote_payload.updated_at
-                        || (config.settings_updated_at > 0
-                            && remote_payload.config != local_syncable)
-                    {
-                        // Local is newer! Sync up.
-                        let local_payload = crate::config::SettingsPayload {
-                            updated_at: config.settings_updated_at,
-                            config: local_syncable,
-                        };
-                        task.description =
-                            serde_json::to_string_pretty(&local_payload).unwrap_or_default();
-                        task.sequence += 1;
-                        store.update_or_add_task(task.clone());
-                        drop(store);
-                        let _ = self.persist_changes(vec![Action::Update(task)]).await;
-                        return Ok(true);
-                    }
-                } else {
-                    // Invalid JSON in task, overwrite with local
-                    if config.settings_updated_at == 0 {
-                        config.settings_updated_at = chrono::Utc::now().timestamp();
-                        let _ = config.save(self.ctx.as_ref());
-                    }
-                    let local_payload = crate::config::SettingsPayload {
-                        updated_at: config.settings_updated_at,
-                        config: local_syncable,
-                    };
-                    task.description =
-                        serde_json::to_string_pretty(&local_payload).unwrap_or_default();
-                    task.sequence += 1;
-                    store.update_or_add_task(task.clone());
-                    drop(store);
-                    let _ = self.persist_changes(vec![Action::Update(task)]).await;
-                    return Ok(true);
-                }
+        match decision {
+            SettingsDecision::InSync => {
+                meta.property_href = Some(target.to_string());
+                self.cleanup_stale_carrier(existing_task).await;
+                PropertySync::Done(false)
             }
-            None => {
-                // Drop the store lock before loading from disk
-                drop(store);
+            SettingsDecision::SyncDown => {
+                let remote_payload = remote.expect("SyncDown implies a remote payload");
+                config.apply_syncable(remote_payload.config.clone());
+                config.settings_updated_at = if remote_payload.updated_at == 0 {
+                    Utc::now().timestamp()
+                } else {
+                    remote_payload.updated_at
+                };
+                let _ = config.save(self.ctx.as_ref());
 
-                // Task doesn't exist, deploy local settings upstream
+                // Re-anchor the property so the server copy carries the
+                // stamped revision.
+                let json = serde_json::to_string(&SettingsPayload {
+                    updated_at: config.settings_updated_at,
+                    config: remote_payload.config.clone(),
+                })
+                .unwrap_or_default();
+                if self
+                    .write_settings_property(client, target, &json, config.settings_updated_at)
+                    .await
+                    .is_err()
+                {
+                    meta.property_href = None;
+                    return PropertySync::Demoted;
+                }
+                meta.property_href = Some(target.to_string());
+                self.cleanup_stale_carrier(existing_task).await;
+                self.apply_aliases_and_persist(&remote_payload.config).await;
+                PropertySync::Done(true)
+            }
+            SettingsDecision::SyncUp => {
                 if config.settings_updated_at == 0 {
-                    config.settings_updated_at = chrono::Utc::now().timestamp();
+                    config.settings_updated_at = Utc::now().timestamp();
                     let _ = config.save(self.ctx.as_ref());
                 }
-
-                let target_href = if let Some(def) = &config.default_calendar {
-                    if !def.starts_with("local://") {
-                        def.clone()
-                    } else {
-                        let cals = crate::cache::Cache::load_calendars(self.ctx.as_ref())
-                            .unwrap_or_default();
-                        cals.into_iter()
-                            .find(|c| !c.href.starts_with("local://"))
-                            .map(|c| c.href)
-                            .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string())
-                    }
-                } else {
-                    let cals =
-                        crate::cache::Cache::load_calendars(self.ctx.as_ref()).unwrap_or_default();
-                    cals.into_iter()
-                        .find(|c| !c.href.starts_with("local://"))
-                        .map(|c| c.href)
-                        .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string())
-                };
-
-                let local_payload = crate::config::SettingsPayload {
+                let json = serde_json::to_string(&SettingsPayload {
                     updated_at: config.settings_updated_at,
                     config: local_syncable,
-                };
-                let local_json = serde_json::to_string_pretty(&local_payload).unwrap_or_default();
-
-                let mut new_task = Task::new(
-                    "⚙ Cfait Settings (Do not delete)",
-                    &std::collections::HashMap::new(),
-                    None,
-                );
-                new_task.uid = settings_uid.to_string();
-                new_task.status = crate::model::TaskStatus::Cancelled; // Hides it in standard clients
-                new_task.description = local_json;
-                new_task.categories.push("cfait-internal".to_string());
-                new_task.calendar_href = target_href;
-
-                // Re-acquire the lock to add the task to the store
-                let mut store = self.store.lock().await;
-                store.add_task(new_task.clone());
-                drop(store);
-                let _ = self.persist_changes(vec![Action::Create(new_task)]).await;
-                return Ok(true);
+                })
+                .unwrap_or_default();
+                if self
+                    .write_settings_property(client, target, &json, config.settings_updated_at)
+                    .await
+                    .is_err()
+                {
+                    meta.property_href = None;
+                    return PropertySync::Demoted;
+                }
+                meta.property_href = Some(target.to_string());
+                self.cleanup_stale_carrier(existing_task).await;
+                PropertySync::Done(true)
             }
         }
-        // Fall-through: the remote settings task exists and is already in
-        // sync with the local config, so nothing changed.
-        Ok(false)
+    }
+
+    /// PROPPATCH the settings payload and revision onto the calendar,
+    /// classifying the failure so the caller can demote to object storage.
+    async fn write_settings_property(
+        &self,
+        client: &RustyClient,
+        target: &str,
+        json: &str,
+        rev: i64,
+    ) -> Result<(), PropWriteError> {
+        let res = client
+            .proppatch_custom_props(
+                target,
+                &[
+                    (CFAIT_SETTINGS_PROP.to_string(), json.to_string()),
+                    (CFAIT_SETTINGS_REV_PROP.to_string(), rev.to_string()),
+                ],
+                &[],
+            )
+            .await;
+        if let Err(e) = &res {
+            log::warn!("Settings sync: PROPPATCH failed on {}: {:?}", target, e);
+        }
+        res
+    }
+
+    /// Remove a leftover settings carrier object (legacy VTODO or a VEVENT
+    /// from fallback mode) from the store and, when it was previously synced,
+    /// from the server.
+    async fn cleanup_stale_carrier(&self, existing_task: Option<Task>) {
+        let Some(task) = existing_task else {
+            return;
+        };
+        let mut store = self.store.lock().await;
+        store.delete_task(&task.uid);
+        drop(store);
+        if !task.href.is_empty() {
+            let _ = self.persist_changes(vec![Action::Delete(task)]).await;
+        }
+    }
+
+    /// Apply tag aliases to existing tasks and persist the resulting updates.
+    async fn apply_aliases_and_persist(&self, sync: &SyncableConfig) {
+        let modified = {
+            let mut store = self.store.lock().await;
+            let mut modified = Vec::new();
+            for (key, values) in &sync.tag_aliases {
+                modified.extend(store.apply_alias_retroactively(key, values));
+            }
+            modified
+        };
+        if !modified.is_empty() {
+            let actions = modified.into_iter().map(Action::Update).collect();
+            let _ = self.persist_changes(actions).await;
+        }
+    }
+
+    /// Settings sync via the carrier object (1970 CANCELLED VEVENT) in the
+    /// target calendar. Used when the server does not support custom
+    /// properties.
+    async fn sync_settings_object(
+        &self,
+        client: &RustyClient,
+        config: &mut Config,
+        existing_task: Option<Task>,
+        target: &str,
+    ) -> Result<bool, String> {
+        // Best-effort: drop a carrier left in a calendar that is no longer the
+        // target (collection deleted or default changed).
+        let stale_in_other_cal = existing_task
+            .as_ref()
+            .filter(|t| !t.calendar_href.starts_with("local://") && t.calendar_href != target)
+            .cloned();
+        if let Some(stale) = &stale_in_other_cal
+            && !stale.href.is_empty()
+        {
+            let mut store = self.store.lock().await;
+            store.delete_task(&stale.uid);
+            drop(store);
+            let _ = self.persist_changes(vec![Action::Delete(stale.clone())]).await;
+        }
+
+        let remote_object = match client.fetch_settings_object(target).await {
+            Ok(obj) => obj,
+            Err(e) => {
+                log::warn!("Settings sync: settings object fetch failed: {}", e);
+                return Ok(false);
+            }
+        };
+
+        let remote_payload =
+            remote_object.as_ref().and_then(|t| parse_settings_payload(&t.description));
+        let local_syncable = config.get_syncable();
+        let decision = decide_settings_sync(
+            config.settings_updated_at,
+            &local_syncable,
+            remote_payload.as_ref(),
+        );
+
+        match decision {
+            SettingsDecision::InSync => Ok(false),
+            SettingsDecision::SyncDown => {
+                let remote_payload = remote_payload.expect("SyncDown implies a remote payload");
+                config.apply_syncable(remote_payload.config.clone());
+                config.settings_updated_at = if remote_payload.updated_at == 0 {
+                    Utc::now().timestamp()
+                } else {
+                    remote_payload.updated_at
+                };
+                let _ = config.save(self.ctx.as_ref());
+                self.apply_aliases_and_persist(&remote_payload.config).await;
+
+                // Re-anchor the carrier when it lacks a revision or still uses
+                // the legacy VTODO format (migrate it to the invisible VEVENT).
+                let needs_reanchor = remote_payload.updated_at == 0
+                    || remote_object.as_ref().is_some_and(|t| !t.is_event);
+                if needs_reanchor {
+                    let json = serde_json::to_string(&SettingsPayload {
+                        updated_at: config.settings_updated_at,
+                        config: remote_payload.config,
+                    })
+                    .unwrap_or_default();
+                    self.push_carrier(
+                        existing_task,
+                        remote_object.as_ref(),
+                        false,
+                        target,
+                        &json,
+                    )
+                    .await?;
+                }
+                Ok(true)
+            }
+            SettingsDecision::SyncUp => {
+                if config.settings_updated_at == 0 {
+                    config.settings_updated_at = Utc::now().timestamp();
+                    let _ = config.save(self.ctx.as_ref());
+                }
+                let json = serde_json::to_string(&SettingsPayload {
+                    updated_at: config.settings_updated_at,
+                    config: local_syncable,
+                })
+                .unwrap_or_default();
+                self.push_carrier(
+                    existing_task,
+                    remote_object.as_ref(),
+                    remote_object.is_none(),
+                    target,
+                    &json,
+                )
+                .await?;
+                Ok(true)
+            }
+        }
+    }
+
+    /// Build the carrier task to push (Create or Update) and persist it.
+    async fn push_carrier(
+        &self,
+        existing_task: Option<Task>,
+        remote_object: Option<&Task>,
+        remote_known_absent: bool,
+        target: &str,
+        json: &str,
+    ) -> Result<bool, String> {
+        let (task, is_new) = build_carrier_task(
+            existing_task.as_ref(),
+            remote_object,
+            remote_known_absent,
+            target,
+            json,
+        );
+        let mut store = self.store.lock().await;
+        store.update_or_add_task(task.clone());
+        drop(store);
+        let action = if is_new {
+            Action::Create(task)
+        } else {
+            Action::Update(task)
+        };
+        self.persist_changes(vec![action]).await?;
+        Ok(true)
+    }
+
+    /// Keep the settings in the local carrier object: used for the local-only
+    /// target and for offline cycles in fallback (object) mode.
+    async fn push_local_settings_to_carrier(
+        &self,
+        config: &mut Config,
+        existing_task: Option<Task>,
+    ) -> Result<bool, String> {
+        let remote_payload =
+            existing_task.as_ref().and_then(|t| parse_settings_payload(&t.description));
+        let local_syncable = config.get_syncable();
+        let target = settings_target_calendar(config, self.ctx.as_ref());
+
+        match decide_settings_sync(
+            config.settings_updated_at,
+            &local_syncable,
+            remote_payload.as_ref(),
+        ) {
+            SettingsDecision::InSync => Ok(false),
+            SettingsDecision::SyncDown => {
+                let remote_payload = remote_payload.expect("SyncDown implies a remote payload");
+                config.apply_syncable(remote_payload.config.clone());
+                config.settings_updated_at = if remote_payload.updated_at == 0 {
+                    Utc::now().timestamp()
+                } else {
+                    remote_payload.updated_at
+                };
+                let _ = config.save(self.ctx.as_ref());
+                self.apply_aliases_and_persist(&remote_payload.config).await;
+
+                if remote_payload.updated_at == 0 {
+                    // Re-anchor the carrier with a stamped revision.
+                    let json = serde_json::to_string(&SettingsPayload {
+                        updated_at: config.settings_updated_at,
+                        config: remote_payload.config,
+                    })
+                    .unwrap_or_default();
+                    self.push_carrier(existing_task, None, false, &target, &json)
+                        .await?;
+                }
+                Ok(true)
+            }
+            SettingsDecision::SyncUp => {
+                if config.settings_updated_at == 0 {
+                    config.settings_updated_at = Utc::now().timestamp();
+                    let _ = config.save(self.ctx.as_ref());
+                }
+                let json = serde_json::to_string(&SettingsPayload {
+                    updated_at: config.settings_updated_at,
+                    config: config.get_syncable(),
+                })
+                .unwrap_or_default();
+                self.push_carrier(existing_task, None, false, &target, &json)
+                    .await?;
+                Ok(true)
+            }
+        }
     }
 
     /// Synchronize the journal with the remote server and update the in-memory store
@@ -600,5 +1073,283 @@ impl TaskController {
         }
 
         self.purge_tasks(purged_tasks).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::context::TestContext;
+    use crate::model::CalendarListEntry;
+
+    fn payload(updated_at: i64, calendar: Option<&str>) -> SettingsPayload {
+        let mut config = SyncableConfig::default();
+        config.default_calendar = calendar.map(|c| c.to_string());
+        SettingsPayload { updated_at, config }
+    }
+
+    #[test]
+    fn decide_no_remote_is_sync_up() {
+        let local = SyncableConfig::default();
+        assert_eq!(
+            decide_settings_sync(5, &local, None),
+            SettingsDecision::SyncUp
+        );
+    }
+
+    #[test]
+    fn decide_remote_newer_is_sync_down() {
+        let local = SyncableConfig::default();
+        let remote = payload(10, None);
+        assert_eq!(
+            decide_settings_sync(5, &local, Some(&remote)),
+            SettingsDecision::SyncDown
+        );
+    }
+
+    #[test]
+    fn decide_local_newer_is_sync_up() {
+        let local = SyncableConfig::default();
+        let remote = payload(5, None);
+        assert_eq!(
+            decide_settings_sync(10, &local, Some(&remote)),
+            SettingsDecision::SyncUp
+        );
+    }
+
+    #[test]
+    fn decide_equal_rev_equal_config_is_in_sync() {
+        let local = SyncableConfig::default();
+        let remote = payload(5, None);
+        assert_eq!(
+            decide_settings_sync(5, &local, Some(&remote)),
+            SettingsDecision::InSync
+        );
+    }
+
+    #[test]
+    fn decide_tie_with_diff_content_and_unstamped_local_prefers_remote() {
+        let local = SyncableConfig::default();
+        let remote = payload(5, Some("/calendars/u/other"));
+        assert_eq!(
+            decide_settings_sync(0, &local, Some(&remote)),
+            SettingsDecision::SyncDown
+        );
+    }
+
+    #[test]
+    fn decide_tie_with_diff_content_and_stamped_local_prefers_local() {
+        let local = SyncableConfig::default();
+        let remote = payload(5, Some("/calendars/u/other"));
+        assert_eq!(
+            decide_settings_sync(5, &local, Some(&remote)),
+            SettingsDecision::SyncUp
+        );
+    }
+
+    #[test]
+    fn newer_payload_picks_higher_revision() {
+        let a = payload(5, None);
+        let b = payload(9, None);
+        assert_eq!(
+            newer_payload(Some(&a), Some(&b)).unwrap().updated_at,
+            9
+        );
+        assert_eq!(
+            newer_payload(Some(&b), Some(&a)).unwrap().updated_at,
+            9
+        );
+    }
+
+    #[test]
+    fn newer_payload_tie_prefers_first() {
+        let a = payload(5, Some("/a"));
+        let b = payload(5, Some("/b"));
+        assert_eq!(
+            newer_payload(Some(&a), Some(&b))
+                .unwrap()
+                .config
+                .default_calendar
+                .as_deref(),
+            Some("/a")
+        );
+        assert_eq!(
+            newer_payload(Some(&b), Some(&a))
+                .unwrap()
+                .config
+                .default_calendar
+                .as_deref(),
+            Some("/b")
+        );
+    }
+
+    #[test]
+    fn newer_payload_handles_none() {
+        assert!(newer_payload(None, None).is_none());
+        let a = payload(1, None);
+        assert_eq!(newer_payload(Some(&a), None).unwrap().updated_at, 1);
+        assert_eq!(newer_payload(None, Some(&a)).unwrap().updated_at, 1);
+    }
+
+    #[test]
+    fn parse_settings_payload_round_trips_and_rejects_garbage() {
+        let p = payload(42, Some("/calendars/u/cal"));
+        let json = serde_json::to_string(&p).unwrap();
+        let parsed = parse_settings_payload(&json).expect("valid json parses");
+        assert_eq!(parsed.updated_at, 42);
+        assert_eq!(
+            parsed.config.default_calendar.as_deref(),
+            Some("/calendars/u/cal")
+        );
+        assert!(parse_settings_payload("not json").is_none());
+        assert!(parse_settings_payload("").is_none());
+    }
+
+    #[test]
+    fn target_calendar_prefers_remote_default() {
+        let ctx = Arc::new(TestContext::new());
+        let mut config = Config::default();
+        config.default_calendar = Some("/calendars/u/main".into());
+        assert_eq!(
+            settings_target_calendar(&config, ctx.as_ref()),
+            "/calendars/u/main"
+        );
+    }
+
+    #[test]
+    fn target_calendar_falls_back_to_first_cached_remote() {
+        let ctx = Arc::new(TestContext::new());
+        let mut config = Config::default();
+        config.default_calendar = Some(LOCAL_CALENDAR_HREF.to_string());
+        let cals = vec![
+            CalendarListEntry {
+                name: "Trash".into(),
+                href: crate::storage::LOCAL_TRASH_HREF.to_string(),
+                color: None,
+                supports_vjournal: None,
+            },
+            CalendarListEntry {
+                name: "Work".into(),
+                href: "/calendars/u/work".into(),
+                color: None,
+                supports_vjournal: None,
+            },
+        ];
+        Cache::save_calendars(ctx.as_ref(), &cals).unwrap();
+        assert_eq!(
+            settings_target_calendar(&config, ctx.as_ref()),
+            "/calendars/u/work"
+        );
+    }
+
+    #[test]
+    fn target_calendar_local_default_when_no_remote_cals() {
+        let ctx = Arc::new(TestContext::new());
+        let config = Config::default();
+        assert_eq!(
+            settings_target_calendar(&config, ctx.as_ref()),
+            LOCAL_CALENDAR_HREF.to_string()
+        );
+    }
+
+    #[test]
+    fn carrier_task_has_hidden_markers() {
+        let t = settings_carrier_task("/calendars/u/cal", "{\"updated_at\":1}");
+        assert_eq!(t.uid, SETTINGS_UID);
+        assert_eq!(t.status, TaskStatus::Cancelled);
+        assert!(t.is_event);
+        assert!(!t.is_journal);
+        assert_eq!(t.summary, SETTINGS_SUMMARY);
+        assert!(t.categories.contains(&SETTINGS_CATEGORY.to_string()));
+        assert_eq!(t.calendar_href, "/calendars/u/cal");
+        assert_eq!(t.description, "{\"updated_at\":1}");
+    }
+
+    #[test]
+    fn normalize_carrier_repairs_tampered_object() {
+        let mut t = Task::new("whatever", &std::collections::HashMap::new(), None);
+        t.uid = "attacker-uid".into();
+        t.status = TaskStatus::NeedsAction;
+        t.is_event = false;
+        t.is_journal = true;
+        t.summary = "random event".into();
+        t.categories = vec!["work".into()];
+        normalize_carrier(&mut t);
+        assert_eq!(t.uid, SETTINGS_UID);
+        assert_eq!(t.status, TaskStatus::Cancelled);
+        assert!(t.is_event);
+        assert!(!t.is_journal);
+        assert!(t.summary.starts_with("⚙ Cfait Settings"));
+        assert!(t.categories.contains(&SETTINGS_CATEGORY.to_string()));
+    }
+
+    #[test]
+    fn normalize_carrier_is_idempotent() {
+        let mut t = settings_carrier_task("/calendars/u/cal", "{}");
+        normalize_carrier(&mut t);
+        normalize_carrier(&mut t);
+        assert_eq!(
+            t.categories
+                .iter()
+                .filter(|c| c == &SETTINGS_CATEGORY)
+                .count(),
+            1
+        );
+    }
+
+    fn existing_in(target: &str, with_href: bool) -> Task {
+        let mut t = settings_carrier_task(target, "{}");
+        if with_href {
+            t.href = format!("{}/cfait-global-settings-v1.ics", target);
+            t.etag = "etag-1".into();
+        }
+        t
+    }
+
+    #[test]
+    fn build_carrier_prefers_remote_object() {
+        let remote = existing_in("/calendars/u/cal", true);
+        let (t, is_new) =
+            build_carrier_task(None, Some(&remote), false, "/calendars/u/cal", "{}");
+        assert!(!is_new);
+        assert_eq!(t.uid, SETTINGS_UID);
+        assert_eq!(t.href, remote.href);
+        assert_eq!(t.sequence, remote.sequence + 1);
+    }
+
+    #[test]
+    fn build_carrier_recreates_when_remote_known_absent() {
+        let existing = existing_in("/calendars/u/cal", true);
+        let (t, is_new) =
+            build_carrier_task(Some(&existing), None, true, "/calendars/u/cal", "{}");
+        assert!(is_new);
+        assert!(t.href.is_empty());
+        assert!(t.etag.is_empty());
+    }
+
+    #[test]
+    fn build_carrier_updates_when_remote_not_checked() {
+        let existing = existing_in("/calendars/u/cal", true);
+        let (t, is_new) =
+            build_carrier_task(Some(&existing), None, false, "/calendars/u/cal", "{}");
+        assert!(!is_new);
+        assert_eq!(t.href, existing.href);
+    }
+
+    #[test]
+    fn build_carrier_fresh_when_existing_in_other_calendar() {
+        let existing = existing_in("/calendars/u/old", true);
+        let (t, is_new) =
+            build_carrier_task(Some(&existing), None, false, "/calendars/u/new", "{}");
+        assert!(is_new);
+        assert_eq!(t.calendar_href, "/calendars/u/new");
+        assert!(t.href.is_empty());
+    }
+
+    #[test]
+    fn build_carrier_fresh_when_nothing_known() {
+        let (t, is_new) = build_carrier_task(None, None, false, "/calendars/u/cal", "{}");
+        assert!(is_new);
+        assert_eq!(t.calendar_href, "/calendars/u/cal");
     }
 }

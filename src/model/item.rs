@@ -382,6 +382,10 @@ pub struct Task {
     /// When `true`, this item represents a VJOURNAL note rather than a VTODO task.
     #[serde(default)]
     pub is_journal: bool,
+    /// When `true`, this item is serialized as a VEVENT (hidden settings
+    /// object fallback). Only used for the settings object.
+    #[serde(default)]
+    pub is_event: bool,
 
     // Time-tracking fields:
     // - `time_spent_seconds` accumulates committed seconds of work for this task.
@@ -804,6 +808,7 @@ impl Task {
             manual_block: false,
             permanent: false,
             is_journal: false,
+            is_event: false,
             time_spent_seconds: 0,
             last_started_at: None,
             sessions: Vec::new(),
