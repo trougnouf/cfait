@@ -2438,7 +2438,7 @@ impl TaskStore {
                             }
                         } else if let Some(prio) = val.strip_prefix('!')
                             && let Ok(p) = prio.parse::<u8>()
-                            && task.priority != p
+                            && task.priority != p.min(9)
                         {
                             needs_update = true;
                             break;
@@ -5544,5 +5544,49 @@ mod tests {
                 "{uid}: per-task {per_task} outside batch {batch_val} + 5s skew"
             );
         }
+    }
+
+    #[test]
+    fn alias_retroactive_priority_clamps_consistently() {
+        let ctx = std::sync::Arc::new(crate::context::StandardContext::new(Some(
+            std::env::temp_dir().join(format!("cfait-store-test-{}", uuid::Uuid::new_v4())),
+        )));
+        let mut store = TaskStore::new(ctx);
+
+        // A task already at the max in-range priority. An out-of-range alias
+        // priority (!15) clamps to 9, which equals the current value, so no
+        // spurious update should be reported.
+        let mut at_max = make_task("at_max", None, TaskStatus::NeedsAction, false);
+        at_max.categories = vec!["work".to_string()];
+        at_max.priority = 9;
+        let at_max_seq = at_max.sequence;
+        store.add_task(at_max);
+
+        // A task below the clamp target should be updated to 9.
+        let mut below = make_task("below", None, TaskStatus::NeedsAction, false);
+        below.categories = vec!["work".to_string()];
+        below.priority = 5;
+        store.add_task(below);
+
+        let modified = store.apply_alias_retroactively("work", &["!15".to_string()]);
+
+        let modified_uids: Vec<&str> = modified.iter().map(|t| t.uid.as_str()).collect();
+        assert!(
+            modified_uids.contains(&"below"),
+            "below-max task should be updated, got {modified_uids:?}"
+        );
+        assert!(
+            !modified_uids.contains(&"at_max"),
+            "at-max task must not be spuriously re-saved, got {modified_uids:?}"
+        );
+
+        // at_max keeps its priority and sequence untouched.
+        let at_max_now = store.get_task_ref("at_max").unwrap();
+        assert_eq!(at_max_now.priority, 9);
+        assert_eq!(at_max_now.sequence, at_max_seq);
+
+        // below is clamped to 9.
+        let below_now = store.get_task_ref("below").unwrap();
+        assert_eq!(below_now.priority, 9);
     }
 }
