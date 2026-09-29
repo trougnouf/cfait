@@ -517,8 +517,14 @@ pub fn extract_markdown_tasks(
             let prev_num = unique_nums.iter().rev().find(|&&n| n < num).copied();
             if let Some(p_num) = prev_num
                 && let Some(deps) = uids_by_num.get(&p_num)
+                // A number shared by parallel siblings (the serializer keeps them at
+                // the same number) resolves to the most recent sibling only: a later
+                // task depending on one of them is adjacent to the last one in
+                // document order, and pulling in every member would add spurious
+                // dependencies on round-trip.
+                && let Some(dep) = deps.last()
             {
-                extracted[e_idx].dependencies.extend(deps.iter().cloned());
+                extracted[e_idx].dependencies.push(dep.clone());
             }
         }
     }

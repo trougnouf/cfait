@@ -690,6 +690,20 @@ fn test_extract_numbered_parallel_siblings_share_block() {
 }
 
 #[test]
+fn test_extract_numbered_dependent_resolves_to_last_parallel_sibling() {
+    // B and C share a number (parallel siblings in the serializer's output).
+    // D, which follows C, must pick up only C as its numbered dependency —
+    // pulling in B as well would corrupt the tree on round-trip.
+    let input = "1. [ ] B\n1. [ ] C\n2. [ ] D\n";
+    let (_, tasks) =
+        cfait::model::extract_markdown_tasks(input, false, &mut std::collections::HashMap::new());
+    assert_eq!(tasks.len(), 3);
+    assert!(tasks[0].dependencies.is_empty());
+    assert!(tasks[1].dependencies.is_empty());
+    assert_eq!(tasks[2].dependencies, vec![tasks[1].uid.clone()]);
+}
+
+#[test]
 fn test_extract_numbered_sequential_chain() {
     let input = "1. [ ] A\n2. [ ] B\n3. [ ] C\n";
     let (_, tasks) =
