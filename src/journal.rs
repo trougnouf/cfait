@@ -18,7 +18,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Action {
@@ -111,7 +111,7 @@ impl Journal {
     }
 
     /// Internal helper: load journal structure from a path without acquiring locks.
-    fn load_internal(path: &PathBuf) -> Self {
+    fn load_internal(path: &Path) -> Self {
         if path.exists()
             && let Ok(content) = fs::read_to_string(path)
             && let Ok(journal) = serde_json::from_str(&content)

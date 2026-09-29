@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//cfait/src/color_utils.rs
+// File: ./src/color_utils.rs
 
 // Utilities for generating deterministic colors from strings.
 // This file provides HSL-based color generation and priority color mappings.
@@ -75,14 +75,7 @@ pub fn is_dark(r: f32, g: f32, b: f32) -> bool {
 
 /// Parse a hex color string like "#RRGGBB" or "RRGGBB" into floats (0.0..1.0).
 pub fn parse_hex_to_floats(hex: &str) -> Option<(f32, f32, f32)> {
-    let hex = hex.trim_start_matches('#');
-    if hex.len() < 6 {
-        return None;
-    }
-    let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
-    let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
-    let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
-    Some((r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0))
+    parse_hex_to_u8(hex).map(|(r, g, b)| (r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0))
 }
 
 /// Generates a random-looking but deterministic tree color from a hash.
