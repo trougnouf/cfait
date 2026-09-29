@@ -7,7 +7,8 @@ use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp};
 use crate::gui::update::common::{
-    apply_alias_retroactively, dispatch_intent, refresh_filtered_tasks, save_config,
+    apply_alias_retroactively, dispatch_intent, flash_info_message, refresh_filtered_tasks,
+    save_config,
 };
 use crate::model::parser::validate_alias_integrity;
 use crate::storage::{LOCAL_CALENDAR_HREF, LocalCalendarRegistry, LocalStorage};
@@ -963,11 +964,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     .to_string()
                 };
 
-                app.error_msg = Some(format!("✓ {}", translated));
-            } else {
-                app.error_msg = Some(rust_i18n::t!("no_events_changed").to_string());
+                return flash_info_message(app, translated);
             }
-            Task::none()
+            flash_info_message(app, rust_i18n::t!("no_events_changed").to_string())
         }
         Message::BackfillEventsComplete(Err(e)) => {
             app.deleting_events = false;
@@ -1033,16 +1032,14 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 Message::ExportSaved,
             )
         }
-        Message::ExportSaved(Ok(path)) => {
-            app.error_msg = Some(
-                rust_i18n::t!(
-                    "export_success",
-                    file = path.file_name().unwrap_or_default().to_string_lossy()
-                )
-                .to_string(),
-            );
-            Task::none()
-        }
+        Message::ExportSaved(Ok(path)) => flash_info_message(
+            app,
+            rust_i18n::t!(
+                "export_success",
+                file = path.file_name().unwrap_or_default().to_string_lossy()
+            )
+            .to_string(),
+        ),
         Message::ExportSaved(Err(e)) => {
             if e != rust_i18n::t!("export_cancelled") {
                 app.error_msg = Some(rust_i18n::t!("export_error", error = e).to_string());
@@ -1087,16 +1084,19 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             )
         }
         Message::ImportCompleted(Ok(msg)) => {
-            app.error_msg = Some(msg);
+            let info_task = flash_info_message(app, msg);
             if let Some(client) = &app.client {
                 app.loading = true;
                 app.pending_refresh_generation = app.edit_generation;
-                return Task::perform(
-                    async_fetch_all_wrapper(client.clone(), app.calendars.clone()),
-                    |res| Message::RefreshedAll(res.map_err(|e| e.to_string())),
-                );
+                return Task::batch(vec![
+                    info_task,
+                    Task::perform(
+                        async_fetch_all_wrapper(client.clone(), app.calendars.clone()),
+                        |res| Message::RefreshedAll(res.map_err(|e| e.to_string())),
+                    ),
+                ]);
             }
-            Task::none()
+            info_task
         }
         Message::ImportCompleted(Err(e)) => {
             if e != rust_i18n::t!("import_cancelled") {
@@ -1255,7 +1255,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::RemoteCalendarCreated(old_href, Ok(new_href)) => {
             app.loading = false;
-            app.error_msg = Some(rust_i18n::t!("collection_created").to_string());
+            let info_task =
+                flash_info_message(app, rust_i18n::t!("collection_created").to_string());
             if let Some(cal) = app
                 .remote_cals_editing
                 .iter_mut()
@@ -1265,18 +1266,25 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.calendars.push(cal.clone()); // Optimistic update
             }
             app.sort_calendars();
-            Task::perform(async { Ok::<(), String>(()) }, |_| Message::Refresh)
+            Task::batch(vec![
+                info_task,
+                Task::perform(async { Ok::<(), String>(()) }, |_| Message::Refresh),
+            ])
         }
         Message::RemoteCalendarUpdated(href, Ok(_)) => {
             app.loading = false;
-            app.error_msg = Some(rust_i18n::t!("collection_updated").to_string());
+            let info_task =
+                flash_info_message(app, rust_i18n::t!("collection_updated").to_string());
             if let Some(cal) = app.remote_cals_editing.iter().find(|c| c.href == href)
                 && let Some(main_cal) = app.calendars.iter_mut().find(|c| c.href == href)
             {
                 main_cal.name = cal.name.clone();
                 main_cal.color = cal.color.clone();
             }
-            Task::perform(async { Ok::<(), String>(()) }, |_| Message::Refresh)
+            Task::batch(vec![
+                info_task,
+                Task::perform(async { Ok::<(), String>(()) }, |_| Message::Refresh),
+            ])
         }
         Message::RemoteCalendarCreated(_, Err(e)) | Message::RemoteCalendarUpdated(_, Err(e)) => {
             app.loading = false;

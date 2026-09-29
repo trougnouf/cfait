@@ -264,6 +264,22 @@ pub fn apply_alias_retroactively(
     modified_tasks
 }
 
+/// Show a green info banner that auto-dismisses after four seconds, clearing
+/// any pending error message.
+pub fn flash_info_message(app: &mut GuiApp, msg: String) -> Task<Message> {
+    app.info_msg = Some(msg);
+    app.info_msg_version = app.info_msg_version.wrapping_add(1);
+    app.error_msg = None;
+    let version = app.info_msg_version;
+    Task::perform(
+        async move {
+            tokio::time::sleep(std::time::Duration::from_secs(4)).await;
+            version
+        },
+        Message::DismissInfo,
+    )
+}
+
 /// Scroll the main list to the selected task.
 ///
 /// This helper prefers a bounds-aware pixel-accurate scroll when we have a widget Id

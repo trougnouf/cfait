@@ -199,13 +199,26 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             .on_press(Message::WindowDragged)
             .into();
 
-    let error = if let Some(e) = &app.error_msg {
-        text(e).color(Color::from_rgb(1.0, 0.0, 0.0))
-    } else if let Some(Some(warn)) = crate::system::KEYRING_WARNING.get() {
-        text(warn).color(Color::from_rgb(1.0, 0.6, 0.0))
-    } else {
-        text("")
-    };
+    let mut banners = column![].spacing(5);
+    if let Some(e) = &app.error_msg {
+        banners = banners.push(crate::gui::view::message_banner(
+            e,
+            app.theme().extended_palette().background.base.text,
+            |_| Color::from_rgb(0.8, 0.2, 0.2).into(),
+            Message::DismissError,
+        ));
+    }
+    if let Some(info) = &app.info_msg {
+        banners = banners.push(crate::gui::view::message_banner(
+            info,
+            app.theme().extended_palette().background.base.text,
+            |theme: &Theme| theme.extended_palette().success.base.color.into(),
+            Message::DismissInfo(app.info_msg_version),
+        ));
+    }
+    if let Some(Some(warn)) = crate::system::KEYRING_WARNING.get() {
+        banners = banners.push(text(warn).color(Color::from_rgb(1.0, 0.6, 0.0)));
+    }
 
     if app.config_was_corrupted {
         let error_text = app.error_msg.clone().unwrap_or_default();
@@ -1377,7 +1390,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
     .spacing(20)
     .max_width(500);
 
-    let scrollable_content = column![error, form]
+    let scrollable_content = column![banners, form]
         .spacing(20)
         .align_x(iced::Alignment::Center);
 

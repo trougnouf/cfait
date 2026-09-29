@@ -253,7 +253,7 @@ fn sidebar_footer_btn(
     )
 }
 
-fn message_banner<'a>(
+pub(crate) fn message_banner<'a>(
     text_str: &'a str,
     cross_color: Color,
     background: impl Fn(&Theme) -> iced::Background + 'a,

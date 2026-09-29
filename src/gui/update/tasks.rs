@@ -256,19 +256,10 @@ fn send_batch(app: &mut GuiApp, actions: Vec<crate::journal::Action>) {
 /// Show an info message that auto-dismisses after four seconds, scrolling
 /// the list to the selected row.
 fn flash_info_message(app: &mut GuiApp, msg: String) -> Task<Message> {
-    app.info_msg = Some(msg);
-    app.info_msg_version = app.info_msg_version.wrapping_add(1);
-    app.error_msg = None;
-    let version = app.info_msg_version;
+    let info_task = common::flash_info_message(app, msg);
     Task::batch(vec![
         common::scroll_to_selected_delayed(app, false),
-        Task::perform(
-            async move {
-                tokio::time::sleep(std::time::Duration::from_secs(4)).await;
-                version
-            },
-            Message::DismissInfo,
-        ),
+        info_task,
     ])
 }
 
