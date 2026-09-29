@@ -17,6 +17,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -28,12 +29,14 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.trougnouf.cfait.BuildConfig
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.core.HelpTab
+import com.trougnouf.cfait.core.MobileHelpCategoryData
 import com.trougnouf.cfait.core.MobileHelpItem
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,9 +44,11 @@ fun HelpScreen(api: CfaitMobile, onBack: () -> Unit) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
-    // Fetch categorized data structure from Rust backend
-    val helpData = remember { api.getHelpData() }
-    val pagerState = rememberPagerState(pageCount = { helpData.size })
+    // Fetch categorized data structure from Rust backend, off the main thread
+    val helpData = produceState<List<MobileHelpCategoryData>?>(null) {
+        value = withContext(Dispatchers.IO) { api.getHelpData() }
+    }
+    val pagerState = rememberPagerState(pageCount = { helpData.value?.size ?: 0 })
 
     Scaffold(
         topBar = {
@@ -56,64 +61,70 @@ fun HelpScreen(api: CfaitMobile, onBack: () -> Unit) {
         },
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-
-            // Swipeable Tab Row for Categories
-            ScrollableTabRow(
-                selectedTabIndex = pagerState.currentPage,
-                edgePadding = 8.dp,
-                containerColor = MaterialTheme.colorScheme.surface,
-                divider = { HorizontalDivider() }
-            ) {
-                helpData.forEachIndexed { index, categoryData ->
-                    Tab(
-                        selected = pagerState.currentPage == index,
-                        onClick = { coroutineScope.launch { pagerState.animateScrollToPage(index) } },
-                        text = {
-                            Text(
-                                categoryData.title,
-                                fontWeight = if (pagerState.currentPage == index) FontWeight.Bold else FontWeight.Normal
-                            )
-                        }
-                    )
+            val data = helpData.value
+            if (data == null) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
                 }
-            }
+            } else {
+                // Swipeable Tab Row for Categories
+                ScrollableTabRow(
+                    selectedTabIndex = pagerState.currentPage,
+                    edgePadding = 8.dp,
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    divider = { HorizontalDivider() }
+                ) {
+                    data.forEachIndexed { index, categoryData ->
+                        Tab(
+                            selected = pagerState.currentPage == index,
+                            onClick = { coroutineScope.launch { pagerState.animateScrollToPage(index) } },
+                            text = {
+                                Text(
+                                    categoryData.title,
+                                    fontWeight = if (pagerState.currentPage == index) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        )
+                    }
+                }
 
-            HorizontalPager(state = pagerState, modifier = Modifier.weight(1f)) { page ->
-                val pageData = helpData[page]
+                HorizontalPager(state = pagerState, modifier = Modifier.weight(1f)) { page ->
+                    val pageData = data[page]
 
-                if (pageData.category == HelpTab.ABOUT) {
-                    // Custom Kotlin About Screen UI
-                    AboutTabContent(api)
-                } else {
-                    // Dynamic Rust-backed Documentation
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        items(pageData.sections) { section ->
-                            Card(
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(
-                                        alpha = 0.5f
-                                    )
-                                ),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(Modifier.padding(16.dp)) {
-                                    Text(
-                                        text = section.title,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontSize = 18.sp,
-                                        modifier = Modifier.padding(bottom = 12.dp)
-                                    )
-                                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f))
-                                    Spacer(Modifier.height(12.dp))
+                    if (pageData.category == HelpTab.ABOUT) {
+                        // Custom Kotlin About Screen UI
+                        AboutTabContent(api)
+                    } else {
+                        // Dynamic Rust-backed Documentation
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            items(pageData.sections) { section ->
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(
+                                            alpha = 0.5f
+                                        )
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(Modifier.padding(16.dp)) {
+                                        Text(
+                                            text = section.title,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontSize = 18.sp,
+                                            modifier = Modifier.padding(bottom = 12.dp)
+                                        )
+                                        HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f))
+                                        Spacer(Modifier.height(12.dp))
 
-                                    section.items.forEach { item ->
-                                        HelpRow(item)
-                                        if (item != section.items.last()) Spacer(Modifier.height(8.dp))
+                                        section.items.forEach { item ->
+                                            HelpRow(item)
+                                            if (item != section.items.last()) Spacer(Modifier.height(8.dp))
+                                        }
                                     }
                                 }
                             }

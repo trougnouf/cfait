@@ -27,17 +27,8 @@ fun VirtualTaskRow(task: MobileTaskSummary, onClick: () -> Unit) {
     // Indent by depth * 12dp
     val startPadding = (task.depth.toInt() * 12).dp
 
-    // Use explicit codepoints to avoid invalid \u escapes for large codepoints.
-    // Nerd Font glyphs for expand / collapse (md arrow expand icons).
-    val expandCodepoint = 0xF0796
-    val collapseCodepoint = 0xF0799
-
     val isExpand = task.uid.startsWith("virtual-expand-")
-    val iconStr = if (isExpand) {
-        String(Character.toChars(expandCodepoint))
-    } else {
-        String(Character.toChars(collapseCodepoint))
-    }
+    val iconStr = if (isExpand) NfIcons.ARROW_EXPAND_DOWN else NfIcons.ARROW_EXPAND_UP
 
     Row(
         modifier = Modifier

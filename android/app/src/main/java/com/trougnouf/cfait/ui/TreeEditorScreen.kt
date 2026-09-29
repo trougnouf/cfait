@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.CfaitMobile
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -50,22 +51,20 @@ fun TreeEditorScreen(
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
 
     LaunchedEffect(uid) {
-        scope.launch(Dispatchers.IO) {
-            try {
-                val initVal = FieldSnapshot(api.getTaskTreeMarkdown(uid), TextRange(0))
-                withContext(Dispatchers.Main) {
-                    markdownText.restore(initVal)
-                    undoStack = listOf(initVal)
-                    redoStack = emptyList()
-                }
-            } catch (e: Exception) {
-                val errVal = FieldSnapshot(context.getString(R.string.error_general, e.message ?: ""), TextRange(0))
-                withContext(Dispatchers.Main) {
-                    markdownText.restore(errVal)
-                }
-            } finally {
-                isLoading = false
-            }
+        try {
+            val initVal = FieldSnapshot(
+                withContext(Dispatchers.IO) { api.getTaskTreeMarkdown(uid) },
+                TextRange(0)
+            )
+            markdownText.restore(initVal)
+            undoStack = listOf(initVal)
+            redoStack = emptyList()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            markdownText.restore(FieldSnapshot(context.getString(R.string.error_general, e.message ?: ""), TextRange(0)))
+        } finally {
+            isLoading = false
         }
     }
 

@@ -25,11 +25,9 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.trougnouf.cfait.core.MobileTaskSummary
 import com.trougnouf.cfait.ui.StableTaskSummary
 import com.trougnouf.cfait.R
 import java.time.Instant
@@ -155,7 +153,7 @@ fun TaskRow(
                     fontWeight = if (task.task.priority > 0.toUByte()) FontWeight.Medium else FontWeight.Normal,
                     lineHeight = 18.sp
                 )
-                val annotatedSummary = remember(task.task.summary, textColor, isStrikethrough, highlightRegex) {
+                val annotatedSummary = remember(task.task.summary, textColor, isStrikethrough, highlightRegex, highlightColor) {
                     parseInlineMarkdown(task.task.summary, textColor, isStrikethrough, highlightRegex, highlightColor)
                 }
 

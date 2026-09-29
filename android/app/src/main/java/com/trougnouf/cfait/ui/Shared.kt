@@ -76,6 +76,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -86,6 +87,7 @@ import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 
 val NerdFont = FontFamily(Font(R.font.symbols_nerd_font))
@@ -501,12 +503,6 @@ object NfIcons {
     val ELEVATOR_UP = get(0xf12c1)
     val ESCALATOR_UP = get(0xf12bf)
     val SAVE_AS = get(0xeb4a)
-    // Extract Subtasks Icons (random variation)
-    val SHOVEL = get(0xf0710) // nf-md-shovel
-    val BULLDOZER = get(0xf0b22) // nf-md-bulldozer
-    val PICKAXE = get(0xf08b7) // nf-md-pickaxe
-    val LANGUAGE_MARKDOWN_OUTLINE = get(0xf0f5b) // nf-md-language_markdown_outline
-
     val ARROW_CIRCLE_UP = get(0xf0aa)
     val TRANSFER_UP = get(0xf0da3)
     val FLY = get(0xed43)
@@ -616,16 +612,6 @@ object NfIcons {
     val RELATED_FEMALE_FEMALE = get(0xf0a5a)
     val RELATED_MALE_MALE = get(0xf0a5e)
     val RELATED_MALE_FEMALE = get(0xf02e8)
-}
-
-fun getRandomExtractSubtasksIcon(): String {
-    val icons = listOf(
-        NfIcons.SHOVEL,
-        NfIcons.BULLDOZER,
-        NfIcons.PICKAXE,
-        NfIcons.LANGUAGE_MARKDOWN_OUTLINE,
-    )
-    return icons.random()
 }
 
 fun getRandomRelatedIcon(
@@ -1198,6 +1184,15 @@ fun InputTransformation.listAutoIndent(api: CfaitMobile): InputTransformation =
         }
     )
 
+/** The line containing [cursor]: its start offset in [text], its content, and the cursor offset within the line. */
+private data class LineAt(val lineStart: Int, val line: String, val localCursor: Int)
+
+private fun lineAt(text: CharSequence, cursor: Int): LineAt {
+    val start = text.lastIndexOf('\n', cursor - 1).let { if (it == -1) 0 else it + 1 }
+    val end = text.indexOf('\n', cursor).let { if (it == -1) text.length else it }
+    return LineAt(start, text.substring(start, end), cursor - start)
+}
+
 @Composable
 fun CursorContextBanner(
     api: CfaitMobile,
@@ -1209,6 +1204,7 @@ fun CursorContextBanner(
     val text = state.text.toString()
 
     var suggestions by remember { mutableStateOf<List<MobileSuggestion>>(emptyList()) }
+    var suggestionsText by remember { mutableStateOf("") }
     var activeToken by remember { mutableStateOf<MobileSyntaxToken?>(null) }
     var resolvedDep by remember { mutableStateOf<MobileResolvedDependency?>(null) }
     var rawWord by remember { mutableStateOf("") }
@@ -1217,10 +1213,7 @@ fun CursorContextBanner(
         // Debounce: cursor drags and fast typing restart this effect repeatedly; only run the
         // (FFI) lookup once the cursor has been still for a moment.
         delay(300)
-        val lineStart = text.lastIndexOf('\n', cursor - 1).let { if (it == -1) 0 else it + 1 }
-        val lineEnd = text.indexOf('\n', cursor).let { if (it == -1) text.length else it }
-        val currentLine = text.substring(lineStart, lineEnd)
-        val localCursor = cursor - lineStart
+        val (lineStart, currentLine, localCursor) = lineAt(text, cursor)
 
         suggestions = withContext(Dispatchers.IO) {
             api.suggest(currentLine, localCursor).map { s ->
@@ -1233,15 +1226,16 @@ fun CursorContextBanner(
                 )
             }
         }
+        // Record the text these suggestions were computed from, so a tap on a stale
+        // suggestion (the text changed in the meantime) is ignored instead of corrupting
+        // the field with out-of-range replacements.
+        suggestionsText = text
     }
 
     LaunchedEffect(cursor, text) {
         delay(300)
         try {
-            val lineStart = text.lastIndexOf('\n', cursor - 1).let { if (it == -1) 0 else it + 1 }
-            val lineEnd = text.indexOf('\n', cursor).let { if (it == -1) text.length else it }
-            val currentLine = text.substring(lineStart, lineEnd)
-            val localCursor = cursor - lineStart
+            val (_, currentLine, localCursor) = lineAt(text, cursor)
 
             val tokens = withContext(Dispatchers.IO) {
                 api.parseSmartString(currentLine, false)
@@ -1346,6 +1340,8 @@ fun CursorContextBanner(
 
                 Button(
                     onClick = {
+                        // Ignore taps on suggestions computed from an older version of the text.
+                        if (state.text.toString() != suggestionsText) return@Button
                         val globalStart = s.rangeStart
                         val globalEnd = s.rangeEnd
                         val replacementText = s.replacement + if (globalEnd < text.length) "" else " "
@@ -1369,20 +1365,45 @@ fun CursorContextBanner(
     }
 }
 
+// A single shared scope so repeated triggers coalesce into sequential syncs instead of
+// each spawning its own (potentially concurrent) one.
+private val backgroundSyncScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+private val syncInFlight = AtomicBoolean(false)
+private val syncPending = AtomicBoolean(false)
+
 fun triggerBackgroundSync(context: Context, api: CfaitMobile) {
-    CoroutineScope(Dispatchers.IO).launch {
-        var errorMsg: String? = null
+    syncPending.set(true)
+    startBackgroundSyncIfIdle(context, api)
+}
+
+private fun startBackgroundSyncIfIdle(context: Context, api: CfaitMobile) {
+    if (!syncInFlight.compareAndSet(false, true)) return
+    backgroundSyncScope.launch {
         try {
-            api.syncJournal()
-        } catch (e: Exception) {
-            // Ignore network failures silently, the red sync icon will remain
-            errorMsg = e.message
+            while (syncPending.getAndSet(false)) {
+                runBackgroundSync(context, api)
+            }
         } finally {
-            val intent = Intent(NotificationActionWorker.BROADCAST_REFRESH)
-            intent.putExtra(NotificationActionWorker.KEY_SYNC_ERROR, errorMsg)
-            intent.setPackage(context.packageName)
-            context.sendBroadcast(intent)
+            syncInFlight.set(false)
+            // A trigger that arrived between the loop exit and clearing the in-flight flag
+            // must not be lost.
+            if (syncPending.getAndSet(false)) startBackgroundSyncIfIdle(context, api)
         }
+    }
+}
+
+private suspend fun runBackgroundSync(context: Context, api: CfaitMobile) {
+    var errorMsg: String? = null
+    try {
+        api.syncJournal()
+    } catch (e: Exception) {
+        // Ignore network failures silently, the red sync icon will remain
+        errorMsg = e.message
+    } finally {
+        val intent = Intent(NotificationActionWorker.BROADCAST_REFRESH)
+        intent.putExtra(NotificationActionWorker.KEY_SYNC_ERROR, errorMsg)
+        intent.setPackage(context.packageName)
+        context.sendBroadcast(intent)
     }
 }
 
