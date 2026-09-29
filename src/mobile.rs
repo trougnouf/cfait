@@ -2446,7 +2446,13 @@ impl CfaitMobile {
         let respect_tree_collapse = options.respect_tree_collapse;
         drop(session);
 
-        let all_cals = self.get_calendars();
+        // Calendar colors for the journal month view. Read the registry and
+        // calendar cache directly instead of going through get_calendars(),
+        // which would block on the store lock again from this async context.
+        let cal_colors: HashMap<String, String> = load_all_calendar_entries(self.ctx.as_ref())
+            .into_iter()
+            .filter_map(|c| c.color.map(|col| (c.href, col)))
+            .collect();
 
         // Then acquire store lock
         let store = self.controller.store.lock().await;
@@ -2677,10 +2683,9 @@ impl CfaitMobile {
             if !visible_cals_set.contains(href) {
                 continue;
             }
-            let col_color = all_cals
-                .iter()
-                .find(|c| c.href == *href)
-                .and_then(|c| c.color.clone())
+            let col_color = cal_colors
+                .get(href)
+                .cloned()
                 .unwrap_or_else(|| "#4CAF50".to_string());
 
             for t in map.values() {
