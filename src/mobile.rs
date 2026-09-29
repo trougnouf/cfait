@@ -1123,7 +1123,7 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
     }
 }
 
-fn task_to_summary(t: &Task, store: &TaskStore) -> MobileTaskSummary {
+fn task_to_summary(t: &Task, subtree_time: &HashMap<String, u64>) -> MobileTaskSummary {
     let status_str = format!("{:?}", t.status);
 
     let (due_iso, due_allday) = match &t.due {
@@ -1146,8 +1146,6 @@ fn task_to_summary(t: &Task, store: &TaskStore) -> MobileTaskSummary {
         .alarms
         .iter()
         .all(|a| a.acknowledged.is_some() || a.is_snooze());
-
-    let tree_location_count = store.count_tree_locations(&t.uid) as u32;
 
     let completed_date_iso = t.completion_date().map(|d| d.to_rfc3339());
 
@@ -1191,10 +1189,10 @@ fn task_to_summary(t: &Task, store: &TaskStore) -> MobileTaskSummary {
         has_blocking_tasks: t.has_blocking_tasks,
         has_related_tasks: t.has_related_tasks,
         has_visible_subtasks: t.has_visible_subtasks,
-        tree_location_count,
+        tree_location_count: t.tree_location_count as u32,
         url: t.url.clone(),
         geo: t.geo.clone(),
-        time_spent_seconds: store.get_aggregated_time_seconds(&t.uid),
+        time_spent_seconds: *subtree_time.get(&t.uid).unwrap_or(&0),
         last_started_at: t.last_started_at,
         is_recurring: t.rrule.is_some(),
         is_relative_recurrence: t.is_relative_recurrence(),
@@ -2511,13 +2509,17 @@ impl CfaitMobile {
             focused_task_uid: focused_task_uid.as_deref(),
         });
 
+        // One bottom-up pass over the whole store instead of one O(subtree)
+        // walk per visible task.
+        let subtree_time = store.compute_subtree_time_seconds();
+
         let mut last_calendar_href = String::new();
         let tasks = filtered
             .items
             .into_iter()
             .filter_map(|item| {
                 if let crate::store::TaskListItem::Task(t) = item {
-                    let mt = task_to_summary(&t, &store);
+                    let mt = task_to_summary(&t, &subtree_time);
                     last_calendar_href = mt.calendar_href.clone();
                     Some(mt)
                 } else if let crate::store::TaskListItem::ExpandGroup(p_uid, depth) = item {

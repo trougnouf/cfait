@@ -2967,6 +2967,76 @@ impl TaskStore {
         total.max(0) as u64
     }
 
+    /// Computes the aggregated (union-merged) tracked time in seconds for every
+    /// task's subtree in a single bottom-up pass over the whole store, using one
+    /// shared "now" timestamp.
+    ///
+    /// Batched counterpart of [`Self::get_aggregated_time_seconds`]: callers that
+    /// need the value for many tasks (e.g. a full list render) should use this,
+    /// since the per-task version is O(subtree) per call.
+    pub fn compute_subtree_time_seconds(&self) -> HashMap<String, u64> {
+        let now_ts = chrono::Utc::now().timestamp();
+        let mut merged: HashMap<String, Vec<(i64, i64)>> = HashMap::new();
+        let mut totals: HashMap<String, u64> = HashMap::new();
+        let mut done: HashSet<String> = HashSet::new();
+
+        for map in self.calendars.values() {
+            for uid in map.keys() {
+                if done.contains(uid) {
+                    continue;
+                }
+                // Iterative post-order walk: children finalize before parents.
+                // The on-stack guard breaks parent cycles.
+                let mut stack: Vec<(String, bool)> = vec![(uid.clone(), false)];
+                let mut on_stack: HashSet<String> = HashSet::new();
+                on_stack.insert(uid.clone());
+                while let Some((curr, children_done)) = stack.pop() {
+                    if !children_done {
+                        stack.push((curr.clone(), true));
+                        if let Some(children) = self.children_index.get(curr.as_str()) {
+                            for child in children {
+                                if on_stack.insert(child.clone()) {
+                                    stack.push((child.clone(), false));
+                                }
+                            }
+                        }
+                    } else if done.insert(curr.clone()) {
+                        on_stack.remove(&curr);
+                        let mut intervals: Vec<(i64, i64)> = Vec::new();
+                        if let Some(t) = self.get_task_ref(&curr) {
+                            for s in &t.sessions {
+                                intervals.push((s.start, s.end));
+                            }
+                            if let Some(start) = t.last_started_at {
+                                intervals.push((start, now_ts));
+                            }
+                        }
+                        if let Some(children) = self.children_index.get(curr.as_str()) {
+                            for child in children {
+                                if let Some(child_intervals) = merged.get(child) {
+                                    intervals.extend_from_slice(child_intervals);
+                                }
+                            }
+                        }
+                        let merged_intervals = if intervals.is_empty() {
+                            Vec::new()
+                        } else {
+                            merge_intervals(intervals)
+                        };
+                        let total: i64 = merged_intervals.iter().map(|(s, e)| (e - s).max(0)).sum();
+                        if total > 0 {
+                            // Zero-length merged lists contribute nothing to any
+                            // ancestor's total, so they can be dropped.
+                            totals.insert(curr.clone(), total as u64);
+                            merged.insert(curr, merged_intervals);
+                        }
+                    }
+                }
+            }
+        }
+        totals
+    }
+
     /// Calculates the current progress for a given goal definition.
     pub fn calculate_goal_progress(&self, key: &str, goal: &crate::config::Goal) -> u32 {
         let now = chrono::Utc::now();
@@ -5407,5 +5477,71 @@ mod tests {
             has_expand,
             "Should have an ExpandGroup item for truncated tasks"
         );
+    }
+
+    #[test]
+    fn subtree_time_batch_matches_per_task_aggregation() {
+        let ctx = std::sync::Arc::new(crate::context::StandardContext::new(Some(
+            std::env::temp_dir().join(format!("cfait-store-test-{}", uuid::Uuid::new_v4())),
+        )));
+        let mut store = TaskStore::new(ctx);
+
+        let session = |start: i64, end: i64| crate::model::item::WorkSession { start, end };
+
+        let mut root = make_task("root", None, TaskStatus::NeedsAction, false);
+        root.sessions = vec![session(100, 200)];
+        let mut child1 = make_task("child1", Some("root"), TaskStatus::NeedsAction, false);
+        child1.sessions = vec![session(150, 250)];
+        let mut grandchild =
+            make_task("grandchild", Some("child1"), TaskStatus::NeedsAction, false);
+        grandchild.sessions = vec![session(300, 400)];
+        let mut child2 = make_task("child2", Some("root"), TaskStatus::NeedsAction, false);
+        child2.last_started_at = Some(1_000); // running timer
+        let mut solo = make_task("solo", None, TaskStatus::NeedsAction, false);
+        solo.sessions = vec![session(500, 600)];
+        let orphan = make_task("orphan", Some("missing"), TaskStatus::NeedsAction, false);
+
+        for t in [root, child1, grandchild, child2, solo, orphan] {
+            store.add_task(t);
+        }
+
+        let batch = store.compute_subtree_time_seconds();
+
+        // Subtrees without the running timer have exact values.
+        assert_eq!(batch.get("grandchild"), Some(&100));
+        // child1: (150-250) and (300-400) do not overlap -> 200
+        assert_eq!(batch.get("child1"), Some(&200));
+        assert_eq!(batch.get("solo"), Some(&100));
+        // orphan: no sessions, no children -> absent (0)
+        assert!(!batch.contains_key("orphan"));
+
+        // root and child2 include the running timer: (1000, now_ts].
+        // root: (100-200) U (150-250) = (100-250) -> 150, + grandchild's 100, + timer.
+        let now = chrono::Utc::now().timestamp();
+        let run = now - 1_000;
+        let child2_val = batch.get("child2").copied().unwrap_or(0) as i64;
+        assert!(
+            (run - 5 < child2_val) && (child2_val <= run),
+            "child2 = {child2_val}, expected in ({}..={}]",
+            run - 5,
+            run
+        );
+        let root_val = batch.get("root").copied().unwrap_or(0) as i64;
+        assert!(
+            (250 + run - 5 < root_val) && (root_val <= 250 + run),
+            "root = {root_val}, expected in ({}..={}]",
+            250 + run - 5,
+            250 + run
+        );
+
+        // Cross-check every uid against the per-task API; the per-task call
+        // happens later, so its running timer is a few ms longer.
+        for (uid, &batch_val) in &batch {
+            let per_task = store.get_aggregated_time_seconds(uid);
+            assert!(
+                per_task >= batch_val && (per_task - batch_val) <= 5,
+                "{uid}: per-task {per_task} outside batch {batch_val} + 5s skew"
+            );
+        }
     }
 }
