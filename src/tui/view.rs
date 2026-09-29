@@ -294,11 +294,20 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
     let mut details_md = String::new();
     let mut selected_task_was_truncated = false;
 
-    // initial main chunks (we'll recalc details height after building content)
-    let main_chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(0), Constraint::Length(10)])
-        .split(h_chunks[1]);
+    // initial main chunks (we'll recalc details height after building content).
+    // In journal mode the main pane is filled entirely by the journal view, so
+    // no details strip is reserved.
+    let main_chunks = if state.sidebar_mode == SidebarMode::Journal {
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(0)])
+            .split(h_chunks[1])
+    } else {
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(0), Constraint::Length(10)])
+            .split(h_chunks[1])
+    };
 
     // Sidebar title/items
     // Determine if filters produced empty result while store has tasks
