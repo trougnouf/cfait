@@ -542,6 +542,130 @@ pub fn get_shortcuts_help(is_gui: bool) -> Vec<HelpSection> {
         });
     }
 
+    let mut edit_items = vec![
+        HelpItem {
+            keys: "a".to_string(),
+            desc: rust_i18n::t!("add").to_string(),
+            example: "".to_string(),
+        },
+        HelpItem {
+            keys: "Ctrl + n".to_string(),
+            desc: rust_i18n::t!("help_keyboard_create_desc").to_string(),
+            example: "".to_string(),
+        },
+        HelpItem {
+            keys: "e / E".to_string(),
+            desc: rust_i18n::t!("help_shortcut_edit_title_desc").to_string(),
+            example: "".to_string(),
+        },
+        HelpItem {
+            keys: "Ctrl + e".to_string(),
+            desc: rust_i18n::t!("help_shortcut_edit_tree").to_string(),
+            example: "".to_string(),
+        },
+    ];
+
+    if is_gui {
+        // The TUI has no maximize state, and Ctrl+M arrives as Enter.
+        edit_items.push(HelpItem {
+            keys: "Ctrl + m".to_string(),
+            desc: rust_i18n::t!("help_shortcut_maximize_editor").to_string(),
+            example: "".to_string(),
+        });
+    }
+
+    edit_items.extend([
+        HelpItem {
+            keys: "Space".to_string(),
+            desc: rust_i18n::t!("done").to_string(),
+            example: "".to_string(),
+        },
+        HelpItem {
+            keys: "Shift + Space".to_string(),
+            desc: rust_i18n::t!("help_shortcut_complete_shift").to_string(),
+            example: "".to_string(),
+        },
+        HelpItem {
+            keys: "s / S".to_string(),
+            desc: rust_i18n::t!("start_task").to_string(),
+            example: "".to_string(),
+        },
+        HelpItem {
+            keys: "x".to_string(),
+            desc: rust_i18n::t!("cancel").to_string(),
+            example: "".to_string(),
+        },
+        HelpItem {
+            keys: "Del".to_string(),
+            desc: rust_i18n::t!("delete").to_string(),
+            example: "".to_string(),
+        },
+        HelpItem {
+            keys: "Ctrl + Del".to_string(),
+            desc: rust_i18n::t!("delete_task_tree").to_string(),
+            example: "".to_string(),
+        },
+        HelpItem {
+            keys: "Ctrl + d".to_string(),
+            desc: rust_i18n::t!("duplicate_task").to_string(),
+            example: "".to_string(),
+        },
+        HelpItem {
+            keys: "t".to_string(),
+            desc: rust_i18n::t!("help_metadata_log_time").to_string(),
+            example: "".to_string(),
+        },
+        HelpItem {
+            keys: "Shift + t".to_string(),
+            desc: rust_i18n::t!("help_metadata_manage_sessions").to_string(),
+            example: "".to_string(),
+        },
+        HelpItem {
+            keys: "+ / -".to_string(),
+            desc: rust_i18n::t!("increase_priority").to_string(),
+            example: "".to_string(),
+        },
+        HelpItem {
+            keys: "M".to_string(),
+            desc: rust_i18n::t!("menu_move").to_string(),
+            example: "".to_string(),
+        },
+        HelpItem {
+            keys: "g".to_string(),
+            desc: format!(
+                "{}/ {}",
+                rust_i18n::t!("open_coordinates"),
+                rust_i18n::t!("action_open_locations")
+            ),
+            example: "".to_string(),
+        },
+        HelpItem {
+            keys: "o".to_string(),
+            desc: rust_i18n::t!("open_url").to_string(),
+            example: "".to_string(),
+        },
+        HelpItem {
+            keys: "Ctrl + o".to_string(),
+            desc: rust_i18n::t!("help_shortcut_open_link_cursor").to_string(),
+            example: "".to_string(),
+        },
+        HelpItem {
+            keys: "Ctrl + z / Ctrl + y (Ctrl + Shift + z)".to_string(),
+            desc: format!("{}/{}", rust_i18n::t!("undo"), rust_i18n::t!("redo")),
+            example: "".to_string(),
+        },
+        HelpItem {
+            keys: "Ctrl + Left / Ctrl + Right".to_string(),
+            desc: rust_i18n::t!("help_editor_word_nav").to_string(),
+            example: "".to_string(),
+        },
+        HelpItem {
+            keys: "Ctrl + Bksp / Ctrl + Del".to_string(),
+            desc: rust_i18n::t!("help_editor_word_delete").to_string(),
+            example: "".to_string(),
+        },
+    ]);
+
     vec![
         HelpSection {
             title: rust_i18n::t!("help_section_navigation").to_string(),
@@ -549,122 +673,7 @@ pub fn get_shortcuts_help(is_gui: bool) -> Vec<HelpSection> {
         },
         HelpSection {
             title: rust_i18n::t!("edit").to_string(),
-            items: vec![
-                HelpItem {
-                    keys: "a".to_string(),
-                    desc: rust_i18n::t!("add").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "Ctrl + n".to_string(),
-                    desc: rust_i18n::t!("help_keyboard_create_desc").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "e / E".to_string(),
-                    desc: rust_i18n::t!("help_shortcut_edit_title_desc").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "Ctrl + e".to_string(),
-                    desc: rust_i18n::t!("help_shortcut_edit_tree").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "Ctrl + m".to_string(),
-                    desc: rust_i18n::t!("help_shortcut_maximize_editor").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "Space".to_string(),
-                    desc: rust_i18n::t!("done").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "Shift + Space".to_string(),
-                    desc: rust_i18n::t!("help_shortcut_complete_shift").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "s / S".to_string(),
-                    desc: rust_i18n::t!("start_task").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "x".to_string(),
-                    desc: rust_i18n::t!("cancel").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "Del".to_string(),
-                    desc: rust_i18n::t!("delete").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "Ctrl + Del".to_string(),
-                    desc: rust_i18n::t!("delete_task_tree").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "Ctrl + d".to_string(),
-                    desc: rust_i18n::t!("duplicate_task").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "t".to_string(),
-                    desc: rust_i18n::t!("help_metadata_log_time").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "Shift + t".to_string(),
-                    desc: rust_i18n::t!("help_metadata_manage_sessions").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "+ / -".to_string(),
-                    desc: rust_i18n::t!("increase_priority").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "M".to_string(),
-                    desc: rust_i18n::t!("menu_move").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "g".to_string(),
-                    desc: format!(
-                        "{}/ {}",
-                        rust_i18n::t!("open_coordinates"),
-                        rust_i18n::t!("action_open_locations")
-                    ),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "o".to_string(),
-                    desc: rust_i18n::t!("open_url").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "Ctrl + o".to_string(),
-                    desc: rust_i18n::t!("help_shortcut_open_link_cursor").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "Ctrl + z / Ctrl + y (Ctrl + Shift + z)".to_string(),
-                    desc: format!("{}/{}", rust_i18n::t!("undo"), rust_i18n::t!("redo")),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "Ctrl + Left / Ctrl + Right".to_string(),
-                    desc: rust_i18n::t!("help_editor_word_nav").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "Ctrl + Bksp / Ctrl + Del".to_string(),
-                    desc: rust_i18n::t!("help_editor_word_delete").to_string(),
-                    example: "".to_string(),
-                },
-            ],
+            items: edit_items,
         },
         HelpSection {
             title: rust_i18n::t!("metadata").to_string(),
