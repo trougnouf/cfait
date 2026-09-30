@@ -66,6 +66,7 @@
     "busy_swapping_time_streams": "Swapping time streams",
     "busy_working_on_things": "Working on things",
     "caldav_url": "CalDAV server URL:",
+    "caldav_url_hint": "If you use Nextcloud, the URL should end with /remote.php/dav (e.g. https://cloud.example.com/remote.php/dav).",
     "calendar_action_created": "Created",
     "calendar_action_deleted": "Deleted",
     "calendar_events_changed": {
@@ -224,7 +225,7 @@
     "editing_cancelled": "Editing cancelled.",
     "eg": "e.g.",
     "eg_log_time_placeholder": "e.g. 30m, yesterday 2h, 14:00-15:30",
-    "error_404_not_found": "The CalDAV resource or user principal was not found (404). Check the URL.",
+    "error_404_not_found": "The CalDAV resource or user principal was not found (404). Check the URL — if you use Nextcloud, it should end with /remote.php/dav.",
     "error_adding_alias": "Error adding alias: %{error}",
     "error_auth_failed": "Authentication failed. Check username and password.",
     "error_cannot_be_child_of_self": "Cannot be child of self!",

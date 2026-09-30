@@ -65,6 +65,7 @@
     "cal_weekday_sa": "Sa",
     "cal_weekday_su": "Di",
     "caldav_url": "URL du serveur CalDAV :",
+    "caldav_url_hint": "Si vous utilisez Nextcloud, l'URL doit se terminer par /remote.php/dav (ex. https://cloud.example.com/remote.php/dav).",
     "calendar_action_created": "Créé",
     "calendar_action_deleted": "Supprimé",
     "calendar_events_changed": {
@@ -224,7 +225,7 @@
     "editing_cancelled": "Édition annulée.",
     "eg": "ex.",
     "eg_log_time_placeholder": "ex. 30m, hier 2h, 14:00-15:30",
-    "error_404_not_found": "La ressource CalDAV ou l'utilisateur principal n'a pas été trouvé (404). Vérifiez l'URL.",
+    "error_404_not_found": "La ressource CalDAV ou l'utilisateur principal n'a pas été trouvé (404). Vérifiez l'URL — si vous utilisez Nextcloud, elle doit se terminer par /remote.php/dav.",
     "error_adding_alias": "Erreur d'ajout de l'alias : %{error}",
     "error_ambiguous_dep": "Référence de tâche ambiguë '%{reference}'. Correspondances : %{matches}",
     "error_ambiguous_uid": "Erreur : UID ambigu '%{uid}'. Correspondances :",

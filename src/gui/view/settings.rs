@@ -1337,6 +1337,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 text_input("https://...", &app.ob_url)
                     .on_input(Message::ObUrlChanged)
                     .padding(10),
+                muted_note(rust_i18n::t!("caldav_url_hint")),
                 text(rust_i18n::t!("username")),
                 text_input(&rust_i18n::t!("username"), &app.ob_user)
                     .on_input(Message::ObUserChanged)
