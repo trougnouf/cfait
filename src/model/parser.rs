@@ -1541,21 +1541,34 @@ pub fn split_input_respecting_quotes(input: &str) -> Vec<(usize, usize, String)>
                     in_quote = false;
                     current.push(c);
                 } else {
-                    // Lookahead: only enter in_quote if there is another unescaped '"' ahead
-                    let mut has_pair = false;
-                    let mut look_escaped = false;
-                    for (_, lc) in chars.iter().skip(i + 1) {
-                        if look_escaped {
-                            look_escaped = false;
-                        } else if *lc == '\\' {
-                            look_escaped = true;
-                        } else if *lc == '"' {
-                            has_pair = true;
-                            break;
+                    // A quote only opens a quoted region when it starts a token
+                    // or follows a non-word character (e.g. `desc:"call mom"`,
+                    // `##"CDV"`, `@@@"my office"`). A quote attached to a word,
+                    // like the inch mark in `5"`, is a literal and must not
+                    // swallow whitespace into the next token.
+                    let can_open = match current.chars().next_back() {
+                        None => true,
+                        Some(prev) => !prev.is_alphanumeric(),
+                    };
+                    if can_open {
+                        // Lookahead: only enter in_quote if there is another
+                        // unescaped '"' ahead, so an unterminated quote stays
+                        // literal.
+                        let mut has_pair = false;
+                        let mut look_escaped = false;
+                        for (_, lc) in chars.iter().skip(i + 1) {
+                            if look_escaped {
+                                look_escaped = false;
+                            } else if *lc == '\\' {
+                                look_escaped = true;
+                            } else if *lc == '"' {
+                                has_pair = true;
+                                break;
+                            }
                         }
-                    }
-                    if has_pair {
-                        in_quote = true;
+                        if has_pair {
+                            in_quote = true;
+                        }
                     }
                     current.push(c);
                 }

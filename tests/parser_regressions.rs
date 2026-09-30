@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Regression tests for input parsing bugs.
-use cfait::model::parser::parse_smart_date;
+use cfait::model::parser::{parse_smart_date, split_input_respecting_quotes};
 use cfait::model::{AlarmTrigger, DateType, Task};
 use chrono::{Local, Timelike};
 use std::collections::HashMap;
@@ -305,4 +305,66 @@ fn test_rem_in_syntax() {
         }
         _ => panic!(),
     }
+}
+
+// --- Quote pairing tests (inch marks vs quoted phrases) ---
+
+fn token_texts(input: &str) -> Vec<String> {
+    split_input_respecting_quotes(input)
+        .into_iter()
+        .map(|(_, _, s)| s)
+        .collect()
+}
+
+#[test]
+fn test_inch_mark_does_not_swallow_later_tokens() {
+    // Regression: a quote attached to a word (the inch mark in `5"`) used to
+    // pair with the next quote anywhere later in the input, swallowing every
+    // word in between into a single token.
+    assert_eq!(
+        token_texts("5\" tall and \"wide\""),
+        vec!["5\"", "tall", "and", "\"wide\""]
+    );
+}
+
+#[test]
+fn test_inch_marks_stay_in_their_own_tokens() {
+    let aliases = HashMap::new();
+    let t = Task::new("Buy 6\" pots and \"large\" ones", &aliases, None);
+    // The inch mark stays literal; the quoted phrase keeps its quotes in the
+    // summary text (quotes are only stripped for tags/locations/desc).
+    assert_eq!(t.summary, "Buy 6\" pots and \"large\" ones");
+}
+
+#[test]
+fn test_two_inch_marks_without_any_quoted_phrase() {
+    let aliases = HashMap::new();
+    let t = Task::new("5\" and 6\" stakes for the garden", &aliases, None);
+    assert_eq!(t.summary, "5\" and 6\" stakes for the garden");
+}
+
+#[test]
+fn test_unterminated_quote_at_token_start_stays_literal() {
+    let aliases = HashMap::new();
+    let t = Task::new("I said \"wide and never closed", &aliases, None);
+    assert_eq!(t.summary, "I said \"wide and never closed");
+}
+
+#[test]
+fn test_quoted_phrase_with_spaces_still_one_token() {
+    let aliases = HashMap::new();
+    let t = Task::new("Read \"The Hobbit\" tonight", &aliases, None);
+    assert_eq!(t.summary, "Read \"The Hobbit\" tonight");
+    assert_eq!(
+        token_texts("Read \"The Hobbit\" tonight"),
+        vec!["Read", "\"The Hobbit\"", "tonight"]
+    );
+}
+
+#[test]
+fn test_keyword_value_and_inch_mark_together() {
+    let aliases = HashMap::new();
+    let t = Task::new("desc:\"water ferns\" and 5\" pots", &aliases, None);
+    assert_eq!(t.description, "water ferns");
+    assert_eq!(t.summary, "and 5\" pots");
 }
