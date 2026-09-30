@@ -228,18 +228,39 @@ pub fn save_config(app: &mut GuiApp) -> Config {
     cfg.update_sync_timestamp_if_changed(&app.core_config);
     let timestamp_changed = cfg.settings_updated_at != old_timestamp;
 
+    // Server or credentials changed: the worker's client is now stale and its
+    // next sync would fail auth, keeping the unsynced indicator lit until a
+    // manual refresh. Rebuild it once the save has landed on disk.
+    let connection_changed = cfg.url != app.core_config.url
+        || cfg.username != app.core_config.username
+        || cfg.password != app.core_config.password
+        || cfg.tls_client_cert_path != app.core_config.tls_client_cert_path
+        || cfg.tls_client_key_path != app.core_config.tls_client_key_path
+        || cfg.allow_insecure_certs != app.core_config.allow_insecure_certs;
+
     // Cache the updated config in memory
     app.core_config = cfg.clone();
 
-    if timestamp_changed && let Some(tx) = &app.bg_tx {
+    // A connection change needs no SyncNow with the stale client: the
+    // Reconnect sent after the save triggers the first sync with the new one.
+    if timestamp_changed
+        && !connection_changed
+        && let Some(tx) = &app.bg_tx
+    {
         let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::SyncNow);
     }
 
     // --- ASYNC SAVE FIX ---
     let ctx_clone = app.ctx.clone();
     let cfg_clone = cfg.clone();
+    let reconnect_tx = app.bg_tx.clone();
     std::thread::spawn(move || {
-        let _ = cfg_clone.save_with_credentials(ctx_clone.as_ref());
+        if cfg_clone.save_with_credentials(ctx_clone.as_ref()).is_ok()
+            && connection_changed
+            && let Some(tx) = reconnect_tx
+        {
+            let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Reconnect);
+        }
     });
     // ----------------------
 

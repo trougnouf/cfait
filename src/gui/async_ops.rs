@@ -5,7 +5,7 @@ use crate::client::RustyClient;
 use crate::config::Config;
 use crate::context::AppContext;
 use crate::controller::TaskController;
-use crate::journal::Action;
+use crate::journal::{Action, Journal};
 use crate::model::{CalendarListEntry, Task as TodoTask};
 use crate::store::TaskStore;
 use iced::futures::SinkExt;
@@ -14,7 +14,7 @@ use iced::stream as iced_stream;
 
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tokio::time::{Duration, sleep};
+use tokio::time::{Duration, Instant, sleep_until};
 
 // --- WRAPPERS ---
 
@@ -158,6 +158,11 @@ pub enum WorkerCommand {
     UpdateClient(Option<RustyClient>),
     Batch(Vec<Action>),
     SyncNow,
+    /// Rebuild the client from the saved config. Sent when the user changes
+    /// the server or credentials in the settings panel, so the next sync does
+    /// not reuse a stale client (which would fail auth and keep the unsynced
+    /// indicator lit until a manual refresh).
+    Reconnect,
     /// Reload the disk state (config + calendars + tasks) and replace the
     /// worker's store with it. Used when another cfait instance changed files.
     FlushAndLoad,
@@ -217,7 +222,6 @@ pub fn spawn_background_worker(
         let store = Arc::new(tokio::sync::Mutex::new(TaskStore::new(ctx.clone())));
         let client_container = Arc::new(tokio::sync::Mutex::new(None));
         let controller = TaskController::new(store, client_container.clone(), ctx.clone());
-        let mut sync_pending = false;
 
         // Watch the data and cache directories for changes made by other cfait
         // instances (e.g. a `cfait sync` in another terminal). Events for files
@@ -266,7 +270,22 @@ pub fn spawn_background_worker(
             }
         }
 
-        let mut external_change_pending = false;
+        // Debounces are anchored deadlines, not stored Sleep futures. Each
+        // select! iteration re-arms `sleep_until(deadline)` from the stored
+        // deadline, so a window never restarts on unrelated activity. The
+        // original code recreated the sleep on every iteration, so any
+        // watcher event reset the 500ms sync window — a continuous stream of
+        // .json events (a synced folder, another cfait instance) could
+        // starve the sync forever and keep the unsynced indicator lit.
+        //
+        // external_deadline: trailing debounce for ExternalChangeDetected
+        // reloads; refreshed on every watcher event. It never touches
+        // sync_deadline, so a busy watcher cannot starve the sync.
+        // sync_deadline: set by user actions (Batch, SyncNow, Reconnect) to
+        // coalesce rapid edits into one sync, and by a failed sync with a
+        // non-empty journal to self-heal after 30s.
+        let mut external_deadline: Option<Instant> = None;
+        let mut sync_deadline: Option<Instant> = None;
 
         loop {
             tokio::select! {
@@ -274,14 +293,24 @@ pub fn spawn_background_worker(
                 // watcher channel closes so a dead watcher can't hot-spin the loop.
                 res = watch_rx.recv(), if watching => {
                     if res.is_some() {
-                        external_change_pending = true;
+                        // Trailing debounce: each event refreshes the
+                        // deadline so a burst of writes coalesces into one
+                        // reload.
+                        external_deadline =
+                            Some(Instant::now() + Duration::from_millis(200));
                     } else {
                         watching = false;
                     }
                 }
                 // Debounce external file changes by 200ms
-                _ = sleep(Duration::from_millis(200)), if external_change_pending => {
-                    external_change_pending = false;
+                _ = async {
+                    if let Some(d) = external_deadline {
+                        sleep_until(d).await;
+                    } else {
+                        std::future::pending::<()>().await;
+                    }
+                }, if external_deadline.is_some() => {
+                    external_deadline = None;
                     let _ = ui_tx
                         .send(crate::gui::message::Message::ExternalChangeDetected)
                         .await;
@@ -295,11 +324,45 @@ pub fn spawn_background_worker(
                             if let Err(e) = controller.persist_changes(actions).await {
                                 log::error!("Failed to persist changes: {e}");
                             }
-                            sync_pending = true;
+                            // A user action (re)starts the 500ms window so rapid
+                            // edits coalesce into one sync.
+                            sync_deadline = Some(Instant::now() + Duration::from_millis(500));
                             let _ = ui_tx.send(crate::gui::message::Message::JournalSaved).await;
                         }
                         Some(WorkerCommand::SyncNow) => {
-                            sync_pending = true;
+                            sync_deadline = Some(Instant::now() + Duration::from_millis(500));
+                        }
+                        Some(WorkerCommand::Reconnect) => {
+                            // Rebuild the client from the saved config (disk +
+                            // keyring) so the next sync uses the new
+                            // server/credentials instead of the stale one.
+                            let ctx_ref = ctx.clone();
+                            let res = tokio::task::spawn_blocking(move || {
+                                let cfg = Config::load_with_credentials(ctx_ref.as_ref())?;
+                                RustyClient::new(
+                                    ctx_ref,
+                                    &cfg.url,
+                                    &cfg.username,
+                                    &cfg.password,
+                                    cfg.allow_insecure_certs,
+                                    Some("GUI"),
+                                )
+                            })
+                            .await;
+                            match res {
+                                Ok(Ok(client)) => {
+                                    *client_container.lock().await = Some(client);
+                                    sync_deadline = Some(Instant::now() + Duration::from_millis(500));
+                                }
+                                Ok(Err(e)) => {
+                                    log::error!(
+                                        "Failed to rebuild client after settings change: {e}"
+                                    );
+                                }
+                                Err(e) => {
+                                    log::error!("Client rebuild task failed: {e}");
+                                }
+                            }
                         }
                         Some(WorkerCommand::FlushAndLoad) => {
                             // Channel FIFO guarantees any earlier Batch (disk writes)
@@ -310,8 +373,14 @@ pub fn spawn_background_worker(
                     }
                 }
                 // Debounce network synchronization by 500ms
-                _ = sleep(Duration::from_millis(500)), if sync_pending => {
-                    sync_pending = false;
+                _ = async {
+                    if let Some(d) = sync_deadline {
+                        sleep_until(d).await;
+                    } else {
+                        std::future::pending::<()>().await;
+                    }
+                }, if sync_deadline.is_some() => {
+                    sync_deadline = None;
                     match controller.sync_and_update_store().await {
                         Ok((_warns, synced_tasks, config_changed)) => {
                             // Always send the success message to allow the GUI to update the unsynced badge
@@ -327,8 +396,16 @@ pub fn spawn_background_worker(
                                 });
                             }
                         }
-                        Err(_) => {
+                        Err(e) => {
+                            log::error!("Background sync failed: {e}");
                             let _ = ui_tx.send(crate::gui::message::Message::BackgroundSyncFailed).await;
+                            // Self-heal: if changes are still queued, retry after
+                            // a pause so a transient failure (or a stale client
+                            // that a Reconnect will replace) doesn't keep the
+                            // indicator lit until the user's next action.
+                            if !Journal::load(ctx.as_ref()).is_empty() {
+                                sync_deadline = Some(Instant::now() + Duration::from_secs(30));
+                            }
                         }
                     }
                 }

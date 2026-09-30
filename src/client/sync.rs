@@ -873,11 +873,7 @@ impl RustyClient {
                 Err(msg) => {
                     // Stop processing on network error.
                     // The action safely remains at the front of the disk queue.
-                    #[cfg(target_os = "android")]
                     log::error!("sync_journal step failed: {}", msg);
-                    #[cfg(not(target_os = "android"))]
-                    eprintln!("sync_journal step failed: {}", msg);
-
                     return Err(msg);
                 }
             }

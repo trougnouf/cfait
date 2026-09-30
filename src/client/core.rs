@@ -549,9 +549,6 @@ impl RustyClient {
             let ctx_clone = client.ctx.clone();
             tokio::spawn(async move {
                 if let Err(e) = config_for_saving.save(ctx_clone.as_ref()) {
-                    #[cfg(not(target_os = "android"))]
-                    eprintln!("[Warning] Failed to auto-save config corrections: {}", e);
-                    #[cfg(target_os = "android")]
                     log::warn!("Failed to auto-save config corrections: {}", e);
                 }
             });
