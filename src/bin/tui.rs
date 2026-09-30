@@ -1532,9 +1532,10 @@ async fn main() -> Result<()> {
             return Ok(());
         }
         "list" | "search" => {
-            // Parse arguments: support explicit --all, --json, and -c <id>
+            // Parse arguments: support explicit --all, --json, --fields <a,b>, and -c <id>
             let mut show_all = false;
             let mut as_json = false;
+            let mut fields_csv: Option<String> = None;
             let mut col_href = None;
             let mut parent_uid_arg = None;
             let mut query_parts: Vec<String> = Vec::new();
@@ -1547,6 +1548,14 @@ async fn main() -> Result<()> {
                 } else if args[i] == "--json" {
                     as_json = true;
                     i += 1;
+                } else if args[i] == "--fields" {
+                    if i + 1 < args.len() {
+                        fields_csv = Some(args[i + 1].clone());
+                        i += 2;
+                    } else {
+                        eprintln!("Error: Missing value for --fields");
+                        std::process::exit(1);
+                    }
                 } else if args[i] == "--collection" || args[i] == "-c" {
                     if i + 1 < args.len() {
                         col_href = Some(args[i + 1].clone());
@@ -1656,6 +1665,45 @@ async fn main() -> Result<()> {
                 search_collapsed_tasks: &search_collapsed_tasks,
                 focused_task_uid: full_parent_uid.as_deref(),
             });
+
+            // --fields takes precedence over --json: print one TSV line per
+            // task with only the requested columns, for scripting.
+            if let Some(fields_csv) = fields_csv {
+                let fields: Vec<&str> = fields_csv
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|f| !f.is_empty())
+                    .collect();
+                if fields.is_empty() {
+                    eprintln!("Error: --fields needs at least one field name");
+                    std::process::exit(1);
+                }
+                let unknown: Vec<&str> = fields
+                    .iter()
+                    .copied()
+                    .filter(|f| !cfait::model::display::TASK_FIELDS.contains(f))
+                    .collect();
+                if !unknown.is_empty() {
+                    eprintln!(
+                        "Error: unknown field(s): {}\nValid fields: {}",
+                        unknown.join(", "),
+                        cfait::model::display::TASK_FIELDS.join(", ")
+                    );
+                    std::process::exit(1);
+                }
+                for item in res.items {
+                    if let cfait::store::TaskListItem::Task(t) = item {
+                        let cols: Vec<String> = fields
+                            .iter()
+                            .map(|f| {
+                                cfait::model::display::task_field_value(&t, f).unwrap_or_default()
+                            })
+                            .collect();
+                        println!("{}", cols.join("\t"));
+                    }
+                }
+                return Ok(());
+            }
 
             if as_json {
                 let tasks: Vec<&Task> = res

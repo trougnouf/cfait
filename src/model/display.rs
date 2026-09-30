@@ -93,6 +93,83 @@ pub fn local_weekday_name(weekday: chrono::Weekday) -> String {
     full_alias(key)
 }
 
+/// Field names accepted by `cfait list --fields` / `cfait search --fields`,
+/// canonical names first followed by their aliases.
+pub const TASK_FIELDS: &[&str] = &[
+    "uid",
+    "col",
+    "summary",
+    "desc",
+    "status",
+    "due",
+    "start",
+    "priority",
+    "percent",
+    "categories",
+    "locations",
+    "url",
+    "parent",
+    "related",
+    "dependencies",
+    "sequence",
+    "time_spent",
+    "estimate",
+    "rrule",
+    "colid",
+    "collection",
+    "title",
+    "description",
+    "dtstart",
+    "pct",
+    "tags",
+];
+
+/// Resolve one task field to its string value for `--fields` output.
+/// Returns `None` for unknown field names. Unset fields yield an empty
+/// string. Tabs and newlines are replaced with spaces so each task stays on
+/// a single TSV line.
+pub fn task_field_value(t: &Task, field: &str) -> Option<String> {
+    let value = match field {
+        "uid" => t.uid.clone(),
+        "col" | "colid" | "collection" => t.calendar_href.clone(),
+        "summary" | "title" => t.summary.clone(),
+        "desc" | "description" => t.description.clone(),
+        "status" => match t.status {
+            TaskStatus::NeedsAction => "needs_action",
+            TaskStatus::InProcess => "in_process",
+            TaskStatus::Completed => "completed",
+            TaskStatus::Cancelled => "cancelled",
+        }
+        .to_string(),
+        "due" => t.due.as_ref().map(|d| d.format_smart()).unwrap_or_default(),
+        "start" | "dtstart" => t
+            .dtstart
+            .as_ref()
+            .map(|d| d.format_smart())
+            .unwrap_or_default(),
+        "priority" => t.priority.to_string(),
+        "percent" | "pct" => t
+            .percent_complete
+            .map(|p| p.to_string())
+            .unwrap_or_default(),
+        "categories" | "tags" => t.categories.join(","),
+        "locations" => t.locations.join(","),
+        "url" => t.url.clone().unwrap_or_default(),
+        "parent" => t.parent_uid.clone().unwrap_or_default(),
+        "related" => t.related_to.join(","),
+        "dependencies" => t.dependencies.join(","),
+        "sequence" => t.sequence.to_string(),
+        "time_spent" => t.time_spent_seconds.to_string(),
+        "estimate" => t
+            .estimated_duration
+            .map(|d| d.to_string())
+            .unwrap_or_default(),
+        "rrule" => t.rrule.clone().unwrap_or_default(),
+        _ => return None,
+    };
+    Some(value.replace(['\t', '\n', '\r'], " "))
+}
+
 pub trait TaskDisplay {
     fn to_smart_string(&self) -> String;
     fn format_duration_short(&self, store: Option<&crate::store::TaskStore>) -> String;
@@ -444,6 +521,9 @@ impl TaskDisplay for Task {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::item::DateType;
+    use chrono::NaiveDate;
+    use std::collections::HashMap;
 
     #[test]
     fn local_month_names() {
@@ -464,5 +544,52 @@ mod tests {
         assert_eq!(local_weekday_name(chrono::Weekday::Mon), "Monday");
         assert_eq!(local_weekday_name(chrono::Weekday::Wed), "Wednesday");
         assert_eq!(local_weekday_name(chrono::Weekday::Sun), "Sunday");
+    }
+
+    #[test]
+    fn task_field_values() {
+        let mut t = Task::new("water the ferns", &HashMap::new(), None);
+        t.uid = "uid-1".to_string();
+        t.summary = "water the ferns".to_string();
+        t.calendar_href = "https://cal.example/ferns.ics".to_string();
+        t.status = TaskStatus::InProcess;
+        t.due = Some(DateType::AllDay(
+            NaiveDate::from_ymd_opt(2026, 9, 30).unwrap(),
+        ));
+        t.priority = 3;
+        t.categories = vec!["garden".to_string()];
+        t.time_spent_seconds = 3600;
+
+        assert_eq!(task_field_value(&t, "uid").as_deref(), Some("uid-1"));
+        assert_eq!(
+            task_field_value(&t, "col").as_deref(),
+            Some("https://cal.example/ferns.ics")
+        );
+        assert_eq!(
+            task_field_value(&t, "colid").as_deref(),
+            Some("https://cal.example/ferns.ics")
+        );
+        assert_eq!(
+            task_field_value(&t, "summary").as_deref(),
+            Some("water the ferns")
+        );
+        assert_eq!(
+            task_field_value(&t, "status").as_deref(),
+            Some("in_process")
+        );
+        assert_eq!(task_field_value(&t, "due").as_deref(), Some("2026-09-30"));
+        assert_eq!(task_field_value(&t, "priority").as_deref(), Some("3"));
+        assert_eq!(
+            task_field_value(&t, "categories").as_deref(),
+            Some("garden")
+        );
+        assert_eq!(task_field_value(&t, "time_spent").as_deref(), Some("3600"));
+        // Unset fields come back empty; unknown fields return None.
+        assert_eq!(task_field_value(&t, "desc").as_deref(), Some(""));
+        assert_eq!(task_field_value(&t, "parent").as_deref(), Some(""));
+        assert_eq!(task_field_value(&t, "bogus"), None);
+        // Tabs and newlines are flattened so the value stays on one line.
+        t.summary = "a\tb\nc".to_string();
+        assert_eq!(task_field_value(&t, "summary").as_deref(), Some("a b c"));
     }
 }

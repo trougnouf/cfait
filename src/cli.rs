@@ -170,14 +170,14 @@ pub fn print_help(binary_name: &str) {
         );
         print_cmd(
             &format!(
-                "{} list [<query>] [--all] [--json] [-c <id>] [-p <uid>]",
+                "{} list [<query>] [--all] [--json] [--fields <a,b,c>] [-c <id>] [-p <uid>]",
                 binary_name
             ),
             rust_i18n::t!("cli_desc_list").to_string(),
         );
         print_cmd(
             &format!(
-                "{} search <{}> [--all] [--json] [-c <id>] [-p <uid>]",
+                "{} search <{}> [--all] [--json] [--fields <a,b,c>] [-c <id>] [-p <uid>]",
                 binary_name,
                 rust_i18n::t!("cli_query_placeholder")
             ),
