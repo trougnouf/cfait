@@ -549,6 +549,7 @@
     "journal_due_today": "Échéance ce jour",
     "journal_no_activity": "Aucune activité de tâche enregistrée ce jour.",
     "journal_no_notes": "Aucune entrée de journal pour cette date dans %{name}. Saisissez du texte pour en créer une.",
+    "journal_no_remote_vjournal": "Aucune collection VJOURNAL distante — créez-en une depuis cfait pour synchroniser votre journal.",
     "journal_notes": "Notes",
     "journal_new_page": "Nouvelle page",
     "journal_started_today": "Commencées ce jour",

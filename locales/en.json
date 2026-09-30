@@ -356,6 +356,7 @@
     "journal_yesterday": "Yesterday",
     "journal_tomorrow": "Tomorrow",
     "journal_no_notes": "No journal entry for this date in %{name}. Type to create one.",
+    "journal_no_remote_vjournal": "No remote VJOURNAL collection — create one from cfait to sync your journal.",
     "first_day_of_week": "First day of the week",
     "monday": "Monday",
     "sunday": "Sunday",

@@ -2713,6 +2713,19 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
         cal_buttons = cal_buttons.push(btn);
     }
 
+    let has_remote_cal = app
+        .calendars
+        .iter()
+        .any(|c| !c.href.starts_with("local://"));
+    let has_remote_journal_cal = visible_cals.iter().any(|c| !c.href.starts_with("local://"));
+    if has_remote_cal && !has_remote_journal_cal {
+        cal_buttons = cal_buttons.push(
+            text(rust_i18n::t!("journal_no_remote_vjournal").to_string())
+                .size(12)
+                .color(Color::from_rgb(0.5, 0.5, 0.5)),
+        );
+    }
+
     let cal_selector = scrollable(cal_buttons)
         .direction(iced::widget::scrollable::Direction::Horizontal(
             iced::widget::scrollable::Scrollbar::new()

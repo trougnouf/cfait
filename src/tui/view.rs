@@ -955,6 +955,17 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             cal_spans.push(Span::styled(text, style));
             cal_spans.push(Span::raw(" "));
         }
+        let has_remote_cal = state
+            .calendars
+            .iter()
+            .any(|c| !c.href.starts_with("local://"));
+        let has_remote_journal_cal = visible_cals.iter().any(|c| !c.href.starts_with("local://"));
+        if has_remote_cal && !has_remote_journal_cal {
+            cal_spans.push(Span::styled(
+                rust_i18n::t!("journal_no_remote_vjournal").to_string(),
+                Style::default().fg(Color::DarkGray),
+            ));
+        }
         let cal_line = Line::from(cal_spans);
 
         // Append Activity Context
