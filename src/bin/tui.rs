@@ -1988,6 +1988,83 @@ async fn main() -> Result<()> {
                 return Ok(());
             }
 
+            if sub == "default" {
+                let mut config =
+                    cfait::config::Config::load_with_credentials(ctx.as_ref()).unwrap_or_default();
+                if args.len() < 4 {
+                    match &config.default_calendar {
+                        Some(href) => {
+                            println!(
+                                "{}",
+                                rust_i18n::t!("collection_default_current", href = href)
+                            );
+                        }
+                        None => {
+                            eprintln!(
+                                "{}",
+                                rust_i18n::t!("cli_usage_collection", binary_name = binary_name)
+                            );
+                            std::process::exit(1);
+                        }
+                    }
+                    return Ok(());
+                }
+                let query = args[3].to_lowercase();
+                let mut all_cals = Vec::new();
+                if let Ok(locals) = cfait::storage::LocalCalendarRegistry::load(ctx.as_ref()) {
+                    all_cals.extend(locals);
+                }
+                if let Ok(remotes) = cfait::cache::Cache::load_calendars(ctx.as_ref()) {
+                    all_cals.extend(remotes);
+                }
+                let matches: Vec<_> = all_cals
+                    .iter()
+                    .filter(|c| {
+                        c.href.eq_ignore_ascii_case(&query) || c.name.eq_ignore_ascii_case(&query)
+                    })
+                    .collect();
+                let target = match matches.as_slice() {
+                    [] => {
+                        eprintln!(
+                            "{}",
+                            rust_i18n::t!(
+                                "error_collection_not_found",
+                                query = args[3],
+                                binary_name = binary_name
+                            )
+                        );
+                        std::process::exit(1);
+                    }
+                    [t] => *t,
+                    _ => {
+                        eprintln!(
+                            "{}",
+                            rust_i18n::t!(
+                                "error_collection_ambiguous",
+                                query = args[3],
+                                binary_name = binary_name
+                            )
+                        );
+                        std::process::exit(1);
+                    }
+                };
+                config.default_calendar = Some(target.href.clone());
+                config.hidden_calendars.retain(|h| h != &target.href);
+                if let Err(e) = config.save_with_credentials(ctx.as_ref()) {
+                    eprintln!("Failed to save config: {}", e);
+                    std::process::exit(1);
+                }
+                println!(
+                    "{}",
+                    rust_i18n::t!(
+                        "collection_default_set",
+                        name = target.name,
+                        href = target.href
+                    )
+                );
+                return Ok(());
+            }
+
             if args.len() < 4 {
                 eprintln!(
                     "{}",

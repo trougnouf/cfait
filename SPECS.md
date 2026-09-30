@@ -355,6 +355,7 @@ Used for headless automation, scripting, and piping. Operates directly on the `T
 *   `cfait collection list [--json]`: Lists CalDAV collections.
 *   `cfait collection create <name> [--color #hex]`: Creates a new collection.
 *   `cfait collection edit <href> --name <name> [--color #hex]`: Edits a collection's display name or color.
+*   `cfait collection default [name-or-href]`: Sets the default collection used when creating tasks without `-c`/`--collection`; accepts a collection name or full HREF and unhides the collection if it was hidden. With no argument, shows the current default.
 *   `cfait login <url> <username>`: Configures the CalDAV server and securely prompts for the password to store in the OS keyring.
 
 ---
