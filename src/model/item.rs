@@ -1583,7 +1583,6 @@ impl Task {
 
     /// Update status based on markdown extraction, with automatic side effects (completion dates, timers).
     pub fn apply_extracted_status(&mut self, new_status: TaskStatus) {
-        let smart_status = self.status;
         self.status = new_status;
         match new_status {
             TaskStatus::Completed | TaskStatus::Cancelled => {
@@ -1597,12 +1596,8 @@ impl Task {
                 }
             }
             TaskStatus::NeedsAction => {
-                if smart_status == TaskStatus::Completed {
-                    self.status = TaskStatus::Completed;
-                } else {
-                    self.percent_complete = None;
-                    self.unmapped_properties.retain(|p| p.key != "COMPLETED");
-                }
+                self.percent_complete = None;
+                self.unmapped_properties.retain(|p| p.key != "COMPLETED");
             }
         }
     }

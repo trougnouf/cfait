@@ -119,6 +119,7 @@ Users can also use the "Edit Tree" action (or `Ctrl+E`) to edit an entire existi
     *   `[>]` or `[▶]` maps to `InProcess` (Timer running).
     *   `[x]`, `[X]`, or `[*]` maps to `Completed`.
     *   `[-]` or `[~]` maps to `Cancelled`.
+    *   In round-trip tree editing, unchecking a completed task (`[x]` → `[ ]`) reopens it: the status returns to `NeedsAction` and the `COMPLETED` date and completion percentage are cleared.
 *   **The Structural Parent Rule:** If you indent an actionable task (`- [ ] subtask`) underneath a plain bullet point (`- Folder`), Cfait recognizes the plain bullet as a structural block and extracts it as an `is:note` component. This preserves the proper parent/child hierarchy.
 *   **Context-Aware Wiki Links:** Creating a missing link inherits the component type of where it was clicked (creating an actionable `VTODO` from a task, or a `VJOURNAL` from a page). Standard links (`[[My Page]]`) always search globally and default to root-level creation.
     *   *Override Context:* Use `- [ ] [[My Task]]` to explicitly force an actionable task, or `[[My Page is:page]]` to explicitly force a journal page.

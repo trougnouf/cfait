@@ -4,7 +4,7 @@ use cfait::config::{Config, PausedSortBehavior, SortPreset};
 use cfait::context::TestContext;
 use cfait::model::{AppIntent, DateType, Task, TaskStatus};
 use cfait::store::{FilterOptions, TaskStore};
-use chrono::{NaiveDate, NaiveTime};
+use chrono::{NaiveDate, NaiveTime, Utc};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -1420,6 +1420,61 @@ fn test_tree_sync_preserves_paused_percent() {
     assert!(
         actions.is_empty(),
         "no journal actions expected for an unchanged tree"
+    );
+}
+
+#[test]
+fn test_tree_sync_uncheck_reopens_completed_task() {
+    let mut store = make_store();
+
+    let mut root = Task::new("Garden plan", &HashMap::new(), None);
+    root.uid = "root-1".to_string();
+    root.calendar_href = "cal1".to_string();
+    store.add_task(root);
+
+    let mut sub = Task::new("Plant the basil", &HashMap::new(), None);
+    sub.uid = "sub-1".to_string();
+    sub.calendar_href = "cal1".to_string();
+    sub.parent_uid = Some("root-1".to_string());
+    sub.status = TaskStatus::Completed;
+    sub.set_completion_date(Some(Utc::now()));
+    store.add_task(sub);
+
+    // The tree editor renders a completed task as a checked box.
+    let markdown = cfait::model::extractor::serialize_task_tree(&store, "root-1", &[], false);
+    assert!(
+        markdown.contains("[x]"),
+        "completed task must serialize as checked"
+    );
+
+    // Unchecking the box asks to reopen the task.
+    let unchecked = markdown.replace("[x]", "[ ]");
+
+    let options = cfait::store::SyncTreeOptions {
+        aliases: &HashMap::new(),
+        default_reminder_time: None,
+        trash_retention_days: 30,
+        calendars: &[],
+    };
+
+    let (_actions, warnings) = store
+        .sync_tree_from_markdown("root-1", &unchecked, &options, false)
+        .expect("tree sync should succeed");
+    assert!(warnings.is_empty());
+
+    let updated = store.get_task_ref("sub-1").expect("subtask should exist");
+    assert_eq!(
+        updated.status,
+        TaskStatus::NeedsAction,
+        "unchecking a completed task in the tree editor must reopen it"
+    );
+    assert!(
+        updated.completion_date().is_none(),
+        "reopened task must not keep its completion date"
+    );
+    assert!(
+        updated.percent_complete.is_none(),
+        "reopened task must not keep a completion percentage"
     );
 }
 
