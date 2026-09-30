@@ -12,7 +12,6 @@ use iced::widget::{
     tooltip,
 };
 use iced::{Color, Element, Length, Theme};
-#[cfg(feature = "gui")]
 use iced_aw::color_picker;
 use strum::IntoEnumIterator;
 
@@ -1134,21 +1133,14 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
 
             let color_widget: Element<_> =
                 if app.color_picker_active_href.as_ref() == Some(&cal_href) {
-                    #[cfg(feature = "gui")]
-                    {
-                        color_picker::ColorPicker::new(
-                            true,
-                            current_color,
-                            color_btn,
-                            Message::CancelColorPicker,
-                            Message::SubmitColorPicker,
-                        )
-                        .into()
-                    }
-                    #[cfg(not(feature = "gui"))]
-                    {
-                        color_btn.into()
-                    }
+                    color_picker::ColorPicker::new(
+                        true,
+                        current_color,
+                        color_btn,
+                        Message::CancelColorPicker,
+                        Message::SubmitColorPicker,
+                    )
+                    .into()
                 } else {
                     color_btn.into()
                 };
