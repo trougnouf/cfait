@@ -3224,7 +3224,7 @@ pub fn build_context_banner<'a>(
                     (
                         icon::URL_CHECK,
                         Color::from_rgb(0.2, 0.7, 1.0),
-                        "Open Link".to_string(),
+                        rust_i18n::t!("menu_open_link").to_string(),
                         Some(Message::OpenUrl(clean_uid.clone())),
                     )
                 } else {
@@ -3251,7 +3251,7 @@ pub fn build_context_banner<'a>(
                                 (
                                     icon::INFO,
                                     Color::from_rgb(0.5, 0.5, 0.5),
-                                    "Resolving...".to_string(),
+                                    rust_i18n::t!("resolving").to_string(),
                                     None,
                                 )
                             }
@@ -3261,7 +3261,8 @@ pub fn build_context_banner<'a>(
                                 (
                                     icon::NEW_FILE,
                                     Color::from_rgb(0.2, 0.7, 1.0),
-                                    format!("Create '{}'", clean_uid),
+                                    rust_i18n::t!("create_named", name = clean_uid.clone())
+                                        .to_string(),
                                     Some(Message::OpenWikiLink(
                                         clean_uid.clone(),
                                         context_uid.map(|s| s.to_string()),
@@ -3271,7 +3272,8 @@ pub fn build_context_banner<'a>(
                                 (
                                     icon::SYNC_ALERT,
                                     Color::from_rgb(0.9, 0.2, 0.2),
-                                    format!("Unknown: {}", clean_uid),
+                                    rust_i18n::t!("unknown_uid", name = clean_uid.clone())
+                                        .to_string(),
                                     None,
                                 )
                             }
