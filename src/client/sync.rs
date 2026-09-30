@@ -575,6 +575,7 @@ impl RustyClient {
     /// How long to wait for another process to finish syncing before giving
     /// up the cross-process lock and proceeding anyway. A stuck process
     /// (e.g. hung on a slow network call) must not block our syncs forever.
+    #[cfg(not(target_os = "android"))]
     const CROSS_PROCESS_SYNC_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
 
     pub async fn sync_journal(&self) -> Result<(Vec<String>, Vec<Task>), String> {

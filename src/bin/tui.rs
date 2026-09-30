@@ -299,11 +299,14 @@ fn get_sync_strategy(
         (true, false)
     } else {
         #[cfg(not(target_os = "android"))]
-        let is_present = cfait::storage::PresenceLock::is_present(ctx.as_ref());
+        {
+            let is_present = cfait::storage::PresenceLock::is_present(ctx.as_ref());
+            (is_present, is_present)
+        }
         #[cfg(target_os = "android")]
-        let is_present = false;
-
-        (is_present, is_present)
+        {
+            (false, false)
+        }
     }
 }
 
