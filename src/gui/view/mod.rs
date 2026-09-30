@@ -59,14 +59,9 @@ pub fn is_action_available(
     let has_time = !task.sessions.is_empty() || task.time_spent_seconds > 0;
 
     match action {
-        crate::config::TaskAction::Move => {
-            let enabled_cal_count = app
-                .calendars
-                .iter()
-                .filter(|c| !app.disabled_calendars.contains(&c.href))
-                .count();
-            enabled_cal_count > 1
-        }
+        crate::config::TaskAction::Move => !app
+            .get_move_targets(&task.calendar_href, task.has_subtasks)
+            .is_empty(),
         crate::config::TaskAction::OpenUrl => task.url.is_some(),
         crate::config::TaskAction::DeleteTree => task.has_subtasks,
         crate::config::TaskAction::CompleteTree => task.has_subtasks,
