@@ -3500,8 +3500,6 @@ pub async fn handle_key_event(
                     state.journal_date -= chrono::Duration::days(1);
                     state.journal_editing_uid = None;
                     state.refresh_filtered_view();
-                } else {
-                    state.move_cursor_left()
                 }
             }
             KeyCode::Right => {
@@ -3640,8 +3638,6 @@ pub async fn handle_key_event(
                             }
                         }
                     }
-                } else if state.mode == InputMode::Editing {
-                    state.move_cursor_right();
                 }
             }
             KeyCode::Enter => {
