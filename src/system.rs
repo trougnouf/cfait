@@ -452,6 +452,40 @@ impl keyring_core::api::CredentialApi for Oo7Cred {
     }
 }
 
+/// File name (inside the data directory) of the persisted alarm fire history.
+const ALARM_HISTORY_FILE: &str = "alarm_history.json";
+
+/// Loads the persisted alarm fire history so alarms do not re-fire after a
+/// restart. Entries outside the fire window (24h) are dropped.
+fn load_alarm_history(ctx: &dyn AppContext) -> HashMap<String, i64> {
+    let path = match ctx.get_data_dir() {
+        Ok(dir) => dir.join(ALARM_HISTORY_FILE),
+        Err(_) => return HashMap::new(),
+    };
+    let Ok(content) = std::fs::read_to_string(&path) else {
+        return HashMap::new();
+    };
+    let mut history: HashMap<String, i64> = serde_json::from_str(&content).unwrap_or_default();
+    let cutoff = Utc::now().timestamp() - 86400;
+    history.retain(|_, ts| *ts >= cutoff);
+    history
+}
+
+/// Persists the alarm fire history so a restarted app does not re-notify for
+/// alarms that already fired.
+fn save_alarm_history(ctx: &dyn AppContext, history: &HashMap<String, i64>) {
+    let Ok(dir) = ctx.get_data_dir() else {
+        return;
+    };
+    let path = dir.join(ALARM_HISTORY_FILE);
+    let Ok(json) = serde_json::to_string(history) else {
+        return;
+    };
+    if let Err(e) = crate::storage::LocalStorage::atomic_write(&path, json) {
+        log::warn!("Failed to persist alarm history: {}", e);
+    }
+}
+
 /// Spawns the background alarm manager.
 /// returns: Sender to update the task list or change state.
 pub fn spawn_alarm_actor(
@@ -469,7 +503,7 @@ pub fn spawn_alarm_actor(
 
     tokio::spawn(async move {
         let mut tasks: Vec<Task> = Vec::new();
-        let mut fired_history: HashMap<String, i64> = HashMap::new();
+        let mut fired_history: HashMap<String, i64> = load_alarm_history(&ctx);
         // Start muted
         let mut alarms_enabled = false;
         let mut last_sync_request = Instant::now() - Duration::from_secs(60);
@@ -607,10 +641,12 @@ pub fn spawn_alarm_actor(
                     }
                 }
 
-                for (task, alarm, is_implicit, history_key) in ready_to_fire {
+                for (task, alarm, _is_implicit, history_key) in ready_to_fire {
                     fired_history.insert(history_key.clone(), now.timestamp());
 
-                    if !is_implicit && let Some(ui_tx) = &ui_sender {
+                    // In-app notifications are per-window and always sent, for
+                    // both explicit and implicit (auto-reminder) alarms.
+                    if let Some(ui_tx) = &ui_sender {
                         let _ = ui_tx
                             .send(AlarmMessage::Fire(task.uid.clone(), alarm.uid.clone()))
                             .await;
@@ -659,6 +695,7 @@ pub fn spawn_alarm_actor(
                         }
                     });
                 }
+                save_alarm_history(&ctx, &fired_history);
                 continue; // Re-evaluate after firing to get next_wake_ts correct
             }
 
@@ -730,4 +767,49 @@ pub fn spawn_alarm_actor(
     });
 
     tx
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::context::TestContext;
+
+    #[test]
+    fn alarm_history_roundtrip() {
+        let ctx = TestContext::new();
+        assert!(load_alarm_history(&ctx).is_empty());
+
+        let mut history = HashMap::new();
+        history.insert(
+            "implicit_due:|2026-09-30T08:00:00+00:00|task-1".to_string(),
+            Utc::now().timestamp(),
+        );
+        save_alarm_history(&ctx, &history);
+
+        let loaded = load_alarm_history(&ctx);
+        assert_eq!(loaded.len(), 1);
+        assert!(loaded.contains_key("implicit_due:|2026-09-30T08:00:00+00:00|task-1"));
+    }
+
+    #[test]
+    fn alarm_history_prunes_stale_entries() {
+        let ctx = TestContext::new();
+        let now = Utc::now().timestamp();
+        let mut history = HashMap::new();
+        history.insert("fresh".to_string(), now);
+        history.insert("stale".to_string(), now - 90_000); // > 24h
+        save_alarm_history(&ctx, &history);
+
+        let loaded = load_alarm_history(&ctx);
+        assert!(loaded.contains_key("fresh"));
+        assert!(!loaded.contains_key("stale"));
+    }
+
+    #[test]
+    fn alarm_history_tolerates_corrupt_file() {
+        let ctx = TestContext::new();
+        let dir = ctx.get_data_dir().unwrap();
+        std::fs::write(dir.join(ALARM_HISTORY_FILE), "not json").unwrap();
+        assert!(load_alarm_history(&ctx).is_empty());
+    }
 }
