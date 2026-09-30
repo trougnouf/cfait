@@ -1368,3 +1368,57 @@ fn test_history_snapshot_survives_parent_recurrence_reset() {
         "history snapshot must keep its COMPLETED property"
     );
 }
+
+#[test]
+fn test_tree_sync_preserves_paused_percent() {
+    let mut store = make_store();
+
+    let mut root = Task::new("Garden plan", &HashMap::new(), None);
+    root.uid = "root-1".to_string();
+    root.calendar_href = "cal1".to_string();
+    store.add_task(root);
+
+    let mut sub = Task::new("Water the tomatoes", &HashMap::new(), None);
+    sub.uid = "sub-1".to_string();
+    sub.calendar_href = "cal1".to_string();
+    sub.parent_uid = Some("root-1".to_string());
+    sub.percent_complete = Some(50);
+    let original_sequence = sub.sequence;
+    store.add_task(sub);
+
+    // Round-trip the canonical serialization (what the tree editor shows):
+    // a paused task carries both the `[/]` checkbox and a `done:50%` suffix.
+    let markdown = cfait::model::extractor::serialize_task_tree(&store, "root-1", &[], false);
+    assert!(
+        markdown.contains("[/]"),
+        "paused task must serialize with the pause checkbox"
+    );
+
+    let options = cfait::store::SyncTreeOptions {
+        aliases: &HashMap::new(),
+        default_reminder_time: None,
+        trash_retention_days: 30,
+        calendars: &[],
+    };
+
+    let (actions, warnings) = store
+        .sync_tree_from_markdown("root-1", &markdown, &options, false)
+        .expect("tree sync should succeed");
+    assert!(warnings.is_empty());
+
+    let updated = store.get_task_ref("sub-1").expect("subtask should exist");
+    assert_eq!(
+        updated.percent_complete,
+        Some(50),
+        "pause state must survive a tree save"
+    );
+    assert_eq!(updated.status, TaskStatus::NeedsAction);
+    assert_eq!(
+        updated.sequence, original_sequence,
+        "an unchanged paused task must not be re-saved"
+    );
+    assert!(
+        actions.is_empty(),
+        "no journal actions expected for an unchanged tree"
+    );
+}

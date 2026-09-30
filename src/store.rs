@@ -1980,10 +1980,13 @@ impl TaskStore {
                 clone.description = ext.description.clone();
                 clone.inline_media = ext.inline_media.clone();
                 clone.is_note = ext.is_note;
-                clone.percent_complete = ext.percent_complete;
                 clone.parent_uid = parent_uid.clone();
 
                 clone.apply_extracted_status(ext.status);
+                // Assign after the status side effects: the checkbox percent
+                // (e.g. `[/]` pause) is the user's explicit state and must not
+                // be clobbered by the NeedsAction cleanup above.
+                clone.percent_complete = ext.percent_complete;
 
                 let final_href = if let Some(target) = clone.target_collection.take() {
                     crate::model::resolve_collection(&target, options.calendars, &inherited_href)
