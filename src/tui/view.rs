@@ -515,7 +515,11 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             use chrono::Datelike;
 
             let is_monday_first = state.first_day_of_week == crate::config::FirstDayOfWeek::Monday;
-            let month_str = date.format("%B %Y").to_string();
+            let month_str = format!(
+                "{} {}",
+                crate::model::display::local_month_name(date.month()),
+                date.year()
+            );
 
             cal_lines.push(Line::from(vec![Span::styled(
                 format!("  < {} >  ", month_str),

@@ -14,6 +14,7 @@ use crate::gui::view::help::view_help;
 use crate::gui::view::settings::view_settings;
 use crate::gui::view::sidebar::{view_sidebar_calendars, view_sidebar_categories};
 use crate::gui::view::task_row::view_task_row;
+use chrono::Datelike;
 use iced::alignment::Horizontal;
 use iced::mouse;
 use iced::widget::scrollable::{Direction, Scrollbar};
@@ -2578,7 +2579,14 @@ fn view_ics_import_overlay<'a>(app: &'a GuiApp) -> Element<'a, Message> {
 
 fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
     let date = app.journal_date;
-    let date_str = date.format("%A, %B %d, %Y").to_string();
+    let date_str = rust_i18n::t!(
+        "journal_date_full",
+        weekday = crate::model::display::local_weekday_name(date.weekday()),
+        month = crate::model::display::local_month_name(date.month()),
+        day = date.day(),
+        year = date.year()
+    )
+    .to_string();
 
     let mut visible_cals_set = HashSet::new();
     let mut visible_cals = Vec::new();

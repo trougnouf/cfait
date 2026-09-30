@@ -939,7 +939,11 @@ pub fn view_sidebar_journal(app: &GuiApp) -> Element<'_, Message> {
         first_day.weekday().num_days_from_sunday() as usize
     };
 
-    let month_str = first_day.format("%B %Y").to_string();
+    let month_str = format!(
+        "{} {}",
+        crate::model::display::local_month_name(first_day.month()),
+        first_day.year()
+    );
 
     let prev_month_date = if month == 1 {
         NaiveDate::from_ymd_opt(year - 1, 12, 1).unwrap()

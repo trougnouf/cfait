@@ -546,6 +546,7 @@
     "journal": "Journal",
     "journal_activity": "Activité",
     "journal_completed_today": "Terminées ce jour",
+    "journal_date_full": "%{weekday} %{day} %{month} %{year}",
     "journal_date_placeholder": "YYYY-MM-DD",
     "journal_due_today": "Échéance ce jour",
     "journal_no_activity": "Aucune activité de tâche enregistrée ce jour.",

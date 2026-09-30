@@ -368,6 +368,7 @@
     "cal_weekday_fr": "Fr",
     "cal_weekday_sa": "Sa",
     "cal_weekday_su": "Su",
+    "journal_date_full": "%{weekday}, %{month} %{day}, %{year}",
     "journal_date_placeholder": "YYYY-MM-DD",
     "journal_new_page": "New Page",
     "journal_due_today": "Due this day",

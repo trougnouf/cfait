@@ -10,6 +10,89 @@ pub fn random_session_example() -> String {
     DURATIONS[fastrand::usize(..DURATIONS.len())].to_string()
 }
 
+/// Capitalize the first letter of a localized name for display.
+fn capitalize_first(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+    }
+}
+
+/// The parser month/weekday locale keys hold comma-separated aliases, the
+/// last of which is the full name. Returns it with a capitalized first
+/// letter. Some locales list the plural form last (en "wednesday,wednesdays");
+/// when the last alias is just the previous one plus an "s", the previous
+/// alias is used instead. A singular name that merely ends in "s" (es
+/// "lunes") is kept as-is.
+fn full_alias(key: &str) -> String {
+    let raw = rust_i18n::t!(key);
+    let aliases: Vec<&str> = raw
+        .split(',')
+        .map(str::trim)
+        .filter(|a| !a.is_empty())
+        .collect();
+    let full = match aliases.len() {
+        0 => String::new(),
+        1 => aliases[0].to_string(),
+        _ => {
+            let last = aliases[aliases.len() - 1];
+            let prev = aliases[aliases.len() - 2];
+            if last.ends_with('s') && &last[..last.len() - 1] == prev {
+                prev.to_string()
+            } else {
+                last.to_string()
+            }
+        }
+    };
+    capitalize_first(&full)
+}
+
+const MONTH_KEYS: &[&str] = &[
+    "parser_months_jan",
+    "parser_months_feb",
+    "parser_months_mar",
+    "parser_months_apr",
+    "parser_months_may",
+    "parser_months_jun",
+    "parser_months_jul",
+    "parser_months_aug",
+    "parser_months_sep",
+    "parser_months_oct",
+    "parser_months_nov",
+    "parser_months_dec",
+];
+
+/// Localized full month name for a 1-12 month number ("September", "septembre").
+pub fn local_month_name(month: u32) -> String {
+    full_alias(MONTH_KEYS[(month.clamp(1, 12) - 1) as usize])
+}
+
+/// Localized short month name for a 1-12 month number ("Sep", "sept").
+pub fn local_month_abbr(month: u32) -> String {
+    let raw = rust_i18n::t!(MONTH_KEYS[(month.clamp(1, 12) - 1) as usize]);
+    let abbr = raw.split(',').next().unwrap_or("").trim();
+    if abbr.is_empty() {
+        format!("{:02}", month)
+    } else {
+        capitalize_first(abbr)
+    }
+}
+
+/// Localized full weekday name ("Wednesday", "mercredi").
+pub fn local_weekday_name(weekday: chrono::Weekday) -> String {
+    let key = match weekday {
+        chrono::Weekday::Mon => "parser_weekdays_mo",
+        chrono::Weekday::Tue => "parser_weekdays_tu",
+        chrono::Weekday::Wed => "parser_weekdays_we",
+        chrono::Weekday::Thu => "parser_weekdays_th",
+        chrono::Weekday::Fri => "parser_weekdays_fr",
+        chrono::Weekday::Sat => "parser_weekdays_sa",
+        chrono::Weekday::Sun => "parser_weekdays_su",
+    };
+    full_alias(key)
+}
+
 pub trait TaskDisplay {
     fn to_smart_string(&self) -> String;
     fn format_duration_short(&self, store: Option<&crate::store::TaskStore>) -> String;
@@ -355,5 +438,31 @@ impl TaskDisplay for Task {
         }
 
         s
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn local_month_names() {
+        assert_eq!(local_month_name(1), "January");
+        assert_eq!(local_month_name(9), "September");
+        assert_eq!(local_month_name(12), "December");
+        // Out-of-range months clamp instead of panicking.
+        assert_eq!(local_month_name(0), "January");
+        assert_eq!(local_month_name(13), "December");
+        assert_eq!(local_month_abbr(1), "Jan");
+        assert_eq!(local_month_abbr(9), "Sep");
+    }
+
+    #[test]
+    fn local_weekday_names() {
+        // The en alias list ends in the plural ("mon,monday,mondays");
+        // the plural must not leak into the display name.
+        assert_eq!(local_weekday_name(chrono::Weekday::Mon), "Monday");
+        assert_eq!(local_weekday_name(chrono::Weekday::Wed), "Wednesday");
+        assert_eq!(local_weekday_name(chrono::Weekday::Sun), "Sunday");
     }
 }
