@@ -3618,15 +3618,23 @@ impl TaskStore {
                 .filter(|t| {
                     let is_system_cal = crate::storage::is_system_calendar(&t.calendar_href);
 
-                    if t.is_journal
-                        && !self.children_index.contains_key(&t.uid)
-                        && t.parent_uid.is_none()
-                        && !is_system_cal
-                        && !t.is_note
-                        && !t.pinned
-                        && options.search_term.trim().is_empty()
-                    {
-                        return false;
+                    // Journals stay out of the main list unless they carry tasks, are pinned,
+                    // are a note, or are attached to a regular task. Sub-pages (a journal whose
+                    // parent is another journal) only appear in the journal's Pages section.
+                    if t.is_journal {
+                        let parent = t.parent_uid.as_ref().and_then(|p| self.get_task_ref(p));
+                        let has_parent_task = parent.is_some_and(|p| !p.is_journal);
+                        let is_subpage = parent.is_some_and(|p| p.is_journal);
+                        let note_visible = !is_subpage && t.is_note;
+                        if !self.children_index.contains_key(&t.uid)
+                            && !has_parent_task
+                            && !is_system_cal
+                            && !note_visible
+                            && !t.pinned
+                            && options.search_term.trim().is_empty()
+                        {
+                            return false;
+                        }
                     }
 
                     // Status-based filtering
@@ -5591,5 +5599,131 @@ mod tests {
         // below is clamped to 9.
         let below_now = store.get_task_ref("below").unwrap();
         assert_eq!(below_now.priority, 9);
+    }
+
+    #[test]
+    fn journal_subpages_hidden_from_main_list() {
+        let ctx = std::sync::Arc::new(crate::context::StandardContext::new(Some(
+            std::env::temp_dir().join(format!("cfait-store-test-{}", uuid::Uuid::new_v4())),
+        )));
+        let mut store = TaskStore::new(ctx);
+
+        let journal = |uid: &str, parent: Option<&str>| {
+            let mut t = make_task(uid, parent, TaskStatus::NeedsAction, false);
+            t.is_journal = true;
+            t
+        };
+
+        // A root page with sub-pages, one of which is a note.
+        let page = journal("page", None);
+        let subpage = journal("subpage", Some("page"));
+        let mut note_subpage = journal("note_subpage", Some("page"));
+        note_subpage.is_note = true;
+        let container = journal("container", Some("page"));
+        let nested = journal("nested", Some("container"));
+        let mut pinned_subpage = journal("pinned_subpage", Some("page"));
+        pinned_subpage.pinned = true;
+
+        // Root note journal, bare root journal, and a journal carrying tasks.
+        let mut root_note = journal("root_note", None);
+        root_note.is_note = true;
+        let root_plain = journal("root_plain", None);
+        let journal_with_tasks = journal("journal_with_tasks", None);
+
+        // A journal attached to a regular task, plus that task and a child task.
+        let task1 = make_task("task1", None, TaskStatus::NeedsAction, false);
+        let attached = journal("attached", Some("task1"));
+        let child_task = make_task(
+            "child_task",
+            Some("journal_with_tasks"),
+            TaskStatus::NeedsAction,
+            false,
+        );
+
+        for t in [
+            page,
+            subpage,
+            note_subpage,
+            container,
+            nested,
+            pinned_subpage,
+            root_note,
+            root_plain,
+            journal_with_tasks,
+            task1,
+            attached,
+            child_task,
+        ] {
+            store.add_task(t);
+        }
+
+        let hidden = HashSet::new();
+        let categories = HashSet::new();
+        let locations = HashSet::new();
+        let aliases = HashMap::new();
+        let collapsed = HashSet::new();
+        let done_groups = HashSet::new();
+        let tags = HashSet::new();
+        let locs_expanded = HashSet::new();
+        let res = store.filter(FilterOptions {
+            active_cal_href: None,
+            hidden_calendars: &hidden,
+            selected_categories: &categories,
+            selected_locations: &locations,
+            match_all_categories: false,
+            search_term: "",
+            hide_completed_global: false,
+            hide_fully_completed_tags: false,
+            hide_aliases_in_sidebar: false,
+            cutoff_date: None,
+            min_duration: None,
+            max_duration: None,
+            include_unset_duration: true,
+            urgent_days: 7,
+            urgent_prio: 9,
+            default_priority: 5,
+            start_grace_period_days: 0,
+            sort_standard_by_priority: false,
+            sort_preset: crate::config::SortPreset::UrgentStartedDue,
+            expanded_done_groups: &done_groups,
+            expanded_tags: &tags,
+            expanded_locations: &locs_expanded,
+            max_done_roots: 10,
+            max_done_subtasks: 10,
+            tag_aliases: &aliases,
+            search_collapsed_tasks: &collapsed,
+            focused_task_uid: None,
+            paused_sort_behavior: crate::config::PausedSortBehavior::default(),
+            sort_tiebreak_recent: false,
+            default_reminder_time: chrono::NaiveTime::from_hms_opt(9, 0, 0).unwrap(),
+        });
+
+        let uids: HashSet<&str> = res
+            .items
+            .iter()
+            .filter_map(|item| match item {
+                TaskListItem::Task(t) => Some(t.uid.as_str()),
+                _ => None,
+            })
+            .collect();
+
+        // Regular tasks and journals that carry tasks stay in the list.
+        assert!(uids.contains("task1"));
+        assert!(uids.contains("journal_with_tasks"));
+        assert!(uids.contains("child_task"));
+        // A journal attached to a regular task stays visible.
+        assert!(uids.contains("attached"));
+        // A root note journal stays visible; a bare root journal does not.
+        assert!(uids.contains("root_note"));
+        assert!(!uids.contains("root_plain"));
+        // The top-level page is visible (it has children); its sub-pages are not,
+        // even when they are notes.
+        assert!(uids.contains("page"));
+        assert!(!uids.contains("subpage"));
+        assert!(!uids.contains("note_subpage"));
+        assert!(!uids.contains("nested"));
+        // A pinned sub-page and a container page stay visible.
+        assert!(uids.contains("pinned_subpage"));
+        assert!(uids.contains("container"));
     }
 }
