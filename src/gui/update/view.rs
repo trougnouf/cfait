@@ -421,7 +421,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::OpenWikiLink(title, context_uid) => {
             let clean_title = title.trim_start_matches("[[").trim_end_matches("]]").trim();
-            if clean_title.is_empty() {
+            // A bare "+" has no path segments to resolve or create.
+            let bare_plus = clean_title
+                .strip_prefix('+')
+                .is_some_and(|rest| rest.trim().is_empty());
+            if clean_title.is_empty() || bare_plus {
                 app.error_msg = Some(rust_i18n::t!("error_empty_wiki_link").to_string());
                 return Task::none();
             }
