@@ -234,7 +234,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.tag_aliases = cfg.tag_aliases.clone();
             app.disabled_calendars = cfg.disabled_calendars.iter().cloned().collect();
 
-            app.state = AppState::Active;
+            // A background sync finishing should not clobber a deliberate
+            // user-facing state (Settings/Help) that the user opened while the
+            // sync was in flight — only transition into Active otherwise.
+            if !matches!(app.state, AppState::Settings | AppState::Help(..)) {
+                app.state = AppState::Active;
+            }
             refresh_filtered_tasks(app);
 
             if let Some(tx) = &app.alarm_tx {
