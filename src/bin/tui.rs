@@ -759,10 +759,30 @@ async fn main() -> Result<()> {
                 config.goals.extend(new_goals);
                 config_changed = true;
             }
+            // Only keep aliases that pass integrity checks (no self-reference or
+            // cycles); warn about values that will not be applied as tags.
+            let mut accepted_aliases: Vec<(String, Vec<String>)> = Vec::new();
             if !new_aliases.is_empty() {
                 for (k, v) in &new_aliases {
-                    let _ = cfait::model::validate_alias_integrity(k, v, &config.tag_aliases);
-                    config.tag_aliases.insert(k.clone(), v.clone());
+                    match cfait::model::validate_alias_integrity(k, v, &config.tag_aliases) {
+                        Ok(()) => {
+                            let useless = cfait::model::find_useless_alias_values(v);
+                            if !useless.is_empty() {
+                                eprintln!(
+                                    "{}",
+                                    rust_i18n::t!(
+                                        "alias_useless_values",
+                                        values = useless.join(", ")
+                                    )
+                                );
+                            }
+                            config.tag_aliases.insert(k.clone(), v.clone());
+                            accepted_aliases.push((k.clone(), v.clone()));
+                        }
+                        Err(e) => {
+                            eprintln!("{}", rust_i18n::t!("error_adding_alias", error = e));
+                        }
+                    }
                 }
                 config_changed = true;
             }
@@ -775,11 +795,11 @@ async fn main() -> Result<()> {
             // Apply new aliases retroactively so existing tasks pick up the
             // expanded tags/locations/priority immediately. Mirrors the TUI.
             let mut alias_updates_persisted = false;
-            if !new_aliases.is_empty() {
+            if !accepted_aliases.is_empty() {
                 let store = Arc::new(tokio::sync::Mutex::new(TaskStore::new(ctx.clone())));
                 let client = Arc::new(tokio::sync::Mutex::new(None));
                 let controller = cfait::controller::TaskController::new(store, client, ctx.clone());
-                for (key, values) in &new_aliases {
+                for (key, values) in &accepted_aliases {
                     for t in temp_store.apply_alias_retroactively(key, values) {
                         controller
                             .persist_changes(vec![cfait::journal::Action::Update(t)])
@@ -1229,8 +1249,24 @@ async fn main() -> Result<()> {
                 }
                 if !new_aliases.is_empty() {
                     for (k, v) in &new_aliases {
-                        let _ = cfait::model::validate_alias_integrity(k, v, &config.tag_aliases);
-                        config.tag_aliases.insert(k.clone(), v.clone());
+                        match cfait::model::validate_alias_integrity(k, v, &config.tag_aliases) {
+                            Ok(()) => {
+                                let useless = cfait::model::find_useless_alias_values(v);
+                                if !useless.is_empty() {
+                                    eprintln!(
+                                        "{}",
+                                        rust_i18n::t!(
+                                            "alias_useless_values",
+                                            values = useless.join(", ")
+                                        )
+                                    );
+                                }
+                                config.tag_aliases.insert(k.clone(), v.clone());
+                            }
+                            Err(e) => {
+                                eprintln!("{}", rust_i18n::t!("error_adding_alias", error = e));
+                            }
+                        }
                     }
                     config_changed = true;
                 }

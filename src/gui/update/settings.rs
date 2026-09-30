@@ -10,7 +10,7 @@ use crate::gui::update::common::{
     apply_alias_retroactively, dispatch_intent, flash_info_message, refresh_filtered_tasks,
     save_config,
 };
-use crate::model::parser::validate_alias_integrity;
+use crate::model::{find_useless_alias_values, parser::validate_alias_integrity};
 use crate::storage::{LOCAL_CALENDAR_HREF, LocalCalendarRegistry, LocalStorage};
 use iced::Task;
 use std::sync::Arc;
@@ -492,6 +492,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         raw_key.trim_start_matches('#').to_string()
                     };
 
+                    let useless = find_useless_alias_values(&tags);
                     match validate_alias_integrity(&key, &tags, &app.tag_aliases) {
                         Ok(_) => {
                             // If we were editing and changed the key, remove the old one
@@ -517,17 +518,32 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                                     );
                                 }
                             }
+                            if !useless.is_empty() {
+                                return flash_info_message(
+                                    app,
+                                    rust_i18n::t!(
+                                        "alias_useless_values",
+                                        values = useless.join(", ")
+                                    )
+                                    .to_string(),
+                                );
+                            }
+                            Task::none()
                         }
                         Err(e) => {
                             app.error_msg = Some(format!(
                                 "{}",
                                 rust_i18n::t!("error_adding_alias", error = e)
                             ));
+                            Task::none()
                         }
                     }
+                } else {
+                    Task::none()
                 }
+            } else {
+                Task::none()
             }
-            Task::none()
         }
         Message::RemoveAlias(key) => {
             if app.editing_alias_key.as_ref() == Some(&key) {

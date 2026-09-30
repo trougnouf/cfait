@@ -34,6 +34,7 @@
     "alarm_task_starting": "Task starting",
     "alias_key_label": "Key (#tag/@@loc)",
     "alias_updated": "Alias updated.",
+    "alias_useless_values": "Some alias values look useless (missing #?): %{values}",
     "alias_value_label": "Values",
     "all_actions_pinned": "All actions pinned",
     "all_tasks": "All tasks",

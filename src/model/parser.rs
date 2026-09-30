@@ -955,6 +955,36 @@ pub fn validate_alias_integrity(
     Ok(())
 }
 
+/// Returns the alias values that will not be applied as tags, locations, or
+/// geo references. A value is only meaningful when it starts with `#` (tag),
+/// `@@` or `loc:` (location), or `geo:` (coordinates) and has a non-empty
+/// payload; anything else is injected verbatim into the task summary, which is
+/// almost always a typo (e.g. a missing `#`).
+pub fn find_useless_alias_values(values: &[String]) -> Vec<String> {
+    values
+        .iter()
+        .filter(|v| !is_meaningful_alias_value(v))
+        .cloned()
+        .collect()
+}
+
+fn is_meaningful_alias_value(v: &str) -> bool {
+    if let Some(rest) = v.strip_prefix('#') {
+        return !rest.trim().is_empty();
+    }
+    if let Some(rest) = v.strip_prefix("@@") {
+        return !rest.trim().is_empty();
+    }
+    let lower = v.to_lowercase();
+    if let Some(rest) = lower.strip_prefix("loc:") {
+        return !rest.trim().is_empty();
+    }
+    if let Some(rest) = lower.strip_prefix("geo:") {
+        return !rest.trim().is_empty();
+    }
+    false
+}
+
 fn parse_time_string(s: &str) -> Option<NaiveTime> {
     let lower = s.to_lowercase();
 
@@ -4321,6 +4351,46 @@ mod alias_extraction_tests {
         assert_eq!(clean, "#garden #green");
         assert_eq!(aliases.get("garden"), Some(&vec!["#balcony".to_string()]));
         assert!(!is_pure_alias_remainder(&clean, true));
+    }
+
+    #[test]
+    fn meaningful_alias_values_are_not_flagged() {
+        let values = vec![
+            "#balcony".to_string(),
+            "#green".to_string(),
+            "@@garden".to_string(),
+            "loc:shops:supermarkets".to_string(),
+            "geo:48.85,2.35".to_string(),
+        ];
+        assert!(find_useless_alias_values(&values).is_empty());
+    }
+
+    #[test]
+    fn missing_hash_is_flagged_useless() {
+        // The classic typo: a tag written without its leading `#`.
+        let values = vec!["garlic".to_string(), "#onion".to_string()];
+        assert_eq!(
+            find_useless_alias_values(&values),
+            vec!["garlic".to_string()]
+        );
+    }
+
+    #[test]
+    fn empty_payload_after_prefix_is_flagged_useless() {
+        let values = vec![
+            "#".to_string(),
+            "@@".to_string(),
+            "loc:".to_string(),
+            "geo:".to_string(),
+            "  ".to_string(),
+        ];
+        assert_eq!(find_useless_alias_values(&values).len(), 5);
+    }
+
+    #[test]
+    fn loc_and_geo_prefixes_are_case_insensitive() {
+        let values = vec!["LOC:home".to_string(), "GEO:1,2".to_string()];
+        assert!(find_useless_alias_values(&values).is_empty());
     }
 }
 

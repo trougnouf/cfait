@@ -27,6 +27,7 @@
     "alarm_task_starting": "Tâche en cours",
     "alias_key_label": "Clé (#tag/@@loc)",
     "alias_updated": "Alias mis à jour.",
+    "alias_useless_values": "Certaines valeurs d'alias semblent inutiles (# manquant ?) : %{values}",
     "alias_value_label": "Valeurs",
     "all_actions_pinned": "Toutes les actions épinglées",
     "all_tasks": "Toutes les tâches",
