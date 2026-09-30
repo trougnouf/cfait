@@ -368,6 +368,7 @@ const CURRENT_CONFIG_VERSION: u32 = 2;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TaskAction {
     OpenUrl,
+    CopyUrl,
     ToggleDetails,
     CompleteAndShift,
     ToggleTimer,
@@ -396,8 +397,9 @@ pub enum TaskAction {
 impl TaskAction {
     pub const ALL: &'static [TaskAction] = &[
         TaskAction::OpenUrl,         // First - link out
-        TaskAction::OpenCoordinates, // Second - single coordinates
-        TaskAction::OpenLocations,   // Third - multiple coordinates (GPX)
+        TaskAction::CopyUrl,         // Second - copy link
+        TaskAction::OpenCoordinates, // Third - single coordinates
+        TaskAction::OpenLocations,   // Fourth - multiple coordinates (GPX)
         TaskAction::ToggleDetails,
         TaskAction::CompleteAndShift,
         TaskAction::ToggleTimer,
@@ -442,6 +444,7 @@ impl TaskAction {
             TaskAction::OpenLocations => rust_i18n::t!("action_open_locations").to_string(),
             TaskAction::OpenCoordinates => rust_i18n::t!("open_coordinates").to_string(),
             TaskAction::OpenUrl => rust_i18n::t!("open_url").to_string(),
+            TaskAction::CopyUrl => rust_i18n::t!("copy_url").to_string(),
             TaskAction::TogglePin => rust_i18n::t!("action_toggle_pin").to_string(),
             TaskAction::Focus => rust_i18n::t!("focus_hide_others").to_string(),
             TaskAction::EditTree => rust_i18n::t!("edit_tree_title").to_string(),
@@ -471,6 +474,7 @@ impl TaskAction {
             TaskAction::Cancel => &["x"],
             TaskAction::Delete | TaskAction::DeleteTree => &["del", "rm"],
             TaskAction::OpenUrl => &["o", "url", "link"],
+            TaskAction::CopyUrl => &["copy", "link", "url"],
             TaskAction::OpenCoordinates | TaskAction::OpenLocations => &["g", "map"],
             TaskAction::Focus => &["f", "focus"],
             TaskAction::BrowseRelations => &["l", "link", "relation", "wiki"],
@@ -500,6 +504,7 @@ impl TaskAction {
             TaskAction::CompleteAndShift => Some("Shift+Space"),
             TaskAction::CompleteTree => Some("Shift+Space"),
             TaskAction::OpenUrl => Some("o"),
+            TaskAction::CopyUrl => None,
             TaskAction::ToggleDetails => None,
             TaskAction::BrowseRelations => Some("L"),
             TaskAction::OpenCoordinates | TaskAction::OpenLocations => None,

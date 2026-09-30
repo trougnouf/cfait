@@ -255,6 +255,7 @@ pub enum Message {
     FocusTag(String),
     FocusLocation(String),
     OpenUrl(String),
+    CopyTaskUrl(String),
     OpenCoordinates(String),
     OpenLocations(String),
     TaskClick(usize, String),

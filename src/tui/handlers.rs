@@ -180,6 +180,7 @@ fn get_available_actions(state: &AppState, task: &Task) -> Vec<crate::config::Ta
                 count > 1
             }
             TaskAction::OpenUrl => task.url.is_some(),
+            TaskAction::CopyUrl => task.first_url().is_some(),
             TaskAction::DeleteTree => task.has_subtasks,
             TaskAction::OpenCoordinates => task.geo.is_some(),
             TaskAction::OpenLocations => task.tree_location_count > 1,
@@ -416,6 +417,16 @@ async fn execute_task_action(
             if let Some(url) = &task.url {
                 crate::system::open_url(url);
                 state.message = rust_i18n::t!("open_url").to_string();
+            }
+        }
+        CopyUrl => {
+            if let Some(url) = task.first_url() {
+                use base64::Engine;
+                let b64 = base64::engine::general_purpose::STANDARD.encode(&url);
+                print!("\x1b]52;c;{}\x07", b64);
+                use std::io::Write;
+                let _ = std::io::stdout().flush();
+                state.message = rust_i18n::t!("copied_to_clipboard").to_string();
             }
         }
         OpenCoordinates => {

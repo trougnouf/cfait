@@ -989,6 +989,13 @@ fun HomeScreen(
                         }
                         null
                     }
+                    "copy_url" -> {
+                        val url = task.firstUrl
+                        if (url != null) {
+                            clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("task_link", url)))
+                        }
+                        null
+                    }
                     "block" -> if (currentYankedUid != null) AppIntent.AddDependency(task.uid, currentYankedUid) else null
                     "child" -> if (currentYankedUid != null) AppIntent.MakeChild(task.uid, currentYankedUid) else null
                     "related" -> if (currentYankedUid != null) AppIntent.AddRelatedTo(task.uid, currentYankedUid) else null

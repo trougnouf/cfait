@@ -611,6 +611,13 @@ fun TaskRow(
                             leadingIcon = { NfIcon(NfIcons.WEB_CHECK, 16.sp) })
                     }
 
+                    if (task.task.firstUrl != null) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.copy_url)) },
+                            onClick = { expanded = false; onAction("copy_url") },
+                            leadingIcon = { NfIcon(NfIcons.COPY, 16.sp) })
+                    }
+
                     DropdownMenuItem(text = { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) },
                         onClick = { expanded = false; onAction("delete") },
                         leadingIcon = { NfIcon(NfIcons.DELETE, 16.sp, MaterialTheme.colorScheme.error) })

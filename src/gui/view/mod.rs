@@ -63,6 +63,7 @@ pub fn is_action_available(
             .get_move_targets(&task.calendar_href, task.has_subtasks)
             .is_empty(),
         crate::config::TaskAction::OpenUrl => task.url.is_some(),
+        crate::config::TaskAction::CopyUrl => task.first_url().is_some(),
         crate::config::TaskAction::DeleteTree => task.has_subtasks,
         crate::config::TaskAction::CompleteTree => task.has_subtasks,
         crate::config::TaskAction::OpenCoordinates => task.geo.is_some(),
@@ -971,6 +972,11 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                     Message::OpenUrl(task.url.clone().unwrap()),
                     false,
                 ),
+                TaskAction::CopyUrl => (
+                    icon::icon(icon::COPY).size(14).into(),
+                    Message::CopyTaskUrl(task.uid.clone()),
+                    false,
+                ),
                 TaskAction::CompleteAndShift => (
                     icon::icon(icon::REPEAT).size(14).into(),
                     Message::ToggleTaskShift(uid.clone()),
@@ -1008,8 +1014,9 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         let context_menu_order = if *is_full {
             vec![
                 TaskAction::OpenUrl,         // Add this at the top
-                TaskAction::OpenCoordinates, // Single coordinates first
-                TaskAction::OpenLocations,   // GPX export second
+                TaskAction::CopyUrl,         // Copy link second
+                TaskAction::OpenCoordinates, // Single coordinates
+                TaskAction::OpenLocations,   // GPX export
                 TaskAction::ToggleDetails,
                 TaskAction::CompleteAndShift,
                 TaskAction::ToggleTimer,
@@ -1041,6 +1048,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             // Move preferred actions to the front, in this order
             let preferred_order = [
                 TaskAction::OpenUrl,
+                TaskAction::CopyUrl,
                 TaskAction::OpenCoordinates,
                 TaskAction::Focus,
                 TaskAction::CompleteAndShift,

@@ -658,6 +658,28 @@ impl Task {
         crate::model::extractor::has_extractable_subtasks(&self.description, self.is_journal)
     }
 
+    /// Returns the first openable link associated with this task.
+    ///
+    /// Scans the description line by line for the first `http://`, `https://`
+    /// or `mailto:` link (markdown `[text](url)` or bare URLs), falling back to
+    /// the explicit `url` field when the description holds none. Wiki links
+    /// (`[[Task]]`) and inline-media placeholders are ignored.
+    pub fn first_url(&self) -> Option<String> {
+        use crate::model::parser::{InlineElement, parse_inline_markdown};
+        for line in self.description.lines() {
+            for el in parse_inline_markdown(line) {
+                if let InlineElement::Link { url, .. } = el
+                    && (url.starts_with("http://")
+                        || url.starts_with("https://")
+                        || url.starts_with("mailto:"))
+                {
+                    return Some(url.to_string());
+                }
+            }
+        }
+        self.url.clone()
+    }
+
     pub fn is_relative_recurrence(&self) -> bool {
         self.unmapped_properties
             .iter()

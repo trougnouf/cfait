@@ -120,6 +120,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::CancelTask(_)
         | Message::YankTask(_)
         | Message::CopyToClipboard(_)
+        | Message::CopyTaskUrl(_)
         | Message::EscapePressed
         | Message::EscCaptured
         | Message::MakeChild(_)

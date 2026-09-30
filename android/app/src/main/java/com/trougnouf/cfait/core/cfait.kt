@@ -5954,6 +5954,7 @@ data class MobileTaskSummary(
     var `hasVisibleSubtasks`: kotlin.Boolean,
     var `treeLocationCount`: kotlin.UInt,
     var `url`: kotlin.String?,
+    var `firstUrl`: kotlin.String?,
     var `geo`: kotlin.String?,
     var `timeSpentSeconds`: kotlin.ULong,
     var `lastStartedAt`: kotlin.Long?,
@@ -6009,6 +6010,7 @@ public object FfiConverterTypeMobileTaskSummary : FfiConverterRustBuffer<MobileT
             FfiConverterUInt.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
             FfiConverterULong.read(buf),
             FfiConverterOptionalLong.read(buf),
             FfiConverterBoolean.read(buf),
@@ -6056,6 +6058,7 @@ public object FfiConverterTypeMobileTaskSummary : FfiConverterRustBuffer<MobileT
                 FfiConverterBoolean.allocationSize(value.`hasVisibleSubtasks`) +
                 FfiConverterUInt.allocationSize(value.`treeLocationCount`) +
                 FfiConverterOptionalString.allocationSize(value.`url`) +
+                FfiConverterOptionalString.allocationSize(value.`firstUrl`) +
                 FfiConverterOptionalString.allocationSize(value.`geo`) +
                 FfiConverterULong.allocationSize(value.`timeSpentSeconds`) +
                 FfiConverterOptionalLong.allocationSize(value.`lastStartedAt`) +
@@ -6106,6 +6109,7 @@ public object FfiConverterTypeMobileTaskSummary : FfiConverterRustBuffer<MobileT
         FfiConverterBoolean.write(value.`hasVisibleSubtasks`, buf)
         FfiConverterUInt.write(value.`treeLocationCount`, buf)
         FfiConverterOptionalString.write(value.`url`, buf)
+        FfiConverterOptionalString.write(value.`firstUrl`, buf)
         FfiConverterOptionalString.write(value.`geo`, buf)
         FfiConverterULong.write(value.`timeSpentSeconds`, buf)
         FfiConverterOptionalLong.write(value.`lastStartedAt`, buf)

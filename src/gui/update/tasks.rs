@@ -1099,6 +1099,21 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::batch(tasks)
         }
 
+        Message::CopyTaskUrl(uid) => {
+            let url = app.store.get_task_ref(&uid).and_then(|t| t.first_url());
+            match url {
+                Some(url) => {
+                    let mut tasks = vec![iced::clipboard::write(url)];
+                    tasks.push(flash_info_message(
+                        app,
+                        rust_i18n::t!("copied_to_clipboard").to_string(),
+                    ));
+                    Task::batch(tasks)
+                }
+                None => Task::none(),
+            }
+        }
+
         Message::TogglePin(uid) => {
             common::dispatch_intent(app, AppIntent::TogglePin { uid });
             Task::none()

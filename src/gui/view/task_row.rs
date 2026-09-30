@@ -1128,6 +1128,7 @@ pub fn view_task_row<'a>(
                         Message::OpenUrl(task.url.clone().unwrap()),
                         0,
                     ),
+                    TaskAction::CopyUrl => (icon::COPY, Message::CopyTaskUrl(task.uid.clone()), 0),
                     TaskAction::EditTree => {
                         (icon::EDIT_TREE, Message::EditTaskTree(task.uid.clone()), 0)
                     }
