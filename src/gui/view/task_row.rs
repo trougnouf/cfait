@@ -803,14 +803,22 @@ pub fn view_task_row<'a>(
                         .padding(3),
                     );
                 }
-                if task.rrule.is_some() {
+                if let Some(rrule) = &task.rrule {
                     let r_color = if task.is_relative_recurrence() {
                         Color::from_rgba(0.67, 0.28, 0.74, dim_factor) // #ab47bc
                     } else {
                         Color::from_rgba(0.5, 0.5, 0.5, dim_factor)
                     };
                     let recurrence_icon = icon::icon(icon::REPEAT).size(14).color(r_color);
-                    tags_row = tags_row.push(container(recurrence_icon).padding(0));
+                    let pretty = crate::model::parser::prettify_recurrence(
+                        rrule,
+                        task.is_relative_recurrence(),
+                    );
+                    tags_row = tags_row.push(super::tip(
+                        container(recurrence_icon).padding(0),
+                        pretty,
+                        tooltip::Position::Top,
+                    ));
                 }
 
                 tags_row.into()
