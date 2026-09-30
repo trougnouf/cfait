@@ -1011,38 +1011,57 @@ pub fn view_sidebar_journal(app: &GuiApp) -> Element<'_, Message> {
         (NaiveDate::from_ymd_opt(year, month + 1, 1).unwrap() - Duration::days(1)).day()
     };
 
+    // Collect journal entry dates once per render instead of scanning each
+    // calendar for every day of the month.
+    let mut journal_days: std::collections::HashMap<NaiveDate, (usize, Option<Color>)> =
+        std::collections::HashMap::new();
+    for c in &app.calendars {
+        let supports = if c.href.starts_with("local://") {
+            true
+        } else {
+            c.supports_vjournal.unwrap_or(false)
+        };
+        if !supports
+            || app.hidden_calendars.contains(&c.href)
+            || app.disabled_calendars.contains(&c.href)
+            || crate::storage::is_system_calendar(&c.href)
+        {
+            continue;
+        }
+        let cal_color = c
+            .color
+            .as_ref()
+            .and_then(|h| crate::color_utils::parse_hex_to_floats(h))
+            .map(|(r, g, b)| Color::from_rgb(r, g, b));
+        if let Some(tasks) = app.store.calendars.get(&c.href) {
+            for task in tasks.values() {
+                if task.is_journal
+                    && let Some(entry_date) = task.dtstart.as_ref().map(|d| d.to_date_naive())
+                {
+                    let slot = journal_days.entry(entry_date).or_insert((0, None));
+                    slot.0 += 1;
+                    if slot.1.is_none() {
+                        slot.1 = cal_color;
+                    }
+                }
+            }
+        }
+    }
+
     for d in 1..=days_in_month {
         let date = NaiveDate::from_ymd_opt(year, month, d).unwrap();
         let is_selected = date == sel_date;
         let is_today = date == today;
 
-        let mut journal_cals = Vec::new();
-        for c in &app.calendars {
-            let supports = if c.href.starts_with("local://") {
-                true
-            } else {
-                c.supports_vjournal.unwrap_or(false)
-            };
-
-            if !app.hidden_calendars.contains(&c.href)
-                && !app.disabled_calendars.contains(&c.href)
-                && !crate::storage::is_system_calendar(&c.href)
-                && supports
-                && app.store.get_journal_entry(&c.href, date).is_some()
-            {
-                journal_cals.push(c);
-            }
-        }
-        let has_journal = !journal_cals.is_empty();
+        let (journal_count, first_color) = journal_days
+            .get(&date)
+            .map(|(count, color)| (*count, *color))
+            .unwrap_or((0, None));
+        let has_journal = journal_count > 0;
 
         let day_text_color = if has_journal {
-            if journal_cals.len() == 1 {
-                journal_cals[0]
-                    .color
-                    .as_ref()
-                    .and_then(|h| crate::color_utils::parse_hex_to_floats(h))
-                    .map(|(r, g, b)| Color::from_rgb(r, g, b))
-                    .unwrap_or(Color::from_rgb(0.2, 0.8, 0.2))
+            if journal_count == 1 {
+                first_color.unwrap_or(Color::from_rgb(0.2, 0.8, 0.2))
             } else {
                 Color::from_rgb(0.8, 0.2, 0.8) // Magenta
             }
