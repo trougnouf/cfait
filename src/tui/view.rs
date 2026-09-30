@@ -886,9 +886,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
         let (title, mut desc) = if let Some(uid) = &state.journal_editing_uid {
             let t = state.store.get_task_ref(uid);
+            let untitled = rust_i18n::t!("untitled_page").to_string();
             let title = format!(
                 " {} (Esc) ",
-                t.map(|t| t.summary.as_str()).unwrap_or("Untitled Page")
+                t.map(|t| t.summary.as_str()).unwrap_or(&untitled)
             );
             let md = crate::model::extractor::serialize_task_tree(
                 &state.store,
@@ -2511,8 +2512,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         }
         if tasks_to_delete.len() > 10 {
             items.push(
-                ListItem::new(format!("...and {} more", tasks_to_delete.len() - 10))
-                    .style(Style::default().fg(Color::DarkGray)),
+                ListItem::new(
+                    rust_i18n::t!("and_more", count = tasks_to_delete.len() - 10).to_string(),
+                )
+                .style(Style::default().fg(Color::DarkGray)),
             );
         }
 

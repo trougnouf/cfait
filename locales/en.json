@@ -378,6 +378,7 @@
     "journal_time_tracked": "Time tracked this day",
     "journal_no_activity": "No task activity recorded for this day.",
     "wiki_index": "Wiki index",
+    "page_title_placeholder": "Page title...",
     "pages": "Wiki",
     "untitled_page": "Untitled page",
     "goals_empty": "No goals configured. Define them via smart input (e.g. #chore:=goal:1/week or #gaming:=goal:6h/month) or in the settings. You can also hide this tab in the advanced settings.",

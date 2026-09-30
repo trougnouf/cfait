@@ -564,7 +564,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         }
         if uids.len() > 10 {
             tasks_col = tasks_col.push(
-                text(format!("...and {} more", uids.len() - 10))
+                text(rust_i18n::t!("and_more", count = uids.len() - 10).to_string())
                     .size(14)
                     .wrapping(iced::widget::text::Wrapping::Glyph)
                     .style(|_t: &Theme| text::Style {
@@ -1638,16 +1638,19 @@ fn view_main_content(app: &GuiApp, show_logo: bool, is_expanded: bool) -> Elemen
 
     let search_text = app.search_value.text();
     if !search_text.is_empty() {
-        subtitle.push_str(&format!(" | Search: '{}'", search_text));
+        subtitle.push_str(&format!(
+            " | {}",
+            rust_i18n::t!("searching_for", term = search_text)
+        ));
     } else if !app.session.selected_categories.is_empty() {
         let tag_count = app.session.selected_categories.len();
         if tag_count == 1 {
             subtitle.push_str(&format!(
-                " | Tag: #{}",
+                " | #{}",
                 app.session.selected_categories.first().unwrap()
             ));
         } else {
-            subtitle.push_str(&format!(" | {} Tags", tag_count));
+            subtitle.push_str(&format!(" | {} {}", tag_count, rust_i18n::t!("tags")));
         }
     }
 
@@ -2744,7 +2747,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
         let title = app
             .store
             .get_summary(uid)
-            .unwrap_or_else(|| "Untitled Page".to_string());
+            .unwrap_or_else(|| rust_i18n::t!("untitled_page").to_string());
         (title, false)
     } else {
         (date_str, true)
@@ -2789,15 +2792,18 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
 
         if app.journal_editing_uid.is_some() {
             row![
-                iced::widget::text_input("Page title...", &app.journal_title_input)
-                    .on_input(Message::JournalTitleInputChanged)
-                    .size(22)
-                    .font(iced::Font {
-                        weight: iced::font::Weight::Bold,
-                        ..Default::default()
-                    })
-                    .padding(5)
-                    .width(Length::FillPortion(2)),
+                iced::widget::text_input(
+                    rust_i18n::t!("page_title_placeholder").as_ref(),
+                    &app.journal_title_input,
+                )
+                .on_input(Message::JournalTitleInputChanged)
+                .size(22)
+                .font(iced::Font {
+                    weight: iced::font::Weight::Bold,
+                    ..Default::default()
+                })
+                .padding(5)
+                .width(Length::FillPortion(2)),
                 Space::new().width(Length::FillPortion(1)),
                 create_subpage_btn,
                 move_btn,
