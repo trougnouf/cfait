@@ -3877,7 +3877,16 @@ pub async fn handle_key_event(
                     target_uid = Some(t.uid.clone());
                 }
 
-                if let Some(uid) = target_uid {
+                // A stale journal page pointer (the task disappeared, e.g.
+                // after a reload or undo) falls through to the daily entry.
+                let target_missing = target_uid
+                    .as_ref()
+                    .map(|uid| state.store.get_task_ref(uid).is_none())
+                    .unwrap_or(false);
+
+                if let Some(uid) = target_uid
+                    && !target_missing
+                {
                     if state.sidebar_mode == SidebarMode::Journal
                         && let Some(t) = state.store.get_task_ref(&uid)
                     {
@@ -3928,6 +3937,9 @@ pub async fn handle_key_event(
                 } else if state.sidebar_mode == SidebarMode::Journal
                     && state.active_focus == Focus::Main
                 {
+                    // Clear a stale page pointer so the edit saves as the
+                    // daily entry instead of being dropped.
+                    state.journal_editing_uid = None;
                     let target_href = state
                         .active_cal_href
                         .clone()
