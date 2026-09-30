@@ -5726,4 +5726,107 @@ mod tests {
         assert!(uids.contains("pinned_subpage"));
         assert!(uids.contains("container"));
     }
+
+    #[test]
+    fn recurring_history_snapshots_not_shown_as_subtasks() {
+        let ctx = std::sync::Arc::new(crate::context::StandardContext::new(Some(
+            std::env::temp_dir().join(format!("cfait-store-test-{}", uuid::Uuid::new_v4())),
+        )));
+        let mut store = TaskStore::new(ctx);
+
+        // A recurring master task (e.g. "water the tomatoes", weekly).
+        let mut master = make_task("master", None, TaskStatus::NeedsAction, false);
+        master.rrule = Some("FREQ=WEEKLY;INTERVAL=1".to_string());
+
+        // A legacy history snapshot: completed, non-recurring, carrying a PARENT
+        // link (as some external clients write it) plus X-CFAIT-HISTORY-OF.
+        let mut snap = make_task("snap", Some("master"), TaskStatus::Completed, false);
+        snap.unmapped_properties.push(crate::model::RawProperty {
+            key: "X-CFAIT-HISTORY-OF".to_string(),
+            value: "master".to_string(),
+            params: vec![],
+        });
+
+        // A legitimate sub-task of the recurring master, which must stay nested.
+        let legit = make_task("legit", Some("master"), TaskStatus::NeedsAction, false);
+
+        // insert_many is the load/sync path that runs the auto-heal cleanup.
+        store.insert_many(vec![(
+            "local://default".to_string(),
+            vec![master, snap, legit],
+        )]);
+
+        // The history snapshot is re-linked: no parent, related to the master.
+        let snap_now = store.get_task_ref("snap").expect("snap present");
+        assert!(
+            snap_now.parent_uid.is_none(),
+            "history snapshot must not remain a sub-task"
+        );
+        assert!(snap_now.related_to.contains(&"master".to_string()));
+
+        // The legitimate sub-task keeps its parent.
+        let legit_now = store.get_task_ref("legit").expect("legit present");
+        assert_eq!(legit_now.parent_uid.as_deref(), Some("master"));
+
+        // The reverse children index reflects the correction.
+        let children = store
+            .children_index
+            .get("master")
+            .cloned()
+            .unwrap_or_default();
+        assert!(children.contains(&"legit".to_string()));
+        assert!(!children.contains(&"snap".to_string()));
+
+        // And in the rendered list the snapshot sits at the root, not nested.
+        let hidden = HashSet::new();
+        let categories = HashSet::new();
+        let locations = HashSet::new();
+        let aliases = HashMap::new();
+        let collapsed = HashSet::new();
+        let done_groups = HashSet::new();
+        let tags = HashSet::new();
+        let locs_expanded = HashSet::new();
+        let res = store.filter(FilterOptions {
+            active_cal_href: None,
+            hidden_calendars: &hidden,
+            selected_categories: &categories,
+            selected_locations: &locations,
+            match_all_categories: false,
+            search_term: "",
+            hide_completed_global: false,
+            hide_fully_completed_tags: false,
+            hide_aliases_in_sidebar: false,
+            cutoff_date: None,
+            min_duration: None,
+            max_duration: None,
+            include_unset_duration: true,
+            urgent_days: 7,
+            urgent_prio: 9,
+            default_priority: 5,
+            start_grace_period_days: 0,
+            sort_standard_by_priority: false,
+            sort_preset: crate::config::SortPreset::UrgentStartedDue,
+            expanded_done_groups: &done_groups,
+            expanded_tags: &tags,
+            expanded_locations: &locs_expanded,
+            max_done_roots: 10,
+            max_done_subtasks: 10,
+            tag_aliases: &aliases,
+            search_collapsed_tasks: &collapsed,
+            focused_task_uid: None,
+            paused_sort_behavior: crate::config::PausedSortBehavior::default(),
+            sort_tiebreak_recent: false,
+            default_reminder_time: chrono::NaiveTime::from_hms_opt(9, 0, 0).unwrap(),
+        });
+
+        let snap_depth = res
+            .items
+            .iter()
+            .find_map(|item| match item {
+                TaskListItem::Task(t) if t.uid == "snap" => Some(t.depth),
+                _ => None,
+            })
+            .expect("history snapshot rendered");
+        assert_eq!(snap_depth, 0, "history snapshot renders at root depth");
+    }
 }
