@@ -133,3 +133,27 @@ fn test_combined_filters() {
     // Should fail: duration mismatch
     assert!(!t.matches_search_term("~>2h", &create_store()));
 }
+
+#[test]
+fn test_recurrent_filter() {
+    let mut recurrent = make_task();
+    recurrent.rrule = Some("FREQ=DAILY".to_string());
+
+    let plain = make_task();
+
+    // is:recurrent matches tasks with a recurrence rule
+    assert!(recurrent.matches_search_term("is:recurrent", &create_store()));
+    assert!(!plain.matches_search_term("is:recurrent", &create_store()));
+
+    // -is:recurrent matches non-recurring tasks
+    assert!(!recurrent.matches_search_term("-is:recurrent", &create_store()));
+    assert!(plain.matches_search_term("-is:recurrent", &create_store()));
+
+    // Combines with other filters via boolean logic
+    assert!(recurrent.matches_search_term("is:recurrent is:active", &create_store()));
+    assert!(!plain.matches_search_term("is:recurrent is:active", &create_store()));
+
+    // OR: matches when either side matches
+    assert!(recurrent.matches_search_term("is:recurrent | #plain", &create_store()));
+    assert!(plain.matches_search_term("is:recurrent | test", &create_store()));
+}

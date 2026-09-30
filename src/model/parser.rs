@@ -103,6 +103,7 @@ pub struct ParserLexicon {
     pub search_is_page: Vec<String>,
     pub search_is_permanent: Vec<String>,
     pub search_is_canceled: Vec<String>,
+    pub search_is_recurrent: Vec<String>,
     pub parser_collection: Vec<String>,
 }
 
@@ -415,6 +416,7 @@ impl ParserLexicon {
             search_is_page: get_all("search_is_page", "is:page,is:journal"),
             search_is_permanent: get_all("parser_is_permanent", "is:permanent"),
             search_is_canceled: get_all("search_is_canceled", "is:canceled,is:cancelled"),
+            search_is_recurrent: get_all("search_is_recurrent", "is:recurrent"),
             parser_collection: get_all("parser_collection", "col:"),
         }
     }

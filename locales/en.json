@@ -973,6 +973,7 @@
     "search_is_note": "is:note",
     "search_is_page": "is:page,is:journal",
     "search_is_permanent": "is:permanent",
+    "search_is_recurrent": "is:recurrent",
     "blur_when_unfocused": "Hide content when window is unfocused (Privacy mode)",
     "privacy_mode": "Privacy mode",
     "widget_action_failed": "The widget action failed",

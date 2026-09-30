@@ -736,6 +736,7 @@
     "search_is_ongoing": "est:encours",
     "search_is_page": "is:page,is:journal",
     "search_is_permanent": "est:permanent",
+    "search_is_recurrent": "est:récurrent",
     "search_is_prefix": "est:",
     "search_is_ready": "est:prêt",
     "search_is_started": "est:démarré",

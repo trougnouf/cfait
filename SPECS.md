@@ -140,7 +140,7 @@ Cfait natively supports rendering basic inline Markdown across task summaries, d
 The search bar supports a boolean recursive-descent parser.
 *   **Logic:** Implicit `AND` (space), `OR` (`|`), `NOT` (`-`), and Grouping `()`.
 *   **Primitives:**
-    *   *State:* `is:done`, `is:active`, `is:started` / `is:ongoing`, `is:blocked`, `is:note`, `is:page`, `is:canceled` / `is:cancelled`.
+    *   *State:* `is:done`, `is:active`, `is:started` / `is:ongoing`, `is:blocked`, `is:note`, `is:page`, `is:canceled` / `is:cancelled`, `is:recurrent` (has a recurrence rule; `-is:recurrent` matches non-recurring tasks).
     *   *Actionable:* `is:ready` (Excludes completed tasks, explicitly/implicitly blocked tasks, tasks starting in the future, and Notes whose children are all unready. `InProcess` bypasses this).
     *   *Comparison:* `~<30m` (duration < 30m), `!<4` (priority < 4).
     *   *Dates:* `@<today` (Overdue), `^>1w` (Starts in > 1 week).
