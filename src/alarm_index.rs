@@ -264,7 +264,7 @@ impl AlarmIndex {
     }
 
     /// Queries the index for alarms that should fire now.
-    /// Returns alarms within the grace period (past 60 minutes to current time).
+    /// Returns alarms within the grace period (past 120 minutes to current time).
     pub fn get_firing_alarms(&self) -> Vec<AlarmIndexEntry> {
         let now = Utc::now();
         let now_ms = now.timestamp_millis();
