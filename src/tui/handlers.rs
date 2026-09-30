@@ -577,20 +577,22 @@ async fn execute_task_action(
         }
         Move => {
             let current_href = task.calendar_href.clone();
-            state.move_targets = state
-                .calendars
-                .iter()
-                .filter(|c| {
-                    c.href != current_href
-                        && !state.disabled_calendars.contains(&c.href)
-                        && !crate::storage::is_system_calendar(&c.href)
-                })
-                .cloned()
-                .collect();
+            let has_subtasks = task.has_subtasks;
+            state.move_targets = state.move_targets_for(&current_href, has_subtasks);
             if !state.move_targets.is_empty() {
                 state.move_selection_state.select(Some(0));
                 state.mode = InputMode::Moving;
-                state.message = rust_i18n::t!("tui_select_calendar_prompt").to_string();
+                state.moving_tree = has_subtasks;
+                state.moving_task_uid = Some(uid);
+                state.message = if has_subtasks {
+                    format!(
+                        "{} ({})",
+                        rust_i18n::t!("tui_select_calendar_prompt"),
+                        rust_i18n::t!("tui_move_toggle")
+                    )
+                } else {
+                    rust_i18n::t!("tui_select_calendar_prompt").to_string()
+                };
             }
         }
         Cancel => {
