@@ -1699,7 +1699,7 @@ pub fn view_task_row<'a>(
                                 task.uid
                             )))
                             .placeholder(format!(
-                                "{} {}, 14:00-15:30",
+                                "{} {}",
                                 rust_i18n::t!("eg"),
                                 random_session_example()
                             ))
