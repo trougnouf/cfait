@@ -428,7 +428,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             ]
             .spacing(10)
             .align_y(iced::Alignment::Center),
-            text("").size(5),
+            Space::new().height(5),
             text(rust_i18n::t!("calendar_integration")).size(20),
             {
                 let events_checkbox = cb(app.create_events_for_tasks)
@@ -445,7 +445,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 }
             },
             muted_note(rust_i18n::t!("create_calendar_events_note")),
-            text("").size(5),
+            Space::new().height(5),
             {
                 let delete_events_checkbox = cb(app.delete_events_on_completion)
                     .label(rust_i18n::t!("delete_calendar_events_on_completion_label"));
