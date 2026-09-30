@@ -605,6 +605,27 @@ pub fn serialize_task_tree(
     calendars: &[crate::model::CalendarListEntry],
     is_journal: bool,
 ) -> String {
+    serialize_task_tree_inner(store, root_uid, calendars, is_journal, false)
+}
+
+/// Same as `serialize_task_tree`, but omits the `<!-- uid -->` comments and
+/// the `dep:`/`rel:` UID tags, for clean copy-paste into external documents.
+pub fn serialize_task_tree_plain(
+    store: &crate::store::TaskStore,
+    root_uid: &str,
+    calendars: &[crate::model::CalendarListEntry],
+    is_journal: bool,
+) -> String {
+    serialize_task_tree_inner(store, root_uid, calendars, is_journal, true)
+}
+
+fn serialize_task_tree_inner(
+    store: &crate::store::TaskStore,
+    root_uid: &str,
+    calendars: &[crate::model::CalendarListEntry],
+    is_journal: bool,
+    plain: bool,
+) -> String {
     let mut out = String::new();
     let root = if let Some(r) = store.get_task_ref(root_uid) {
         r
@@ -721,6 +742,7 @@ pub fn serialize_task_tree(
         children_map: &'a std::collections::HashMap<String, Vec<&'a crate::model::Task>>,
         store: &'a crate::store::TaskStore,
         calendars: &'a [crate::model::CalendarListEntry],
+        plain: bool,
     }
 
     fn serialize_node(
@@ -768,7 +790,11 @@ pub fn serialize_task_tree(
             ));
         }
 
-        let uid_tag = format!("<!-- uid:{} -->", task.uid);
+        let uid_tag = if ctx.plain {
+            String::new()
+        } else {
+            format!("<!-- uid:{} -->", task.uid)
+        };
         let indent = "    ".repeat(depth);
 
         // Output short UID dependencies and relations to guarantee they are never ambiguous upon re-parsing
@@ -801,19 +827,32 @@ pub fn serialize_task_tree(
             }
         };
 
-        process_relations(&task.dependencies, "dep", &mut dep_str);
-        process_relations(&task.related_to, "rel", &mut dep_str);
+        if !ctx.plain {
+            process_relations(&task.dependencies, "dep", &mut dep_str);
+            process_relations(&task.related_to, "rel", &mut dep_str);
+        }
 
-        out.push_str(&format!(
-            "{}{}{}{}{}{} {}\n",
-            indent,
-            prefix,
-            if prefix.ends_with(' ') { "" } else { " " },
-            status_str,
-            smart_string,
-            dep_str,
-            uid_tag
-        ));
+        if ctx.plain {
+            out.push_str(&format!(
+                "{}{}{}{}{}\n",
+                indent,
+                prefix,
+                if prefix.ends_with(' ') { "" } else { " " },
+                status_str,
+                smart_string
+            ));
+        } else {
+            out.push_str(&format!(
+                "{}{}{}{}{}{} {}\n",
+                indent,
+                prefix,
+                if prefix.ends_with(' ') { "" } else { " " },
+                status_str,
+                smart_string,
+                dep_str,
+                uid_tag
+            ));
+        }
 
         if !task.description.is_empty() {
             for line in task.description.lines() {
@@ -833,6 +872,7 @@ pub fn serialize_task_tree(
         children_map: &children_map,
         store,
         calendars,
+        plain,
     };
 
     if is_journal {

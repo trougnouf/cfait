@@ -1705,16 +1705,19 @@ async fn main() -> Result<()> {
         }
         "tree" => {
             let mut partial = String::new();
+            let mut plain = false;
             for arg in args.iter().skip(2) {
-                if arg.starts_with('-') {
+                if arg == "--plain" {
+                    plain = true;
+                } else if arg.starts_with('-') {
                     eprintln!("Error: Unknown flag '{}' for tree command", arg);
                     std::process::exit(1);
-                }
-                if !partial.is_empty() {
+                } else if !partial.is_empty() {
                     eprintln!("Error: tree command takes exactly one <uid>");
                     std::process::exit(1);
+                } else {
+                    partial = arg.clone();
                 }
-                partial = arg.clone();
             }
             if partial.is_empty() {
                 eprintln!("{}", rust_i18n::t!("error_uid_required"));
@@ -1731,7 +1734,11 @@ async fn main() -> Result<()> {
             if let Ok(locals) = cfait::storage::LocalCalendarRegistry::load(ctx.as_ref()) {
                 cals.extend(locals);
             }
-            let tree_md = cfait::model::extractor::serialize_task_tree(&store, &uid, &cals, false);
+            let tree_md = if plain {
+                cfait::model::extractor::serialize_task_tree_plain(&store, &uid, &cals, false)
+            } else {
+                cfait::model::extractor::serialize_task_tree(&store, &uid, &cals, false)
+            };
             println!("{}", tree_md);
             return Ok(());
         }

@@ -1422,3 +1422,66 @@ fn test_tree_sync_preserves_paused_percent() {
         "no journal actions expected for an unchanged tree"
     );
 }
+
+#[test]
+fn test_serialize_tree_plain_omits_uids_and_relations() {
+    let mut store = make_store();
+
+    let mut root = Task::new("Garden plan", &HashMap::new(), None);
+    root.uid = "root-1".to_string();
+    root.calendar_href = "cal1".to_string();
+    store.add_task(root);
+
+    let mut sub_a = Task::new("Water the tomatoes", &HashMap::new(), None);
+    sub_a.uid = "sub-a".to_string();
+    sub_a.calendar_href = "cal1".to_string();
+    sub_a.parent_uid = Some("root-1".to_string());
+    store.add_task(sub_a);
+
+    let mut sub_b = Task::new("Deadhead the roses", &HashMap::new(), None);
+    sub_b.uid = "sub-b".to_string();
+    sub_b.calendar_href = "cal1".to_string();
+    sub_b.parent_uid = Some("root-1".to_string());
+    sub_b.dependencies = vec!["sub-a".to_string()];
+    store.add_task(sub_b);
+
+    let full = cfait::model::extractor::serialize_task_tree(&store, "root-1", &[], false);
+    assert!(
+        full.contains("<!-- uid:root-1 -->"),
+        "canonical form keeps UID comments"
+    );
+    assert!(
+        full.contains("dep:sub-a"),
+        "canonical form keeps dependency tags"
+    );
+
+    let plain = cfait::model::extractor::serialize_task_tree_plain(&store, "root-1", &[], false);
+    assert!(
+        !plain.contains("uid:"),
+        "plain form must not contain UID comments"
+    );
+    assert!(
+        !plain.contains("dep:"),
+        "plain form must not contain dependency tags"
+    );
+    assert!(
+        !plain.contains("rel:"),
+        "plain form must not contain relation tags"
+    );
+    assert!(
+        plain.contains("[ ] Garden plan"),
+        "plain form keeps the root task"
+    );
+    assert!(
+        plain.contains("Water the tomatoes"),
+        "plain form keeps child tasks"
+    );
+    assert!(
+        plain.contains("Deadhead the roses"),
+        "plain form keeps dependent tasks"
+    );
+    assert!(
+        plain.lines().all(|l| l == l.trim_end()),
+        "plain lines must not carry trailing spaces"
+    );
+}

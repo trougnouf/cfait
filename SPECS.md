@@ -344,7 +344,7 @@ Used for headless automation, scripting, and piping. Operates directly on the `T
 *   `cfait list [<query>] [--all] [--json] [-c <id>] [-p <uid>]`: Outputs task tree; an optional positional query filters the output (use `-p` to focus on a specific sub-tree).
 *   `cfait search <query> [--all] [--json] [-c <id>] [-p <uid>]`: Searches and outputs tasks within a specific sub-tree.
 *   `cfait view` (alias: `show`) `<uid> [--json]`: Outputs detailed task info.
-*   `cfait tree <uid>`: Views the task tree starting at `<uid>` serialized into markdown format (same format used by the `Ctrl+E` editor).
+*   `cfait tree <uid> [--plain]`: Views the task tree starting at `<uid>` serialized into markdown format (same format used by the `Ctrl+E` editor). `--plain` omits the UID comments and `dep:`/`rel:` tags for clean copy-paste into external documents.
 *   `cfait start|pause|toggle|done <uid>`: State mutation commands. `done` is idempotent (an already-done task stays done); `toggle` flips the status.
 *   `cfait move` (alias: `mv`) `<uid> <collection> [--tree]`: Moves a task to a different collection.
 *   `cfait delete` (alias: `rm`) `<uid>`: Moves task to trash.

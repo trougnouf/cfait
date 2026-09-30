@@ -121,7 +121,7 @@
     "cli_desc_start": "Démarrer le suivi du temps d'une tâche.",
     "cli_desc_sync": "Récupérer et envoyer les modifications, puis quitter.",
     "cli_desc_toggle": "Basculer l'état terminé/à faire d'une tâche.",
-    "cli_desc_tree": "Afficher l'arbre des tâches à partir de l'UID au format Markdown.",
+    "cli_desc_tree": "Afficher l'arbre des tâches à partir de l'UID au format Markdown. Utilisez --plain pour omettre les UID et les dépendances, pour une copie propre.",
     "cli_desc_view": "Afficher les détails d'une tâche.",
     "cli_desc_version": "Afficher la version.",
     "cli_desc_wait": "Forcer la synchronisation réseau après l'action (outrepasse la détection auto).",
