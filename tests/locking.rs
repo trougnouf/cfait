@@ -1,15 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Tests for locking mechanism.
-use cfait::client::RustyClient;
-use cfait::context::{AppContext, TestContext};
+use cfait::context::TestContext;
 use cfait::journal::{Action, Journal};
 use cfait::model::Task;
-use cfait::storage::SyncLock;
-use mockito::Server;
 use std::collections::HashMap;
 use std::sync::{Arc, Barrier};
 use std::thread;
-use std::time::Duration;
 
 #[test]
 fn test_concurrent_journal_writes() {
@@ -76,6 +72,11 @@ fn test_concurrent_journal_writes() {
 #[cfg(not(target_os = "android"))]
 #[tokio::test]
 async fn test_sync_journal_waits_for_cross_process_lock() {
+    use cfait::client::RustyClient;
+    use cfait::context::AppContext;
+    use mockito::Server;
+    use std::time::Duration;
+
     use fs2::FileExt;
 
     let ctx = Arc::new(TestContext::new());
@@ -151,6 +152,10 @@ async fn test_sync_journal_waits_for_cross_process_lock() {
 #[cfg(not(target_os = "android"))]
 #[tokio::test]
 async fn test_sync_lock_gives_up_after_timeout() {
+    use cfait::context::AppContext;
+    use cfait::storage::SyncLock;
+    use std::time::Duration;
+
     use fs2::FileExt;
 
     let ctx = TestContext::new();

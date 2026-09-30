@@ -288,6 +288,7 @@ fn run_editor_cli(initial_content: &str, config: &cfait::config::Config) -> Resu
 }
 
 // Helper to determine if we should skip waiting based on args and background presence
+#[allow(unused_variables)] // `ctx` is unused on android, where presence is always false
 fn get_sync_strategy(
     no_wait_flag: bool,
     wait_flag: bool,

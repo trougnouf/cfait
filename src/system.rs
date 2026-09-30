@@ -161,6 +161,7 @@ pub fn init_logging(ctx: &dyn AppContext, enable_stderr: bool, level: Option<log
     }
 }
 
+#[allow(unused_variables)] // `url` is unused on android, where this is a no-op
 pub fn open_url(url: &str) {
     #[cfg(not(target_os = "android"))]
     {
@@ -652,7 +653,9 @@ pub fn spawn_alarm_actor(
                             .await;
                     }
 
+                    #[cfg(not(target_os = "android"))]
                     let summary = task.summary.clone();
+                    #[cfg(not(target_os = "android"))]
                     let body = alarm
                         .description
                         .clone()
