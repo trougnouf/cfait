@@ -78,6 +78,7 @@ fun AdvancedSettingsScreen(
     val defaultPriorityState = remember { TextFieldState("5") }
     val startGracePeriodDaysState = remember { TextFieldState("1") }
     var firstDayOfWeek by remember { mutableStateOf(MobileFirstDayOfWeek.MONDAY) }
+    var dateFormat by remember { mutableStateOf("auto") }
     var showTaskGoalsInSidebar by remember { mutableStateOf(true) }
     var showCalendarsTab by remember { mutableStateOf(true) }
     var showTagsTab by remember { mutableStateOf(true) }
@@ -132,6 +133,7 @@ fun AdvancedSettingsScreen(
                 newDefaultPriority = cfg.defaultPriority.toString()
                 newStartGracePeriodDays = cfg.startGracePeriodDays.toString()
                 firstDayOfWeek = cfg.firstDayOfWeek
+                dateFormat = cfg.dateFormat
                 showTaskGoalsInSidebar = cfg.showTaskGoalsInSidebar
                 showCalendarsTab = cfg.showCalendarsTab
                 showTagsTab = cfg.showTagsTab
@@ -208,6 +210,7 @@ fun AdvancedSettingsScreen(
                     defaultPriority = defaultPriorityStr.toUByteOrNull() ?: 5u,
                     startGracePeriodDays = startGracePeriodDaysStr.toUIntOrNull() ?: 1u,
                     firstDayOfWeek = firstDayOfWeek,
+                    dateFormat = dateFormat,
                     showTaskGoalsInSidebar = showTaskGoalsInSidebar,
                     showCalendarsTab = finalShowCalendarsTab,
                     showTagsTab = finalShowTagsTab,
@@ -508,6 +511,33 @@ fun AdvancedSettingsScreen(
                     modifier = Modifier.width(240.dp)
                 )
             }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                Text(stringResource(R.string.date_format_label), modifier = Modifier.weight(1f))
+                DropdownPicker(
+                    label = "",
+                    selected = dateFormat,
+                    options = listOf(
+                        "auto" to stringResource(R.string.date_format_auto),
+                        "ymd" to stringResource(R.string.date_format_ymd),
+                        "dmy" to stringResource(R.string.date_format_dmy),
+                        "mdy" to stringResource(R.string.date_format_mdy),
+                        "ydm" to stringResource(R.string.date_format_ydm),
+                        "myd" to stringResource(R.string.date_format_myd),
+                        "dym" to stringResource(R.string.date_format_dym)
+                    ),
+                    onSelect = {
+                        dateFormat = it
+                        scope.launch { saveToDisk() }
+                    },
+                    modifier = Modifier.width(240.dp)
+                )
+            }
+            Text(
+                stringResource(R.string.settings_date_format_explain),
+                fontSize = 12.sp,
+                color = Color.Gray,
+                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+            )
 
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                 Text(stringResource(R.string.sorting_preset_label), modifier = Modifier.weight(1f))

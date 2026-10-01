@@ -183,6 +183,7 @@ pub fn save_config(app: &mut GuiApp) -> Config {
     cfg.paused_sort_behavior = app.paused_sort_behavior;
     cfg.sort_tiebreak_recent = app.sort_tiebreak_recent;
     cfg.sort_preset = app.sort_preset;
+    cfg.date_format = app.date_format;
     cfg.ui_scale = app.ui_scale;
     cfg.show_priority_numbers = app.show_priority_numbers;
     cfg.tag_aliases = app.tag_aliases.clone();

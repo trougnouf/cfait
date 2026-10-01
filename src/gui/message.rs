@@ -200,6 +200,7 @@ pub enum Message {
     CategoryMatchModeChanged(bool),
     SetPausedSortBehavior(crate::config::PausedSortBehavior),
     SetSortPreset(crate::config::SortPreset),
+    SetDateFormat(crate::config::DateFormat),
     CycleFocus(bool),
     OpenHelp(crate::help::HelpTab),
     CloseHelp,

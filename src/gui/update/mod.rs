@@ -200,6 +200,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::CategoryMatchModeChanged(_)
         | Message::SetPausedSortBehavior(_)
         | Message::SetSortPreset(_)
+        | Message::SetDateFormat(_)
         | Message::ToggleSortStandardByPriorityToggle
         | Message::SelectCalendar(_)
         | Message::ToggleCalendarDisabled(_, _)

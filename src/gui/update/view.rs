@@ -1089,6 +1089,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             refresh_filtered_tasks(app);
             Task::none()
         }
+        Message::SetDateFormat(val) => {
+            app.date_format = val;
+            crate::model::parser::set_configured_date_formats(val.chrono_formats());
+            save_config(app);
+            Task::none()
+        }
         Message::ToggleSortStandardByPriorityToggle => {
             let new_val = !app.sort_standard_by_priority;
             super::update(

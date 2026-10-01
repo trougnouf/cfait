@@ -620,6 +620,15 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                     Message::SetFirstDayOfWeek,
                     Length::Fill,
                 ),
+                Space::new().height(5),
+                pick_row(
+                    rust_i18n::t!("date_format_label"),
+                    crate::config::DateFormat::iter().collect(),
+                    Some(app.date_format),
+                    Message::SetDateFormat,
+                    Length::Fill,
+                ),
+                muted_note(rust_i18n::t!("settings_date_format_explain")),
                 Space::new().height(10),
                 text(rust_i18n::t!("settings_urgent_and_timeframes"))
                     .size(16)

@@ -130,6 +130,8 @@ pub fn apply_config_to_app(app: &mut GuiApp, config: &crate::config::Config) {
     app.paused_sort_behavior = config.paused_sort_behavior;
     app.sort_tiebreak_recent = config.sort_tiebreak_recent;
     app.sort_preset = config.sort_preset;
+    app.date_format = config.date_format;
+    crate::model::parser::set_configured_date_formats(config.date_format.chrono_formats());
     app.ui_scale = config.ui_scale;
     app.show_priority_numbers = config.show_priority_numbers;
     app.sync_settings = config.sync_settings;

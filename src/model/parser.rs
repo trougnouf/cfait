@@ -86,6 +86,9 @@ pub struct ParserLexicon {
     pub exact: HashMap<String, ExactToken>,
     pub prefixes: Vec<(String, PrefixToken)>,
     pub date_format: String,
+    /// Extra date formats forced by the user's `date_format` setting.
+    /// Tried after ISO/compact and before the locale format.
+    pub configured_date_formats: Vec<String>,
     pub unit_m: String,
     pub unit_h: String,
     pub unit_d: String,
@@ -394,11 +397,18 @@ impl ParserLexicon {
         } else {
             "%Y-%m-%d".to_string()
         };
+        let configured_date_formats = CONFIGURED_DATE_FORMATS
+            .read()
+            .unwrap()
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
 
         Self {
             exact,
             prefixes,
             date_format,
+            configured_date_formats,
             unit_m: get_first("parser_unit_minutes", "m"),
             unit_h: get_first("parser_unit_hours", "h"),
             unit_d: get_first("parser_unit_days", "d"),
@@ -424,6 +434,22 @@ impl ParserLexicon {
 
 pub static LEXICON: std::sync::LazyLock<RwLock<ParserLexicon>> =
     std::sync::LazyLock::new(|| RwLock::new(ParserLexicon::build()));
+
+/// User-forced date formats (from the `date_format` setting). Kept outside the
+/// lexicon so that `rebuild_lexicon()` (triggered by locale changes) preserves them.
+static CONFIGURED_DATE_FORMATS: std::sync::LazyLock<RwLock<Vec<&'static str>>> =
+    std::sync::LazyLock::new(|| RwLock::new(Vec::new()));
+
+pub fn set_configured_date_formats(formats: Vec<&'static str>) {
+    {
+        if let Ok(mut guard) = CONFIGURED_DATE_FORMATS.write() {
+            *guard = formats;
+        }
+    }
+    // The guard is dropped before rebuilding: `rebuild_lexicon()` takes the
+    // lexicon write lock and then reads this static, so holding it would deadlock.
+    rebuild_lexicon();
+}
 
 pub fn rebuild_lexicon() {
     if let Ok(mut lex) = LEXICON.write() {
@@ -2338,6 +2364,12 @@ pub fn parse_smart_date_with_lex(val: &str, lex: &ParserLexicon) -> Option<DateT
         return Some(DateType::AllDay(date));
     }
 
+    // The user's explicit `date_format` setting wins over the locale format.
+    for fmt in &lex.configured_date_formats {
+        if let Ok(date) = NaiveDate::parse_from_str(val, fmt) {
+            return Some(DateType::AllDay(date));
+        }
+    }
     if let Ok(date) = NaiveDate::parse_from_str(val, &lex.date_format) {
         return Some(DateType::AllDay(date));
     }

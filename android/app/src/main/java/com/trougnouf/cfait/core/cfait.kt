@@ -4759,6 +4759,7 @@ data class MobileConfig(
     var `sortCutoffDays`: kotlin.UInt?,
     var `sortStandardByPriority`: kotlin.Boolean,
     var `sortPreset`: kotlin.String,
+    var `dateFormat`: kotlin.String,
     var `pausedSortBehavior`: kotlin.String,
     var `sortTiebreakRecent`: kotlin.Boolean,
     var `urgentDays`: kotlin.UInt,
@@ -4822,6 +4823,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
             FfiConverterBoolean.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterUByte.read(buf),
@@ -4877,6 +4879,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
                 FfiConverterOptionalUInt.allocationSize(value.`sortCutoffDays`) +
                 FfiConverterBoolean.allocationSize(value.`sortStandardByPriority`) +
                 FfiConverterString.allocationSize(value.`sortPreset`) +
+                FfiConverterString.allocationSize(value.`dateFormat`) +
                 FfiConverterString.allocationSize(value.`pausedSortBehavior`) +
                 FfiConverterBoolean.allocationSize(value.`sortTiebreakRecent`) +
                 FfiConverterUInt.allocationSize(value.`urgentDays`) +
@@ -4935,6 +4938,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
         FfiConverterOptionalUInt.write(value.`sortCutoffDays`, buf)
         FfiConverterBoolean.write(value.`sortStandardByPriority`, buf)
         FfiConverterString.write(value.`sortPreset`, buf)
+        FfiConverterString.write(value.`dateFormat`, buf)
         FfiConverterString.write(value.`pausedSortBehavior`, buf)
         FfiConverterBoolean.write(value.`sortTiebreakRecent`, buf)
         FfiConverterUInt.write(value.`urgentDays`, buf)

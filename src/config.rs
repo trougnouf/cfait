@@ -512,6 +512,84 @@ impl TaskAction {
     }
 }
 
+/// How typed dates (e.g. `due:01/02/2026`) are interpreted when creating or
+/// editing tasks.
+/// - `Auto`: follow the language's format (ISO 8601 is always accepted too)
+/// - `Ymd` / `Dmy` / `Mdy` / `Ydm` / `Myd` / `Dym`: explicit digit order
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, EnumIter)]
+#[serde(rename_all = "lowercase")]
+pub enum DateFormat {
+    #[default]
+    Auto,
+    Ymd,
+    Dmy,
+    Mdy,
+    Ydm,
+    Myd,
+    Dym,
+}
+
+impl DateFormat {
+    /// Stable machine-readable name (matches the TOML representation).
+    pub fn name(&self) -> &'static str {
+        match self {
+            DateFormat::Auto => "auto",
+            DateFormat::Ymd => "ymd",
+            DateFormat::Dmy => "dmy",
+            DateFormat::Mdy => "mdy",
+            DateFormat::Ydm => "ydm",
+            DateFormat::Myd => "myd",
+            DateFormat::Dym => "dym",
+        }
+    }
+
+    /// Chrono format strings for this setting, in order of preference.
+    /// Both `-` and `/` separators are accepted. `Auto` adds nothing: the
+    /// locale format applies.
+    pub fn chrono_formats(&self) -> Vec<&'static str> {
+        match self {
+            DateFormat::Auto => Vec::new(),
+            DateFormat::Ymd => vec!["%Y-%m-%d", "%Y/%m/%d"],
+            DateFormat::Dmy => vec!["%d-%m-%Y", "%d/%m/%Y"],
+            DateFormat::Mdy => vec!["%m-%d-%Y", "%m/%d/%Y"],
+            DateFormat::Ydm => vec!["%Y-%d-%m", "%Y/%d/%m"],
+            DateFormat::Myd => vec!["%m-%Y-%d", "%m/%Y/%d"],
+            DateFormat::Dym => vec!["%d-%Y-%m", "%d/%Y/%m"],
+        }
+    }
+}
+
+impl fmt::Display for DateFormat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let key = match self {
+            DateFormat::Auto => "date_format_auto",
+            DateFormat::Ymd => "date_format_ymd",
+            DateFormat::Dmy => "date_format_dmy",
+            DateFormat::Mdy => "date_format_mdy",
+            DateFormat::Ydm => "date_format_ydm",
+            DateFormat::Myd => "date_format_myd",
+            DateFormat::Dym => "date_format_dym",
+        };
+        write!(f, "{}", rust_i18n::t!(key))
+    }
+}
+
+impl std::str::FromStr for DateFormat {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s.trim().to_lowercase().as_str() {
+            "auto" => DateFormat::Auto,
+            "ymd" => DateFormat::Ymd,
+            "dmy" => DateFormat::Dmy,
+            "mdy" => DateFormat::Mdy,
+            "ydm" => DateFormat::Ydm,
+            "myd" => DateFormat::Myd,
+            "dym" => DateFormat::Dym,
+            _ => return Err(()),
+        })
+    }
+}
+
 /// Controls the priority order of task sorting within the "urgent" bucket (rank 1-3).
 /// This determines which criterion (urgent priority, started status, or due soon) takes precedence.
 /// - `UrgentStartedDue`: Urgent tasks first, then started, then due soon
@@ -786,6 +864,9 @@ pub struct Config {
     // Optional language/locale selection. None = use system default.
     pub language: Option<String>,
     pub first_day_of_week: FirstDayOfWeek,
+    /// How typed dates are interpreted when creating/editing tasks.
+    /// `Auto` follows the language; the other variants force an explicit order.
+    pub date_format: DateFormat,
     pub urgent_days_horizon: u32,
     pub urgent_priority_threshold: u8,
     pub default_priority: u8,
@@ -933,6 +1014,8 @@ pub struct SyncableConfig {
     pub sort_collections_by_size: bool,
     #[serde(default)]
     pub first_day_of_week: FirstDayOfWeek,
+    #[serde(default)]
+    pub date_format: DateFormat,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -1005,6 +1088,7 @@ impl Default for Config {
             blur_when_unfocused: false,
             sidebar_is_hidden: false,
             first_day_of_week: FirstDayOfWeek::default(),
+            date_format: DateFormat::default(),
             description_editor: String::new(),
             log_level: LogLevel::Warn,
             expanded_tags: vec!["j:pages".to_string()],
@@ -1067,6 +1151,7 @@ impl Config {
             blur_when_unfocused: self.blur_when_unfocused,
             sort_collections_by_size: self.sort_collections_by_size,
             first_day_of_week: self.first_day_of_week,
+            date_format: self.date_format,
         }
     }
 
@@ -1120,6 +1205,7 @@ impl Config {
         self.blur_when_unfocused = sync.blur_when_unfocused;
         self.sort_collections_by_size = sync.sort_collections_by_size;
         self.first_day_of_week = sync.first_day_of_week;
+        self.date_format = sync.date_format;
     }
 
     pub fn update_sync_timestamp_if_changed(&mut self, old: &Config) {
@@ -1739,6 +1825,14 @@ impl Config {
                 None,
                 Some(
                     " # Enum: First day of the week for calendar/journal views (Monday or Sunday).",
+                ),
+            ),
+            (
+                "date_format =",
+                None,
+                None,
+                Some(
+                    " # Enum: How typed dates are interpreted (auto, ymd, dmy, mdy, ydm, myd, dym). ISO 8601 is always accepted.",
                 ),
             ),
             (

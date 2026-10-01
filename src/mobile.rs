@@ -533,6 +533,7 @@ pub struct MobileConfig {
     pub sort_cutoff_days: Option<u32>,
     pub sort_standard_by_priority: bool,
     pub sort_preset: String,
+    pub date_format: String,
     pub paused_sort_behavior: String,
     pub sort_tiebreak_recent: bool,
     pub urgent_days: u32,
@@ -1322,6 +1323,7 @@ impl CfaitMobile {
         let controller = TaskController::new(store, client, ctx.clone());
 
         let config = crate::config::Config::load(ctx.as_ref()).unwrap_or_default();
+        crate::model::parser::set_configured_date_formats(config.date_format.chrono_formats());
         let session = crate::model::SessionState {
             expanded_tags: config.expanded_tags,
             expanded_locations: config.expanded_locations,
@@ -1547,6 +1549,7 @@ impl CfaitMobile {
             sort_cutoff_days: c.sort_cutoff_days,
             sort_standard_by_priority: c.sort_standard_by_priority,
             sort_preset: c.sort_preset.to_string(),
+            date_format: c.date_format.name().to_string(),
             paused_sort_behavior: match c.paused_sort_behavior {
                 crate::config::PausedSortBehavior::Top => "top".to_string(),
                 crate::config::PausedSortBehavior::None => "none".to_string(),
@@ -1726,6 +1729,8 @@ impl CfaitMobile {
         };
         c.sort_tiebreak_recent = config.sort_tiebreak_recent;
         c.sort_preset = config.sort_preset.parse().unwrap_or_default();
+        c.date_format = config.date_format.parse().unwrap_or_default();
+        crate::model::parser::set_configured_date_formats(c.date_format.chrono_formats());
         c.urgent_days_horizon = config.urgent_days;
         c.urgent_priority_threshold = config.urgent_prio;
         c.default_priority = config.default_priority;

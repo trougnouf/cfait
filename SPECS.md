@@ -386,6 +386,7 @@ All persistent state and settings live here. Unrecognized TOML keys must not be 
 *   `theme`: Enum (RustyDark, Light, Dracula, Nord, Catppuccin variants, etc.).
 *   `language`: String (`en`, `fr`). None = system locale.
 *   `first_day_of_week`: Enum (`Monday`, `Sunday`). Controls the first day in calendar/journal week views.
+*   `date_format`: Enum (`auto`, `ymd`, `dmy`, `mdy`, `ydm`, `myd`, `dym`). How typed dates (e.g. `due:01/02/2026`) are interpreted in task input. `auto` follows the language's format. Both `-` and `/` separators are accepted for the chosen order, and ISO 8601 (`2026-01-02`) plus compact (`20260102`) are always accepted regardless of the setting.
 *   `description_editor`: String. CLI command for TUI description editing. `builtin` forces internal UI editor.
 *   `show_ongoing_notifications`, `show_priority_numbers`, `sidebar_is_hidden`, `show_task_goals_in_sidebar`: Booleans.
 *   `show_calendars_tab`, `show_tags_tab`, `show_locations_tab`, `show_goals_tab`, `show_journal_tab`: Booleans. Toggle individual sidebar tab visibility. On Android, these live under "More settings" (advanced settings), not "Manage collections".

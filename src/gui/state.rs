@@ -115,6 +115,7 @@ pub struct GuiApp {
     pub paused_sort_behavior: crate::config::PausedSortBehavior,
     pub sort_tiebreak_recent: bool,
     pub sort_preset: crate::config::SortPreset,
+    pub date_format: crate::config::DateFormat,
     pub current_theme: AppTheme,
 
     // Store the resolved random theme for this session
@@ -633,6 +634,7 @@ impl Default for GuiApp {
             paused_sort_behavior: crate::config::PausedSortBehavior::default(),
             sort_tiebreak_recent: config.sort_tiebreak_recent,
             sort_preset: crate::config::SortPreset::default(),
+            date_format: crate::config::DateFormat::default(),
             ob_sort_days_input: "30".to_string(),
             current_theme: AppTheme::default(),
             resolved_random_theme,

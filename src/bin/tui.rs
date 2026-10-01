@@ -425,6 +425,7 @@ async fn main() -> Result<()> {
     // It is ONLY safe to use stderr if we are NOT in the interactive TUI.
     let is_interactive_tui = command.is_empty();
     let config = cfait::config::Config::load(ctx.as_ref()).unwrap_or_default();
+    cfait::model::parser::set_configured_date_formats(config.date_format.chrono_formats());
     cfait::system::init_logging(
         ctx.as_ref(),
         !is_interactive_tui,
