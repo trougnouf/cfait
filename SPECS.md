@@ -31,6 +31,7 @@ Cfait is an offline-first task manager that seamlessly synchronizes with CalDAV 
 *   **Write Target (Active Collection):** When a new task is created, it is assigned to the UI's currently "active" collection. In the TUI/GUI, this is the collection currently selected/highlighted in the sidebar (regardless of how many other collections are visible in the main view). On Android, this is the collection tab currently being viewed. Upon app startup, this active collection is initialized to the globally synced `default_calendar`.
 *   **Conflict & Error Handling:** 
     *   `412 Precondition Failed` (ETag mismatch): Performs a local 3-way merge. If unmergeable, a "Conflict Copy" is generated.
+    *   **Re-parent conflicts:** `parent_uid` is the one scalar field exempted from hard-conflict Conflict Copies: when both sides moved a task under different parents, the newer edit wins (higher `SEQUENCE`; ties go to the committed server state), since duplicating a whole task over one relationship would be worse than losing the older move.
     *   **Fatal Server Errors (e.g., 400, 403, 415):** The problematic task is rescued into a local `local://recovery` calendar to prevent data loss or sync loop lockups, with the error appended to its description.
     *   **Duplicate UID Resolution:** If a duplicate UID is detected across collections (e.g., during a remote fetch), active collections always take precedence over system collections (`local://trash`, `local://recovery`). Otherwise, the task with the higher sequence number wins, tie-breaking alphabetically by collection HREF.
 
@@ -78,6 +79,7 @@ Evaluated instantly during text input. Supported across all clients.
 | `[[ ]]` | Wiki-link to jump to or create a task/page. Use `:` for absolute paths and `+` for relative sub-items. | `[[Master plan]]`, `[[+Child]]`, `[[Project:Phase 1]]` |
 | `dep:` or `depends:`| Set dependency (blocks the task). Supports short UIDs or fuzzy matching by summary. | `dep:"Install foundation"`, `dep:abc1234` |
 | `rel:` or `related:`| Set related task (sibling). Supports short UIDs or fuzzy matching by summary. | `rel:"Master plan"`, `rel:abc1234` |
+| `parent:` | Make the task a subtask of another task. Supports short UIDs or fuzzy matching by summary (resolved like `dep:`/`rel:` at save time). Replaces any previous parent; unresolvable, self- or cyclic references are kept as typed with a warning, like `dep:`. | `parent:"Home garden"`, `parent:abc1234` |
 | `geo:` | Geo-coordinates. | `geo:50.1,4.2`, `geo:here` (Mobile: Fetches GPS) |
 | `- ` or `is:note` | Mark task as a note/header (hides checkbox). | `- Pantry`, `is:note` |
 | `desc:` | Append text to the description. | `desc:"Buy milk"` or `desc:{...}` |
@@ -172,16 +174,17 @@ All clients maintain an active session Undo/Redo stack. Every task mutation appl
 *   **Android:** Mutations trigger a transient Snackbar allowing 1-tap Undo. Markdown editors feature explicit ↶/↷ toolbar buttons.
 *   **Desktop (GUI/TUI):** Global `Ctrl+Z` (Undo) and `Ctrl+Y` / `Ctrl+Shift+Z` (Redo) shortcuts.
 *   **Smart Commands:** If the Add Task input starts with `:` and contains no spaces (e.g., `:undo`, `:redo`, `:empty-trash`, `:delete-all`, `:login`), it is intercepted and executed as a session command rather than creating a task. 
-*   **Auto-Complete:** The `CursorContextBanner` acts as a unified auto-complete engine, suggesting commands (when typing `:`), tags (when typing `#`), locations (when typing `@@`), collections (when typing `col:`), and relationships (when typing `dep:`, `rel:`, or `[[`). Suggestions are typically ordered by exact prefix match, then by descending frequency/usage, and finally alphabetically.
+*   **Auto-Complete:** The `CursorContextBanner` acts as a unified auto-complete engine, suggesting commands (when typing `:`), tags (when typing `#`), locations (when typing `@@`), collections (when typing `col:`), and relationships (when typing `dep:`, `rel:`, `parent:`, or `[[`). Task suggestions only draw from currently visible collections (hidden/disabled/system collections never leak their task summaries). Suggestions are typically ordered by exact prefix match, then by descending frequency/usage, and finally alphabetically.
 
 ### 4.1. The "Yank" Relationship System
 Instead of drag-and-drop, Cfait uses a robust "Yank" (Clipboard) system for hierarchy management.
 1.  **Yank (`y` / Action Menu):** Copies the selected task's UID to an internal "Yanked" state. UI displays a persistent banner.
 2.  **Relate:** Select a *target* task and execute:
-    *   `c` (Child): Target becomes a subtask (child) of Yanked.
+    *   `c` (Child): Target becomes a subtask (child) of Yanked. An existing parent is replaced; sync conflicts between two re-parenting devices resolve to the newest relationship (higher `SEQUENCE`, ties to the server, see §1.1) instead of duplicating the task.
     *   `b` (Block): Target becomes blocked by Yanked.
     *   `l` (Link): Target becomes related (sibling) to Yanked.
 3.  **Clear (`Esc`):** Clears yank state. (`Y` locks the yanked state for multiple relations).
+4.  **Re-parent by text:** The `parent:` token (see §2.1) re-parents via the smart input from any client, accepting the same fuzzy references as `dep:`/`rel:`.
 
 ### 4.2. Recurrence Recycling & DST Safety
 When completing a recurring task:

@@ -101,6 +101,9 @@ pub enum DependencyWarning {
         relation_type: String, // "dep" or "rel"
         candidates: Vec<(String, String)>,
     },
+    InvalidParent {
+        raw: String,
+    },
 }
 
 impl std::fmt::Display for DependencyWarning {
@@ -121,6 +124,11 @@ impl std::fmt::Display for DependencyWarning {
                 }
                 write!(f, "Ambiguous reference '{}'. Matches: {}", raw, matches_str)
             }
+            DependencyWarning::InvalidParent { raw } => write!(
+                f,
+                "Invalid parent reference '{}': no unique matching task, or it would create a cycle. The reference was kept as-is.",
+                raw
+            ),
         }
     }
 }
@@ -1340,6 +1348,27 @@ impl TaskStore {
         task.dependencies =
             self.resolve_ref_list(&task.dependencies, &task.uid, "dep", &mut warnings);
         task.related_to = self.resolve_ref_list(&task.related_to, &task.uid, "rel", &mut warnings);
+
+        // Resolve a raw `parent:` reference (summary, short UID or wiki path)
+        // into a real parent UID. Values that already are known task UIDs —
+        // including full UUIDs of parents absent from this store — pass
+        // untouched so remote-only parents survive. Like dep:/rel:, a
+        // reference that cannot be resolved is kept as-is with a warning
+        // instead of destroying data; references that would create a cycle
+        // or a self-parenting are likewise left unresolved.
+        if let Some(raw) = task.parent_uid.clone()
+            && !self.index.contains_key(&raw)
+            && !(raw.len() == 36 && uuid::Uuid::parse_str(&raw).is_ok())
+        {
+            let valid = self
+                .resolve_dependency_ref(&raw, Some(&task.uid))
+                .ok()
+                .filter(|p_uid| p_uid != &task.uid && !self.is_descendant_of(p_uid, &task.uid));
+            match valid {
+                Some(p_uid) => task.parent_uid = Some(p_uid),
+                None => warnings.push(DependencyWarning::InvalidParent { raw }),
+            }
+        }
         warnings
     }
 

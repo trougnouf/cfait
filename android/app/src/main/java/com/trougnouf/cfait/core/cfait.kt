@@ -7541,6 +7541,7 @@ enum class MobileSyntaxType {
     WIKI_LINK,
     DEPENDENCY,
     RELATION,
+    PARENT,
     NOTE,
     ;
 

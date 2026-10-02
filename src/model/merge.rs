@@ -138,7 +138,20 @@ pub fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task>
     merge_field!(is_event);
     merge_field!(goal);
     merge_field!(last_started_at);
-    merge_field!(parent_uid);
+
+    // Hierarchy: re-parenting is a discrete "move" of the task. When both
+    // sides moved it under different parents, duplicating the whole task
+    // (hard conflict) is worse than picking one parent, so the newer edit
+    // wins: the side with the higher SEQUENCE made the later edit in the
+    // change chain; on a tie the already-committed server state wins.
+    // Other single-parent semantics (unchanged local / unchanged server)
+    // are covered by the branch below without ever hard-conflicting.
+    if local.parent_uid != base.parent_uid
+        && local.parent_uid != server.parent_uid
+        && (server.parent_uid == base.parent_uid || local.sequence > server.sequence)
+    {
+        merged.parent_uid = local.parent_uid.clone();
+    }
 
     // List properties (Set-based 3-way merge to handle deletions correctly)
     merged.categories = merge_lists(&base.categories, &local.categories, &server.categories);
@@ -442,5 +455,79 @@ mod tests {
             three_way_merge(&base, &local2, &server2).is_none(),
             "Delete locally + modify on server is a hard conflict"
         );
+    }
+
+    #[test]
+    fn test_reparent_conflict_resolves_to_newest_relationship() {
+        let mut base = Task::new("Repot the fern", &HashMap::new(), None);
+        base.parent_uid = Some("old-parent".to_string());
+
+        // Local moved the task under the balcony garden project, the server
+        // (another device) moved it under the living room one.
+        let mut local = base.clone();
+        local.parent_uid = Some("balcony-garden".to_string());
+        local.sequence += 2;
+        let mut server = base.clone();
+        server.parent_uid = Some("living-room".to_string());
+        server.sequence += 1;
+
+        let merged = three_way_merge(&base, &local, &server)
+            .expect("Re-parenting on both sides must merge, not duplicate");
+        assert_eq!(
+            merged.parent_uid.as_deref(),
+            Some("balcony-garden"),
+            "The higher-sequence (newer) edit must win the parent"
+        );
+
+        // Reverse recency: the server made the later edit in the chain.
+        let mut local_stale = base.clone();
+        local_stale.parent_uid = Some("balcony-garden".to_string());
+        local_stale.sequence += 1;
+        let mut server_new = base.clone();
+        server_new.parent_uid = Some("living-room".to_string());
+        server_new.sequence += 2;
+
+        let merged = three_way_merge(&base, &local_stale, &server_new)
+            .expect("Re-parenting on both sides must merge, not duplicate");
+        assert_eq!(
+            merged.parent_uid.as_deref(),
+            Some("living-room"),
+            "The server's newer parent must win over the staler local one"
+        );
+    }
+
+    #[test]
+    fn test_reparent_conflict_tie_keeps_server_parent() {
+        let mut base = Task::new("Repot the fern", &HashMap::new(), None);
+        base.parent_uid = Some("old-parent".to_string());
+
+        let mut local = base.clone();
+        local.parent_uid = Some("balcony-garden".to_string());
+        local.sequence += 1;
+        let mut server = base.clone();
+        server.parent_uid = Some("living-room".to_string());
+        server.sequence += 1;
+
+        let merged = three_way_merge(&base, &local, &server)
+            .expect("Equal-sequence re-parenting must still merge, not duplicate");
+        assert_eq!(
+            merged.parent_uid.as_deref(),
+            Some("living-room"),
+            "On a sequence tie the already-committed server parent must be kept"
+        );
+    }
+
+    #[test]
+    fn test_reparent_only_local_changed_keeps_local_parent() {
+        let mut base = Task::new("Repot the fern", &HashMap::new(), None);
+        base.parent_uid = Some("old-parent".to_string());
+
+        let mut local = base.clone();
+        local.parent_uid = Some("balcony-garden".to_string());
+        let server = base.clone();
+
+        let merged =
+            three_way_merge(&base, &local, &server).expect("Unopposed local move must merge");
+        assert_eq!(merged.parent_uid.as_deref(), Some("balcony-garden"));
     }
 }

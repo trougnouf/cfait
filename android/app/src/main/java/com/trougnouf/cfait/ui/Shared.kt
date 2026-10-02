@@ -886,6 +886,7 @@ fun getSyntaxColor(kind: MobileSyntaxType, text: String, isDark: Boolean): Color
         MobileSyntaxType.WIKI_LINK -> Color(0xFF4FC3F7)
         MobileSyntaxType.DEPENDENCY -> Color(0xFFFF9800)
         MobileSyntaxType.RELATION -> Color(0xFF64B5F6)
+        MobileSyntaxType.PARENT -> Color(0xFF81C784)
         MobileSyntaxType.NOTE -> Color(0xFF9E9E9E)
         MobileSyntaxType.PIN -> Color(0xFFFF7043)
         else -> null

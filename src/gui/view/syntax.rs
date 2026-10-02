@@ -51,6 +51,7 @@ pub fn get_syntax_style(kind: SyntaxType, text: &str, is_dark: bool) -> (Option<
         SyntaxType::WikiLink => (Some(Color::from_rgb(0.2, 0.7, 1.0)), true),
         SyntaxType::Dependency => (Some(Color::from_rgb(0.9, 0.6, 0.2)), true),
         SyntaxType::Relation => (Some(Color::from_rgb(0.4, 0.6, 0.9)), true),
+        SyntaxType::Parent => (Some(Color::from_rgb(0.3, 0.8, 0.3)), true),
         SyntaxType::Geo => (Some(Color::from_rgb(0.5, 0.5, 0.5)), false),
         SyntaxType::Description => (Some(Color::from_rgb(0.6, 0.0, 0.6)), false),
         SyntaxType::Reminder => (Some(Color::from_rgb(1.0, 0.4, 0.0)), true),

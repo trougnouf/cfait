@@ -608,6 +608,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 &app.store,
                 &app.tag_aliases,
                 &app.calendars,
+                &app.visible_calendar_hrefs(),
             ) && let Some(s) = suggs.into_iter().next()
             {
                 return handle(app, Message::ApplySuggestion(range, s.replacement));

@@ -3084,6 +3084,7 @@ pub fn build_context_banner<'a>(
         &app.store,
         &app.tag_aliases,
         &app.calendars,
+        &app.visible_calendar_hrefs(),
     ) {
         let mut sugg_row = row![].spacing(8).padding(iced::Padding {
             bottom: 8.0,
@@ -3201,6 +3202,7 @@ pub fn build_context_banner<'a>(
                     t.kind,
                     SyntaxType::Dependency
                         | SyntaxType::Relation
+                        | SyntaxType::Parent
                         | SyntaxType::WikiLink
                         | SyntaxType::Url
                 ) {
@@ -3248,15 +3250,15 @@ pub fn build_context_banner<'a>(
                     match app.store.resolve_dependency_ref(&clean_uid, context_uid) {
                         Ok(resolved_uid) => {
                             if let Some(summary) = app.store.get_summary(&resolved_uid) {
-                                let icon = if kind == SyntaxType::Dependency {
-                                    icon::BLOCKED
-                                } else {
-                                    icon::LINK
+                                let icon = match kind {
+                                    SyntaxType::Dependency => icon::BLOCKED,
+                                    SyntaxType::Parent => icon::CHILD,
+                                    _ => icon::LINK,
                                 };
-                                let color = if kind == SyntaxType::Dependency {
-                                    Color::from_rgb(0.9, 0.6, 0.2)
-                                } else {
-                                    Color::from_rgb(0.4, 0.6, 0.9)
+                                let color = match kind {
+                                    SyntaxType::Dependency => Color::from_rgb(0.9, 0.6, 0.2),
+                                    SyntaxType::Parent => Color::from_rgb(0.3, 0.8, 0.3),
+                                    _ => Color::from_rgb(0.4, 0.6, 0.9),
                                 };
                                 (
                                     icon,

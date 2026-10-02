@@ -2204,6 +2204,9 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         SyntaxType::Relation => Style::default()
                             .fg(Color::LightBlue)
                             .add_modifier(Modifier::BOLD),
+                        SyntaxType::Parent => Style::default()
+                            .fg(Color::Green)
+                            .add_modifier(Modifier::BOLD),
                         SyntaxType::Note => Style::default()
                             .fg(Color::Rgb(128, 128, 128))
                             .add_modifier(Modifier::BOLD),

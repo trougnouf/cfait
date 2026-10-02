@@ -808,6 +808,7 @@ impl AppState {
             &self.store,
             &self.tag_aliases,
             &self.calendars,
+            &self.visible_calendar_hrefs(),
         );
         let range_changed = match (&self.suggestions, &result) {
             (Some((r, _)), Some((nr, _))) => r != nr,
@@ -874,6 +875,29 @@ impl AppState {
         self.text_history.push(old);
         self.refresh_suggestions();
         true
+    }
+
+    /// Hrefs of the collections currently visible in the main view: hidden and
+    /// disabled collections are excluded, local collections only show up in
+    /// local mode, and system calendars (trash/recovery) never qualify. Used
+    /// to scope autocomplete suggestions to what the user can actually see.
+    pub fn visible_calendar_hrefs(&self) -> Vec<String> {
+        let mut effective_hidden = self.hidden_calendars.clone();
+        effective_hidden.extend(self.disabled_calendars.iter().cloned());
+        if !self.local_mode_enabled {
+            for href in self.store.calendars.keys() {
+                if href.starts_with("local://") {
+                    effective_hidden.insert(href.clone());
+                }
+            }
+        }
+        self.calendars
+            .iter()
+            .filter(|c| {
+                !effective_hidden.contains(&c.href) && !crate::storage::is_system_calendar(&c.href)
+            })
+            .map(|c| c.href.clone())
+            .collect()
     }
 
     /// Journal-capable calendars that are currently visible (not hidden,

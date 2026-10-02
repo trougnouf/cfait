@@ -59,6 +59,7 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
     let p_url = get_first("parser_url");
     let p_dep = get_first("parser_dep");
     let p_rel = get_first("parser_rel");
+    let p_parent = get_first("parser_parent");
 
     let e_today = get_first("parser_today");
     let e_tomorrow = get_first("parser_tomorrow");
@@ -251,6 +252,11 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                     keys: format!("{p_rel}{val_uid_text}"),
                     desc: rust_i18n::t!("help_metadata_relation").to_string(),
                     example: format!("{p_rel}\"{}\"", rust_i18n::t!("example_meeting")),
+                },
+                HelpItem {
+                    keys: format!("{p_parent}{val_uid_text}"),
+                    desc: rust_i18n::t!("help_metadata_parent").to_string(),
+                    example: format!("{p_parent}\"{}\"", rust_i18n::t!("example_plant_tree")),
                 },
                 HelpItem {
                     keys: p_url.to_string(),

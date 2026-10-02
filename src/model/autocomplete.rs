@@ -19,6 +19,7 @@ pub fn suggest(
     store: &TaskStore,
     aliases: &HashMap<String, Vec<String>>,
     calendars: &[CalendarListEntry],
+    visible_hrefs: &[String],
 ) -> Option<(Range<usize>, Vec<Suggestion>)> {
     let line_start = input[..cursor_byte_idx]
         .rfind('\n')
@@ -221,7 +222,7 @@ pub fn suggest(
         }
     }
 
-    // 4. Dependencies, Relations & WikiLinks
+    // 4. Dependencies, Relations, Parents & WikiLinks
     let mut is_task_lookup = false;
     let mut orig_prefix = "";
     let mut search_query = "";
@@ -233,7 +234,9 @@ pub fn suggest(
         orig_prefix = "[[";
         search_query = stripped.trim_end_matches("]]");
     } else if let Some((kind, _, rem_original)) = lex.extract_prefix(&word, &lower)
-        && (kind == PrefixToken::Dependency || kind == PrefixToken::Rel)
+        && (kind == PrefixToken::Dependency
+            || kind == PrefixToken::Rel
+            || kind == PrefixToken::Parent)
     {
         is_task_lookup = true;
         orig_prefix = &word[..word.len() - rem_original.len()];
@@ -245,7 +248,12 @@ pub fn suggest(
 
         if !query_clean.is_empty() {
             let mut matches = Vec::new();
-            for map in store.calendars.values() {
+            for (href, map) in &store.calendars {
+                // Only suggest tasks from collections the user can currently
+                // see, so hidden collections never leak their summaries.
+                if !visible_hrefs.iter().any(|v| v == href) {
+                    continue;
+                }
                 for t in map.values() {
                     if t.status.is_done() || t.calendar_href == crate::storage::LOCAL_TRASH_HREF {
                         continue;

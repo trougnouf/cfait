@@ -152,6 +152,7 @@ pub enum MobileSyntaxType {
     WikiLink,
     Dependency,
     Relation,
+    Parent,
     Note,
 }
 
@@ -179,6 +180,7 @@ impl From<SyntaxType> for MobileSyntaxType {
             SyntaxType::WikiLink => MobileSyntaxType::WikiLink,
             SyntaxType::Dependency => MobileSyntaxType::Dependency,
             SyntaxType::Relation => MobileSyntaxType::Relation,
+            SyntaxType::Parent => MobileSyntaxType::Parent,
             SyntaxType::Note => MobileSyntaxType::Note,
         }
     }
@@ -696,12 +698,20 @@ impl CfaitMobile {
             .unwrap_or(b_pos);
 
         let store = self.controller.store.blocking_lock();
+        let visible_hrefs: Vec<String> = cals_list
+            .iter()
+            .filter(|c| {
+                c.is_visible && !c.is_disabled && !crate::storage::is_system_calendar(&c.href)
+            })
+            .map(|c| c.href.clone())
+            .collect();
         if let Some((range, suggs)) = crate::model::autocomplete::suggest(
             &input,
             actual_byte_idx,
             &store,
             &config.tag_aliases,
             &calendars,
+            &visible_hrefs,
         ) {
             suggs
                 .into_iter()

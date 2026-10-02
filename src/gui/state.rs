@@ -427,6 +427,20 @@ impl GuiApp {
         })
     }
 
+    /// Hrefs of all currently visible collections. Used to scope autocomplete
+    /// suggestions so hidden collections never leak their task summaries.
+    pub fn visible_calendar_hrefs(&self) -> Vec<String> {
+        self.calendars
+            .iter()
+            .filter(|c| {
+                !self.hidden_calendars.contains(&c.href)
+                    && !self.disabled_calendars.contains(&c.href)
+                    && !crate::storage::is_system_calendar(&c.href)
+            })
+            .map(|c| c.href.clone())
+            .collect()
+    }
+
     pub fn sort_calendars(&mut self) {
         let order = &self.core_config.collection_order;
         let sort_by_size = self.sort_collections_by_size;

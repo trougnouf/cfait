@@ -80,6 +80,7 @@ pub enum PrefixToken {
     Collection,
     Dependency,
     Rel,
+    Parent,
 }
 
 pub struct ParserLexicon {
@@ -366,6 +367,7 @@ impl ParserLexicon {
         add_prefix("parser_collection", "col:", PrefixToken::Collection);
         add_prefix("parser_dep", "dep:,depends:", PrefixToken::Dependency);
         add_prefix("parser_rel", "rel:,related:", PrefixToken::Rel);
+        add_prefix("parser_parent", "parent:", PrefixToken::Parent);
 
         // Merge logic: Localized translations unconditionally overwrite English canonicals.
         // This ensures e.g., French "mar" (Mardi) overwrites English "mar" (March).
@@ -480,6 +482,7 @@ pub enum SyntaxType {
     Collection, // cal:, col:
     Dependency, // dep:, depends:
     Relation,   // rel:, related:
+    Parent,     // parent:
     Note,
 }
 
@@ -1439,6 +1442,8 @@ pub fn tokenize_smart_input(input: &str, is_search_query: bool) -> Vec<SyntaxTok
                 matched_kind = Some(SyntaxType::Dependency);
             } else if pref == Some(PrefixToken::Rel) {
                 matched_kind = Some(SyntaxType::Relation);
+            } else if pref == Some(PrefixToken::Parent) {
+                matched_kind = Some(SyntaxType::Parent);
             } else if word.starts_with('!') && word.len() > 1 && word[1..].parse::<u8>().is_ok() {
                 matched_kind = Some(SyntaxType::Priority);
             } else if word.starts_with('~')
@@ -3539,6 +3544,17 @@ pub fn apply_smart_input(
             let val = strip_quotes(rem_original);
             if !val.is_empty() {
                 task.related_to.push(val);
+            } else if !is_bg {
+                summary_words.push(unescape(token));
+            }
+            consumed = 1;
+        } else if pref == Some(PrefixToken::Parent) {
+            // Store the raw reference (summary or short UID); the store
+            // resolves it into a real parent UID at save time, mirroring
+            // how dep:/rel: references are handled.
+            let val = strip_quotes(rem_original);
+            if !val.is_empty() {
+                task.parent_uid = Some(val);
             } else if !is_bg {
                 summary_words.push(unescape(token));
             }
