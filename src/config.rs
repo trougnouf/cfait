@@ -1103,6 +1103,27 @@ impl Default for Config {
     }
 }
 
+/// Extract the lowercase hostname from a CalDAV URL.
+///
+/// Strips the scheme, any userinfo, the port, and the path. Returns `None`
+/// when nothing host-like remains (e.g. an empty or path-only URL).
+fn host_of(url: &str) -> Option<String> {
+    let without_scheme = url.split_once("://").map(|(_, rest)| rest).unwrap_or(url);
+    let authority = without_scheme.split('/').next()?;
+    let authority = authority
+        .rsplit_once('@')
+        .map(|(_, host)| host)
+        .unwrap_or(authority);
+    let host = if let Some(rest) = authority.strip_prefix('[') {
+        // IPv6 literal: [::1]:8080
+        rest.split(']').next()?
+    } else {
+        authority.split(':').next()?
+    };
+    let host = host.to_lowercase();
+    if host.is_empty() { None } else { Some(host) }
+}
+
 impl Config {
     pub fn get_syncable(&self) -> SyncableConfig {
         SyncableConfig {
@@ -1308,28 +1329,48 @@ impl Config {
         Ok(config)
     }
 
+    /// The keyring entry name for this profile's password.
+    ///
+    /// Namespaced by host so that separate profiles (e.g. `--root`) pointing
+    /// at different servers never overwrite each other's credentials. Falls
+    /// back to the bare username for URLs without a host (local mode).
+    pub fn keyring_key(&self) -> String {
+        let user = if self.username.is_empty() {
+            "default"
+        } else {
+            &self.username
+        };
+        match host_of(&self.url) {
+            Some(host) => format!("{}@{}", user, host),
+            None => user.to_string(),
+        }
+    }
+
     /// Load the configuration from disk and fetch the password from the OS keyring.
     /// Use this ONLY during app startup, explicit syncing, or opening the settings panel.
     pub fn load_with_credentials(ctx: &dyn AppContext) -> Result<Self> {
         let mut config = Self::load(ctx)?;
 
-        let user_key = if config.username.is_empty() {
-            "default"
+        let new_key = config.keyring_key();
+        let legacy_key = if config.username.is_empty() {
+            "default".to_string()
         } else {
-            &config.username
+            config.username.clone()
         };
 
-        match keyring_core::Entry::new("cfait", user_key) {
+        match keyring_core::Entry::new("cfait", &new_key) {
             Ok(entry) => {
                 if !config.password.is_empty() {
                     // Migration: plaintext password found in config.toml!
                     // Move it securely into the OS keyring.
                     if let Err(err) = entry.set_password(&config.password) {
                         log::warn!(
-                            "Failed to migrate password into keyring for user '{}': {}",
-                            user_key,
+                            "Failed to migrate password into keyring for '{}': {}",
+                            new_key,
                             err
                         );
+                    } else if new_key != legacy_key {
+                        Self::delete_legacy_entry(&legacy_key);
                     }
                 } else {
                     match entry.get_password() {
@@ -1337,11 +1378,23 @@ impl Config {
                             // Normal run: fetch the password from the OS keyring.
                             config.password = pw;
                         }
+                        Err(keyring_core::Error::NoEntry) if new_key != legacy_key => {
+                            // First run under the host-namespaced key: carry the
+                            // legacy username-only credential over, if any.
+                            if let Ok(legacy) = keyring_core::Entry::new("cfait", &legacy_key)
+                                && let Ok(pw) = legacy.get_password()
+                            {
+                                if entry.set_password(&pw).is_ok() {
+                                    Self::delete_legacy_entry(&legacy_key);
+                                }
+                                config.password = pw;
+                            }
+                        }
                         Err(keyring_core::Error::NoEntry) => {}
                         Err(err) => {
                             log::warn!(
-                                "Failed to load password from keyring for user '{}': {}",
-                                user_key,
+                                "Failed to load password from keyring for '{}': {}",
+                                new_key,
                                 err
                             );
                         }
@@ -1350,14 +1403,38 @@ impl Config {
             }
             Err(err) => {
                 log::warn!(
-                    "Failed to initialize keyring entry for user '{}': {}",
-                    user_key,
+                    "Failed to initialize keyring entry for '{}': {}",
+                    new_key,
                     err
                 );
             }
         }
 
         Ok(config)
+    }
+
+    /// Delete a legacy username-only keyring entry, ignoring a missing one.
+    fn delete_legacy_entry(legacy_key: &str) {
+        match keyring_core::Entry::new("cfait", legacy_key) {
+            Ok(entry) => {
+                if let Err(err) = entry.delete_credential()
+                    && !matches!(err, keyring_core::Error::NoEntry)
+                {
+                    log::warn!(
+                        "Failed to delete legacy keyring entry '{}': {}",
+                        legacy_key,
+                        err
+                    );
+                }
+            }
+            Err(err) => {
+                log::warn!(
+                    "Failed to initialize legacy keyring entry '{}': {}",
+                    legacy_key,
+                    err
+                );
+            }
+        }
     }
 
     pub fn is_missing_config_error(err: &Error) -> bool {
@@ -1397,21 +1474,27 @@ impl Config {
 
     /// Save configuration and update the OS keyring credential.
     pub fn save_with_credentials(&self, ctx: &dyn AppContext) -> Result<()> {
-        let user_key = if self.username.is_empty() {
-            "default"
+        let new_key = self.keyring_key();
+        let legacy_key = if self.username.is_empty() {
+            "default".to_string()
         } else {
-            &self.username
+            self.username.clone()
         };
 
-        match keyring_core::Entry::new("cfait", user_key) {
+        match keyring_core::Entry::new("cfait", &new_key) {
             Ok(entry) => {
                 if !self.password.is_empty() {
                     if let Err(err) = entry.set_password(&self.password) {
                         log::warn!(
-                            "Failed to save password to keyring for user '{}': {}",
-                            user_key,
+                            "Failed to save password to keyring for '{}': {}",
+                            new_key,
                             err
                         );
+                    } else if new_key != legacy_key {
+                        // The legacy username-only entry can no longer hold
+                        // this profile's password; drop it so another profile
+                        // with the same username doesn't inherit it.
+                        Self::delete_legacy_entry(&legacy_key);
                     }
                 } else {
                     // The in-memory password is empty. Only remove the stored
@@ -1428,16 +1511,19 @@ impl Config {
                                 && !matches!(err, keyring_core::Error::NoEntry)
                             {
                                 log::warn!(
-                                    "Failed to delete keyring credential for user '{}': {}",
-                                    user_key,
+                                    "Failed to delete keyring credential for '{}': {}",
+                                    new_key,
                                     err
                                 );
+                            }
+                            if new_key != legacy_key {
+                                Self::delete_legacy_entry(&legacy_key);
                             }
                         }
                         Err(err) => {
                             log::warn!(
-                                "Keyring unreadable for user '{}'; keeping stored credential: {}",
-                                user_key,
+                                "Keyring unreadable for '{}'; keeping stored credential: {}",
+                                new_key,
                                 err
                             );
                         }
@@ -1446,8 +1532,8 @@ impl Config {
             }
             Err(err) => {
                 log::warn!(
-                    "Failed to initialize keyring entry for user '{}': {}",
-                    user_key,
+                    "Failed to initialize keyring entry for '{}': {}",
+                    new_key,
                     err
                 );
             }
@@ -1953,5 +2039,57 @@ impl Config {
         }
 
         out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn host_of_strips_scheme_userinfo_port_and_path() {
+        assert_eq!(
+            host_of("https://cloud.example.com/remote.php/dav/").as_deref(),
+            Some("cloud.example.com")
+        );
+        assert_eq!(
+            host_of("https://user:pass@Cloud.Example.com:8443/dav").as_deref(),
+            Some("cloud.example.com")
+        );
+        assert_eq!(host_of("https://[::1]:8080/dav").as_deref(), Some("::1"));
+        // No scheme: still find the host.
+        assert_eq!(
+            host_of("cloud.example.com/remote.php/dav/").as_deref(),
+            Some("cloud.example.com")
+        );
+        // Degenerate inputs yield no host.
+        assert_eq!(host_of(""), None);
+        assert_eq!(host_of("https://"), None);
+        assert_eq!(host_of("/remote.php/dav/"), None);
+    }
+
+    #[test]
+    fn keyring_key_namespaces_by_host() {
+        let c = Config {
+            username: "bob".to_string(),
+            url: "https://cloud.example.com/remote.php/dav/".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(c.keyring_key(), "bob@cloud.example.com");
+
+        // Different profile, same user, different server: different key.
+        let mut other = c.clone();
+        other.url = "https://work.example.com/dav".to_string();
+        assert_eq!(other.keyring_key(), "bob@work.example.com");
+
+        // No host (local mode): fall back to the bare username.
+        let mut local = c.clone();
+        local.url.clear();
+        assert_eq!(local.keyring_key(), "bob");
+
+        // Empty username: the "default" key, still host-namespaced.
+        let mut anon = c.clone();
+        anon.username.clear();
+        assert_eq!(anon.keyring_key(), "default@cloud.example.com");
     }
 }
