@@ -17,12 +17,14 @@ jobs:
   # becomes undownloadable for everyone but the owner until publish-rolling
   # re-tags it at the end of the run.
   #
-  # This job makes a single best-effort attempt to un-draft the release a few
-  # minutes into the run, after the mirror has had time to delete the tag.
-  # Un-drafting via the API re-creates the `rolling` tag and re-anchors the
-  # release, keeping the packages downloadable during the build. If the attempt
-  # lands before the mirror syncs, the mirror re-drafts it and publish-rolling
-  # heals it at the end anyway.
+  # This job makes a single best-effort attempt to un-draft the release early
+  # in the run. Un-drafting via the API re-creates the `rolling` tag and
+  # re-anchors the release, keeping the packages downloadable during the
+  # build. The PATCH must carry an explicit `target_commitish`: the stored
+  # target of the release is empty, and Forgejo re-creates the tag from the
+  # target when un-drafting, which fails when it is empty. If the attempt
+  # lands before the mirror syncs, the mirror re-drafts it and
+  # publish-rolling heals it at the end anyway.
   keep-rolling-live:
     if: github.ref == 'refs/heads/master' && github.event_name == 'push'
     runs-on: self-hosted-ubuntu
@@ -35,17 +37,25 @@ jobs:
           RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         shell: bash
         run: |
-          # Give the codeberg mirror time to sync and delete the tag first.
-          sleep 180
+          # Give the codeberg mirror a moment to sync and delete the tag first.
+          sleep 30
 
           API="${{ github.server_url }}/api/v1/repos/${{ github.repository }}/releases"
           AUTH="Authorization: token ${RELEASE_TOKEN}"
 
           ID=$(curl -s -H "$AUTH" "$API/tags/rolling" | tr -d '[:space:]' | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
           if [ -n "$ID" ]; then
-            curl -s -o /dev/null -X PATCH -H "$AUTH" -H "Content-Type: application/json" \
-              -d '{"draft": false}' "$API/$ID"
-            echo "Un-drafted rolling release (id ${ID}); the rolling tag was re-created."
+            # target_commitish is required: the release's stored target is
+            # empty, and Forgejo re-creates the tag from it when un-drafting.
+            HTTP=$(curl -s -o /tmp/undraft.json -w '%{http_code}' -X PATCH \
+              -H "$AUTH" -H "Content-Type: application/json" \
+              -d '{"draft": false, "target_commitish": "master"}' "$API/$ID")
+            if [ "$HTTP" = "200" ]; then
+              echo "Un-drafted rolling release (id ${ID}); the rolling tag was re-created at master."
+            else
+              echo "Failed to un-draft rolling release (id ${ID}): HTTP ${HTTP}"
+              cat /tmp/undraft.json
+            fi
           else
             echo "No rolling release found; nothing to heal."
           fi
