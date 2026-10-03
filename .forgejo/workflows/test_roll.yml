@@ -9,6 +9,47 @@ on:
   pull_request:
 
 jobs:
+  # --- JOB: keep rolling release live (best-effort) ---
+  # The codeberg->disroot push mirror runs `git push --mirror`, which deletes
+  # the `rolling` tag (codeberg has no such tag). When a release's tag
+  # disappears, Forgejo turns the release into a detached draft, and since
+  # CVE-2026-27660 draft attachments 404 for non-writers, the rolling release
+  # becomes undownloadable for everyone but the owner until publish-rolling
+  # re-tags it at the end of the run.
+  #
+  # This job makes a single best-effort attempt to un-draft the release a few
+  # minutes into the run, after the mirror has had time to delete the tag.
+  # Un-drafting via the API re-creates the `rolling` tag and re-anchors the
+  # release, keeping the packages downloadable during the build. If the attempt
+  # lands before the mirror syncs, the mirror re-drafts it and publish-rolling
+  # heals it at the end anyway.
+  keep-rolling-live:
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    runs-on: self-hosted-ubuntu
+    container:
+      image: local/ubuntu-builder
+    continue-on-error: true
+    steps:
+      - name: Un-draft the rolling release
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        shell: bash
+        run: |
+          # Give the codeberg mirror time to sync and delete the tag first.
+          sleep 180
+
+          API="${{ github.server_url }}/api/v1/repos/${{ github.repository }}/releases"
+          AUTH="Authorization: token ${RELEASE_TOKEN}"
+
+          ID=$(curl -s -H "$AUTH" "$API/tags/rolling" | tr -d '[:space:]' | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+          if [ -n "$ID" ]; then
+            curl -s -o /dev/null -X PATCH -H "$AUTH" -H "Content-Type: application/json" \
+              -d '{"draft": false}' "$API/$ID"
+            echo "Un-drafted rolling release (id ${ID}); the rolling tag was re-created."
+          else
+            echo "No rolling release found; nothing to heal."
+          fi
+
   # --- JOB 1: VALIDATION ---
   test:
     runs-on: self-hosted-arch
