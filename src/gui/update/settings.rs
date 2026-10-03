@@ -1209,13 +1209,32 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     {
                         main_cal.color = Some(hex.clone());
                     }
-                }
-                if let Some(cal) = app
+                } else if let Some(cal) = app
                     .remote_cals_editing
                     .iter_mut()
                     .find(|c| c.href == *active_href)
                 {
-                    cal.color = Some(hex);
+                    cal.color = Some(hex.clone());
+                    let href = cal.href.clone();
+                    // Not yet created: the color is picked up by the create call.
+                    if !href.starts_with("new_remote_")
+                        && let Some(client) = app.client.clone()
+                    {
+                        let name = cal.name.clone();
+                        app.color_picker_active_href = None;
+                        app.loading = true;
+                        return Task::perform(
+                            async_update_remote_calendar_wrapper(
+                                client,
+                                href.clone(),
+                                name,
+                                Some(hex),
+                            ),
+                            move |res| {
+                                Message::RemoteCalendarUpdated(href, res.map_err(|e| e.to_string()))
+                            },
+                        );
+                    }
                 }
             }
             app.color_picker_active_href = None;
