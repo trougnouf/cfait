@@ -585,8 +585,7 @@ pub async fn run_network_actor(
                                     let _ = event_tx
                                         .send(AppEvent::Status {
                                             key: "migration_complete".to_string(),
-                                            human: rust_i18n::t!("migration_complete_moved", count = count)
-                                                .to_string(),
+                                            human: crate::i18n::t_plural("migration_complete_moved", count),
                                         })
                                         .await;
 

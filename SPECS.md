@@ -64,6 +64,9 @@ Evaluated instantly during text input. Supported across all clients.
 *   **Canonical Storage:** The internal data model and `Task::to_smart_string()` MUST always output canonical English/ISO tokens (e.g., `due:`, `@2025-01-01`, `~30m`). This ensures CalDAV sync works seamlessly across devices even if one device is in French and another in English.
 *   **Dual-Input Parser:** The parser accepts *both* localized terms AND English canonical terms. This prevents breaking muscle memory for existing users and keeps headless CLI scripts language-agnostic.
 *   **Lexicon Cache:** `src/model/parser.rs` uses an `RwLock<ParserLexicon>` to cache valid tokens (O(1) lookups) built from the `rust_i18n` JSON files on startup.
+*   **UI Strings (Rust):** `locales/*.json` are the single source of truth. Rust uses `rust_i18n` with `%{param}` placeholders and `t!("key", param = value)`. Parameters MUST be written as `%{param}` — a bare `{param}` is shown literally in the UI.
+*   **UI Strings (Android):** The Gradle task `generateStringsXml` (run automatically before any build) converts each `locales/*.json` into `android/app/src/main/res/values*/strings.xml`, rewriting `%{param}` to positional `%1$s`, `%2$s`, ... arguments. Plural keys (objects with `one`/`other`/`zero` subkeys) are emitted as a single `{one=..., other=...}` string and resolved at runtime by `resolvePluralMap()` in `Shared.kt`. Kotlin call sites must therefore pass arguments in the same order as the placeholders appear in the JSON.
+*   **Plural Selection:** rust_i18n does NOT select plural forms automatically — `t!("key", count = n)` on a plural key returns the key itself. Callers must pick the subkey, e.g. `i18n::t_plural("key", count)` (see `src/i18n.rs`) or `t!("key.one")` / `t!("key.other")` directly. A regression test (`i18n_tests::t_macro_keys_exist_in_fallback_locale`) fails the build if any `t!()` literal key is missing from `en.json`.
 
 ### 2.1. Tokens
 | Token | Meaning | Example |

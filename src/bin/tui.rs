@@ -499,7 +499,7 @@ async fn main() -> Result<()> {
             if href.starts_with("local://") {
                 match LocalStorage::import_from_ics(ctx.as_ref(), &href, &ics_content) {
                     Ok(count) => {
-                        println!("{}", rust_i18n::t!("import_success", count = count));
+                        println!("{}", cfait::i18n::t_plural("import_success", count));
                     }
                     Err(e) => {
                         eprintln!("{}", rust_i18n::t!("import_error", error = e.to_string()));
@@ -540,7 +540,7 @@ async fn main() -> Result<()> {
                         rust_i18n::t!("import_partial", count = count, failed = failed)
                     );
                 }
-                println!("{}", rust_i18n::t!("import_success", count = count));
+                println!("{}", cfait::i18n::t_plural("import_success", count));
                 // Best-effort background sync
                 if let Err(e) = maybe_sync(ctx.clone()).await {
                     eprintln!(

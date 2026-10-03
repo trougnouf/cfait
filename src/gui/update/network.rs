@@ -364,8 +364,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             release_loading(app)
         }
         Message::MigrationComplete(Ok(count)) => {
-            app.error_msg =
-                Some(rust_i18n::t!("migration_complete_moved", count = count).to_string());
+            app.error_msg = Some(crate::i18n::t_plural("migration_complete_moved", count));
             refresh_filtered_tasks(app);
             Task::batch(vec![
                 release_loading(app),

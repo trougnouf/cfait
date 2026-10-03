@@ -408,7 +408,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             flash_info_message(
                 app,
                 if count > 0 {
-                    rust_i18n::t!("trash_emptied", count = count).to_string()
+                    crate::i18n::t_plural("trash_emptied", count)
                 } else {
                     rust_i18n::t!("trash_is_empty").to_string()
                 },

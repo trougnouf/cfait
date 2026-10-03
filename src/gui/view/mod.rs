@@ -565,7 +565,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         }
         if uids.len() > 10 {
             tasks_col = tasks_col.push(
-                text(rust_i18n::t!("and_more", count = uids.len() - 10).to_string())
+                text(crate::i18n::t_plural("and_more", uids.len() - 10))
                     .size(14)
                     .wrapping(iced::widget::text::Wrapping::Glyph)
                     .style(|_t: &Theme| text::Style {

@@ -1445,7 +1445,7 @@ impl CfaitMobile {
             count
         };
 
-        Ok(rust_i18n::t!("import_success", count = count).to_string())
+        Ok(crate::i18n::t_plural("import_success", count))
     }
 
     pub fn extract_list_prefix(&self, line: String) -> String {
@@ -3512,7 +3512,7 @@ impl CfaitMobile {
             .migrate_tasks(tasks, &target_href)
             .await
             .map_err(MobileError::from)?;
-        Ok(rust_i18n::t!("migration_complete_moved", count = count).to_string())
+        Ok(crate::i18n::t_plural("migration_complete_moved", count))
     }
 
     pub async fn create_local_calendar(

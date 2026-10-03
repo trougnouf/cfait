@@ -2515,9 +2515,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         }
         if tasks_to_delete.len() > 10 {
             items.push(
-                ListItem::new(
-                    rust_i18n::t!("and_more", count = tasks_to_delete.len() - 10).to_string(),
-                )
+                ListItem::new(crate::i18n::t_plural(
+                    "and_more",
+                    tasks_to_delete.len() - 10,
+                ))
                 .style(Style::default().fg(Color::DarkGray)),
             );
         }
