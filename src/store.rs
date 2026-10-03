@@ -1896,7 +1896,30 @@ impl TaskStore {
         );
 
         for ext in extracted {
-            let task_uid = ext.parsed_existing_uid.clone().unwrap_or(ext.uid.clone());
+            let mut task_uid = ext.parsed_existing_uid.clone().unwrap_or(ext.uid.clone());
+
+            // A sub-page re-pasted without a `<!-- uid -->` tag would otherwise mint a
+            // fresh component on every save (the soft-delete guard keeps old
+            // `is_journal` descendants). Match an existing sibling by summary so the
+            // round-trip is idempotent.
+            if ext.parsed_existing_uid.is_none()
+                && (ext.raw_text.contains("is:page") || ext.raw_text.contains("is:journal"))
+            {
+                let parent = ext
+                    .parent_uid
+                    .clone()
+                    .unwrap_or_else(|| root_uid.to_string());
+                let probe = crate::model::Task::new(
+                    &ext.raw_text,
+                    options.aliases,
+                    options.default_reminder_time,
+                );
+                if let Some(existing_uid) = self.find_child_uid_by_summary(&parent, &probe.summary)
+                {
+                    task_uid = existing_uid;
+                }
+            }
+
             active_uids.insert(task_uid.clone());
 
             let p_uid_str = ext
@@ -2177,6 +2200,19 @@ impl TaskStore {
         }
 
         Ok((actions, all_warnings))
+    }
+
+    /// Find a child of `parent_uid` whose summary matches `summary`, returning its
+    /// uid. Used to make re-parsing of sub-pages idempotent: a sub-page pasted
+    /// without a `<!-- uid -->` tag would otherwise mint a fresh component on every
+    /// save, because the soft-delete guard keeps `is_journal` descendants.
+    fn find_child_uid_by_summary(&self, parent_uid: &str, summary: &str) -> Option<String> {
+        self.children_index.get(parent_uid).and_then(|children| {
+            children
+                .iter()
+                .find(|uid| self.get_task_ref(uid).is_some_and(|t| t.summary == summary))
+                .cloned()
+        })
     }
 
     /// Deep-duplicate a task and all its descendants.

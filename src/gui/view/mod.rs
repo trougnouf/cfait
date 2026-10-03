@@ -2812,10 +2812,19 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
 
     let window_controls = window_controls(app.force_ssd);
 
-    let (header_title, show_activity) = if let Some(uid) = &app.journal_editing_uid {
+    // A date-bound entry (a daily note) keeps the daily layout — date header and
+    // collection selector — even once an entry exists. Only standalone wiki pages
+    // (no DTSTART) switch to the page layout with a title input.
+    let editing_page = app
+        .journal_editing_uid
+        .as_ref()
+        .and_then(|uid| app.store.get_task_ref(uid))
+        .is_some_and(|t| t.dtstart.is_none());
+
+    let (header_title, show_activity) = if editing_page {
         let title = app
             .store
-            .get_summary(uid)
+            .get_summary(app.journal_editing_uid.as_ref().unwrap())
             .unwrap_or_else(|| rust_i18n::t!("untitled_page").to_string());
         (title, false)
     } else {
@@ -2859,7 +2868,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
         )
         .style(crate::gui::view::tooltip_style);
 
-        if app.journal_editing_uid.is_some() {
+        if editing_page {
             row![
                 iced::widget::text_input(
                     rust_i18n::t!("page_title_placeholder").as_ref(),
@@ -2918,7 +2927,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
 
     let header_drag_area = drag_area(header_container, app.force_ssd);
 
-    let top_header = if app.journal_editing_uid.is_some() {
+    let top_header = if editing_page {
         column![header_drag_area].spacing(0)
     } else {
         column![
@@ -2937,7 +2946,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
 
     let editor = text_editor(&app.journal_editor_content)
         .id("journal_editor")
-        .placeholder(if app.journal_editing_uid.is_some() {
+        .placeholder(if editing_page {
             rust_i18n::t!("notes_placeholder").to_string()
         } else {
             rust_i18n::t!("journal_no_notes", name = active_name).to_string()
