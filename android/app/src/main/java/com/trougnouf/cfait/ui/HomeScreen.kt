@@ -100,6 +100,42 @@ data class TabInfo(
     val isWriteTarget: String?
 )
 
+// Uids to show on a tab: the tab's own tasks plus the ancestor chain of any
+// task that belongs to the tab (parents may live in other collections and are
+// returned by the backend as dimmed search context), plus the virtual
+// expand/collapse rows whose payload task is visible.
+private fun tabVisibleUids(tasks: List<StableTaskSummary>, tab: TabInfo): Set<String> {
+    val uidToParent = HashMap<String, String?>()
+    val inTab = HashSet<String>()
+    for (task in tasks) {
+        val uid = task.task.uid
+        if (uid.startsWith("virtual-")) continue
+        uidToParent[uid] = task.task.parentUid
+        if (tab.hrefs.contains(task.task.calendarHref)) inTab.add(uid)
+    }
+    val visible = HashSet(inTab)
+    val queue = ArrayDeque<String>(inTab)
+    while (queue.isNotEmpty()) {
+        val uid = queue.removeFirst()
+        val parentUid = uidToParent[uid] ?: continue
+        if (visible.add(parentUid)) queue.add(parentUid)
+    }
+    for (task in tasks) {
+        val uid = task.task.uid
+        val payload = when {
+            uid.startsWith("virtual-expand-") -> uid.removePrefix("virtual-expand-")
+            uid.startsWith("virtual-collapse-") -> uid.removePrefix("virtual-collapse-")
+            else -> null
+        } ?: continue
+        if (payload.isEmpty()) {
+            if (inTab.isNotEmpty()) visible.add(uid)
+        } else if (visible.contains(payload)) {
+            visible.add(uid)
+        }
+    }
+    return visible
+}
+
 data class JournalCalendarData(
     val parsedDate: Date,
     val currentDay: Int,
@@ -1168,7 +1204,7 @@ fun HomeScreen(
 
         try {
             val currentTab = tabs.getOrNull(pagerState.currentPage)
-            val needsTabSwitch = currentTab != null && !currentTab.hrefs.contains(targetTask.task.calendarHref)
+            val needsTabSwitch = currentTab != null && targetTask.task.uid !in tabVisibleUids(tasks, currentTab)
 
             // 1. Jump Tab if needed
             if (needsTabSwitch) {
@@ -1184,7 +1220,8 @@ fun HomeScreen(
             // 2. Find the index in the new tab's list
             val activeTab = tabs.getOrNull(pagerState.currentPage)
             val currentList = if (activeTab != null) {
-                tasks.filter { it.task.calendarHref in activeTab.hrefs }
+                val visibleUids = tabVisibleUids(tasks, activeTab)
+                tasks.filter { it.task.uid in visibleUids }
             } else tasks
 
             val index = currentList.indexOfFirst { it.task.uid == highlightedUid }
@@ -2891,12 +2928,13 @@ fun HomeScreen(
                                 val pageTasks = remember(tasks, taskCache, currentTab) {
                                     if (currentTab == null) return@remember emptyList()
 
+                                    val visibleUids = tabVisibleUids(tasks, currentTab)
                                     val liveTasks = ArrayList<StableTaskSummary>()
                                     val presentHrefs = HashSet<String>()
 
                                     // 1. Single-pass filter: O(N) time, zero intermediate list allocations
                                     for (task in tasks) {
-                                        if (currentTab.hrefs.contains(task.task.calendarHref)) {
+                                        if (visibleUids.contains(task.task.uid)) {
                                             liveTasks.add(task)
                                             presentHrefs.add(task.task.calendarHref)
                                         }
@@ -2904,7 +2942,7 @@ fun HomeScreen(
 
                                     // 2. Fast-path: If all requested calendars are in the live list, return immediately.
                                     // This preserves the Rust backend's perfect interleaved sorting 99% of the time.
-                                    if (presentHrefs.size == currentTab.hrefs.size) {
+                                    if (currentTab.hrefs.all { presentHrefs.contains(it) }) {
                                         liveTasks
                                     } else {
                                         // 3. Slow-path: User just swiped, backend hasn't fetched the new calendar yet (~50ms window).
