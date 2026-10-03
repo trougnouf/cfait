@@ -318,7 +318,7 @@ fun CfaitNavHost(
                 workManager.pruneWork()
             } else if (currentMigration?.state == WorkInfo.State.FAILED) {
                 val msg = currentMigration.outputData.getString(CalendarMigrationWorker.OUTPUT_MESSAGE)
-                Toast.makeText(context, msg ?: context.getString(R.string.migration_failed), Toast.LENGTH_LONG).show()
+                Toast.makeText(context, msg ?: context.getString(R.string.migration_failed, "unknown error"), Toast.LENGTH_LONG).show()
 
                 // Prune failed work too so user can retry immediately without UI glitch
                 workManager.pruneWork()
