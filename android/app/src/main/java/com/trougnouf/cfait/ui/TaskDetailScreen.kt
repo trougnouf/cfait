@@ -1004,12 +1004,9 @@ fun TaskDetailScreen(
                 modifier = Modifier.fillMaxWidth().heightIn(min = 150.dp),
                 textStyle = TextStyle(textAlign = TextAlign.Start),
                 outputTransformation = remember(isDark) { MarkdownTransformation(isDark, api).asOutputTransformation() },
-                keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done),
-                onKeyboardAction = { _ ->
-                    // Save and keep editing, so the keyboard can stay handy
-                    // while iterating on the description.
-                    handleSaveWithGeo(smartInput.text.toString(), description.text.toString(), keepOpen = true)
-                },
+                // No imeAction here: an explicit one would replace the newline
+                // key with a checkmark on this multi-line field. Saving without
+                // leaving the screen is handled by the top bar button.
             )
 
             if (task!!.createdDateIso != null || task!!.lastModifiedDateIso != null) {
