@@ -2239,14 +2239,12 @@ pub async fn handle_key_event(
                 state.message = rust_i18n::t!("editing_cancelled").to_string();
             }
             // Editing & Navigation
+            // Tab indents the current line, Shift+Tab outdents it (journal
+            // notes and task descriptions alike).
+            KeyCode::Tab => state.indent_line(2),
+            KeyCode::BackTab => state.outdent_line(2),
             KeyCode::Char(c) => {
-                // FIX: Sanitize control characters and normalize tabs to spaces.
-                // Convert Tab to 4 spaces to ensure cursor math matches rendering.
-                if c == '\t' {
-                    for _ in 0..4 {
-                        state.enter_char(' ');
-                    }
-                } else if !c.is_control() || c == '\n' {
+                if !c.is_control() || c == '\n' {
                     state.enter_char(c);
                 }
             }

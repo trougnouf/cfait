@@ -23,6 +23,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.error_msg = None;
 
             if app.client.is_some() {
+                app.syncing = true;
                 let mut cfg = app.core_config.clone();
                 cfg.password = app.ob_pass.clone(); // Re-use the securely loaded password
                 app.pending_refresh_generation = app.edit_generation;
@@ -438,6 +439,7 @@ pub(crate) fn trigger_external_reload(app: &mut GuiApp) -> Task<Message> {
 /// pending).
 pub(crate) fn release_loading(app: &mut GuiApp) -> Task<Message> {
     app.loading = false;
+    app.syncing = false;
     let pending_external_reload = app.pending_external_reload;
     let pending_refresh = app.pending_refresh;
     app.pending_external_reload = false;

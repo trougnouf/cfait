@@ -107,6 +107,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
 
         Message::InputChanged(_)
         | Message::DescriptionChanged(_)
+        | Message::DescriptionIndent(_)
         | Message::StartCreateWithDescription
         | Message::StartCreateChild(_)
         | Message::SubmitTask
@@ -281,10 +282,13 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::SelectJournalDate(_)
         | Message::SelectJournalCollection(_)
         | Message::JournalContentChanged(_)
+        | Message::JournalIndent(_)
+        | Message::FocusJournalEditor
         | Message::JournalDateInputChanged(_)
         | Message::JournalDateInputSubmit
         | Message::JournalTitleInputChanged(_)
-        | Message::SaveJournal(_) => view::handle(app, message),
+        | Message::SaveJournal(_)
+        | Message::SpinnerTick => view::handle(app, message),
 
         Message::SnapToSelected { focus } => {
             if let Some(_uid) = &app.selected_uid {

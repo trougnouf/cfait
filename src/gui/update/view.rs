@@ -4,8 +4,8 @@ use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, Focus, GuiApp, ResizeDirection, SidebarMode};
 use crate::gui::update::common::{
-    refresh_filtered_tasks, save_config, scroll_to_selected, scroll_to_selected_delayed,
-    set_active_focus,
+    indent_line, outdent_line, refresh_filtered_tasks, save_config, scroll_to_selected,
+    scroll_to_selected_delayed, set_active_focus,
 };
 use crate::gui::update::tasks;
 use crate::store::select_weighted_random_index;
@@ -192,9 +192,10 @@ fn create_journal_page(app: &mut GuiApp, parent_uid: Option<String>) -> Task<Mes
     app.journal_editor_content = iced::widget::text_editor::Content::with_text("");
     app.journal_history.clear();
     app.editor_maximized = true;
+    set_active_focus(app, Focus::JournalTitle);
 
     refresh_filtered_tasks(app);
-    Task::none()
+    operation::focus(iced::widget::Id::new("journal_title"))
 }
 
 /// Run `f` on the latest window handle, or do nothing if there is none.
@@ -675,6 +676,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 crate::gui::state::Focus::Journal => {
                     iced::widget::operation::focus("journal_editor")
                 }
+                crate::gui::state::Focus::JournalTitle => {
+                    iced::widget::operation::focus("journal_title")
+                }
             }
         }
         Message::FocusInput => {
@@ -959,6 +963,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::JournalTitleInputChanged(s) => {
+            set_active_focus(app, Focus::JournalTitle);
             app.journal_title_input = s.clone();
             if let Some(uid) = &app.journal_editing_uid
                 && let Some((t, _)) = app.store.get_task_mut(uid)
@@ -992,12 +997,76 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::JournalContentChanged(action) => {
             set_active_focus(app, Focus::Journal);
+            let is_enter = matches!(
+                action,
+                iced::widget::text_editor::Action::Edit(iced::widget::text_editor::Edit::Enter)
+            );
             let old_text = app.journal_editor_content.text();
             app.journal_editor_content.perform(action);
+            if is_enter {
+                let cursor_pos = app.journal_editor_content.cursor().position;
+                let line_idx = cursor_pos.line;
+                let text = app.journal_editor_content.text();
+                if line_idx > 0 {
+                    let lines: Vec<&str> = text.split('\n').collect();
+                    if line_idx - 1 < lines.len() {
+                        let prev_line = lines[line_idx - 1];
+                        let prefix = crate::model::extractor::extract_list_prefix(prev_line);
+                        if !prefix.is_empty() {
+                            if prev_line.trim() == prefix.trim() {
+                                // Enter on an empty item: remove the newline and prefix.
+                                app.journal_editor_content.perform(
+                                    iced::widget::text_editor::Action::Edit(
+                                        iced::widget::text_editor::Edit::Backspace,
+                                    ),
+                                );
+                                for _ in 0..prefix.chars().count() {
+                                    app.journal_editor_content.perform(
+                                        iced::widget::text_editor::Action::Edit(
+                                            iced::widget::text_editor::Edit::Backspace,
+                                        ),
+                                    );
+                                }
+                            } else {
+                                // Continue the list on the new line.
+                                for c in prefix.chars() {
+                                    app.journal_editor_content.perform(
+                                        iced::widget::text_editor::Action::Edit(
+                                            iced::widget::text_editor::Edit::Insert(c),
+                                        ),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             if old_text != app.journal_editor_content.text() {
                 app.journal_history.push(old_text);
                 return tasks::schedule_journal_save(app);
             }
+            Task::none()
+        }
+        Message::JournalIndent(indent) => {
+            set_active_focus(app, Focus::Journal);
+            let old_text = app.journal_editor_content.text();
+            if indent {
+                indent_line(&mut app.journal_editor_content);
+            } else {
+                outdent_line(&mut app.journal_editor_content);
+            }
+            if old_text != app.journal_editor_content.text() {
+                app.journal_history.push(old_text);
+                return tasks::schedule_journal_save(app);
+            }
+            Task::none()
+        }
+        Message::FocusJournalEditor => {
+            set_active_focus(app, Focus::Journal);
+            operation::focus(iced::widget::Id::new("journal_editor"))
+        }
+        Message::SpinnerTick => {
+            app.spinner_frame = (app.spinner_frame + 1) % crate::gui::icon::SPINNER_FRAMES.len();
             Task::none()
         }
         Message::SaveJournal(version) => {

@@ -294,6 +294,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             refresh_filtered_tasks(app);
             app.state = AppState::Active;
             app.loading = true;
+            app.syncing = true;
             Task::perform(connect_and_fetch_wrapper(app.ctx.clone(), config), |res| {
                 Message::Loaded(res.map_err(|e| e.to_string()))
             })

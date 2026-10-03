@@ -185,6 +185,7 @@
     "create_calendar_events_note": "Events will be retroactively created. Use +cal/-cal per task to override.",
     "create_named": "Create '%{name}'",
     "create_new_local_calendar": "Create new local collection",
+    "create_subpage": "Create sub-page",
     "create_subtask": "Create subtask",
     "created_label": "Created",
     "last_modified_label": "Last Modified",
@@ -730,7 +731,12 @@
     "search": "Search",
     "search_and_filtering": "Search & filtering",
     "search_placeholder": "Search…",
-    "searching_for": "Searching: '{term}'",
+    "search_results": {
+        "zero": "No results for '%{term}'",
+        "one": "1 result for '%{term}'",
+        "other": "%{count} results for '%{term}'"
+    },
+    "searching_for": "Searching: '%{term}'",
     "select_destination_collection": "Select destination collection:",
     "select_local_collection_to_export": "Select which local collection to export:",
     "select_target_collection": "Select target collection:",

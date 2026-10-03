@@ -52,6 +52,16 @@ pub const TAG_CHECK: char = '\u{f1a7a}'; // nf-md-tag_check
 pub const REFRESH: char = '\u{f0450}'; // nf-md-refresh
 pub const SYNC_ALERT: char = '\u{f04e7}'; // nf-md-sync_alert
 pub const SYNC_OFF: char = '\u{f04e8}'; // nf-md-sync_off
+/// Frames of the extra-progress spinner (nf-extra-progress_spinner_1..6),
+/// cycled to animate the "syncing" state.
+pub const SPINNER_FRAMES: &[char] = &[
+    '\u{ee06}', // nf-extra-progress_spinner_1
+    '\u{ee07}', // nf-extra-progress_spinner_2
+    '\u{ee08}', // nf-extra-progress_spinner_3
+    '\u{ee09}', // nf-extra-progress_spinner_4
+    '\u{ee0a}', // nf-extra-progress_spinner_5
+    '\u{ee0b}', // nf-extra-progress_spinner_6
+];
 pub const UNSYNCED: char = '\u{f0c2}'; //  (Cloud)
 pub const PLUS: char = '\u{f0603}'; // nf-md-priority_high
 pub const MINUS: char = '\u{f0604}'; // nf-md-priority_low

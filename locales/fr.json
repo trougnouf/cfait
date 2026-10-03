@@ -195,6 +195,7 @@
     "create_named": "Créer '%{name}'",
     "create_new_local_calendar": "Créer une collection locale",
     "create_new_remote_calendar": "Créer une nouvelle collection distante",
+    "create_subpage": "Créer une sous-page",
     "create_subtask": "Créer une sous-tâche",
     "created_label": "Créée",
     "creating_events_background": "Création d'événements en arrière-plan…",
@@ -751,7 +752,12 @@
     "search_is_ready": "est:prêt",
     "search_is_started": "est:démarré",
     "search_placeholder": "Rechercher…",
-    "searching_for": "Recherche : « {term} »",
+    "search_results": {
+        "zero": "Aucun résultat pour « %{term} »",
+        "one": "1 résultat pour « %{term} »",
+        "other": "%{count} résultats pour « %{term} »"
+    },
+    "searching_for": "Recherche : « %{term} »",
     "select_destination_collection": "Sélectionner la collection de destination :",
     "select_local_collection_to_export": "Sélectionner la collection locale à exporter :",
     "select_target_collection": "Sélectionnez la collection cible :",

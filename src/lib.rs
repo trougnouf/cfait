@@ -34,3 +34,31 @@ pub mod mobile;
 
 #[cfg(feature = "mobile")]
 uniffi::setup_scaffolding!();
+
+#[cfg(test)]
+mod i18n_tests {
+    // Regression test: rust_i18n parameters must be written as `%{param}` in
+    // the locale files, otherwise the raw placeholder text leaks into the UI
+    // (e.g. "4 results for '{term}'"). Assertions are locale-agnostic: they
+    // only check that the parameters were substituted.
+    #[test]
+    fn search_result_count_substitutes_parameters() {
+        let other = rust_i18n::t!("search_results.other", count = 4, term = "tomatoes").to_string();
+        assert!(other.contains('4'), "count missing in: {other}");
+        assert!(other.contains("tomatoes"), "term missing in: {other}");
+        assert!(
+            !other.contains("term}"),
+            "unsubstituted placeholder in: {other}"
+        );
+
+        let searching = rust_i18n::t!("searching_for", term = "carrots").to_string();
+        assert!(
+            searching.contains("carrots"),
+            "term missing in: {searching}"
+        );
+        assert!(
+            !searching.contains("term}"),
+            "unsubstituted placeholder in: {searching}"
+        );
+    }
+}

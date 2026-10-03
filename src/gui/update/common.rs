@@ -45,6 +45,33 @@ pub fn set_active_focus(app: &mut GuiApp, focus: Focus) {
     }
 }
 
+/// Indent the current line of a multi-line editor by two spaces (Tab).
+pub fn indent_line(content: &mut iced::widget::text_editor::Content) {
+    use iced::widget::text_editor::{Action, Edit, Motion};
+    content.perform(Action::Move(Motion::Home));
+    content.perform(Action::Edit(Edit::Insert(' ')));
+    content.perform(Action::Edit(Edit::Insert(' ')));
+}
+
+/// Remove up to two leading spaces from the current line of a multi-line
+/// editor (Shift+Tab).
+pub fn outdent_line(content: &mut iced::widget::text_editor::Content) {
+    use iced::widget::text_editor::{Action, Edit, Motion};
+    let cursor = content.cursor();
+    let Some(line) = content.line(cursor.position.line) else {
+        return;
+    };
+    let leading = line.text.chars().take_while(|c| *c == ' ').count();
+    let to_remove = leading.min(2);
+    if to_remove == 0 {
+        return;
+    }
+    content.perform(Action::Move(Motion::Home));
+    for _ in 0..to_remove {
+        content.perform(Action::Edit(Edit::Delete));
+    }
+}
+
 /// Build the visible task list and update UI caches.
 ///
 /// Strategy:

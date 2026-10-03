@@ -42,6 +42,7 @@ pub enum Focus {
     SearchInput,
     AddTaskInput,
     Journal,
+    JournalTitle,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -162,6 +163,10 @@ pub struct GuiApp {
     pub unsynced_changes: bool,
     pub unsynced_tooltip: String,
     pub last_sync_failed: bool,
+    /// True while a remote synchronization is in flight (drives the spinner).
+    pub syncing: bool,
+    /// Current frame of the sync spinner animation.
+    pub spinner_frame: usize,
 
     // Session UI state
     pub adding_session_uid: Option<String>,
@@ -692,6 +697,8 @@ impl Default for GuiApp {
             unsynced_changes: false,
             unsynced_tooltip: String::new(),
             last_sync_failed: false,
+            syncing: false,
+            spinner_frame: 0,
 
             // Session UI defaults
             adding_session_uid: None,

@@ -117,6 +117,13 @@ pub fn subscription(app: &GuiApp) -> Subscription<Message> {
         );
     }
 
+    // While a sync is in flight, tick the top-bar spinner icon.
+    if app.syncing {
+        subs.push(
+            iced::time::every(std::time::Duration::from_millis(150)).map(|_| Message::SpinnerTick),
+        );
+    }
+
     // Tick every minute if any task is running, so the timer updates visually.
     // Scan the whole store (not the filtered list): a visible parent may
     // aggregate session time from a running child that is hidden by filters.
@@ -401,7 +408,17 @@ fn handle_hotkey(
                 // Handled in is_cmd block for Ctrl+Delete, so here it's just Delete
                 Some(Message::DeleteSelected)
             }
-            keyboard::Key::Named(Named::Tab) => Some(Message::CycleFocus(!modifiers.shift())),
+            keyboard::Key::Named(Named::Tab) => {
+                // From the new-page title, Tab jumps to the note body instead of
+                // cycling focus.
+                if let Ok(focus) = ACTIVE_FOCUS.read()
+                    && *focus == Focus::JournalTitle
+                {
+                    Some(Message::FocusJournalEditor)
+                } else {
+                    Some(Message::CycleFocus(!modifiers.shift()))
+                }
+            }
             keyboard::Key::Named(_) => navigation_key_message(&key, modifiers.shift()),
 
             _ => None,

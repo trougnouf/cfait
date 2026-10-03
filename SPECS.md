@@ -148,6 +148,7 @@ The search bar supports a boolean recursive-descent parser.
     *   *Comparison:* `~<30m` (duration < 30m), `!<4` (priority < 4).
     *   *Dates:* `@<today` (Overdue), `^>1w` (Starts in > 1 week).
 *   **Match Highlighting:** Search terms are highlighted inline in task titles and descriptions across all clients.
+*   **Result Count:** While a search is active, the GUI top bar shows the number of results for the current query instead of the total task count.
 *   **Parent Inclusion:** Search matches include parents of matching tasks in the results, so searching for a subtask surfaces its full ancestry.
 
 ### 3.2. Multi-Stage Sorting Algorithm
@@ -250,6 +251,8 @@ Tasks tagged with `is:permanent` act as endless trackers. When checked off (Comp
 *   **Layout:** 3-pane layout (Sidebar, Main List, Markdown Details Pane).
 *   **Cursor Context Banner:** Raw text editors feature a dynamic banner that instantly resolves UIDs (`dep:`, `rel:`, `[[...]]`) into task summaries when the text cursor is placed on them.
     *   *Open via Ctrl+Click:* Ctrl+click (Cmd+click on macOS) a `[[wiki link]]` or URL in a text editor to open it, mirroring the TUI's `Ctrl+O`. Wiki links resolve to the target task or create the missing page in context; URLs open externally.
+    *   *Click to follow:* When the caret sits on a link that resolves to an existing task (or URL), the banner becomes a clickable chip that navigates to it. Partial links still show autocomplete chips to finish the link; a completed `[[link]]` never re-triggers autocomplete.
+*   **Sync Indicator:** The top-bar refresh button reflects sync state: an animated spinner (blue) while a sync is in flight, a red alert when the last sync failed (click to retry), amber pending-changes when local edits are not yet synced, and a neutral refresh icon when everything is up to date.
 *   **Window:** Client-Side Decorations (Custom frameless window, resize grips) unless `--force-ssd` is passed.
 *   **Zooming:** Global scale via `Ctrl++`, `Ctrl+-`, and `Ctrl+ScrollWheel`. Middle-click resets.
 *   **Mouse Interactions:**
@@ -294,6 +297,7 @@ Daily notes and wiki pages are `VJOURNAL` components (see 1.2). They share a uni
 *   **Journal Tab:** A sidebar tab (toggled by `show_journal_tab`) that anchors notes to dates. Selecting a date opens its daily note alongside an activity panel showing tasks due, started, completed, or worked on that day.
 *   **Wiki Index:** Wiki pages (notes without `DTSTART`) appear in a tree view under the Journal tab. Pages can be nested hierarchically via `[[Parent:Child]]` links and collapsed/expanded with `z` (TUI/GUI).
 *   **Page Creation:** Typing `[[My Page]]` in any text editor creates the page if it doesn't exist. The component type is inherited from the context (actionable `VTODO` from a task, `VJOURNAL` from a page). Use `is:page` or `is:journal` to force the type explicitly.
+*   **Page Creation Focus:** Creating a new page focuses the title field first; `Tab` moves focus to the note body.
 *   **TUI Journal Navigation:** When the Journal tab is active, `j`/`k` (or arrow keys) navigate the page list, `Enter` opens the selected page for editing, and `z` collapses/expands the wiki tree.
 *   **Android Journal:** A month-grid calendar view with daily-note indicators; tapping a day opens its note. Pages can be moved between dates via the context menu.
 
@@ -301,7 +305,7 @@ Daily notes and wiki pages are `VJOURNAL` components (see 1.2). They share a uni
 
 ## 6. Keyboard Shortcuts (GUI & TUI)
 
-*   **Navigation:** `j`/`k` or `Up`/`Down` (Select), `Tab` (Cycle focus between Sidebar, List, Input). `1..5` (Switch Sidebar tabs: 1:Collections, 2:Tags, 3:Locations, 4:Goals, 5:Journal). From text fields, use `Ctrl+1..5` instead.
+*   **Navigation:** `j`/`k` or `Up`/`Down` (Select), `Tab` (Cycle focus between Sidebar, List, Input — applies an active suggestion in title fields, indents the current line inside text editors). `1..5` (Switch Sidebar tabs: 1:Collections, 2:Tags, 3:Locations, 4:Goals, 5:Journal). From text fields, use `Ctrl+1..5` instead.
 *   **Main Actions:** 
     *   `Space`: Toggle Done/NeedsAction.
     *   `Shift+Space`: Complete & Shift recurrence (Relative advance).
@@ -314,7 +318,7 @@ Daily notes and wiki pages are `VJOURNAL` components (see 1.2). They share a uni
     *   `M`: Move task (or task tree) to another collection.
     *   `t`: Log time session manually.
     *   `Ctrl+Z` / `Ctrl+Y` / `Ctrl+Shift+Z`: Undo / Redo.
-*   **Text Editing (in editors):** `Ctrl+Left` / `Ctrl+Right`: move by word. `Ctrl+Backspace` / `Ctrl+Delete`: delete previous / next word (UAX#29 boundaries). On macOS, use `Option` instead of `Ctrl`.
+*   **Text Editing (in editors):** `Ctrl+Left` / `Ctrl+Right`: move by word. `Ctrl+Backspace` / `Ctrl+Delete`: delete previous / next word (UAX#29 boundaries). On macOS, use `Option` instead of `Ctrl`. `Enter` continues the current list item (bullets, checkboxes, and numbered lists auto-increment; an empty list item ends the list). `Tab` / `Shift+Tab`: indent / outdent the current line by two spaces.
 *   **Tree/Relationships:** 
     *   `z`: Fold/Unfold tree.
     *   `>` / `.` : Demote (Indent / Make child of previous).

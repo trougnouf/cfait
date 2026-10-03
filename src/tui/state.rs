@@ -664,6 +664,54 @@ impl AppState {
             }
         }
     }
+    pub fn indent_line(&mut self, n: usize) {
+        let old = self.input_buffer.clone();
+        let chars: Vec<char> = self.input_buffer.chars().collect();
+        let pos = self.cursor_position.min(chars.len());
+        let line_start = chars[..pos]
+            .iter()
+            .rposition(|&c| c == '\n')
+            .map(|i| i + 1)
+            .unwrap_or(0);
+        let byte_index = self
+            .input_buffer
+            .char_indices()
+            .map(|(i, _)| i)
+            .nth(line_start)
+            .unwrap_or(self.input_buffer.len());
+        for _ in 0..n {
+            self.input_buffer.insert(byte_index, ' ');
+        }
+        self.cursor_position = pos + n;
+        if old != self.input_buffer {
+            self.text_history.push(old);
+        }
+    }
+    pub fn outdent_line(&mut self, n: usize) {
+        let chars: Vec<char> = self.input_buffer.chars().collect();
+        let pos = self.cursor_position.min(chars.len());
+        let line_start = chars[..pos]
+            .iter()
+            .rposition(|&c| c == '\n')
+            .map(|i| i + 1)
+            .unwrap_or(0);
+        let leading = chars[line_start..]
+            .iter()
+            .take_while(|&&c| c == ' ')
+            .count();
+        let removed = n.min(leading);
+        if removed == 0 {
+            return;
+        }
+        let old = self.input_buffer.clone();
+        let end = line_start + removed;
+        self.input_buffer = chars[..line_start]
+            .iter()
+            .chain(chars[end..].iter())
+            .collect();
+        self.cursor_position = pos.saturating_sub(removed);
+        self.text_history.push(old);
+    }
 
     // --- WORD-LEVEL EDITING ---
     // UAX#29 word boundaries (unicode-segmentation), the same semantics the

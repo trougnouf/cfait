@@ -477,10 +477,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::DescriptionChanged(action) => {
-            if let text_editor::Action::Edit(text_editor::Edit::Insert('\t')) = action {
-                return Task::done(Message::TabPressed(true));
-            }
-
             // Ctrl+click a [[wiki link]] or URL in the description to open it,
             // mirroring the cursor-context open action (ctrl+o).
             if let text_editor::Action::Click(_) = action
@@ -541,6 +537,20 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.last_edited_field = 1;
             }
 
+            Task::none()
+        }
+
+        Message::DescriptionIndent(indent) => {
+            let old_text = app.description_value.text();
+            if indent {
+                common::indent_line(&mut app.description_value);
+            } else {
+                common::outdent_line(&mut app.description_value);
+            }
+            if old_text != app.description_value.text() {
+                app.desc_history.push(old_text);
+                app.last_edited_field = 1;
+            }
             Task::none()
         }
 

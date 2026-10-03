@@ -740,7 +740,7 @@
     "search_is_ready": "es:listo",
     "search_is_started": "está:iniciado",
     "search_placeholder": "Buscar…",
-    "searching_for": "Buscando: '{term}'",
+    "searching_for": "Buscando: '%{term}'",
     "select_destination_collection": "Elegir colección de destino:",
     "select_local_collection_to_export": "Elige qué colección local exportar:",
     "select_target_collection": "Seleccionar colección destino:",

@@ -1638,29 +1638,39 @@ fn view_main_content(app: &GuiApp, show_logo: bool, is_expanded: bool) -> Elemen
             }
         })
         .count();
-    let mut subtitle = match active_count {
-        0 => rust_i18n::t!("tasks_count.zero").to_string(),
-        1 => rust_i18n::t!("tasks_count.one").to_string(),
-        _ => rust_i18n::t!("tasks_count.other", count = active_count).to_string(),
-    };
-
     let search_text = app.search_value.text();
-    if !search_text.is_empty() {
-        subtitle.push_str(&format!(
-            " | {}",
-            rust_i18n::t!("searching_for", term = search_text)
-        ));
-    } else if !app.session.selected_categories.is_empty() {
-        let tag_count = app.session.selected_categories.len();
-        if tag_count == 1 {
-            subtitle.push_str(&format!(
-                " | #{}",
-                app.session.selected_categories.first().unwrap()
-            ));
-        } else {
-            subtitle.push_str(&format!(" | {} {}", tag_count, rust_i18n::t!("tags")));
+    let subtitle = if !search_text.is_empty() {
+        // While searching, show the result count for the term instead of the
+        // global task count.
+        match active_count {
+            0 => rust_i18n::t!("search_results.zero", term = search_text).to_string(),
+            1 => rust_i18n::t!("search_results.one", term = search_text).to_string(),
+            _ => rust_i18n::t!(
+                "search_results.other",
+                count = active_count,
+                term = search_text
+            )
+            .to_string(),
         }
-    }
+    } else {
+        let mut subtitle = match active_count {
+            0 => rust_i18n::t!("tasks_count.zero").to_string(),
+            1 => rust_i18n::t!("tasks_count.one").to_string(),
+            _ => rust_i18n::t!("tasks_count.other", count = active_count).to_string(),
+        };
+        if !app.session.selected_categories.is_empty() {
+            let tag_count = app.session.selected_categories.len();
+            if tag_count == 1 {
+                subtitle.push_str(&format!(
+                    " | #{}",
+                    app.session.selected_categories.first().unwrap()
+                ));
+            } else {
+                subtitle.push_str(&format!(" | {} {}", tag_count, rust_i18n::t!("tags")));
+            }
+        }
+        subtitle
+    };
 
     let mut title_group = row![].spacing(0).align_y(iced::Alignment::Center);
 
@@ -1731,21 +1741,31 @@ fn view_main_content(app: &GuiApp, show_logo: bool, is_expanded: bool) -> Elemen
         .spacing(10)
         .align_y(iced::Alignment::Center);
 
-    let (sync_icon_char, sync_icon_color, sync_tooltip) = if app.unsynced_changes {
+    let (sync_icon_char, sync_icon_color, sync_tooltip) = if app.syncing {
+        (
+            icon::SPINNER_FRAMES[app.spinner_frame % icon::SPINNER_FRAMES.len()],
+            Color::from_rgb(0.2, 0.7, 1.0), // Blue (#33B3FF)
+            rust_i18n::t!("syncing").to_string(),
+        )
+    } else if app.last_sync_failed {
         (
             icon::SYNC_ALERT,
             Color::from_rgb(0.92, 0.0, 0.0), // Red (#EB0000)
+            if app.unsynced_tooltip.is_empty() {
+                rust_i18n::t!("sync_failed_retry").to_string()
+            } else {
+                app.unsynced_tooltip.clone()
+            },
+        )
+    } else if app.unsynced_changes {
+        (
+            icon::SYNC_OFF,
+            Color::from_rgb(1.0, 0.702, 0.0), // Amber (#FFB300)
             if app.unsynced_tooltip.is_empty() {
                 rust_i18n::t!("unsynced").to_string()
             } else {
                 app.unsynced_tooltip.clone()
             },
-        )
-    } else if app.last_sync_failed {
-        (
-            icon::SYNC_OFF,
-            Color::from_rgb(1.0, 0.702, 0.0), // Amber (#FFB300)
-            rust_i18n::t!("sync_failed_retry").to_string(),
         )
     } else {
         (
@@ -2151,6 +2171,47 @@ fn word_delete_key_binding(
     Binding::from_key_press(key_press)
 }
 
+/// Key bindings for the multi-line list editors (journal notes and task
+/// descriptions): Tab indents the current line by two spaces, Shift+Tab
+/// outdents it, and Ctrl/Option+Backspace/Delete delete the whole word. Every
+/// other key falls back to iced's default bindings. The `indent_message`
+/// closure maps `shift` to the message the editor should receive.
+fn list_editor_key_binding(
+    key_press: text_editor::KeyPress,
+    indent_message: impl Fn(bool) -> Message,
+) -> Option<text_editor::Binding<Message>> {
+    use iced::keyboard::key::Named;
+    use text_editor::{Binding, Motion, Status};
+
+    let focused = matches!(key_press.status, Status::Focused { .. });
+
+    if focused && matches!(key_press.key, iced::keyboard::Key::Named(Named::Tab)) {
+        let shift = key_press.modifiers.shift();
+        return Some(Binding::Custom(indent_message(!shift)));
+    }
+
+    let is_word_delete_key = matches!(
+        key_press.key,
+        iced::keyboard::Key::Named(Named::Backspace | Named::Delete)
+    );
+    let word_mod =
+        key_press.modifiers.control() || (cfg!(target_os = "macos") && key_press.modifiers.alt());
+
+    if focused && is_word_delete_key && word_mod {
+        let is_backspace = matches!(key_press.key, iced::keyboard::Key::Named(Named::Backspace));
+        let motion = if is_backspace {
+            Motion::WordLeft
+        } else {
+            Motion::WordRight
+        };
+        return Some(Binding::Sequence(vec![
+            Binding::Select(motion),
+            Binding::Delete,
+        ]));
+    }
+    Binding::from_key_press(key_press)
+}
+
 fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
     let is_dark_mode = app.theme().extended_palette().is_dark;
 
@@ -2246,7 +2307,7 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
             .id("description_input")
             .placeholder(placeholder)
             .on_action(Message::DescriptionChanged)
-            .key_binding(word_delete_key_binding)
+            .key_binding(|kp| list_editor_key_binding(kp, Message::DescriptionIndent))
             .highlight_with::<self::syntax::MarkdownHighlighter>(
                 is_dark_mode,
                 |highlight, _theme| *highlight,
@@ -2793,7 +2854,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
                 .style(iced::widget::button::secondary)
                 .padding(8)
                 .on_press(Message::CreateJournalSubPage(uid.clone())),
-            text(rust_i18n::t!("create_subtask")).size(12),
+            text(rust_i18n::t!("create_subpage")).size(12),
             tooltip::Position::Bottom,
         )
         .style(crate::gui::view::tooltip_style);
@@ -2804,6 +2865,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
                     rust_i18n::t!("page_title_placeholder").as_ref(),
                     &app.journal_title_input,
                 )
+                .id("journal_title")
                 .on_input(Message::JournalTitleInputChanged)
                 .size(22)
                 .font(iced::Font {
@@ -2881,7 +2943,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
             rust_i18n::t!("journal_no_notes", name = active_name).to_string()
         })
         .on_action(Message::JournalContentChanged)
-        .key_binding(word_delete_key_binding)
+        .key_binding(|kp| list_editor_key_binding(kp, Message::JournalIndent))
         .highlight_with::<self::syntax::MarkdownHighlighter>(is_dark_mode, |highlight, _theme| {
             *highlight
         })
