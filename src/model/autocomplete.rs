@@ -229,6 +229,13 @@ pub fn suggest(
     let mut is_wiki = false;
 
     if let Some(stripped) = word.strip_prefix("[[") {
+        // A completed [[wiki link]] is followed or created through the
+        // context banner, not autocompleted. Without this, re-applying a
+        // suggestion would keep the cursor inside the finished link and
+        // trigger the same suggestions again.
+        if stripped.ends_with("]]") {
+            return None;
+        }
         is_task_lookup = true;
         is_wiki = true;
         orig_prefix = "[[";

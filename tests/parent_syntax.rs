@@ -242,3 +242,54 @@ fn autocomplete_task_lookup_scoped_to_visible_collections() {
     .expect("expected suggestions");
     assert_eq!(suggestions.len(), 2);
 }
+
+#[test]
+fn wiki_link_autocomplete_only_while_typing() {
+    let mut store = make_store();
+    let aliases = HashMap::new();
+
+    let mut task = Task::new("Machine IA", &aliases, None);
+    task.uid = "machine-ia".to_string();
+    task.calendar_href = "garden".to_string();
+    store.add_task(task);
+
+    let calendars = vec![cal_entry("Garden", "garden")];
+    let visible = vec!["garden".to_string()];
+
+    // While the link is still open, the task is suggested.
+    let input = "[[Machine";
+    let (_, suggestions) = suggest(input, input.len(), &store, &aliases, &calendars, &visible)
+        .expect("open [[link should suggest tasks");
+    assert_eq!(
+        suggestions
+            .iter()
+            .map(|s| s.replacement.as_str())
+            .collect::<Vec<_>>(),
+        vec!["[[Machine IA]]"]
+    );
+
+    // A completed link must not suggest again, no matter where the cursor
+    // sits inside it: following it is the context banner's job.
+    let done = "[[Machine IA]]";
+    assert!(
+        suggest(done, done.len(), &store, &aliases, &calendars, &visible).is_none(),
+        "completed [[link]] at cursor end must not autocomplete"
+    );
+    let mid = "[[Machine IA]]";
+    assert!(
+        suggest(mid, 2, &store, &aliases, &calendars, &visible).is_none(),
+        "cursor right after [[ of a completed link must not autocomplete"
+    );
+    assert!(
+        suggest(
+            "[[Machine IA]] and then some",
+            13,
+            &store,
+            &aliases,
+            &calendars,
+            &visible
+        )
+        .is_none(),
+        "cursor inside a completed link must not autocomplete"
+    );
+}
