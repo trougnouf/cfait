@@ -45,16 +45,35 @@ pub fn set_active_focus(app: &mut GuiApp, focus: Focus) {
     }
 }
 
-/// Indent the current line of a multi-line editor by two spaces (Tab).
+/// Number of characters between the start of the current line and the cursor.
+fn cursor_char_column(content: &iced::widget::text_editor::Content) -> usize {
+    let cursor = content.cursor();
+    content
+        .line(cursor.position.line)
+        .map(|line| {
+            line.text[..cursor.position.column.min(line.text.len())]
+                .chars()
+                .count()
+        })
+        .unwrap_or(0)
+}
+
+/// Indent the current line of a multi-line editor by two spaces (Tab),
+/// keeping the cursor at the same position relative to the line text.
 pub fn indent_line(content: &mut iced::widget::text_editor::Content) {
     use iced::widget::text_editor::{Action, Edit, Motion};
+    let column = cursor_char_column(content);
     content.perform(Action::Move(Motion::Home));
     content.perform(Action::Edit(Edit::Insert(' ')));
     content.perform(Action::Edit(Edit::Insert(' ')));
+    for _ in 0..column {
+        content.perform(Action::Move(Motion::Right));
+    }
 }
 
 /// Remove up to two leading spaces from the current line of a multi-line
-/// editor (Shift+Tab).
+/// editor (Shift+Tab), keeping the cursor at the same position relative to
+/// the line text.
 pub fn outdent_line(content: &mut iced::widget::text_editor::Content) {
     use iced::widget::text_editor::{Action, Edit, Motion};
     let cursor = content.cursor();
@@ -66,9 +85,13 @@ pub fn outdent_line(content: &mut iced::widget::text_editor::Content) {
     if to_remove == 0 {
         return;
     }
+    let column = cursor_char_column(content);
     content.perform(Action::Move(Motion::Home));
     for _ in 0..to_remove {
         content.perform(Action::Edit(Edit::Delete));
+    }
+    for _ in 0..column.saturating_sub(to_remove) {
+        content.perform(Action::Move(Motion::Right));
     }
 }
 
