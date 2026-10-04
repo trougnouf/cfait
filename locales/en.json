@@ -197,6 +197,7 @@
     "switch_data_dir_title": "Change data directory?",
     "switch_data_dir_text": "The app will restart to use the new location. Existing local data will NOT be moved automatically.\n\n⚠️ WARNING: Syncing data files via tools like Syncthing is NOT recommended. It will cause unhandled file conflicts and permanent data loss if edited on multiple devices offline. CalDAV is the only officially supported sync method.",
     "switch_and_restart": "Change & restart",
+    "dependency_resolution_failed": "Unresolved task references: %{warnings}",
     "debug_export_explain": "Export all app data (config, cache, journals) for debugging. Credentials will be redacted.",
     "default_calendar": "Default",
     "default_collection": "Default collection",

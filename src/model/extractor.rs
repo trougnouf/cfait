@@ -7,6 +7,8 @@ use uuid::Uuid;
 pub struct ExtractedTask {
     pub uid: String,
     pub parsed_existing_uid: Option<String>, // Found via <!-- uid:... -->
+    /// Index of the source line in the input text (0-based).
+    pub line_idx: usize,
     pub parent_uid: Option<String>,
     pub dependencies: Vec<String>,
     pub raw_text: String,
@@ -48,6 +50,29 @@ fn extract_uid_tag(line: &str) -> (String, Option<String>) {
         return (clean_line, Some(uid));
     }
     (line.trim_end().to_string(), None)
+}
+
+/// Append `<!-- uid:... -->` tags to the lines that a sync just minted, so
+/// the next save of the same buffer matches those components by uid instead
+/// of minting a fresh one (which would soft-delete the previous version).
+///
+/// `mints` maps source line index (in `text`) to the uid assigned to that
+/// line; lines that already carry a uid tag are left untouched. Tags are
+/// appended at the end of the line, so neither line numbers nor column
+/// offsets shift — a cursor restored at the same (line, column) keeps
+/// typing before the tag.
+pub fn inject_uid_tags(text: &str, mints: &[(usize, String)]) -> String {
+    if mints.is_empty() {
+        return text.to_string();
+    }
+    let mut lines: Vec<String> = text.split('\n').map(str::to_string).collect();
+    for &(line_idx, ref uid) in mints {
+        if line_idx >= lines.len() || lines[line_idx].contains("<!-- uid:") {
+            continue;
+        }
+        lines[line_idx].push_str(&format!(" <!-- uid:{} -->", uid));
+    }
+    lines.join("\n")
 }
 
 /// Leading whitespace of `line`, as (indent level with tabs counting as 4, byte offset past it).
@@ -420,6 +445,7 @@ pub fn extract_markdown_tasks(
             extracted.push(ExtractedTask {
                 uid,
                 parsed_existing_uid: parsed_uid,
+                line_idx,
                 parent_uid,
                 dependencies: Vec::new(),
                 raw_text: clean_text,
@@ -895,4 +921,25 @@ fn serialize_task_tree_inner(
     }
 
     out.trim_end().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn inject_uid_tags_appends_at_line_ends_only() {
+        let text = "Woke up early.\n- [ ] Buy\n- My Page is:page <!-- uid:keep-me -->\nNotes.";
+        let out = inject_uid_tags(text, &[(1, "abc".to_string()), (2, "def".to_string())]);
+        assert_eq!(
+            out,
+            "Woke up early.\n- [ ] Buy <!-- uid:abc -->\n- My Page is:page <!-- uid:keep-me -->\nNotes."
+        );
+
+        // No mints: the buffer comes back unchanged.
+        assert_eq!(inject_uid_tags(text, &[]), text);
+
+        // An out-of-range line index is ignored, not a panic.
+        assert_eq!(inject_uid_tags(text, &[(99, "x".to_string())]), text);
+    }
 }

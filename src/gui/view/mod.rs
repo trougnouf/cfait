@@ -3318,7 +3318,11 @@ pub fn build_context_banner<'a>(
                         Some(Message::OpenUrl(clean_uid.clone())),
                     )
                 } else {
-                    match app.store.resolve_dependency_ref(&clean_uid, context_uid) {
+                    match app.store.resolve_dependency_ref_scoped(
+                        &clean_uid,
+                        context_uid,
+                        Some(&app.visible_calendar_hrefs()),
+                    ) {
                         Ok(resolved_uid) => {
                             if let Some(summary) = app.store.get_summary(&resolved_uid) {
                                 let icon = match kind {

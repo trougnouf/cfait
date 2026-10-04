@@ -204,6 +204,7 @@
     "daemon_offline_sleeping": "Mode hors ligne configuré. Daemon en veille...",
     "daemon_syncing": "Daemon : Synchronisation avec le serveur...",
     "data_management": "Gestion des données",
+    "dependency_resolution_failed": "Références de tâches non résolues : %{warnings}",
     "debug_export_android_only": "L'export de débogage n'est disponible que sur Android",
     "debug_export_explain": "Exporter toutes les données de l'application (config, cache, journaux) pour le débogage. Les identifiants seront masqués.",
     "default_calendar": "Par défaut",

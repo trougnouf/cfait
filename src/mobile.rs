@@ -3477,7 +3477,7 @@ impl CfaitMobile {
         };
 
         match store.sync_tree_from_markdown(&uid, &markdown, &sync_options, is_journal) {
-            Ok((actions, warnings)) => {
+            Ok((actions, warnings, _mints)) => {
                 drop(store);
                 if !warnings.is_empty() {
                     #[cfg(target_os = "android")]

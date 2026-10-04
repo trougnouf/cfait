@@ -293,3 +293,136 @@ fn wiki_link_autocomplete_only_while_typing() {
         "cursor inside a completed link must not autocomplete"
     );
 }
+
+#[test]
+fn resolve_parent_scoped_to_visible_collections() {
+    let mut store = make_store();
+    let aliases = HashMap::new();
+
+    let mut visible_parent = Task::new("test task", &aliases, None);
+    visible_parent.uid = "visible-uid".to_string();
+    visible_parent.calendar_href = "tests".to_string();
+    store.add_task(visible_parent);
+
+    let mut hidden_parent = Task::new("test task", &aliases, None);
+    hidden_parent.uid = "hidden-uid".to_string();
+    hidden_parent.calendar_href = "archive".to_string();
+    store.add_task(hidden_parent);
+
+    let mut child = Task::new("sub-task parent:\"test task\"", &aliases, None);
+    child.uid = "child-uid".to_string();
+    child.calendar_href = "tests".to_string();
+    let warnings = store.resolve_dependencies_scoped(&mut child, &["tests".to_string()]);
+
+    assert!(warnings.is_empty(), "warnings: {warnings:?}");
+    assert_eq!(
+        child.parent_uid.as_deref(),
+        Some("visible-uid"),
+        "resolution must pick the only visible 'test task', ignoring hidden collections"
+    );
+
+    // Without a scope, both collections match and the reference is ambiguous.
+    let mut child = Task::new("sub-task parent:\"test task\"", &aliases, None);
+    child.uid = "child-uid-2".to_string();
+    child.calendar_href = "tests".to_string();
+    let warnings = store.resolve_dependencies(&mut child);
+    assert!(
+        warnings
+            .iter()
+            .any(|w| matches!(w, DependencyWarning::InvalidParent { .. })),
+        "unscoped resolution must be ambiguous, got: {warnings:?}"
+    );
+}
+
+#[test]
+fn ambiguous_parent_warning_lists_candidates_with_collections() {
+    let mut store = make_store();
+    let aliases = HashMap::new();
+
+    for (uid, href) in [("parent-a", "garden"), ("parent-b", "balcony")] {
+        let mut t = Task::new("test task", &aliases, None);
+        t.uid = uid.to_string();
+        t.calendar_href = href.to_string();
+        store.add_task(t);
+    }
+
+    let mut child = Task::new("sub-task parent:\"test task\"", &aliases, None);
+    child.uid = "child-uid".to_string();
+    child.calendar_href = "garden".to_string();
+    let warnings = store
+        .resolve_dependencies_scoped(&mut child, &["garden".to_string(), "balcony".to_string()]);
+
+    let candidates = warnings
+        .iter()
+        .find_map(|w| match w {
+            DependencyWarning::InvalidParent { candidates, .. } => Some(candidates),
+            _ => None,
+        })
+        .expect("an InvalidParent warning carrying candidates");
+    assert_eq!(candidates.len(), 2);
+    let hrefs: Vec<&str> = candidates
+        .iter()
+        .map(|(_, _, href)| href.as_str())
+        .collect();
+    assert!(hrefs.contains(&"garden") && hrefs.contains(&"balcony"));
+    assert!(
+        warnings.iter().any(|w| w.to_string().contains("abc12345")),
+        "the warning must tell the user how to disambiguate: {warnings:?}"
+    );
+    // The ambiguous reference is kept as typed, not dropped.
+    assert_eq!(child.parent_uid.as_deref(), Some("test task"));
+}
+
+#[test]
+fn autocomplete_duplicate_summaries_offer_short_uids() {
+    let mut store = make_store();
+    let aliases = HashMap::new();
+
+    let mut garden_task = Task::new("Plant tomatoes", &aliases, None);
+    garden_task.uid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee".to_string();
+    garden_task.calendar_href = "garden".to_string();
+    store.add_task(garden_task);
+
+    let mut balcony_task = Task::new("Plant tomatoes", &aliases, None);
+    balcony_task.uid = "99999999-bbbb-cccc-dddd-eeeeeeeeeeee".to_string();
+    balcony_task.calendar_href = "balcony".to_string();
+    store.add_task(balcony_task);
+
+    let calendars = vec![
+        cal_entry("Garden", "garden"),
+        cal_entry("Balcony", "balcony"),
+    ];
+    let visible = vec!["garden".to_string(), "balcony".to_string()];
+
+    let input = "parent:plant";
+    let (_, suggestions) = suggest(input, input.len(), &store, &aliases, &calendars, &visible)
+        .expect("expected suggestions for duplicate summaries");
+    assert_eq!(suggestions.len(), 2);
+    for s in &suggestions {
+        assert_eq!(
+            s.replacement,
+            format!("parent:{}", &s.replacement["parent:".len()..]),
+            "duplicates must insert a short UID reference"
+        );
+        assert_eq!(s.replacement.len(), "parent:".len() + 8);
+        assert!(
+            s.display.contains(" — "),
+            "duplicate rows must be labelled with their collection: {}",
+            s.display
+        );
+    }
+
+    // A unique summary keeps the quoted-summary reference.
+    let mut unique = Task::new("Plant a fig tree", &aliases, None);
+    unique.uid = "11111111-bbbb-cccc-dddd-eeeeeeeeeeee".to_string();
+    unique.calendar_href = "garden".to_string();
+    store.add_task(unique);
+    let input = "parent:fig";
+    let (_, suggestions) = suggest(input, input.len(), &store, &aliases, &calendars, &visible)
+        .expect("expected suggestions");
+    let s = suggestions
+        .iter()
+        .find(|s| s.display.contains("fig"))
+        .expect("fig tree suggestion");
+    assert_eq!(s.replacement, "parent:\"Plant a fig tree\"");
+}

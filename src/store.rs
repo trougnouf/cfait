@@ -98,11 +98,14 @@ pub enum DependencyWarning {
     Ambiguous {
         raw: String,
         source_task_uid: String,
-        relation_type: String, // "dep" or "rel"
-        candidates: Vec<(String, String)>,
+        relation_type: String,                     // "dep" or "rel"
+        candidates: Vec<(String, String, String)>, // (uid, summary, calendar href)
     },
     InvalidParent {
         raw: String,
+        // (uid, summary, calendar href) of the matches when the reference
+        // was ambiguous; empty for not-found and cyclic references.
+        candidates: Vec<(String, String, String)>,
     },
 }
 
@@ -113,24 +116,40 @@ impl std::fmt::Display for DependencyWarning {
             DependencyWarning::Ambiguous {
                 raw, candidates, ..
             } => {
-                let summaries: Vec<String> = candidates
-                    .iter()
-                    .take(3)
-                    .map(|(_, s)| format!("'{}'", s))
-                    .collect();
-                let mut matches_str = summaries.join(", ");
-                if candidates.len() > 3 {
-                    matches_str.push_str(", ...");
-                }
-                write!(f, "Ambiguous reference '{}'. Matches: {}", raw, matches_str)
+                write!(f, "{}", format_ambiguous(raw, candidates))
             }
-            DependencyWarning::InvalidParent { raw } => write!(
-                f,
-                "Invalid parent reference '{}': no unique matching task, or it would create a cycle. The reference was kept as-is.",
-                raw
-            ),
+            DependencyWarning::InvalidParent { raw, candidates } => {
+                if candidates.is_empty() {
+                    write!(
+                        f,
+                        "Invalid parent reference '{}': no unique matching task, or it would create a cycle. The reference was kept as-is.",
+                        raw
+                    )
+                } else {
+                    write!(f, "{}", format_ambiguous(raw, candidates))
+                }
+            }
         }
     }
+}
+
+/// Shared wording for ambiguity across relation types, listing the candidate
+/// summaries with their collection hrefs and how to disambiguate.
+fn format_ambiguous(raw: &str, candidates: &[(String, String, String)]) -> String {
+    let summaries: Vec<String> = candidates
+        .iter()
+        .take(3)
+        .map(|(_, s, href)| format!("'{}' ({})", s, href))
+        .collect();
+    let mut matches_str = summaries.join(", ");
+    if candidates.len() > 3 {
+        matches_str.push_str(", ...");
+    }
+    format!(
+        "Ambiguous reference '{}'. Matches: {}. Disambiguate with a short UID \
+         (e.g. parent:abc12345) or make one of the collections invisible.",
+        raw, matches_str
+    )
 }
 
 /// Outcome of a failed reference resolution. Matching on the variant is
@@ -690,6 +709,16 @@ pub struct SyncTreeOptions<'a> {
     pub calendars: &'a [crate::model::CalendarListEntry],
 }
 
+/// The result of a tree sync: the actions to apply, the dependency
+/// warnings, and the `(line_idx, uid)` pairs for lines that carried no
+/// `<!-- uid -->` tag and were therefore minted by this sync (see
+/// `sync_tree_from_markdown`).
+pub type SyncTreeResult = (
+    Vec<crate::journal::Action>,
+    Vec<DependencyWarning>,
+    Vec<(usize, String)>,
+);
+
 /// Check if [s, e) is fully covered by the union of merged intervals.
 fn session_fully_covered(s: i64, e: i64, intervals: &[(i64, i64)]) -> bool {
     let mut covered = 0i64;
@@ -1102,6 +1131,25 @@ impl TaskStore {
         reference: &str,
         context_uid: Option<&str>,
     ) -> Result<String, DependencyRefError> {
+        self.resolve_dependency_ref_scoped(reference, context_uid, None)
+    }
+
+    /// Same as [`resolve_dependency_ref`], but fuzzy references (summaries,
+    /// hierarchical paths, UID prefixes) only match tasks in the given
+    /// collection hrefs, mirroring what autocomplete suggests. Exact known
+    /// UIDs still resolve regardless of visibility.
+    pub fn resolve_dependency_ref_scoped(
+        &self,
+        reference: &str,
+        context_uid: Option<&str>,
+        visible_hrefs: Option<&[String]>,
+    ) -> Result<String, DependencyRefError> {
+        // A calendar is matchable when it is not a system calendar and,
+        // when a visibility scope is given, listed in it.
+        let in_scope = |href: &str, is_system: bool| match visible_hrefs {
+            Some(visible) => !is_system && visible.iter().any(|h| h == href),
+            None => !is_system,
+        };
         let clean_ref = reference
             .trim_start_matches("[[")
             .trim_end_matches("]]")
@@ -1133,8 +1181,9 @@ impl TaskStore {
 
             for (uid, task) in map {
                 if (path_segments.len() == 1
+                    && in_scope(href, is_system)
                     && uid.starts_with(&crate::model::parser::strip_quotes(&path_segments[0])))
-                    || (!is_system
+                    || (in_scope(href, is_system)
                         && self.task_matches_path(task, &path_segments, is_relative, context_uid))
                 {
                     matches.push(task.clone());
@@ -1153,9 +1202,9 @@ impl TaskStore {
             for (href, map) in &self.calendars {
                 let is_system = crate::storage::is_system_calendar(href);
                 for (uid, task) in map {
-                    if uid.starts_with(&single)
-                        || (!is_system
-                            && crate::model::matcher::contains_ignore_case(&task.summary, &single))
+                    if in_scope(href, is_system)
+                        && (uid.starts_with(&single)
+                            || crate::model::matcher::contains_ignore_case(&task.summary, &single))
                     {
                         matches.push(task.clone());
                     }
@@ -1283,11 +1332,16 @@ impl TaskStore {
         (final_uid, actions)
     }
 
+    /// Candidate tasks for a `dep:`/`rel:`/`parent:` reference, as
+    /// (uid, summary, calendar href) tuples, best matches first. Used to
+    /// build ambiguity warnings; pass a visibility scope to get the same
+    /// candidate set the scoped resolver would accept.
     pub fn get_dependency_candidates(
         &self,
         reference: &str,
         context_uid: Option<&str>,
-    ) -> Vec<(String, String)> {
+        visible_hrefs: Option<&[String]>,
+    ) -> Vec<(String, String, String)> {
         let clean_ref = reference
             .trim_start_matches("[[")
             .trim_end_matches("]]")
@@ -1309,13 +1363,18 @@ impl TaskStore {
 
         for (href, map) in &self.calendars {
             let is_system = crate::storage::is_system_calendar(href);
+            let in_scope = match visible_hrefs {
+                Some(visible) => !is_system && visible.iter().any(|h| h == href),
+                None => !is_system,
+            };
             for (uid, task) in map {
                 if (path_segments.len() == 1
+                    && in_scope
                     && uid.starts_with(&crate::model::parser::strip_quotes(&path_segments[0])))
-                    || (!is_system
+                    || (in_scope
                         && self.task_matches_path(task, &path_segments, is_relative, context_uid))
                 {
-                    matches.push((uid.clone(), task.summary.clone()));
+                    matches.push((uid.clone(), task.summary.clone(), href.clone()));
                 }
             }
         }
@@ -1324,17 +1383,17 @@ impl TaskStore {
             crate::model::parser::strip_quotes(path_segments.last().unwrap()).to_lowercase();
         // Precompute the lowercase summary and the starts-with flag once per candidate,
         // instead of calling .to_lowercase() on every comparator invocation during sort.
-        let mut keyed: Vec<(String, String, bool)> = matches
+        let mut keyed: Vec<(String, String, String, bool)> = matches
             .into_iter()
-            .map(|(uid, summary)| {
+            .map(|(uid, summary, href)| {
                 let starts = summary.to_lowercase().starts_with(&target_summary);
-                (uid, summary, starts)
+                (uid, summary, href, starts)
             })
             .collect();
-        keyed.sort_by(|a, b| b.2.cmp(&a.2).then_with(|| a.1.cmp(&b.1)));
-        let mut matches: Vec<(String, String)> = keyed
+        keyed.sort_by(|a, b| b.3.cmp(&a.3).then_with(|| a.1.cmp(&b.1)));
+        let mut matches: Vec<(String, String, String)> = keyed
             .into_iter()
-            .map(|(uid, summary, _)| (uid, summary))
+            .map(|(uid, summary, href, _)| (uid, summary, href))
             .collect();
         matches.dedup_by(|a, b| a.0 == b.0);
         matches
@@ -1348,6 +1407,7 @@ impl TaskStore {
         refs: &[String],
         context_uid: &str,
         rel_type: &str,
+        visible_hrefs: Option<&[String]>,
         warnings: &mut Vec<DependencyWarning>,
     ) -> Vec<String> {
         let mut resolved = Vec::new();
@@ -1355,10 +1415,11 @@ impl TaskStore {
             let uid = if r.len() == 36 && uuid::Uuid::parse_str(r).is_ok() {
                 r.clone()
             } else {
-                match self.resolve_dependency_ref(r, Some(context_uid)) {
+                match self.resolve_dependency_ref_scoped(r, Some(context_uid), visible_hrefs) {
                     Ok(resolved_uid) => resolved_uid,
                     Err(_) => {
-                        let candidates = self.get_dependency_candidates(r, Some(context_uid));
+                        let candidates =
+                            self.get_dependency_candidates(r, Some(context_uid), visible_hrefs);
                         if candidates.len() > 1 {
                             warnings.push(DependencyWarning::Ambiguous {
                                 raw: r.clone(),
@@ -1389,10 +1450,39 @@ impl TaskStore {
     }
 
     pub fn resolve_dependencies(&self, task: &mut Task) -> Vec<DependencyWarning> {
+        self.resolve_dependencies_impl(task, None)
+    }
+
+    /// Like [`resolve_dependencies`], but fuzzy references only resolve within
+    /// the given collection hrefs, matching what the autocomplete offered.
+    pub fn resolve_dependencies_scoped(
+        &self,
+        task: &mut Task,
+        visible_hrefs: &[String],
+    ) -> Vec<DependencyWarning> {
+        self.resolve_dependencies_impl(task, Some(visible_hrefs))
+    }
+
+    fn resolve_dependencies_impl(
+        &self,
+        task: &mut Task,
+        visible_hrefs: Option<&[String]>,
+    ) -> Vec<DependencyWarning> {
         let mut warnings = Vec::new();
-        task.dependencies =
-            self.resolve_ref_list(&task.dependencies, &task.uid, "dep", &mut warnings);
-        task.related_to = self.resolve_ref_list(&task.related_to, &task.uid, "rel", &mut warnings);
+        task.dependencies = self.resolve_ref_list(
+            &task.dependencies,
+            &task.uid,
+            "dep",
+            visible_hrefs,
+            &mut warnings,
+        );
+        task.related_to = self.resolve_ref_list(
+            &task.related_to,
+            &task.uid,
+            "rel",
+            visible_hrefs,
+            &mut warnings,
+        );
 
         // Resolve a raw `parent:` reference (summary, short UID or wiki path)
         // into a real parent UID. Values that already are known task UIDs —
@@ -1405,13 +1495,24 @@ impl TaskStore {
             && !self.index.contains_key(&raw)
             && !(raw.len() == 36 && uuid::Uuid::parse_str(&raw).is_ok())
         {
-            let valid = self
-                .resolve_dependency_ref(&raw, Some(&task.uid))
+            let resolved = self.resolve_dependency_ref_scoped(&raw, Some(&task.uid), visible_hrefs);
+            let valid = resolved
+                .as_ref()
                 .ok()
-                .filter(|p_uid| p_uid != &task.uid && !self.is_descendant_of(p_uid, &task.uid));
+                .filter(|p_uid| **p_uid != task.uid && !self.is_descendant_of(p_uid, &task.uid))
+                .cloned();
             match valid {
                 Some(p_uid) => task.parent_uid = Some(p_uid),
-                None => warnings.push(DependencyWarning::InvalidParent { raw }),
+                None => {
+                    // An Ok-but-rejected resolution is a cycle; only an Err
+                    // leaves candidate matches worth reporting.
+                    let candidates = if resolved.is_ok() {
+                        Vec::new()
+                    } else {
+                        self.get_dependency_candidates(&raw, Some(&task.uid), visible_hrefs)
+                    };
+                    warnings.push(DependencyWarning::InvalidParent { raw, candidates });
+                }
             }
         }
         warnings
@@ -1886,20 +1987,27 @@ impl TaskStore {
     }
 
     /// Synchronizes a modified markdown tree back into the database.
+    ///
+    /// Returns `(actions, warnings, mints)`. A *mint* is a `(line_idx, uid)`
+    /// pair for every input line that carried no `<!-- uid -->` tag and was
+    /// therefore assigned a uid by this sync (fresh, or matched to an
+    /// existing sibling by summary). Persistent editors use it to re-tag the
+    /// buffer so the next save matches by uid instead of minting again.
     pub fn sync_tree_from_markdown(
         &mut self,
         root_uid: &str,
         markdown: &str,
         options: &SyncTreeOptions,
         is_journal: bool,
-    ) -> Result<(Vec<crate::journal::Action>, Vec<DependencyWarning>), String> {
+    ) -> Result<SyncTreeResult, String> {
         let mut actions = Vec::new();
+        let mut mints = Vec::new();
         let old_descendants = self.get_descendant_uids(root_uid);
 
         let root_calendar_href = if let Some(root) = self.get_task_ref(root_uid) {
             root.calendar_href.clone()
         } else {
-            return Ok((actions, Vec::new()));
+            return Ok((actions, Vec::new(), mints));
         };
 
         let mut root_clone = self.get_task_ref(root_uid).unwrap().clone();
@@ -1953,9 +2061,8 @@ impl TaskStore {
             let mut task_uid = ext.parsed_existing_uid.clone().unwrap_or(ext.uid.clone());
 
             // A sub-page re-pasted without a `<!-- uid -->` tag would otherwise mint a
-            // fresh component on every save (the soft-delete guard keeps old
-            // `is_journal` descendants). Match an existing sibling by summary so the
-            // round-trip is idempotent.
+            // fresh component on every save. Match an existing sibling by summary so
+            // the round-trip is idempotent.
             if ext.parsed_existing_uid.is_none()
                 && (ext.raw_text.contains("is:page") || ext.raw_text.contains("is:journal"))
             {
@@ -1972,6 +2079,13 @@ impl TaskStore {
                 {
                     task_uid = existing_uid;
                 }
+            }
+
+            // The line carried no uid tag, so this sync assigned it a uid. Report
+            // it so a persistent editor can re-tag the line and keep matching by
+            // uid on the next save.
+            if ext.parsed_existing_uid.is_none() {
+                mints.push((ext.line_idx, task_uid.clone()));
             }
 
             active_uids.insert(task_uid.clone());
@@ -2251,13 +2365,16 @@ impl TaskStore {
             self.add_task(t);
         }
 
-        // Soft-delete missing descendants
+        // Soft-delete missing descendants: the buffer is the full tree, so a
+        // line absent from it is an explicit deletion (sub-pages included).
+        // System-calendar components (trash / recovery) are exempt: they are
+        // not serialized into the tree but keep their parent link, and
+        // re-deleting them here would hard-delete them and bypass retention.
         for old_uid in old_descendants {
             if !active_uids.contains(&old_uid) {
                 if let Some(old_task) = self.get_task_ref(&old_uid)
-                    && old_task.is_journal
+                    && crate::storage::is_system_calendar(&old_task.calendar_href)
                 {
-                    // Do not delete sub-pages just because they aren't in the parent's markdown
                     continue;
                 }
                 if let Some((deleted, trashed_opt)) =
@@ -2271,13 +2388,13 @@ impl TaskStore {
             }
         }
 
-        Ok((actions, all_warnings))
+        Ok((actions, all_warnings, mints))
     }
 
     /// Find a child of `parent_uid` whose summary matches `summary`, returning its
     /// uid. Used to make re-parsing of sub-pages idempotent: a sub-page pasted
     /// without a `<!-- uid -->` tag would otherwise mint a fresh component on every
-    /// save, because the soft-delete guard keeps `is_journal` descendants.
+    /// save.
     fn find_child_uid_by_summary(&self, parent_uid: &str, summary: &str) -> Option<String> {
         self.children_index.get(parent_uid).and_then(|children| {
             children

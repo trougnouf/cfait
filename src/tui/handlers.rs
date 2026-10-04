@@ -508,7 +508,7 @@ async fn execute_task_action(
                             &sync_options,
                             is_journal,
                         ) {
-                            Ok((actions, warnings)) => {
+                            Ok((actions, warnings, _mints)) => {
                                 if !warnings.is_empty() {
                                     for w in warnings {
                                         log::warn!("Dependency resolution: {}", w);
@@ -793,7 +793,7 @@ fn sync_journal_tree(
         .store
         .sync_tree_from_markdown(uid, markdown, &sync_options, true)
     {
-        Ok((actions, warnings)) => {
+        Ok((actions, warnings, _mints)) => {
             if !warnings.is_empty() {
                 for w in &warnings {
                     log::warn!("Dependency resolution: {}", w);
@@ -900,7 +900,7 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
             &sync_options,
             is_journal,
         ) {
-            Ok((actions, warnings)) => {
+            Ok((actions, warnings, _mints)) => {
                 if !warnings.is_empty() {
                     for w in warnings {
                         log::warn!("Dependency resolution: {}", w);
@@ -2771,7 +2771,7 @@ pub async fn handle_key_event(
                                     &sync_options,
                                     is_journal,
                                 ) {
-                                    Ok((actions, warnings)) => {
+                                    Ok((actions, warnings, _mints)) => {
                                         if !warnings.is_empty() {
                                             for w in warnings {
                                                 log::warn!("Dependency resolution: {}", w);
@@ -3918,7 +3918,7 @@ pub async fn handle_key_event(
                                         calendars: &state.calendars,
                                     };
                                     state.edit_generation = state.edit_generation.wrapping_add(1);
-                                    if let Ok((actions, _warnings)) =
+                                    if let Ok((actions, _warnings, _mints)) =
                                         state.store.sync_tree_from_markdown(
                                             &uid,
                                             &new_desc,

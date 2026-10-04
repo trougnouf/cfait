@@ -88,7 +88,7 @@ fn journal_page_roundtrip_is_idempotent() {
     assert!(md.contains("Water the tomatoes"));
     assert!(md.contains("Tomatoes"));
 
-    let (actions, warnings) = store
+    let (actions, warnings, _mints) = store
         .sync_tree_from_markdown("page-1", &md, &opts, true)
         .unwrap();
     assert!(warnings.is_empty());
@@ -130,7 +130,7 @@ fn journal_page_description_lists_stay_in_description() {
     };
 
     let md = cfait::model::extractor::serialize_task_tree(&store, "page-1", &cals, true);
-    let (actions, warnings) = store
+    let (actions, warnings, _mints) = store
         .sync_tree_from_markdown("page-1", &md, &opts, true)
         .unwrap();
     assert!(warnings.is_empty());
@@ -188,7 +188,7 @@ fn daily_note_and_date_anchored_page_do_not_collapse() {
         calendars: &cals,
     };
     let md = cfait::model::extractor::serialize_task_tree(&store, &entry_uid, &cals, true);
-    let (actions, warnings) = store
+    let (actions, warnings, _mints) = store
         .sync_tree_from_markdown(&entry_uid, &md, &opts, true)
         .unwrap();
     assert!(warnings.is_empty());
@@ -300,7 +300,7 @@ fn journal_note_token_round_trips_through_sync() {
     );
 
     // Re-saving the identical tree is a no-op.
-    let (actions, warnings) = store
+    let (actions, warnings, _mints) = store
         .sync_tree_from_markdown("page-1", &md, &opts, true)
         .unwrap();
     assert!(warnings.is_empty());
@@ -315,7 +315,7 @@ fn journal_note_token_round_trips_through_sync() {
 
     // Removing the token turns the page back into a standard page.
     let unnoted = md.replace(" is:note", "");
-    let (actions, warnings) = store
+    let (actions, warnings, _mints) = store
         .sync_tree_from_markdown("page-1", &unnoted, &opts, true)
         .unwrap();
     assert!(warnings.is_empty());
@@ -332,7 +332,7 @@ fn journal_note_token_round_trips_through_sync() {
     );
 
     // Adding it back restores the note state.
-    let (_actions, warnings) = store
+    let (_actions, warnings, _mints) = store
         .sync_tree_from_markdown("page-1", &md, &opts, true)
         .unwrap();
     assert!(warnings.is_empty());

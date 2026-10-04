@@ -3,7 +3,7 @@ use crate::model::CalendarListEntry;
 use crate::model::matcher::{contains_ignore_case, starts_with_ignore_case};
 use crate::model::parser::{LEXICON, PrefixToken, quote_value, split_input_respecting_quotes};
 use crate::store::TaskStore;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -283,16 +283,50 @@ pub fn suggest(
             matches.dedup_by(|a, b| a.uid == b.uid);
             matches.truncate(10);
 
+            // Two visible tasks can share a summary. A plain `parent:"sum"`
+            // reference would then be ambiguous at save time, so mark those
+            // rows with their collection name and insert their short UID,
+            // which resolves uniquely.
+            let duplicate_summaries: HashSet<String> = {
+                let mut counts: HashMap<String, usize> = HashMap::new();
+                for t in &matches {
+                    *counts.entry(t.summary.to_lowercase()).or_default() += 1;
+                }
+                counts
+                    .into_iter()
+                    .filter(|(_, count)| *count > 1)
+                    .map(|(summary, _)| summary)
+                    .collect()
+            };
+
             let suggestions: Vec<_> = matches
                 .into_iter()
-                .map(|t| Suggestion {
-                    replacement: if is_wiki {
-                        format!("{}{}]]", orig_prefix, t.summary)
+                .map(|t| {
+                    let is_duplicate = duplicate_summaries.contains(&t.summary.to_lowercase());
+                    // Only prefix tokens (`dep:`/`rel:`/`parent:`) accept a
+                    // short UID; wiki links must keep their title.
+                    let needs_uid = !is_wiki && is_duplicate && t.uid.len() >= 8;
+                    let display = if is_duplicate {
+                        let collection = calendars
+                            .iter()
+                            .find(|c| c.href == t.calendar_href)
+                            .map(|c| c.name.as_str())
+                            .unwrap_or(&t.calendar_href);
+                        format!("{} — {}", t.summary, collection)
                     } else {
-                        format!("{}{}", orig_prefix, quote_value(&t.summary))
-                    },
-                    display: t.summary.clone(),
-                    description: String::new(),
+                        t.summary.clone()
+                    };
+                    Suggestion {
+                        replacement: if is_wiki {
+                            format!("{}{}]]", orig_prefix, t.summary)
+                        } else if needs_uid {
+                            format!("{}{}", orig_prefix, &t.uid[..8])
+                        } else {
+                            format!("{}{}", orig_prefix, quote_value(&t.summary))
+                        },
+                        display,
+                        description: String::new(),
+                    }
                 })
                 .collect();
 

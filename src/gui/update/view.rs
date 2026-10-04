@@ -62,15 +62,32 @@ fn flush_journal_save(app: &mut GuiApp) {
         };
 
         app.edit_generation = app.edit_generation.wrapping_add(1);
-        if let Ok((actions, _warnings)) = app.store.sync_tree_from_markdown(
+        if let Ok((actions, _warnings, mints)) = app.store.sync_tree_from_markdown(
             &uid,
             &new_text,
             &sync_options,
             true, // is_journal is always true here
-        ) && !actions.is_empty()
-            && let Some(tx) = &app.bg_tx
-        {
-            let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(actions));
+        ) {
+            // Re-tag the lines this sync just minted so the next debounced
+            // save matches them by uid instead of minting a fresh component
+            // for every intermediate version. The cursor keeps its (line,
+            // column): tags are appended at line ends and shift neither.
+            if !mints.is_empty() {
+                let cursor_pos = app.journal_editor_content.cursor().position;
+                let retagged = crate::model::extractor::inject_uid_tags(&new_text, &mints);
+                app.journal_editor_content =
+                    iced::widget::text_editor::Content::with_text(&retagged);
+                app.journal_editor_content
+                    .move_to(iced::widget::text_editor::Cursor {
+                        position: cursor_pos,
+                        selection: None,
+                    });
+            }
+            if !actions.is_empty()
+                && let Some(tx) = &app.bg_tx
+            {
+                let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(actions));
+            }
         }
     }
 }

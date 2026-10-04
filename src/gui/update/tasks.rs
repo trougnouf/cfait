@@ -314,11 +314,23 @@ fn apply_text_replacement(current: &str, range: std::ops::Range<usize>, text: &s
     new_text
 }
 
-/// Log dependency resolution warnings, if any.
-fn log_dependency_warnings(warnings: Vec<crate::store::DependencyWarning>) {
-    for w in warnings {
+/// Log dependency resolution warnings and surface them as a dismissible
+/// error banner: an ambiguous or dangling `parent:`/`dep:`/`rel:` reference
+/// must not fail silently.
+fn handle_dependency_warnings(app: &mut GuiApp, warnings: Vec<crate::store::DependencyWarning>) {
+    if warnings.is_empty() {
+        return;
+    }
+    for w in &warnings {
         log::warn!("Dependency resolution: {}", w);
     }
+    let details = warnings
+        .iter()
+        .map(|w| w.to_string())
+        .collect::<Vec<_>>()
+        .join("; ");
+    app.error_msg =
+        Some(rust_i18n::t!("dependency_resolution_failed", warnings = details).to_string());
 }
 
 /// Append `extra` to a description, joining with a blank line.
@@ -1748,7 +1760,7 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
         .map(|t| t.is_journal)
         .unwrap_or(false);
 
-    if let Some(tree_uid) = &app.editing_tree_uid {
+    if let Some(tree_uid) = app.editing_tree_uid.clone() {
         let sync_options = crate::store::SyncTreeOptions {
             aliases: &app.tag_aliases,
             default_reminder_time: config_time,
@@ -1756,19 +1768,20 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
             calendars: &app.calendars,
         };
         app.edit_generation = app.edit_generation.wrapping_add(1);
-        let (mut actions, warnings) =
-            match app
-                .store
-                .sync_tree_from_markdown(tree_uid, &desc_text, &sync_options, is_journal)
-            {
-                Ok(res) => res,
-                Err(e) => {
-                    app.error_msg = Some(e);
-                    return Task::none();
-                }
-            };
+        let (mut actions, warnings, _mints) = match app.store.sync_tree_from_markdown(
+            &tree_uid,
+            &desc_text,
+            &sync_options,
+            is_journal,
+        ) {
+            Ok(res) => res,
+            Err(e) => {
+                app.error_msg = Some(e);
+                return Task::none();
+            }
+        };
 
-        log_dependency_warnings(warnings);
+        handle_dependency_warnings(app, warnings);
 
         app.selected_uid = Some(tree_uid.clone());
         if !keep_editing {
@@ -1779,7 +1792,7 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
         } else {
             let tree_md = crate::model::extractor::serialize_task_tree(
                 &app.store,
-                tree_uid,
+                &tree_uid,
                 &app.calendars,
                 is_journal,
             );
@@ -1810,7 +1823,10 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
             task.description = cleaned_desc.clone();
             task.apply_smart_input(&clean_input, &app.tag_aliases, config_time);
 
-            log_dependency_warnings(app.store.resolve_dependencies(&mut task));
+            let warnings = app
+                .store
+                .resolve_dependencies_scoped(&mut task, &app.visible_calendar_hrefs());
+            handle_dependency_warnings(app, warnings);
 
             if let Some(target) = task.target_collection.take() {
                 task.calendar_href =
@@ -1865,7 +1881,10 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                     (sub.categories.clone(), sub.locations.clone(), sub.priority),
                 );
 
-                log_dependency_warnings(app.store.resolve_dependencies(&mut sub));
+                let warnings = app
+                    .store
+                    .resolve_dependencies_scoped(&mut sub, &app.visible_calendar_hrefs());
+                handle_dependency_warnings(app, warnings);
 
                 append_description(&mut sub.description, &ext.description);
                 sub.inline_media = ext.inline_media.clone();
@@ -1915,7 +1934,11 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
             &mut new_task.inline_media,
         );
 
-        log_dependency_warnings(app.store.resolve_dependencies(&mut new_task));
+        let visible_hrefs = app.visible_calendar_hrefs();
+        let warnings = app
+            .store
+            .resolve_dependencies_scoped(&mut new_task, &visible_hrefs);
+        handle_dependency_warnings(app, warnings);
 
         if new_task.summary.trim().is_empty() && cleaned_desc.is_empty() {
             if !keep_editing {
@@ -1997,7 +2020,10 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                     (sub.categories.clone(), sub.locations.clone(), sub.priority),
                 );
 
-                log_dependency_warnings(app.store.resolve_dependencies(&mut sub));
+                let warnings = app
+                    .store
+                    .resolve_dependencies_scoped(&mut sub, &app.visible_calendar_hrefs());
+                handle_dependency_warnings(app, warnings);
 
                 append_description(&mut sub.description, &ext.description);
                 sub.inline_media = ext.inline_media.clone();
@@ -2030,9 +2056,14 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
             }
 
             // Resolve dependencies atomically before mutating store
+            let mut all_warnings = Vec::new();
             for t in &mut tasks_to_create {
-                log_dependency_warnings(app.store.resolve_dependencies(t));
+                all_warnings.extend(
+                    app.store
+                        .resolve_dependencies_scoped(t, &app.visible_calendar_hrefs()),
+                );
             }
+            handle_dependency_warnings(app, all_warnings);
 
             app.task_ids
                 .entry(parent_uid.clone())

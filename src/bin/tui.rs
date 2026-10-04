@@ -156,7 +156,7 @@ async fn apply_markdown_update(
             calendars: &cals,
         };
         match store.sync_tree_from_markdown(full_uid, new_content, &sync_options, is_journal) {
-            Ok((acts, warns)) => {
+            Ok((acts, warns, _mints)) => {
                 actions.extend(acts);
                 warnings.extend(warns);
             }

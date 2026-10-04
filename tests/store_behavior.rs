@@ -1401,7 +1401,7 @@ fn test_tree_sync_preserves_paused_percent() {
         calendars: &[],
     };
 
-    let (actions, warnings) = store
+    let (actions, warnings, _mints) = store
         .sync_tree_from_markdown("root-1", &markdown, &options, false)
         .expect("tree sync should succeed");
     assert!(warnings.is_empty());
@@ -1457,7 +1457,7 @@ fn test_tree_sync_uncheck_reopens_completed_task() {
         calendars: &[],
     };
 
-    let (_actions, warnings) = store
+    let (_actions, warnings, _mints) = store
         .sync_tree_from_markdown("root-1", &unchecked, &options, false)
         .expect("tree sync should succeed");
     assert!(warnings.is_empty());
