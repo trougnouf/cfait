@@ -163,3 +163,56 @@ async fn test_sync_ignores_companion_events_to_prevent_multiget_spam() {
     );
     assert_eq!(tasks[0].uid, "valid-task");
 }
+
+#[tokio::test]
+async fn test_sync_delete_prunes_task_from_cache() {
+    let ctx = Arc::new(TestContext::new());
+
+    // 1. Mock server accepting the DELETE
+    let mut server = Server::new_async().await;
+    let url = server.url();
+    let cal_path = "/cal/";
+    let full_cal_href = format!("{}{}", url, cal_path);
+    let mock = server
+        .mock("DELETE", mockito::Matcher::Any)
+        .with_status(204)
+        .create_async()
+        .await;
+
+    // 2. Seed the calendar cache as if a previous fetch had run: it still
+    //    holds the task being deleted plus an unrelated survivor task.
+    let mut deleted = Task::new("deleted task", &HashMap::new(), None);
+    deleted.uid = "delete-me".to_string();
+    deleted.href = format!("{}{}delete-me.ics", url, cal_path);
+    deleted.calendar_href = full_cal_href.clone();
+    deleted.etag = "\"1\"".to_string();
+
+    let mut survivor = Task::new("survivor task", &HashMap::new(), None);
+    survivor.uid = "keep-me".to_string();
+    survivor.href = format!("{}{}keep-me.ics", url, cal_path);
+    survivor.calendar_href = full_cal_href.clone();
+    survivor.etag = "\"2\"".to_string();
+
+    cfait::cache::Cache::save(
+        ctx.as_ref(),
+        &full_cal_href,
+        &[deleted.clone(), survivor.clone()],
+        Some("token".to_string()),
+    )
+    .unwrap();
+
+    // 3. Queue the delete and sync it
+    let client = RustyClient::new(ctx.clone(), &url, "u", "p", true, None).unwrap();
+    Journal::push(ctx.as_ref(), Action::Delete(deleted)).unwrap();
+    client.sync_journal().await.unwrap();
+    mock.assert();
+
+    // 4. The cache must no longer serve the deleted task: with the Delete
+    //    popped from the journal, cache-backed store rebuilds would resurrect
+    //    it (and later edits would spawn "(Conflict Copy)" tasks).
+    let (cached, token) = cfait::cache::Cache::load(ctx.as_ref(), &full_cal_href).unwrap();
+    assert!(cached.iter().all(|t| t.uid != "delete-me"));
+    assert_eq!(cached.len(), 1);
+    assert_eq!(cached[0].uid, "keep-me");
+    assert_eq!(token, Some("token".to_string()));
+}

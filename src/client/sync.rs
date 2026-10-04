@@ -13,6 +13,7 @@ use libdav::caldav::CalDavClient;
 use libdav::dav::WebDavError;
 use libdav::dav::{Delete, PutResource};
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
+use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 use tokio::sync::Mutex as AsyncMutex;
 
@@ -88,6 +89,34 @@ fn actions_match_identity(a: &Action, b: &Action) -> bool {
         (Action::Delete(t1), Action::Delete(t2)) => t1.uid == t2.uid,
         (Action::Move(t1, d1), Action::Move(t2, d2)) => t1.uid == t2.uid && d1 == d2,
         _ => false,
+    }
+}
+
+/// Drop the given uids from the per-calendar disk caches.
+///
+/// A Delete popped from the journal (successfully pushed, or discarded because
+/// the server returned 404) means the task is gone from that calendar. Until
+/// the next full fetch rewrites the cache, every cache-backed store rebuild
+/// (GUI refresh, external-change reload, fetch-timeout fallback) would
+/// otherwise resurrect the task, and edits to the resurrected copy produce
+/// spurious "(Conflict Copy)" tasks when the stale etag hits the server.
+fn prune_caches(
+    ctx: &dyn crate::context::AppContext,
+    deleted_uids_by_cal: &HashMap<String, HashSet<String>>,
+) {
+    for (cal_href, uids) in deleted_uids_by_cal {
+        if cal_href.starts_with("local://") {
+            continue;
+        }
+        if let Ok((tasks, token)) = crate::cache::Cache::load(ctx, cal_href)
+            && tasks.iter().any(|t| uids.contains(&t.uid))
+        {
+            let kept: Vec<Task> = tasks
+                .into_iter()
+                .filter(|t| !uids.contains(&t.uid))
+                .collect();
+            let _ = crate::cache::Cache::save(ctx, cal_href, &kept, token);
+        }
     }
 }
 
@@ -596,6 +625,11 @@ impl RustyClient {
         let client = self.client.as_ref().ok_or("Offline")?;
         let mut warnings = Vec::new();
         let mut synced_tasks: Vec<Task> = Vec::new();
+        // Tasks removed from their (source) calendar this cycle, by calendar
+        // href. These must be pruned from the disk caches before returning:
+        // the journal no longer holds their Delete, so cache-backed store
+        // rebuilds would otherwise resurrect them until the next full fetch.
+        let mut deleted_uids_by_cal: HashMap<String, HashSet<String>> = HashMap::new();
 
         let mut recovery_cal_created_this_cycle = false;
 
@@ -698,6 +732,21 @@ impl RustyClient {
                                 };
                                 new_href_to_propagate = Some((old, h));
                             }
+                            match &next_action {
+                                Action::Delete(t) => {
+                                    deleted_uids_by_cal
+                                        .entry(t.calendar_href.clone())
+                                        .or_default()
+                                        .insert(t.uid.clone());
+                                }
+                                Action::Move(t, _) if !t.calendar_href.starts_with("local://") => {
+                                    deleted_uids_by_cal
+                                        .entry(t.calendar_href.clone())
+                                        .or_default()
+                                        .insert(t.uid.clone());
+                                }
+                                _ => {}
+                            }
                         }
                         StepOutcome::RetryWith(act) => {
                             conflict_resolved_action = Some(*act);
@@ -705,7 +754,16 @@ impl RustyClient {
                         StepOutcome::ReplaceWith(acts) => {
                             replaced_actions = Some(acts);
                         }
-                        StepOutcome::Discard => {}
+                        StepOutcome::Discard => {
+                            // A discarded Delete (404, never-synced ghost) means
+                            // the server does not hold the task either.
+                            if let Action::Delete(t) = &next_action {
+                                deleted_uids_by_cal
+                                    .entry(t.calendar_href.clone())
+                                    .or_default()
+                                    .insert(t.uid.clone());
+                            }
+                        }
                         StepOutcome::ServerWins(t) => {
                             new_etag_to_propagate = Some(t.etag.clone());
                             synced_task = Some(*t);
@@ -875,11 +933,13 @@ impl RustyClient {
                     // Stop processing on network error.
                     // The action safely remains at the front of the disk queue.
                     log::error!("sync_journal step failed: {}", msg);
+                    prune_caches(self.ctx.as_ref(), &deleted_uids_by_cal);
                     return Err(msg);
                 }
             }
         }
 
+        prune_caches(self.ctx.as_ref(), &deleted_uids_by_cal);
         Ok((warnings, synced_tasks))
     }
 
