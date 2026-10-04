@@ -484,7 +484,7 @@ async fn execute_task_action(
                 &state.store,
                 &uid,
                 &state.calendars,
-                false,
+                task.is_journal,
             );
             match run_external_editor(&desc, state.ctx.as_ref()) {
                 Ok(Some(new_desc)) => {
@@ -772,6 +772,39 @@ fn run_external_editor(
     Ok(None)
 }
 
+/// Syncs a journal entry's full tree from markdown, the same way the GUI's
+/// `flush_journal_save` does: checkboxes become subtasks, re-pasted content
+/// is matched by summary, and removed children are soft-deleted.
+fn sync_journal_tree(
+    state: &mut AppState,
+    uid: &str,
+    markdown: &str,
+) -> Result<Vec<crate::journal::Action>, String> {
+    let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
+    let def_time = NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
+    let sync_options = crate::store::SyncTreeOptions {
+        aliases: &state.tag_aliases,
+        default_reminder_time: def_time,
+        trash_retention_days: config.trash_retention_days,
+        calendars: &state.calendars,
+    };
+    state.edit_generation = state.edit_generation.wrapping_add(1);
+    match state
+        .store
+        .sync_tree_from_markdown(uid, markdown, &sync_options, true)
+    {
+        Ok((actions, warnings)) => {
+            if !warnings.is_empty() {
+                for w in &warnings {
+                    log::warn!("Dependency resolution: {}", w);
+                }
+            }
+            Ok(actions)
+        }
+        Err(e) => Err(e),
+    }
+}
+
 fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
     if state.sidebar_mode == SidebarMode::Journal
         && !state.creating_with_desc
@@ -798,17 +831,21 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
             .cloned();
         let mut actions = Vec::new();
 
-        if let Some(mut existing) = existing_opt {
+        if let Some(existing) = existing_opt {
             if new_text.trim().is_empty() {
                 state.edit_generation = state.edit_generation.wrapping_add(1);
                 let _ = state.store.delete_task(&existing.uid);
                 actions.push(crate::journal::Action::Delete(existing));
             } else {
-                existing.description = new_text;
-                existing.sequence += 1;
-                state.edit_generation = state.edit_generation.wrapping_add(1);
-                state.store.update_or_add_task(existing.clone());
-                actions.push(crate::journal::Action::Update(existing));
+                match sync_journal_tree(state, &existing.uid, &new_text) {
+                    Ok(sync_actions) => actions = sync_actions,
+                    Err(e) => {
+                        // Keep the buffer and stay in the editor so the text
+                        // is not lost.
+                        state.message = e;
+                        return;
+                    }
+                }
             }
         } else if !new_text.trim().is_empty() {
             let mut new_journal = crate::model::Task::new("", &state.tag_aliases, None);
@@ -816,10 +853,19 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
             new_journal.calendar_href = target_href;
             new_journal.dtstart = Some(crate::model::DateType::AllDay(state.journal_date));
             new_journal.summary = state.journal_date.format("%Y-%m-%d").to_string();
-            new_journal.description = new_text;
             state.edit_generation = state.edit_generation.wrapping_add(1);
+            let new_uid = new_journal.uid.clone();
             state.store.add_task(new_journal.clone());
             actions.push(crate::journal::Action::Create(new_journal));
+            match sync_journal_tree(state, &new_uid, &new_text) {
+                Ok(sync_actions) => actions.extend(sync_actions),
+                Err(e) => {
+                    // Roll back the just-created entry and keep the buffer.
+                    let _ = state.store.delete_task(&new_uid);
+                    state.message = e;
+                    return;
+                }
+            }
         }
 
         if !actions.is_empty() {
@@ -876,8 +922,6 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
     if state.creating_with_desc {
         let desc_text = state.input_buffer.clone();
         let mut parent_media = std::collections::HashMap::new();
-        let (clean_desc, extracted) =
-            crate::model::extractor::extract_markdown_tasks(&desc_text, false, &mut parent_media);
 
         let (clean_input_1, new_goals) =
             crate::model::parser::extract_inline_goals(&state.new_task_title);
@@ -913,6 +957,15 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
             chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
 
         let mut parent = Task::new(&clean_input, &state.tag_aliases, def_time);
+
+        // Extract the description with the parent's semantics: a journal
+        // page (is:page) only turns explicit items into subtasks, while a
+        // plain task also turns list items and headings into subtasks.
+        let (clean_desc, extracted) = crate::model::extractor::extract_markdown_tasks(
+            &desc_text,
+            parent.is_journal,
+            &mut parent_media,
+        );
 
         let warnings = state.store.resolve_dependencies(&mut parent);
         if !warnings.is_empty() {
@@ -1024,7 +1077,12 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
             if let Some(pc) = ext.percent_complete {
                 sub.percent_complete = Some(pc);
             }
-            sub.is_note = ext.is_note;
+            // Journal components are never serialized with a checkbox, so
+            // `ext.is_note` is noise for them; `Task::new` already derived the
+            // note state from the explicit `is:note` token.
+            if !sub.is_journal {
+                sub.is_note = ext.is_note;
+            }
 
             state.store.add_task(sub.clone());
             send_persist_batch(action_tx, vec![crate::journal::Action::Create(sub)]);
@@ -1131,7 +1189,12 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
                 if let Some(pc) = ext.percent_complete {
                     sub.percent_complete = Some(pc);
                 }
-                sub.is_note = ext.is_note;
+                // Journal components are never serialized with a checkbox, so
+                // `ext.is_note` is noise for them; `Task::new` already derived
+                // the note state from the explicit `is:note` token.
+                if !sub.is_journal {
+                    sub.is_note = ext.is_note;
+                }
 
                 state.store.add_task(sub.clone());
                 actions.push(crate::journal::Action::Create(sub));
@@ -1146,9 +1209,10 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
     }
 }
 
-/// Opens the journal entry (or the task attached to it) in the external
-/// editor. If the text changed, loads it into the buffer and saves;
-/// otherwise loads the original text into the buffer for in-TUI editing.
+/// Opens the journal entry (or the page attached to it) in the external
+/// editor. The buffer always holds the serialized task tree, so saving
+/// round-trips through a full tree sync. If the text changed, it is saved
+/// immediately; otherwise it is loaded into the buffer for in-TUI editing.
 fn edit_journal_in_external_editor(state: &mut AppState, action_tx: &Sender<Action>) {
     let target_href = state
         .active_cal_href
@@ -1162,52 +1226,67 @@ fn edit_journal_in_external_editor(state: &mut AppState, action_tx: &Sender<Acti
         })
         .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
 
-    let (desc, is_daily) = if let Some(uid) = &state.journal_editing_uid
-        && let Some(t) = state.store.get_task_ref(uid)
-    {
-        (t.description.clone(), false)
-    } else {
-        // Stale pointer (the task disappeared, e.g. after a reload
-        // or undo): fall back to the daily entry and clear it.
-        state.journal_editing_uid = None;
-        let entry = state
-            .store
-            .get_journal_entry(&target_href, state.journal_date);
-        (
-            entry.map(|e| e.description.clone()).unwrap_or_default(),
-            true,
-        )
+    // A stale page pointer (the task disappeared, e.g. after a reload or
+    // undo) falls back to the daily entry and clears the pointer.
+    let page_uid: Option<String> = match &state.journal_editing_uid {
+        Some(uid) if state.store.get_task_ref(uid).is_some() => Some(uid.clone()),
+        Some(_) => {
+            state.journal_editing_uid = None;
+            None
+        }
+        None => None,
+    };
+
+    let desc = match &page_uid {
+        Some(uid) => {
+            crate::model::extractor::serialize_task_tree(&state.store, uid, &state.calendars, true)
+        }
+        None => {
+            let entry = state
+                .store
+                .get_journal_entry(&target_href, state.journal_date);
+            entry
+                .map(|e| {
+                    crate::model::extractor::serialize_task_tree(
+                        &state.store,
+                        &e.uid,
+                        &state.calendars,
+                        true,
+                    )
+                })
+                .unwrap_or_default()
+        }
+    };
+
+    // Load the text into the buffer and enter the matching edit mode: the
+    // full-tree mode for pages (save = tree sync) and the daily-note mode
+    // for the daily entry (save = tree sync of the daily entry).
+    let enter_in_tui_edit = |state: &mut AppState, page_uid: Option<String>| {
+        state.input_buffer = desc.clone();
+        state.cursor_position = state.input_buffer.chars().count();
+        state.edit_scroll_offset = 0;
+        state.edit_scroll_x = 0;
+        if let Some(uid) = page_uid {
+            state.editing_tree_uid = Some(uid.clone());
+            state.mode = InputMode::EditingTree(uid);
+        } else {
+            state.mode = InputMode::EditingDescription;
+        }
+        state.needs_redraw = true;
     };
 
     match run_external_editor(&desc, state.ctx.as_ref()) {
         Ok(Some(new_desc)) => {
             if new_desc != desc {
-                state.input_buffer = new_desc;
-                if !is_daily {
-                    state.editing_uid = state.journal_editing_uid.clone();
-                }
-                state.mode = InputMode::EditingDescription;
+                enter_in_tui_edit(state, page_uid);
                 save_description(state, action_tx);
             }
             state.needs_redraw = true;
         }
-        Ok(None) => {
-            state.input_buffer = desc;
-            state.cursor_position = state.input_buffer.chars().count();
-            if !is_daily {
-                state.editing_uid = state.journal_editing_uid.clone();
-            }
-            state.mode = InputMode::EditingDescription;
-        }
+        Ok(None) => enter_in_tui_edit(state, page_uid),
         Err(e) => {
             state.message = e;
-            state.input_buffer = desc;
-            state.cursor_position = state.input_buffer.chars().count();
-            if !is_daily {
-                state.editing_uid = state.journal_editing_uid.clone();
-            }
-            state.mode = InputMode::EditingDescription;
-            state.needs_redraw = true;
+            enter_in_tui_edit(state, page_uid);
         }
     }
 }
@@ -1692,6 +1771,19 @@ pub async fn handle_key_event(
                             .resolve_dependency_ref(&clean_uid, context_uid)
                         {
                             Ok(resolved_uid) => resolved_uid,
+                            Err(e)
+                                if kind == crate::model::parser::SyntaxType::WikiLink
+                                    && matches!(
+                                        e,
+                                        crate::store::DependencyRefError::Ambiguous { .. }
+                                    ) =>
+                            {
+                                // Never guess: creating a page here would
+                                // shadow the existing matching tasks.
+                                state.mode = InputMode::Normal;
+                                state.message = e.to_string();
+                                return None;
+                            }
                             Err(_) => {
                                 if kind == crate::model::parser::SyntaxType::WikiLink {
                                     let config = crate::config::Config::load(state.ctx.as_ref())
@@ -3942,51 +4034,11 @@ pub async fn handle_key_event(
                 } else if state.sidebar_mode == SidebarMode::Journal
                     && state.active_focus == Focus::Main
                 {
-                    // Clear a stale page pointer so the edit saves as the
-                    // daily entry instead of being dropped.
-                    state.journal_editing_uid = None;
-                    let target_href = state
-                        .active_cal_href
-                        .clone()
-                        .filter(|href| state.local_mode_enabled || !href.starts_with("local://"))
-                        .or_else(|| {
-                            state
-                                .get_filtered_calendars()
-                                .first()
-                                .map(|c| c.href.clone())
-                        })
-                        .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
-
-                    let entry = state
-                        .store
-                        .get_journal_entry(&target_href, state.journal_date);
-                    let desc = entry.map(|e| e.description.clone()).unwrap_or_default();
-
-                    match run_external_editor(&desc, state.ctx.as_ref()) {
-                        Ok(Some(new_desc)) => {
-                            if new_desc != desc {
-                                state.input_buffer = new_desc;
-                                state.mode = InputMode::EditingDescription;
-                                save_description(state, action_tx);
-                            }
-                            state.needs_redraw = true;
-                            return None;
-                        }
-                        Ok(None) => {
-                            state.input_buffer = desc;
-                            state.cursor_position = state.input_buffer.chars().count();
-                            state.mode = InputMode::EditingDescription;
-                            return None;
-                        }
-                        Err(e) => {
-                            state.message = e;
-                            state.input_buffer = desc;
-                            state.cursor_position = state.input_buffer.chars().count();
-                            state.mode = InputMode::EditingDescription;
-                            state.needs_redraw = true;
-                            return None;
-                        }
-                    }
+                    // No live page in view (or a stale pointer): edit the
+                    // daily entry through the shared external-editor path,
+                    // which serializes the tree and saves via a full sync.
+                    edit_journal_in_external_editor(state, action_tx);
+                    return None;
                 }
             }
             _ => {}
@@ -4301,9 +4353,14 @@ pub async fn handle_key_event(
                             .resolve_dependency_ref(&target_uid, curr_uid.as_deref())
                         {
                             Ok(uid) => uid,
-                            Err(msg) if msg.starts_with("Ambiguous") => {
+                            Err(ref e)
+                                if matches!(
+                                    e,
+                                    crate::store::DependencyRefError::Ambiguous { .. }
+                                ) =>
+                            {
                                 state.mode = InputMode::Normal;
-                                state.message = msg;
+                                state.message = e.to_string();
                                 return None;
                             }
                             Err(_) => {

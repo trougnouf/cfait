@@ -133,6 +133,58 @@ impl std::fmt::Display for DependencyWarning {
     }
 }
 
+/// Outcome of a failed reference resolution. Matching on the variant is
+/// locale-stable, unlike string-matching the localized message.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DependencyRefError {
+    /// The reference was empty.
+    Empty,
+    /// No task matches the reference.
+    NotFound { reference: String },
+    /// Multiple tasks match the reference; the caller must not guess.
+    Ambiguous {
+        reference: String,
+        /// Summaries of the matching tasks (all of them, for display).
+        matches: Vec<String>,
+    },
+}
+
+impl std::fmt::Display for DependencyRefError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DependencyRefError::Empty => {
+                write!(
+                    f,
+                    "{}",
+                    rust_i18n::t!("error_task_not_found_for_dep", reference = "")
+                )
+            }
+            DependencyRefError::NotFound { reference } => write!(
+                f,
+                "{}",
+                rust_i18n::t!("error_task_not_found_for_dep", reference = reference)
+            ),
+            DependencyRefError::Ambiguous { reference, matches } => {
+                let summaries: Vec<String> =
+                    matches.iter().take(3).map(|s| format!("'{}'", s)).collect();
+                let mut matches_str = summaries.join(", ");
+                if matches.len() >= 3 {
+                    matches_str.push_str(", ...");
+                }
+                write!(
+                    f,
+                    "{}",
+                    rust_i18n::t!(
+                        "error_ambiguous_dep",
+                        reference = reference,
+                        matches = matches_str
+                    )
+                )
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct DayContext {
     pub date: chrono::NaiveDate,
@@ -1049,7 +1101,7 @@ impl TaskStore {
         &self,
         reference: &str,
         context_uid: Option<&str>,
-    ) -> Result<String, String> {
+    ) -> Result<String, DependencyRefError> {
         let clean_ref = reference
             .trim_start_matches("[[")
             .trim_end_matches("]]")
@@ -1064,7 +1116,7 @@ impl TaskStore {
 
         let path_segments = crate::model::parser::split_path_respecting_quotes(path_str);
         if path_segments.is_empty() {
-            return Err("Empty reference".to_string());
+            return Err(DependencyRefError::Empty);
         }
 
         if path_segments.len() == 1 {
@@ -1132,24 +1184,16 @@ impl TaskStore {
                 return Ok(exact_matches[0].uid.clone());
             }
 
-            let summaries: Vec<String> = matches
-                .into_iter()
-                .take(3)
-                .map(|t| format!("'{}'", t.summary))
-                .collect();
-            let mut matches_str = summaries.join(", ");
-            if summaries.len() == 3 {
-                matches_str.push_str(", ...");
-            }
-            return Err(rust_i18n::t!(
-                "error_ambiguous_dep",
-                reference = clean_ref,
-                matches = matches_str
-            )
-            .to_string());
+            let match_summaries: Vec<String> = matches.iter().map(|t| t.summary.clone()).collect();
+            return Err(DependencyRefError::Ambiguous {
+                reference: clean_ref.to_string(),
+                matches: match_summaries,
+            });
         }
 
-        Err(rust_i18n::t!("error_task_not_found_for_dep", reference = clean_ref).to_string())
+        Err(DependencyRefError::NotFound {
+            reference: clean_ref.to_string(),
+        })
     }
 
     /// Walk a wiki-link path, creating missing pages along the way.
@@ -1210,8 +1254,9 @@ impl TaskStore {
             } else {
                 let mut new_task = crate::model::Task::new(&seg_clean, tag_aliases, def_time);
                 if context_is_journal {
+                    // A wiki page is a standard journal page; it only becomes a
+                    // note when explicitly tagged with `is:note`.
                     new_task.is_journal = true;
-                    new_task.is_note = true;
                 }
                 new_task.parent_uid = current_parent_uid.clone();
 
@@ -1872,10 +1917,19 @@ impl TaskStore {
             .iter()
             .any(|ext| ext.parsed_existing_uid.as_deref() == Some(root_uid) || ext.uid == root_uid);
 
+        let mut root_changed = false;
         if !root_in_extracted {
-            root_clone.description = clean_desc;
-            root_clone.inline_media = tree_media;
-            root_clone.sequence += 1;
+            // The journal root is serialized raw (no uid tag), so it never
+            // appears in `extracted`. Only touch it when the description or
+            // media actually changed, keeping no-op round-trips action-free
+            // like the non-journal path.
+            root_changed =
+                root_clone.description != clean_desc || root_clone.inline_media != tree_media;
+            if root_changed {
+                root_clone.description = clean_desc;
+                root_clone.inline_media = tree_media;
+                root_clone.sequence += 1;
+            }
         }
 
         let mut active_uids = std::collections::HashSet::new();
@@ -1948,7 +2002,9 @@ impl TaskStore {
 
                 // Reconstruct the exact expected raw_text for the existing task:
                 let mut expected_raw_text = existing.to_smart_string();
-                if existing.is_note {
+                // Mirror serialize_node: the leading dash is the list marker for
+                // notes and journal pages, and the serializer strips it for both.
+                if existing.is_note || existing.is_journal {
                     if expected_raw_text.starts_with("- ") || expected_raw_text.starts_with("* ") {
                         expected_raw_text = expected_raw_text[2..].trim_start().to_string();
                     } else if expected_raw_text == "-" || expected_raw_text == "*" {
@@ -2031,7 +2087,18 @@ impl TaskStore {
 
                 clone.description = ext.description.clone();
                 clone.inline_media = ext.inline_media.clone();
-                clone.is_note = ext.is_note;
+                if existing.is_journal {
+                    // Journal components are never serialized with a checkbox,
+                    // so `ext.is_note` is noise for them. The explicit `is:note`
+                    // token in the line is the single source of truth: present
+                    // means note, absent means a standard page.
+                    clone.is_note = ext
+                        .raw_text
+                        .split_whitespace()
+                        .any(|w| w.eq_ignore_ascii_case("is:note"));
+                } else {
+                    clone.is_note = ext.is_note;
+                }
                 clone.parent_uid = parent_uid.clone();
 
                 clone.apply_extracted_status(ext.status);
@@ -2136,7 +2203,12 @@ impl TaskStore {
                 new_task.calendar_href = final_href.clone();
                 resolved_hrefs.insert(task_uid.clone(), final_href);
 
-                new_task.is_note = ext.is_note;
+                // Journal components are never serialized with a checkbox, so
+                // `ext.is_note` is noise for them; `Task::new` already derived
+                // the note state from the explicit `is:note` token.
+                if !new_task.is_journal {
+                    new_task.is_note = ext.is_note;
+                }
                 new_task.percent_complete = ext.percent_complete;
 
                 resolved_props.insert(
@@ -2154,7 +2226,7 @@ impl TaskStore {
 
         // --- Validate dependencies atomically before mutating the store ---
         let mut all_warnings = Vec::new();
-        if !root_in_extracted {
+        if root_changed {
             all_warnings.extend(self.resolve_dependencies(&mut root_clone));
         }
         for t in &mut tasks_to_update {
@@ -2165,7 +2237,7 @@ impl TaskStore {
         }
 
         // --- All safe, apply to store ---
-        if !root_in_extracted {
+        if root_changed {
             actions.push(crate::journal::Action::Update(root_clone.clone()));
             self.update_or_add_task(root_clone);
         }
@@ -3179,16 +3251,24 @@ impl TaskStore {
     }
 
     /// Finds a VJOURNAL entry for a specific calendar collection and date.
+    /// When several entries share a date (the daily note plus date-anchored
+    /// wiki pages), the entry whose summary is the date string wins;
+    /// otherwise the smallest uid wins, so the result is deterministic.
     pub fn get_journal_entry(&self, calendar_href: &str, date: chrono::NaiveDate) -> Option<&Task> {
-        if let Some(map) = self.calendars.get(calendar_href) {
-            for task in map.values() {
-                if task.is_journal && task.dtstart.as_ref().map(|d| d.to_date_naive()) == Some(date)
-                {
+        let map = self.calendars.get(calendar_href)?;
+        let date_str = date.format("%Y-%m-%d").to_string();
+        let mut fallback: Option<&Task> = None;
+        for task in map.values() {
+            if task.is_journal && task.dtstart.as_ref().map(|d| d.to_date_naive()) == Some(date) {
+                if task.summary == date_str {
                     return Some(task);
+                }
+                if fallback.is_none_or(|f| task.uid < f.uid) {
+                    fallback = Some(task);
                 }
             }
         }
-        None
+        fallback
     }
 
     /// Computes the dynamic activity context for a given day across all visible collections.

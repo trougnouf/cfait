@@ -769,7 +769,11 @@ fn serialize_task_tree_inner(
             )
         };
         let mut smart_string = task.to_smart_string();
-        if task.is_note {
+        // Notes and journal pages carry a leading dash in their smart string as
+        // the list marker; the parent's child prefix already provides the
+        // marker, so strip it for both (a journal page that is NOT a note would
+        // otherwise serialize as `- - Title`).
+        if task.is_note || task.is_journal {
             if smart_string.starts_with("- ") || smart_string.starts_with("* ") {
                 smart_string = smart_string[2..].trim_start().to_string();
             } else if smart_string == "-" || smart_string == "*" {

@@ -647,8 +647,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
         Message::EditTaskTree(uid) => {
             if let Some(idx) = app.find_task_index_by_uid(&uid) {
-                let data = app.get_task_at_index(idx).map(|t| t.uid.clone());
-                if let Some(task_uid) = data {
+                let data = app
+                    .get_task_at_index(idx)
+                    .map(|t| (t.uid.clone(), t.is_journal));
+                if let Some((task_uid, is_journal)) = data {
                     // For tree editing, we don't use the top input field for the summary anymore.
                     // The entire tree (including root) is edited in the description field.
                     app.input_value = text_editor::Content::new();
@@ -657,7 +659,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         &app.store,
                         &task_uid,
                         &app.calendars,
-                        false,
+                        is_journal,
                     );
                     app.description_value = text_editor::Content::with_text(&tree_md);
 
@@ -1779,7 +1781,7 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                 &app.store,
                 tree_uid,
                 &app.calendars,
-                false,
+                is_journal,
             );
             app.description_value = text_editor::Content::with_text(&tree_md);
         }
@@ -1883,7 +1885,12 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                 if let Some(pc) = ext.percent_complete {
                     sub.percent_complete = Some(pc);
                 }
-                sub.is_note = ext.is_note;
+                // Journal components are never serialized with a checkbox, so
+                // `ext.is_note` is noise for them; `Task::new` already derived
+                // the note state from the explicit `is:note` token.
+                if !sub.is_journal {
+                    sub.is_note = ext.is_note;
+                }
 
                 app.store.add_task(sub.clone());
                 actions.push(crate::journal::Action::Create(sub));
@@ -2012,7 +2019,12 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                 if let Some(pc) = ext.percent_complete {
                     sub.percent_complete = Some(pc);
                 }
-                sub.is_note = ext.is_note;
+                // Journal components are never serialized with a checkbox, so
+                // `ext.is_note` is noise for them; `Task::new` already derived
+                // the note state from the explicit `is:note` token.
+                if !sub.is_journal {
+                    sub.is_note = ext.is_note;
+                }
 
                 tasks_to_create.push(sub);
             }

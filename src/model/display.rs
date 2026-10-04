@@ -428,6 +428,13 @@ impl TaskDisplay for Task {
             s.push_str(" is:pinned");
         }
 
+        // Journals are never serialized with a checkbox, so a journal note must
+        // carry its note state as an explicit token to round-trip through the
+        // editor. Regular notes already encode this via the missing checkbox.
+        if self.is_note && self.is_journal {
+            s.push_str(" is:note");
+        }
+
         if self.is_journal {
             s.push_str(" is:page");
         }

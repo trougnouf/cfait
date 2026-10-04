@@ -1450,13 +1450,22 @@ async fn main() -> Result<()> {
             let config =
                 cfait::config::Config::load_with_credentials(ctx.as_ref()).unwrap_or_default();
 
+            let task_is_journal = store
+                .get_task_ref(&full_uid)
+                .map(|t| t.is_journal)
+                .unwrap_or(false);
             let initial_content = if use_tree {
                 let mut cals =
                     cfait::cache::Cache::load_calendars(ctx.as_ref()).unwrap_or_default();
                 if let Ok(locals) = cfait::storage::LocalCalendarRegistry::load(ctx.as_ref()) {
                     cals.extend(locals);
                 }
-                cfait::model::extractor::serialize_task_tree(&store, &full_uid, &cals, false)
+                cfait::model::extractor::serialize_task_tree(
+                    &store,
+                    &full_uid,
+                    &cals,
+                    task_is_journal,
+                )
             } else {
                 let task = store.get_task_ref(&full_uid).unwrap();
                 let mut content = task.to_smart_string();
@@ -1787,10 +1796,14 @@ async fn main() -> Result<()> {
             if let Ok(locals) = cfait::storage::LocalCalendarRegistry::load(ctx.as_ref()) {
                 cals.extend(locals);
             }
+            let is_journal = store
+                .get_task_ref(&uid)
+                .map(|t| t.is_journal)
+                .unwrap_or(false);
             let tree_md = if plain {
-                cfait::model::extractor::serialize_task_tree_plain(&store, &uid, &cals, false)
+                cfait::model::extractor::serialize_task_tree_plain(&store, &uid, &cals, is_journal)
             } else {
-                cfait::model::extractor::serialize_task_tree(&store, &uid, &cals, false)
+                cfait::model::extractor::serialize_task_tree(&store, &uid, &cals, is_journal)
             };
             println!("{}", tree_md);
             return Ok(());

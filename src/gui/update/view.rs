@@ -436,8 +436,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 .resolve_dependency_ref(clean_title, context_uid.as_deref())
             {
                 Ok(uid) => handle(app, Message::JumpToTask(uid)),
-                Err(msg) if msg.starts_with("Ambiguous") => {
-                    app.error_msg = Some(msg);
+                Err(ref e) if matches!(e, crate::store::DependencyRefError::Ambiguous { .. }) => {
+                    app.error_msg = Some(e.to_string());
                     Task::none()
                 }
                 Err(_) => {

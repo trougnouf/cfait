@@ -2931,8 +2931,8 @@ impl CfaitMobile {
             let store = self.controller.store.lock().await;
             match store.resolve_dependency_ref(clean_title, context_uid.as_deref()) {
                 Ok(uid) => return Ok(uid),
-                Err(msg) if msg.starts_with("Ambiguous") => {
-                    return Err(MobileError::from(msg));
+                Err(ref e) if matches!(e, crate::store::DependencyRefError::Ambiguous { .. }) => {
+                    return Err(MobileError::from(e.to_string()));
                 }
                 Err(_) => {}
             }
@@ -3182,7 +3182,12 @@ impl CfaitMobile {
             if let Some(pc) = ext.percent_complete {
                 sub.percent_complete = Some(pc);
             }
-            sub.is_note = ext.is_note;
+            // Journal components are never serialized with a checkbox, so
+            // `ext.is_note` is noise for them; `Task::new` already derived the
+            // note state from the explicit `is:note` token.
+            if !sub.is_journal {
+                sub.is_note = ext.is_note;
+            }
 
             sub.calendar_href = if let Some(target) = sub.target_collection.take() {
                 crate::model::resolve_collection(&target, &sub_calendars, &parent_href)
@@ -3370,7 +3375,12 @@ impl CfaitMobile {
             if let Some(pc) = ext.percent_complete {
                 sub.percent_complete = Some(pc);
             }
-            sub.is_note = ext.is_note;
+            // Journal components are never serialized with a checkbox, so
+            // `ext.is_note` is noise for them; `Task::new` already derived the
+            // note state from the explicit `is:note` token.
+            if !sub.is_journal {
+                sub.is_note = ext.is_note;
+            }
 
             let _warnings = store.resolve_dependencies(&mut sub);
 
