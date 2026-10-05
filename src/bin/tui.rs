@@ -449,7 +449,10 @@ async fn main() -> Result<()> {
                 std::process::exit(1);
             }
             let file_path = &args[2];
-            let collection_id = if args.get(3).is_some_and(|a| a == "--collection") {
+            let collection_id = if args
+                .get(3)
+                .is_some_and(|a| a == "--collection" || a == "-c")
+            {
                 if args.len() > 4 {
                     Some(args[4].clone())
                 } else {
