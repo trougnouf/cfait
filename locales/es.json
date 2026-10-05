@@ -222,6 +222,7 @@
     "delete_calendar_events_on_completion_label": "Borrar eventos al completarse",
     "delete_task_tree": "Eliminar árbol de tareas",
     "deleting_events_background": "Borrando eventos en segundo plano…",
+    "dependency_resolution_failed": "Referencias de tareas no resueltas: %{warnings}",
     "desc_editor_help": "Presiona Enter para nueva línea. Esc / Ctrl+S para guardar.",
     "description_label": "Descripción",
     "details": "Detalles",
