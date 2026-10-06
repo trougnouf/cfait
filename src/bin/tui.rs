@@ -555,7 +555,10 @@ async fn main() -> Result<()> {
             return Ok(());
         }
         "export" => {
-            let collection_id = if args.get(2).is_some_and(|a| a == "--collection") {
+            let collection_id = if args
+                .get(2)
+                .is_some_and(|a| a == "--collection" || a == "-c")
+            {
                 if args.len() > 3 {
                     Some(args[3].clone())
                 } else {
