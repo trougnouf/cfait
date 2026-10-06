@@ -183,7 +183,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ShiftSpaceSelected
         | Message::Undo
         | Message::Redo
-        | Message::ApplySuggestion(..) => tasks::handle(app, message),
+        | Message::ApplySuggestion(..)
+        | Message::ApplySuggestionAt(..) => tasks::handle(app, message),
 
         Message::FocusInput
         | Message::FocusSearch

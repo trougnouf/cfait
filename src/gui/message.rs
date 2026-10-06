@@ -163,6 +163,7 @@ pub enum Message {
     Undo,
     Redo,
     ApplySuggestion(std::ops::Range<usize>, String),
+    ApplySuggestionAt(std::ops::Range<usize>, usize),
     TabPressed(bool),
     EnterPressed,
     DuplicateTask(String),

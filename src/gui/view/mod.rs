@@ -2258,7 +2258,15 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
     } else {
         &app.input_value
     };
-    let context_banner = build_context_banner(app, active_content);
+    let context_banner = build_context_banner(
+        app,
+        active_content,
+        if is_desc_focused {
+            BannerEditor::TaskDescription
+        } else {
+            BannerEditor::TaskInput
+        },
+    );
 
     let inner_content: Element<'_, Message> = if is_expanded {
         let banner_height = if context_banner.is_some() { 65.0 } else { 0.0 };
@@ -2967,7 +2975,8 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
             style
         });
 
-    let context_banner = build_context_banner(app, &app.journal_editor_content);
+    let context_banner =
+        build_context_banner(app, &app.journal_editor_content, BannerEditor::Journal);
 
     let banner_element = if let Some(banner) = context_banner {
         column![Space::new().height(4), banner]
@@ -3126,9 +3135,18 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
         .into()
 }
 
-pub fn build_context_banner<'a>(
+/// Which editor a context banner is attached to; an in-progress suggestion
+/// cycle only applies to the editor that started it.
+enum BannerEditor {
+    TaskInput,
+    TaskDescription,
+    Journal,
+}
+
+fn build_context_banner<'a>(
     app: &'a GuiApp,
     content: &text_editor::Content,
+    editor: BannerEditor,
 ) -> Option<Element<'a, Message>> {
     use crate::model::parser::{LEXICON, SyntaxType};
     let target_text = content.text();
@@ -3149,19 +3167,38 @@ pub fn build_context_banner<'a>(
         byte_offset
     };
 
-    if let Some((range, suggs)) = crate::model::autocomplete::suggest(
-        &target_text,
-        cursor_pos,
-        &app.store,
-        &app.tag_aliases,
-        &app.calendars,
-        &app.visible_calendar_hrefs(),
-    ) {
+    // While a Tab cycle is running, the completed word no longer produces the
+    // original suggestion list, so the banner renders the cycle's list with
+    // the applied entry highlighted instead of re-running the engine.
+    let cycled = app.suggestion_cycle.as_ref().filter(|c| {
+        let matches_editor = match editor {
+            BannerEditor::TaskInput => !c.in_description,
+            BannerEditor::TaskDescription => c.in_description,
+            BannerEditor::Journal => false,
+        };
+        matches_editor
+            && target_text.get(c.range.clone()) == Some(c.suggestions[c.index].replacement.as_str())
+    });
+    let banner_data = if let Some(c) = cycled {
+        Some((c.range.clone(), c.suggestions.clone(), Some(c.index)))
+    } else {
+        crate::model::autocomplete::suggest(
+            &target_text,
+            cursor_pos,
+            &app.store,
+            &app.tag_aliases,
+            &app.calendars,
+            &app.visible_calendar_hrefs(),
+        )
+        .map(|(range, suggs)| (range, suggs, None))
+    };
+    if let Some((range, suggs, active_index)) = banner_data {
         let mut sugg_row = row![].spacing(8).padding(iced::Padding {
             bottom: 8.0,
             ..Default::default()
         });
-        for s in suggs {
+        for (i, s) in suggs.iter().enumerate() {
+            let active = Some(i) == active_index;
             let color = if s.display.starts_with('#') {
                 let (r, g, b) =
                     crate::color_utils::generate_color(s.display.trim_start_matches('#'));
@@ -3176,11 +3213,14 @@ pub fn build_context_banner<'a>(
 
             let btn = button(
                 row![
-                    text(s.display).size(14).color(color).font(iced::Font {
-                        weight: iced::font::Weight::Bold,
-                        ..Default::default()
-                    }),
-                    text(s.description)
+                    text(s.display.clone())
+                        .size(14)
+                        .color(color)
+                        .font(iced::Font {
+                            weight: iced::font::Weight::Bold,
+                            ..Default::default()
+                        }),
+                    text(s.description.clone())
                         .size(12)
                         .style(move |theme: &Theme| text::Style {
                             color: Some(theme.extended_palette().background.weak.text),
@@ -3191,10 +3231,19 @@ pub fn build_context_banner<'a>(
             )
             .style(
                 move |_theme: &Theme, status: iced::widget::button::Status| {
-                    let bg_alpha = match status {
-                        iced::widget::button::Status::Hovered
-                        | iced::widget::button::Status::Pressed => 0.25,
-                        _ => 0.15,
+                    let (bg_alpha, border) = match (active, status) {
+                        (
+                            true,
+                            iced::widget::button::Status::Hovered
+                            | iced::widget::button::Status::Pressed,
+                        ) => (0.55, (2.0, 0.9)),
+                        (true, _) => (0.45, (2.0, 0.9)),
+                        (
+                            false,
+                            iced::widget::button::Status::Hovered
+                            | iced::widget::button::Status::Pressed,
+                        ) => (0.25, (1.0, 0.5)),
+                        (false, _) => (0.15, (1.0, 0.5)),
                     };
                     iced::widget::button::Style {
                         background: Some(
@@ -3207,15 +3256,18 @@ pub fn build_context_banner<'a>(
                         text_color: color,
                         border: iced::Border {
                             radius: 8.0.into(),
-                            width: 1.0,
-                            color: Color { a: 0.5, ..color },
+                            width: border.0,
+                            color: Color {
+                                a: border.1,
+                                ..color
+                            },
                         },
                         ..iced::widget::button::Style::default()
                     }
                 },
             )
             .padding([6, 12])
-            .on_press(Message::ApplySuggestion(range.clone(), s.replacement));
+            .on_press(Message::ApplySuggestionAt(range.clone(), i));
 
             sugg_row = sugg_row.push(btn);
         }

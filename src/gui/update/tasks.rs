@@ -431,6 +431,71 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.error_msg = Some(e);
             Task::none()
         }
+        Message::ApplySuggestionAt(range, index) => {
+            // A suggestion chip was clicked: resolve the list the banner
+            // rendered — the intact cycle's list when Tab already picked from
+            // it, otherwise a fresh suggestion run for the word at `range` —
+            // then apply the clicked entry and make it the new cycle position
+            // so repeated Tab presses continue from there.
+            if app.sidebar_mode == SidebarMode::Journal {
+                let text = app.journal_editor_content.text();
+                let Some((_, suggs)) = crate::model::autocomplete::suggest(
+                    &text,
+                    range.end,
+                    &app.store,
+                    &app.tag_aliases,
+                    &app.calendars,
+                    &app.visible_calendar_hrefs(),
+                ) else {
+                    return Task::none();
+                };
+                let Some(s) = suggs.get(index) else {
+                    return Task::none();
+                };
+                return handle(app, Message::ApplySuggestion(range, s.replacement.clone()));
+            }
+
+            let is_desc = app.last_edited_field == 1 || app.editing_tree_uid.is_some();
+            let text = if is_desc {
+                app.description_value.text()
+            } else {
+                app.input_value.text()
+            };
+
+            let cycled = app.suggestion_cycle.as_ref().filter(|c| {
+                c.in_description == is_desc
+                    && c.range == range
+                    && text.get(c.range.clone())
+                        == Some(c.suggestions[c.index].replacement.as_str())
+            });
+            let suggs = match cycled {
+                Some(c) => c.suggestions.clone(),
+                None => {
+                    let Some((_, suggs)) = crate::model::autocomplete::suggest(
+                        &text,
+                        range.end,
+                        &app.store,
+                        &app.tag_aliases,
+                        &app.calendars,
+                        &app.visible_calendar_hrefs(),
+                    ) else {
+                        return Task::none();
+                    };
+                    suggs
+                }
+            };
+            let Some(s) = suggs.get(index) else {
+                return Task::none();
+            };
+            let replacement = s.replacement.clone();
+            app.suggestion_cycle = Some(crate::gui::state::SuggestionCycle {
+                range: range.start..range.start + replacement.len(),
+                index,
+                suggestions: suggs,
+                in_description: is_desc,
+            });
+            handle(app, Message::ApplySuggestion(range, replacement))
+        }
         Message::ApplySuggestion(range, text) => {
             if app.sidebar_mode == SidebarMode::Journal {
                 let current = app.journal_editor_content.text();
