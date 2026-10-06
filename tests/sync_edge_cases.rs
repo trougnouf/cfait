@@ -216,3 +216,91 @@ async fn test_sync_delete_prunes_task_from_cache() {
     assert_eq!(cached[0].uid, "keep-me");
     assert_eq!(token, Some("token".to_string()));
 }
+
+#[tokio::test]
+async fn test_sync_422_rescues_task_to_recovery() {
+    let ctx = Arc::new(TestContext::new());
+
+    // A 422 answer is a deterministic rejection: retrying the same PUT later
+    // cannot succeed, so the task must be rescued instead of parking at the
+    // head of the queue forever.
+    let mut server = Server::new_async().await;
+    let url = server.url();
+    let mock = server
+        .mock("PUT", "/cal/task.ics")
+        .with_status(422)
+        .create_async()
+        .await;
+
+    let client = RustyClient::new(ctx.clone(), &url, "u", "p", true, None).unwrap();
+
+    let mut task = Task::new("water the ferns", &HashMap::new(), None);
+    task.uid = "task".to_string();
+    task.calendar_href = "/cal/".to_string();
+    Journal::push(ctx.as_ref(), Action::Create(task)).unwrap();
+
+    let res = client.sync_journal().await;
+    assert!(res.is_ok(), "Sync failed: {:?}", res.err());
+    mock.assert();
+
+    // The queue drains: the rejection was handled, not parked.
+    let j = Journal::load(ctx.as_ref());
+    assert!(j.is_empty(), "a deterministic 4xx must not stay queued");
+    assert!(
+        j.last_error.is_none(),
+        "no failure reason once the queue is empty"
+    );
+
+    // The task survives in local recovery with the reason appended.
+    let recovered =
+        cfait::storage::LocalStorage::load_for_href(ctx.as_ref(), "local://recovery").unwrap();
+    let recovered = recovered
+        .iter()
+        .find(|t| t.uid == "task")
+        .expect("task should be rescued into local recovery");
+    assert!(recovered.description.contains("[Sync Error]"));
+    assert!(recovered.description.contains("422"));
+}
+
+#[tokio::test]
+async fn test_sync_503_keeps_item_and_records_reason() {
+    let ctx = Arc::new(TestContext::new());
+
+    // A 503 is transient (server overloaded or offline): the action must stay
+    // queued no matter how many times it fails, with the reason recorded.
+    let mut server = Server::new_async().await;
+    let url = server.url();
+    let mock = server
+        .mock("PUT", "/cal/task.ics")
+        .with_status(503)
+        .expect(2)
+        .create_async()
+        .await;
+
+    let client = RustyClient::new(ctx.clone(), &url, "u", "p", true, None).unwrap();
+
+    let mut task = Task::new("water the ferns", &HashMap::new(), None);
+    task.uid = "task".to_string();
+    task.calendar_href = "/cal/".to_string();
+    Journal::push(ctx.as_ref(), Action::Create(task)).unwrap();
+
+    // First attempt fails and records the reason.
+    let res = client.sync_journal().await;
+    assert!(res.is_err(), "503 should fail the sync pass");
+
+    let j = Journal::load(ctx.as_ref());
+    assert_eq!(j.queue.len(), 1, "a transient error must keep the action");
+    let err = j.last_error.as_ref().expect("failure reason recorded");
+    assert_eq!(err.uid, "task");
+    assert_eq!(err.summary, "water the ferns");
+    assert!(err.message.contains("503"));
+    assert_eq!(err.attempts, 1);
+
+    // Second attempt: still queued, attempts incremented.
+    let res = client.sync_journal().await;
+    assert!(res.is_err());
+    mock.assert();
+    let j = Journal::load(ctx.as_ref());
+    assert_eq!(j.queue.len(), 1, "still nothing is discarded on 503");
+    assert_eq!(j.last_error.as_ref().unwrap().attempts, 2);
+}

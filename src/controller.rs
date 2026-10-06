@@ -397,6 +397,7 @@ impl TaskController {
             queue.extend(remote_actions);
             let mut tmp_j = Journal {
                 queue: std::mem::take(queue),
+                ..Default::default()
             };
             tmp_j.compact();
             *queue = tmp_j.queue;

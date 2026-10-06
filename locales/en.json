@@ -915,6 +915,7 @@
     "unsynced_action_move": "Moved",
     "unsynced_action_update": "Updated",
     "unsynced_and_more": "... and %{count} more",
+    "unsynced_last_error": "Last error: %{error} (attempt %{attempts})",
     "username": "Username:",
     "waiting_for_keyring": "Waiting for tasks (check for OS keyring/wallet unlock prompt if this persists)...",
     "welcome_title": "Welcome",

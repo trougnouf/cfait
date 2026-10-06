@@ -671,6 +671,16 @@ pub fn update_journal_state(app: &mut GuiApp) {
 
     if app.unsynced_changes {
         let mut lines = vec![rust_i18n::t!("unsynced").to_string()];
+        if let Some(err) = &journal.last_error {
+            lines.push(
+                rust_i18n::t!(
+                    "unsynced_last_error",
+                    error = err.message.clone(),
+                    attempts = err.attempts
+                )
+                .to_string(),
+            );
+        }
         for (i, action) in journal.queue.iter().enumerate() {
             if i >= 10 {
                 lines.push(

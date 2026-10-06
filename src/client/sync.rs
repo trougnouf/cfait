@@ -92,6 +92,30 @@ fn actions_match_identity(a: &Action, b: &Action) -> bool {
     }
 }
 
+/// A 4xx answer means the server processed the request and rejected it
+/// deterministically: replaying the same request later cannot succeed, so
+/// the action is rescued (or, for deletes, discarded) instead of parking at
+/// the head of the queue forever.
+///
+/// Excluded: 401 (credentials — retry once they change), 408/429 (the
+/// server explicitly asked to retry later), 412 (conflict — resolved by
+/// its own arm), 413 (payload too large — discarded). 404 only reaches this
+/// classification in `handle_create` (missing calendar), where it is a
+/// deterministic rejection; the update/delete handlers intercept it first.
+///
+/// Transient failures (network, timeouts, 5xx) are deliberately NOT
+/// classified here: they keep the action queued so an offline server never
+/// loses or rescues pending changes, however long the outage lasts.
+fn is_deterministic_rejection(status: &StatusCode) -> bool {
+    let code = status.as_u16();
+    (400..=499).contains(&code)
+        && code != 401
+        && code != 408
+        && code != 412
+        && code != 413
+        && code != 429
+}
+
 /// Drop the given uids from the per-calendar disk caches.
 ///
 /// A Delete popped from the journal (successfully pushed, or discarded because
@@ -234,15 +258,7 @@ impl RustyClient {
             Err(e) => {
                 let msg = format!("{:?}", e);
                 let is_fatal = match &e {
-                    WebDavError::BadStatusCode(status) => {
-                        let code = status.as_u16();
-                        code == 400
-                            || code == 403
-                            || code == 404
-                            || code == 405
-                            || code == 409
-                            || code == 415
-                    }
+                    WebDavError::BadStatusCode(status) => is_deterministic_rejection(status),
                     _ => {
                         msg.contains("NotFound")
                             || msg.contains("Conflict")
@@ -405,10 +421,7 @@ impl RustyClient {
                     )
                 } else {
                     let is_fatal = match &e {
-                        WebDavError::BadStatusCode(status) => {
-                            let code = status.as_u16();
-                            code == 400 || code == 403 || code == 405 || code == 409 || code == 415
-                        }
+                        WebDavError::BadStatusCode(status) => is_deterministic_rejection(status),
                         _ => {
                             msg.contains("Conflict")
                                 || msg.contains("InvalidInput")
@@ -496,10 +509,7 @@ impl RustyClient {
             Err(e) => {
                 let msg = format!("{:?}", e);
                 let is_fatal = match &e {
-                    WebDavError::BadStatusCode(status) => {
-                        let code = status.as_u16();
-                        code == 400 || code == 403 || code == 405 || code == 409 || code == 415
-                    }
+                    WebDavError::BadStatusCode(status) => is_deterministic_rejection(status),
                     _ => {
                         msg.contains("Conflict")
                             || msg.contains("InvalidInput")
@@ -641,6 +651,7 @@ impl RustyClient {
         Journal::modify(self.ctx.as_ref(), |queue| {
             let mut tmp_j = Journal {
                 queue: std::mem::take(queue),
+                ..Default::default()
             };
             tmp_j.compact();
             *queue = tmp_j.queue;
@@ -933,6 +944,15 @@ impl RustyClient {
                     // Stop processing on network error.
                     // The action safely remains at the front of the disk queue.
                     log::error!("sync_journal step failed: {}", msg);
+                    // Persist the reason next to the queue so users and UIs can
+                    // see why the head action is not syncing.
+                    let (uid, summary) = match &next_action {
+                        Action::Create(t)
+                        | Action::Update(t)
+                        | Action::Delete(t)
+                        | Action::Move(t, _) => (t.uid.clone(), t.summary.clone()),
+                    };
+                    let _ = Journal::record_error(self.ctx.as_ref(), &uid, &summary, &msg);
                     prune_caches(self.ctx.as_ref(), &deleted_uids_by_cal);
                     return Err(msg);
                 }

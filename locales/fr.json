@@ -969,6 +969,7 @@
     "unsynced_action_move": "Déplacé",
     "unsynced_action_update": "Mis à jour",
     "unsynced_and_more": "... et %{count} de plus",
+    "unsynced_last_error": "Dernière erreur : %{error} (essai %{attempts})",
     "untitled_page": "Page sans titre",
     "use_external_storage_explain": "Enregistre les données locales dans le répertoire externe pour les rendre accessibles aux applications tierces.",
     "use_external_storage_label": "Utiliser le stockage externe pour les données",

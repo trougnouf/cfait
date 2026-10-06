@@ -99,9 +99,23 @@ impl UndoHistory {
     }
 }
 
+/// Why the front of the queue failed to sync, persisted alongside the queue
+/// so users and UIs can see the reason something is not syncing instead of
+/// only that it is queued. Purely informational: nothing is ever discarded
+/// or rescued based on `attempts`.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct JournalError {
+    pub uid: String,
+    pub summary: String,
+    pub message: String,
+    pub attempts: u32,
+}
+
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Journal {
     pub queue: Vec<Action>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_error: Option<JournalError>,
 }
 
 impl Journal {
@@ -134,6 +148,10 @@ impl Journal {
     }
 
     /// Modify the journal by applying a closure to the queue, persisting changes.
+    ///
+    /// Invariant: an empty queue cannot be failing, so `last_error` is cleared
+    /// once no actions remain. This also drops stale errors after a manual
+    /// journal edit or an undo that removes the failing action.
     pub fn modify<F>(ctx: &dyn AppContext, f: F) -> Result<()>
     where
         F: FnOnce(&mut Vec<Action>),
@@ -142,6 +160,39 @@ impl Journal {
             LocalStorage::with_lock(&path, || {
                 let mut journal = Self::load_internal(&path);
                 f(&mut journal.queue);
+                if journal.queue.is_empty() {
+                    journal.last_error = None;
+                }
+                let json = serde_json::to_string(&journal)?;
+                LocalStorage::atomic_write(&path, json)?;
+                Ok(())
+            })?;
+        }
+        Ok(())
+    }
+
+    /// Record why the front of the queue failed to sync. Consecutive failures
+    /// of the same action increment `attempts`; a failure of a different
+    /// action resets it.
+    pub fn record_error(
+        ctx: &dyn AppContext,
+        uid: &str,
+        summary: &str,
+        message: &str,
+    ) -> Result<()> {
+        if let Some(path) = Self::get_path(ctx) {
+            LocalStorage::with_lock(&path, || {
+                let mut journal = Self::load_internal(&path);
+                let attempts = match &journal.last_error {
+                    Some(e) if e.uid == uid => e.attempts.saturating_add(1),
+                    _ => 1,
+                };
+                journal.last_error = Some(JournalError {
+                    uid: uid.to_string(),
+                    summary: summary.to_string(),
+                    message: message.to_string(),
+                    attempts,
+                });
                 let json = serde_json::to_string(&journal)?;
                 LocalStorage::atomic_write(&path, json)?;
                 Ok(())
@@ -347,6 +398,40 @@ mod tests {
         task.calendar_href = calendar_href.to_string();
         task.etag = "etag-1".to_string();
         task
+    }
+
+    #[test]
+    fn last_error_survives_compaction_and_clears_when_queue_empties() {
+        let ctx = TestContext::new();
+        Journal::push(&ctx, Action::Create(task_in("cal://user/1/main/"))).unwrap();
+        Journal::record_error(&ctx, "uid-ferns", "water the ferns", "connection refused").unwrap();
+
+        // Compaction through modify keeps the recorded reason while the
+        // failing action is still queued.
+        Journal::modify(&ctx, |queue| {
+            let mut tmp_j = Journal {
+                queue: std::mem::take(queue),
+                ..Default::default()
+            };
+            tmp_j.compact();
+            *queue = tmp_j.queue;
+        })
+        .unwrap();
+        let err = Journal::load(&ctx).last_error.expect("reason kept");
+        assert_eq!(err.message, "connection refused");
+        assert_eq!(err.attempts, 1);
+
+        // A second failure of the same action increments the counter.
+        Journal::record_error(&ctx, "uid-ferns", "water the ferns", "connection refused").unwrap();
+        assert_eq!(Journal::load(&ctx).last_error.unwrap().attempts, 2);
+
+        // A failure of a different action resets it.
+        Journal::record_error(&ctx, "uid-other", "repot the ferns", "reset").unwrap();
+        assert_eq!(Journal::load(&ctx).last_error.unwrap().attempts, 1);
+
+        // Draining the queue clears the reason.
+        Journal::modify(&ctx, |queue| queue.clear()).unwrap();
+        assert!(Journal::load(&ctx).last_error.is_none());
     }
 
     #[test]
