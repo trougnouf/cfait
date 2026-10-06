@@ -971,6 +971,7 @@
     "unsynced_action_move": "Movido",
     "unsynced_action_update": "Actualizado",
     "unsynced_and_more": "... y %{count} más",
+    "unsynced_last_error": "Último error: %{error} (intento %{attempts})",
     "untitled_page": "Página sin título",
     "use_external_storage_explain": "Guarda los datos locales en el directorio externo para que las aplicaciones de terceros puedan acceder a ellos.",
     "use_external_storage_label": "Utilizar almacenamiento externo para datos",
