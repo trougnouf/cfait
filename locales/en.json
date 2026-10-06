@@ -774,6 +774,7 @@
     "start_grace_days": "Start grace (days):",
     "start_task": "Start task",
     "suggestions": "Suggestions",
+    "suggestions_cycle_hint": "tab: cycle",
     "suggestions_hint": "tab: apply, esc: dismiss",
     "status": "Status",
     "status_no_tasks_found": "No tasks found.",

@@ -831,6 +831,7 @@
     "stop_reset": "Arrêter (réinit.)",
     "strikethrough_completed": "Barrer les tâches terminées",
     "suggestions": "Suggestions",
+    "suggestions_cycle_hint": "tab : défiler",
     "suggestions_hint": "tab : appliquer, Échap : fermer",
     "sunday": "Dimanche",
     "support_card_title": "Soutenir le développement",

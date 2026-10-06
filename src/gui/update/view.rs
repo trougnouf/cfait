@@ -620,6 +620,27 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 content_text_and_offset(&app.input_value)
             };
 
+            // Repeated Tab presses cycle through the suggestions produced for
+            // the same word: the stored range covers the completed word, so if
+            // the text is still intact there, the next match replaces it.
+            if let Some(cycle) = app.suggestion_cycle.take()
+                && cycle.in_description == is_desc_focused
+                && target_text.get(cycle.range.clone())
+                    == Some(cycle.suggestions[cycle.index].replacement.as_str())
+            {
+                let len = cycle.suggestions.len();
+                let step = if forward { 1 } else { len - 1 };
+                let next = (cycle.index + step) % len;
+                let replacement = cycle.suggestions[next].replacement.clone();
+                app.suggestion_cycle = Some(crate::gui::state::SuggestionCycle {
+                    range: cycle.range.start..cycle.range.start + replacement.len(),
+                    index: next,
+                    suggestions: cycle.suggestions,
+                    in_description: cycle.in_description,
+                });
+                return handle(app, Message::ApplySuggestion(cycle.range, replacement));
+            }
+
             if let Some((range, suggs)) = crate::model::autocomplete::suggest(
                 &target_text,
                 cursor_pos,
@@ -627,8 +648,14 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 &app.tag_aliases,
                 &app.calendars,
                 &app.visible_calendar_hrefs(),
-            ) && let Some(s) = suggs.into_iter().next()
+            ) && let Some(s) = suggs.first().cloned()
             {
+                app.suggestion_cycle = Some(crate::gui::state::SuggestionCycle {
+                    range: range.start..range.start + s.replacement.len(),
+                    index: 0,
+                    suggestions: suggs,
+                    in_description: is_desc_focused,
+                });
                 return handle(app, Message::ApplySuggestion(range, s.replacement));
             }
 

@@ -57,6 +57,17 @@ pub enum ResizeDirection {
     SouthWest,
 }
 
+/// Repeated Tab presses cycle through the suggestion list produced for a
+/// single word. `range` is the byte range of the completed word *after* the
+/// last application, so the next Tab can verify the word is still intact and
+/// swap in the next match.
+pub struct SuggestionCycle {
+    pub range: std::ops::Range<usize>,
+    pub index: usize,
+    pub suggestions: Vec<crate::model::autocomplete::Suggestion>,
+    pub in_description: bool,
+}
+
 pub struct GuiApp {
     pub core_config: Config,
     pub state: AppState,
@@ -322,6 +333,7 @@ pub struct GuiApp {
     pub input_history: crate::model::session::TextHistory,
     pub desc_history: crate::model::session::TextHistory,
     pub journal_history: crate::model::session::TextHistory,
+    pub suggestion_cycle: Option<SuggestionCycle>,
     pub last_edited_field: u8, // 0 for main input, 1 for description
     pub editor_maximized: bool,
 }
@@ -830,6 +842,7 @@ impl Default for GuiApp {
             input_history: crate::model::session::TextHistory::default(),
             desc_history: crate::model::session::TextHistory::default(),
             journal_history: crate::model::session::TextHistory::default(),
+            suggestion_cycle: None,
             last_edited_field: 0,
             editor_maximized: false,
         }

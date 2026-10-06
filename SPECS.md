@@ -184,7 +184,7 @@ All clients maintain an active session Undo/Redo stack. Every task mutation appl
 *   **Android:** Mutations trigger a transient Snackbar allowing 1-tap Undo. Markdown editors feature explicit ↶/↷ toolbar buttons.
 *   **Desktop (GUI/TUI):** Global `Ctrl+Z` (Undo) and `Ctrl+Y` / `Ctrl+Shift+Z` (Redo) shortcuts.
 *   **Smart Commands:** If the Add Task input starts with `:` and contains no spaces (e.g., `:undo`, `:redo`, `:empty-trash`, `:delete-all`, `:login`), it is intercepted and executed as a session command rather than creating a task. 
-*   **Auto-Complete:** The `CursorContextBanner` acts as a unified auto-complete engine, suggesting commands (when typing `:`), tags (when typing `#`), locations (when typing `@@`), collections (when typing `col:`), and relationships (when typing `dep:`, `rel:`, `parent:`, or `[[`). Task suggestions only draw from currently visible collections (hidden/disabled/system collections never leak their task summaries); when several suggestions share the same summary, each row is labelled with its collection and `dep:`/`rel:`/`parent:` suggestions insert the short UID so the saved reference is unambiguous. Suggestions are typically ordered by exact prefix match, then by descending frequency/usage, and finally alphabetically.
+*   **Auto-Complete:** The `CursorContextBanner` acts as a unified auto-complete engine, suggesting commands (when typing `:`), tags (when typing `#`), locations (when typing `@@`), collections (when typing `col:`), and relationships (when typing `dep:`, `rel:`, `parent:`, or `[[`). Task suggestions only draw from currently visible collections (hidden/disabled/system collections never leak their task summaries); when several suggestions share the same summary, each row is labelled with its collection and `dep:`/`rel:`/`parent:` suggestions insert the short UID so the saved reference is unambiguous. Suggestions are typically ordered by exact prefix match, then by descending frequency/usage, and finally alphabetically. In the GUI, the chips are clickable and `Tab` applies the top suggestion; further `Tab` presses cycle through the list (wrapping around) while the completed word stays untouched, and the cycle resets as soon as the text or field changes. In the TUI, `Up`/`Down` move the suggestion cursor, `Tab` applies the selected row, and `Esc` dismisses the popup.
 
 ### 4.1. The "Yank" Relationship System
 Instead of drag-and-drop, Cfait uses a robust "Yank" (Clipboard) system for hierarchy management.
@@ -315,7 +315,7 @@ Daily notes and wiki pages are `VJOURNAL` components (see 1.2). They share a uni
 
 ## 6. Keyboard Shortcuts (GUI & TUI)
 
-*   **Navigation:** `j`/`k` or `Up`/`Down` (Select), `Tab` (Cycle focus between Sidebar, List, Input — applies an active suggestion in title fields, indents the current line inside text editors). `1..5` (Switch Sidebar tabs: 1:Collections, 2:Tags, 3:Locations, 4:Goals, 5:Journal). From text fields, use `Ctrl+1..5` instead.
+*   **Navigation:** `j`/`k` or `Up`/`Down` (Select), `Tab` (Cycle focus between Sidebar, List, Input — applies an active suggestion in title fields and cycles through the suggestion list on repeated presses, indents the current line inside text editors). `1..5` (Switch Sidebar tabs: 1:Collections, 2:Tags, 3:Locations, 4:Goals, 5:Journal). From text fields, use `Ctrl+1..5` instead.
 *   **Main Actions:** 
     *   `Space`: Toggle Done/NeedsAction.
     *   `Shift+Space`: Complete & Shift recurrence (Relative advance).

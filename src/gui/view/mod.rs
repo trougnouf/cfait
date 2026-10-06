@@ -3219,6 +3219,14 @@ pub fn build_context_banner<'a>(
 
             sugg_row = sugg_row.push(btn);
         }
+        sugg_row = sugg_row.push(
+            text(rust_i18n::t!("suggestions_cycle_hint"))
+                .size(12)
+                .style(|theme: &Theme| text::Style {
+                    color: Some(theme.extended_palette().background.weak.text),
+                })
+                .align_y(iced::Alignment::Center),
+        );
         return Some(
             container(
                 scrollable(sugg_row).direction(iced::widget::scrollable::Direction::Horizontal(
