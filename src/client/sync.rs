@@ -245,15 +245,35 @@ impl RustyClient {
             }
             Err(WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED))
             | Err(WebDavError::PreconditionFailed(_)) => {
-                Ok(StepResult::new(StepOutcome::Success {
-                    etag: None,
-                    href: None,
-                    refresh_path: Some(path),
-                })
-                .with_warning(
-                    rust_i18n::t!("sync_conflict_creation", summary = task.summary.clone())
-                        .to_string(),
-                ))
+                // A 412 on a create (If-None-Match: *) normally means the
+                // object already exists on the server. But servers such as
+                // Nextcloud also answer 412 when the calendar rejects the
+                // component type outright; treating that as "already exists"
+                // would pop the action and leave an unsynced ghost whose
+                // later updates can never succeed (empty If-Match -> 412
+                // forever). Verify which case this is.
+                match self.fetch_etag(&path).await {
+                    Some(etag) => {
+                        let href = if task.calendar_href.ends_with('/') {
+                            format!("{}{}.ics", task.calendar_href, task.uid)
+                        } else {
+                            format!("{}/{}.ics", task.calendar_href, task.uid)
+                        };
+                        Ok(StepResult::new(StepOutcome::Success {
+                            etag: Some(etag),
+                            href: Some(href),
+                            refresh_path: Some(path),
+                        })
+                        .with_warning(
+                            rust_i18n::t!("sync_conflict_creation", summary = task.summary.clone())
+                                .to_string(),
+                        ))
+                    }
+                    None => Ok(StepResult::new(StepOutcome::RecoveryNeeded(format!(
+                        "Server answered 412 to the creation of {} but the object does not exist on the server\nTarget Path: {}",
+                        task.uid, path
+                    )))),
+                }
             }
             Err(e) => {
                 let msg = format!("{:?}", e);
@@ -361,6 +381,16 @@ impl RustyClient {
                                 .to_string(),
                         ),
                     );
+                }
+
+                // Ghost update: the entry never reached the server (no href),
+                // so there is no server version to merge with and the empty
+                // If-Match can never be met. Retry it as a creation; if the
+                // server rejects that too, the creation handler rescues it.
+                if task.href.is_empty() {
+                    return Ok(StepResult::new(StepOutcome::RetryWith(Box::new(
+                        Action::Create(task.clone()),
+                    ))));
                 }
 
                 match self.attempt_conflict_resolution(task).await {
@@ -976,6 +1006,15 @@ impl RustyClient {
                 return ConflictResolution::HardConflict;
             }
             Err(msg) => {
+                // A deterministic 4xx from the fetch (e.g. a 405 when the
+                // server refuses the REPORT on the target path) fails on
+                // every retry; parking the action forever would stick the
+                // queue. Keep the local edits as a conflict copy instead.
+                // Only transient failures (network, 5xx) stay queued for a
+                // later retry. 404 is already mapped to `Ok(None)` upstream.
+                if msg.contains("BadStatusCode(4") {
+                    return ConflictResolution::HardConflict;
+                }
                 return ConflictResolution::RetryLater(
                     rust_i18n::t!(
                         "sync_conflict_fetch_failed",

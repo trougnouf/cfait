@@ -206,3 +206,142 @@ async fn test_412_fetch_failure_leaves_queued_no_copy() {
         "The update must remain queued, not be dropped or duplicated"
     );
 }
+
+#[tokio::test]
+async fn test_ghost_update_412_retries_as_create() {
+    let ctx = Arc::new(TestContext::new());
+
+    // An entry that never reached the server (ghost: empty href, pending
+    // refresh etag). Its update PUT carries an unsatisfiable If-Match and
+    // gets 412 forever; the conflict-resolution fetch on an empty href fails
+    // deterministically, so the action must be retried as a creation instead
+    // of parking at the queue head.
+    let mut server = Server::new_async().await;
+    let url = server.url();
+    let task_uid = "ghost-uid";
+    let task_path = format!("/cal/{}.ics", task_uid);
+
+    let mock_update_412 = server
+        .mock("PUT", task_path.as_str())
+        .match_header("If-Match", mockito::Matcher::Any)
+        .with_status(412)
+        .expect(1)
+        .create_async()
+        .await;
+
+    // The retried creation succeeds.
+    let mock_create = server
+        .mock("PUT", task_path.as_str())
+        .match_header("If-None-Match", "*")
+        .with_status(201)
+        .with_header("ETag", "\"fresh-etag\"")
+        .expect(1)
+        .create_async()
+        .await;
+
+    let client = RustyClient::new(ctx.clone(), &url, "u", "p", true, None).unwrap();
+
+    let mut task = Task::new("water the ferns", &HashMap::new(), None);
+    task.uid = task_uid.to_string();
+    task.calendar_href = format!("{}/cal/", url);
+    task.href = String::new();
+    task.etag = "pending_refresh".to_string();
+    Journal::push(ctx.as_ref(), Action::Update(task)).unwrap();
+
+    let result = client.sync_journal().await;
+    assert!(result.is_ok(), "Sync failed: {:?}", result.err());
+    mock_update_412.assert();
+    mock_create.assert();
+
+    // The queue drains: the ghost was re-created instead of parking.
+    let journal = Journal::load(ctx.as_ref());
+    assert!(
+        journal.is_empty(),
+        "a ghost update must be retried as a creation"
+    );
+    let (_, synced) = result.unwrap();
+    assert!(
+        synced.iter().any(|t| t.uid == task_uid),
+        "the re-created entry should be reported as synced"
+    );
+}
+
+#[tokio::test]
+async fn test_412_conflict_fetch_405_makes_conflict_copy() {
+    let ctx = Arc::new(TestContext::new());
+
+    // A deterministic 4xx on the server-version fetch (405 here) would park
+    // the action forever if treated as transient; the local edits must be
+    // preserved as a conflict copy instead.
+    let mut server = Server::new_async().await;
+    let url = server.url();
+    let task_uid = "merge-fetch-405";
+    let task_path = format!("/cal/{}.ics", task_uid);
+
+    let mock_412 = server
+        .mock("PUT", task_path.as_str())
+        .match_header("If-Match", "old-etag")
+        .with_status(412)
+        .expect(1)
+        .create_async()
+        .await;
+
+    // The server refuses the multiget REPORT on the calendar (405), e.g.
+    // because the path cannot serve the request. This fails on every retry.
+    let mock_fetch_405 = server
+        .mock("REPORT", "/cal/")
+        .with_status(405)
+        .expect(1)
+        .create_async()
+        .await;
+
+    // The conflict copy is created on the server.
+    let mock_conflict_copy = server
+        .mock(
+            "PUT",
+            mockito::Matcher::Regex(r"^/cal/.*\.ics$".to_string()),
+        )
+        .match_header("If-None-Match", "*")
+        .match_body(mockito::Matcher::Regex(r"Conflict Copy".to_string()))
+        .with_status(201)
+        .with_header("ETag", "\"copy-etag\"")
+        .expect(1)
+        .create_async()
+        .await;
+
+    let client = RustyClient::new(ctx.clone(), &url, "u", "p", true, None).unwrap();
+
+    let mut base_task = Task::new("water the ferns", &HashMap::new(), None);
+    base_task.uid = task_uid.to_string();
+    base_task.href = format!("{}{}", url, task_path);
+    base_task.calendar_href = format!("{}/cal/", url);
+    base_task.etag = "\"old-etag\"".to_string();
+    Cache::save(
+        ctx.as_ref(),
+        &base_task.calendar_href,
+        &[base_task.clone()],
+        Some("token".to_string()),
+    )
+    .unwrap();
+
+    let mut local_task = base_task.clone();
+    local_task.summary = "repot the ferns".to_string();
+    local_task.etag = "old-etag".to_string();
+    Journal::push(ctx.as_ref(), Action::Update(local_task)).unwrap();
+
+    let result = client.sync_journal().await;
+    assert!(
+        result.is_ok(),
+        "a deterministic fetch failure must not park the queue: {:?}",
+        result.err()
+    );
+    mock_412.assert();
+    mock_fetch_405.assert();
+    mock_conflict_copy.assert();
+
+    let journal = Journal::load(ctx.as_ref());
+    assert!(
+        journal.is_empty(),
+        "the conflict copy must be pushed, not parked"
+    );
+}
