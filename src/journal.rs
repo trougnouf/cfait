@@ -264,6 +264,9 @@ impl Journal {
                     (Action::Create(t1), Action::Create(t2)) => {
                         t1.calendar_href == t2.calendar_href
                     }
+                    (Action::Delete(t1), Action::Delete(t2)) => {
+                        t1.calendar_href == t2.calendar_href
+                    }
                     _ => false,
                 };
 
@@ -297,6 +300,14 @@ impl Journal {
                             let mut merged_t = t.clone();
                             merged_t.inherit_metadata_if_pending(prev_t);
                             compacted[idx] = Some(Action::Create(merged_t));
+                            merged = true;
+                        }
+                        (Action::Delete(_), Action::Delete(t)) => {
+                            // Identical deletes would pile up unbounded when a
+                            // producer re-queues the same deletion every sync
+                            // cycle (e.g. the settings carrier while the queue
+                            // head is stuck waiting for connectivity).
+                            compacted[idx] = Some(Action::Delete(t.clone()));
                             merged = true;
                         }
                         _ => {}
@@ -432,6 +443,46 @@ mod tests {
         // Draining the queue clears the reason.
         Journal::modify(&ctx, |queue| queue.clear()).unwrap();
         assert!(Journal::load(&ctx).last_error.is_none());
+    }
+
+    #[test]
+    fn duplicate_deletes_of_the_same_calendar_are_merged() {
+        let ctx = TestContext::new();
+        let cal = "cal://user/1/main/";
+        for _ in 0..3 {
+            Journal::push(&ctx, Action::Delete(task_in(cal))).unwrap();
+        }
+
+        Journal::modify(&ctx, |queue| {
+            let mut tmp_j = Journal {
+                queue: std::mem::take(queue),
+                ..Default::default()
+            };
+            tmp_j.compact();
+            *queue = tmp_j.queue;
+        })
+        .unwrap();
+
+        // Identical deletes pile up when a producer re-queues the same
+        // deletion every sync cycle (e.g. the settings carrier while the
+        // queue head is stuck); compaction must keep only one.
+        let j = Journal::load(&ctx);
+        assert_eq!(j.queue.len(), 1, "identical deletes must be merged");
+        assert!(matches!(j.queue[0], Action::Delete(_)));
+
+        // A delete of the same uid from a different calendar is a distinct
+        // action and must be kept.
+        Journal::push(&ctx, Action::Delete(task_in("cal://user/1/other/"))).unwrap();
+        Journal::modify(&ctx, |queue| {
+            let mut tmp_j = Journal {
+                queue: std::mem::take(queue),
+                ..Default::default()
+            };
+            tmp_j.compact();
+            *queue = tmp_j.queue;
+        })
+        .unwrap();
+        assert_eq!(Journal::load(&ctx).queue.len(), 2);
     }
 
     #[test]
