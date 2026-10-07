@@ -316,7 +316,7 @@ Daily notes and wiki pages are `VJOURNAL` components (see 1.2). They share a uni
 
 ## 6. Keyboard Shortcuts (GUI & TUI)
 
-*   **Navigation:** `j`/`k` or `Up`/`Down` (Select), `Tab` (Cycle focus between Sidebar, List, Input — applies an active suggestion in title fields and cycles through the suggestion list on repeated presses, indents the current line inside text editors). `1..5` (Switch Sidebar tabs: 1:Collections, 2:Tags, 3:Locations, 4:Goals, 5:Journal). From text fields, use `Ctrl+1..5` instead. `Enter` (GUI) opens the selected task's context menu; while it is open, `Up`/`Down` (or `j`/`k`) move the highlighted entry, `Enter` activates it, and any other key closes the menu.
+*   **Navigation:** `j`/`k` or `Up`/`Down` (Select), `Tab` (applies the top autocomplete suggestion in any editor with a suggestion banner and cycles through the suggestion list on repeated presses; with no suggestion it indents the current line inside multi-line editors and cycles focus between Sidebar, List, Input). `1..5` (Switch Sidebar tabs: 1:Collections, 2:Tags, 3:Locations, 4:Goals, 5:Journal). From text fields, use `Ctrl+1..5` instead. `Enter` (GUI) opens the selected task's context menu; while it is open, `Up`/`Down` (or `j`/`k`) move the highlighted entry, `Enter` activates it, and any other key closes the menu.
 *   **Main Actions:** 
     *   `Space`: Toggle Done/NeedsAction.
     *   `Shift+Space`: Complete & Shift recurrence (Relative advance).

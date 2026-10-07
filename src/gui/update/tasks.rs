@@ -437,33 +437,17 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             // it, otherwise a fresh suggestion run for the word at `range` —
             // then apply the clicked entry and make it the new cycle position
             // so repeated Tab presses continue from there.
-            if app.sidebar_mode == SidebarMode::Journal {
-                let text = app.journal_editor_content.text();
-                let Some((_, suggs)) = crate::model::autocomplete::suggest(
-                    &text,
-                    range.end,
-                    &app.store,
-                    &app.tag_aliases,
-                    &app.calendars,
-                    &app.visible_calendar_hrefs(),
-                ) else {
-                    return Task::none();
-                };
-                let Some(s) = suggs.get(index) else {
-                    return Task::none();
-                };
-                return handle(app, Message::ApplySuggestion(range, s.replacement.clone()));
-            }
-
-            let is_desc = app.last_edited_field == 1 || app.editing_tree_uid.is_some();
-            let text = if is_desc {
-                app.description_value.text()
-            } else {
-                app.input_value.text()
+            let editor = common::active_suggestion_editor(app);
+            let text = match editor {
+                crate::gui::state::SuggestionEditor::Journal => app.journal_editor_content.text(),
+                crate::gui::state::SuggestionEditor::TaskDescription => {
+                    app.description_value.text()
+                }
+                crate::gui::state::SuggestionEditor::TaskInput => app.input_value.text(),
             };
 
             let cycled = app.suggestion_cycle.as_ref().filter(|c| {
-                c.in_description == is_desc
+                c.editor == editor
                     && c.range == range
                     && text.get(c.range.clone())
                         == Some(c.suggestions[c.index].replacement.as_str())
@@ -492,7 +476,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 range: range.start..range.start + replacement.len(),
                 index,
                 suggestions: suggs,
-                in_description: is_desc,
+                editor,
             });
             handle(app, Message::ApplySuggestion(range, replacement))
         }
@@ -538,22 +522,24 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::InputChanged(action) => {
             common::set_active_focus(app, Focus::AddTaskInput);
+            // Any interaction with the add-task input makes it the target of
+            // suggestion Tab cycling.
+            app.last_edited_field = 0;
             if let text_editor::Action::Edit(text_editor::Edit::Enter) = action {
                 return handle_submit(app, false);
-            }
-            if let text_editor::Action::Edit(text_editor::Edit::Insert('\t')) = action {
-                return Task::done(Message::TabPressed(true));
             }
             let old_text = app.input_value.text();
             app.input_value.perform(action);
             if old_text != app.input_value.text() {
                 app.input_history.push(old_text);
-                app.last_edited_field = 0;
             }
             Task::none()
         }
 
         Message::DescriptionChanged(action) => {
+            // Any interaction with the description editor makes it the
+            // target of suggestion Tab cycling.
+            app.last_edited_field = 1;
             // Ctrl+click a [[wiki link]] or URL in the description to open it,
             // mirroring the cursor-context open action (ctrl+o).
             if let text_editor::Action::Click(_) = action
@@ -611,7 +597,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             if old_text != app.description_value.text() {
                 app.desc_history.push(old_text);
-                app.last_edited_field = 1;
             }
 
             Task::none()

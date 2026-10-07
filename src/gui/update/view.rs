@@ -4,8 +4,8 @@ use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, Focus, GuiApp, ResizeDirection, SidebarMode};
 use crate::gui::update::common::{
-    indent_line, outdent_line, refresh_filtered_tasks, save_config, scroll_to_selected,
-    scroll_to_selected_delayed, set_active_focus,
+    active_suggestion_editor, indent_line, outdent_line, refresh_filtered_tasks, save_config,
+    scroll_to_selected, scroll_to_selected_delayed, set_active_focus,
 };
 use crate::gui::update::tasks;
 use crate::store::select_weighted_random_index;
@@ -693,18 +693,24 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::TabPressed(forward) => {
-            let is_desc_focused = app.last_edited_field == 1 || app.editing_tree_uid.is_some();
-            let (target_text, cursor_pos) = if is_desc_focused {
-                content_text_and_offset(&app.description_value)
-            } else {
-                content_text_and_offset(&app.input_value)
+            let editor = active_suggestion_editor(app);
+            let (target_text, cursor_pos) = match editor {
+                crate::gui::state::SuggestionEditor::Journal => {
+                    content_text_and_offset(&app.journal_editor_content)
+                }
+                crate::gui::state::SuggestionEditor::TaskDescription => {
+                    content_text_and_offset(&app.description_value)
+                }
+                crate::gui::state::SuggestionEditor::TaskInput => {
+                    content_text_and_offset(&app.input_value)
+                }
             };
 
             // Repeated Tab presses cycle through the suggestions produced for
             // the same word: the stored range covers the completed word, so if
             // the text is still intact there, the next match replaces it.
             if let Some(cycle) = app.suggestion_cycle.take()
-                && cycle.in_description == is_desc_focused
+                && cycle.editor == editor
                 && target_text.get(cycle.range.clone())
                     == Some(cycle.suggestions[cycle.index].replacement.as_str())
             {
@@ -716,7 +722,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     range: cycle.range.start..cycle.range.start + replacement.len(),
                     index: next,
                     suggestions: cycle.suggestions,
-                    in_description: cycle.in_description,
+                    editor: cycle.editor,
                 });
                 return handle(app, Message::ApplySuggestion(cycle.range, replacement));
             }
@@ -734,24 +740,23 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     range: range.start..range.start + s.replacement.len(),
                     index: 0,
                     suggestions: suggs,
-                    in_description: is_desc_focused,
+                    editor,
                 });
                 return handle(app, Message::ApplySuggestion(range, s.replacement));
             }
 
-            if is_desc_focused {
-                let old_text = app.description_value.text();
-                app.description_value
-                    .perform(iced::widget::text_editor::Action::Edit(
-                        iced::widget::text_editor::Edit::Insert('\t'),
-                    ));
-                if old_text != app.description_value.text() {
-                    app.desc_history.push(old_text);
-                    app.last_edited_field = 1;
+            // No suggestion to apply: fall back to the editor's normal Tab
+            // behavior (line indent in list editors, focus cycling elsewhere).
+            match editor {
+                crate::gui::state::SuggestionEditor::Journal => {
+                    handle(app, Message::JournalIndent(forward))
                 }
-                Task::none()
-            } else {
-                handle(app, Message::CycleFocus(forward))
+                crate::gui::state::SuggestionEditor::TaskDescription => {
+                    handle(app, Message::DescriptionIndent(forward))
+                }
+                crate::gui::state::SuggestionEditor::TaskInput => {
+                    handle(app, Message::CycleFocus(forward))
+                }
             }
         }
         Message::CycleFocus(forward) => {

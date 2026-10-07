@@ -57,6 +57,14 @@ pub enum ResizeDirection {
     SouthWest,
 }
 
+/// Which editor a suggestion cycle (or the context banner) is attached to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SuggestionEditor {
+    TaskInput,
+    TaskDescription,
+    Journal,
+}
+
 /// Repeated Tab presses cycle through the suggestion list produced for a
 /// single word. `range` is the byte range of the completed word *after* the
 /// last application, so the next Tab can verify the word is still intact and
@@ -65,7 +73,7 @@ pub struct SuggestionCycle {
     pub range: std::ops::Range<usize>,
     pub index: usize,
     pub suggestions: Vec<crate::model::autocomplete::Suggestion>,
-    pub in_description: bool,
+    pub editor: SuggestionEditor,
 }
 
 pub struct GuiApp {

@@ -9,7 +9,7 @@ pub mod syntax;
 pub mod task_row;
 use crate::gui::icon;
 use crate::gui::message::Message;
-use crate::gui::state::{AppState, Focus, GuiApp, ResizeDirection, SidebarMode};
+use crate::gui::state::{AppState, Focus, GuiApp, ResizeDirection, SidebarMode, SuggestionEditor};
 use crate::gui::view::help::view_help;
 use crate::gui::view::settings::view_settings;
 use crate::gui::view::sidebar::{view_sidebar_calendars, view_sidebar_categories};
@@ -2103,15 +2103,22 @@ fn view_main_content(app: &GuiApp, show_logo: bool, is_expanded: bool) -> Elemen
         .into()
 }
 
-/// Word-level deletion (Ctrl+Backspace / Ctrl+Delete, Option+ on macOS) on
-/// top of iced's default key bindings. The custom closure replaces the
-/// defaults entirely, so every other key press must fall back to
-/// `Binding::from_key_press`, which also handles the unfocused case.
-fn word_delete_key_binding(
-    key_press: text_editor::KeyPress,
-) -> Option<text_editor::Binding<Message>> {
+/// Key bindings for the add-task input: Tab applies the top autocomplete
+/// suggestion (repeated presses cycle; without suggestions TabPressed falls
+/// back to focus cycling), Ctrl/Backspace / Ctrl+Delete delete a whole word.
+/// The custom closure replaces the defaults entirely, so every other key
+/// press must fall back to `Binding::from_key_press`, which also handles the
+/// unfocused case.
+fn input_key_binding(key_press: text_editor::KeyPress) -> Option<text_editor::Binding<Message>> {
     use iced::keyboard::key::Named;
     use text_editor::{Binding, Motion, Status};
+
+    if matches!(key_press.status, Status::Focused { .. })
+        && matches!(key_press.key, iced::keyboard::Key::Named(Named::Tab))
+    {
+        let shift = key_press.modifiers.shift();
+        return Some(Binding::Custom(Message::TabPressed(!shift)));
+    }
 
     let is_word_delete_key = matches!(
         key_press.key,
@@ -2136,13 +2143,12 @@ fn word_delete_key_binding(
 }
 
 /// Key bindings for the multi-line list editors (journal notes and task
-/// descriptions): Tab indents the current line by two spaces, Shift+Tab
-/// outdents it, and Ctrl/Option+Backspace/Delete delete the whole word. Every
-/// other key falls back to iced's default bindings. The `indent_message`
-/// closure maps `shift` to the message the editor should receive.
+/// descriptions): Tab applies/cycles the autocomplete suggestion banner and
+/// falls back to indenting the current line by two spaces (Shift+Tab
+/// outdents), and Ctrl/Option+Backspace/Delete delete the whole word. Every
+/// other key falls back to iced's default bindings.
 fn list_editor_key_binding(
     key_press: text_editor::KeyPress,
-    indent_message: impl Fn(bool) -> Message,
 ) -> Option<text_editor::Binding<Message>> {
     use iced::keyboard::key::Named;
     use text_editor::{Binding, Motion, Status};
@@ -2151,7 +2157,7 @@ fn list_editor_key_binding(
 
     if focused && matches!(key_press.key, iced::keyboard::Key::Named(Named::Tab)) {
         let shift = key_press.modifiers.shift();
-        return Some(Binding::Custom(indent_message(!shift)));
+        return Some(Binding::Custom(Message::TabPressed(!shift)));
     }
 
     let is_word_delete_key = matches!(
@@ -2186,7 +2192,7 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
         .id("main_input")
         .placeholder(&app.current_placeholder)
         .on_action(Message::InputChanged)
-        .key_binding(word_delete_key_binding)
+        .key_binding(input_key_binding)
         .highlight_with::<self::syntax::SmartInputHighlighter>(
             (is_dark_mode, false),
             |highlight, _theme| *highlight,
@@ -2226,9 +2232,9 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
         app,
         active_content,
         if is_desc_focused {
-            BannerEditor::TaskDescription
+            SuggestionEditor::TaskDescription
         } else {
-            BannerEditor::TaskInput
+            SuggestionEditor::TaskInput
         },
     );
 
@@ -2279,7 +2285,7 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
             .id("description_input")
             .placeholder(placeholder)
             .on_action(Message::DescriptionChanged)
-            .key_binding(|kp| list_editor_key_binding(kp, Message::DescriptionIndent))
+            .key_binding(list_editor_key_binding)
             .highlight_with::<self::syntax::MarkdownHighlighter>(
                 is_dark_mode,
                 |highlight, _theme| *highlight,
@@ -2924,7 +2930,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
             rust_i18n::t!("journal_no_notes", name = active_name).to_string()
         })
         .on_action(Message::JournalContentChanged)
-        .key_binding(|kp| list_editor_key_binding(kp, Message::JournalIndent))
+        .key_binding(list_editor_key_binding)
         .highlight_with::<self::syntax::MarkdownHighlighter>(is_dark_mode, |highlight, _theme| {
             *highlight
         })
@@ -2940,7 +2946,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
         });
 
     let context_banner =
-        build_context_banner(app, &app.journal_editor_content, BannerEditor::Journal);
+        build_context_banner(app, &app.journal_editor_content, SuggestionEditor::Journal);
 
     let banner_element = if let Some(banner) = context_banner {
         column![Space::new().height(4), banner]
@@ -3099,18 +3105,10 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
         .into()
 }
 
-/// Which editor a context banner is attached to; an in-progress suggestion
-/// cycle only applies to the editor that started it.
-enum BannerEditor {
-    TaskInput,
-    TaskDescription,
-    Journal,
-}
-
 fn build_context_banner<'a>(
     app: &'a GuiApp,
     content: &text_editor::Content,
-    editor: BannerEditor,
+    editor: crate::gui::state::SuggestionEditor,
 ) -> Option<Element<'a, Message>> {
     use crate::model::parser::{LEXICON, SyntaxType};
     let target_text = content.text();
@@ -3135,12 +3133,7 @@ fn build_context_banner<'a>(
     // original suggestion list, so the banner renders the cycle's list with
     // the applied entry highlighted instead of re-running the engine.
     let cycled = app.suggestion_cycle.as_ref().filter(|c| {
-        let matches_editor = match editor {
-            BannerEditor::TaskInput => !c.in_description,
-            BannerEditor::TaskDescription => c.in_description,
-            BannerEditor::Journal => false,
-        };
-        matches_editor
+        c.editor == editor
             && target_text.get(c.range.clone()) == Some(c.suggestions[c.index].replacement.as_str())
     });
     let banner_data = if let Some(c) = cycled {

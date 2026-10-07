@@ -21,7 +21,7 @@ use crate::cache::Cache;
 use crate::config::Config;
 use crate::context::AppContext;
 use crate::gui::message::Message;
-use crate::gui::state::{Focus, GuiApp};
+use crate::gui::state::{Focus, GuiApp, SidebarMode, SuggestionEditor};
 use crate::gui::subscription::ACTIVE_FOCUS;
 use crate::gui::view::focusable::{clear_focus_bounds, get_all_focus_bounds, get_focus_bounds};
 use crate::model::CalendarListEntry;
@@ -42,6 +42,20 @@ pub fn set_active_focus(app: &mut GuiApp, focus: Focus) {
     app.active_focus = focus;
     if let Ok(mut g) = ACTIVE_FOCUS.write() {
         *g = focus;
+    }
+}
+
+/// Which editor the suggestion banner (and a Tab-triggered suggestion cycle)
+/// currently targets: the journal editor while its tab is active, otherwise
+/// the description/tree editor when it was the last one edited, else the
+/// add-task input.
+pub fn active_suggestion_editor(app: &GuiApp) -> SuggestionEditor {
+    if app.sidebar_mode == SidebarMode::Journal {
+        SuggestionEditor::Journal
+    } else if app.last_edited_field == 1 || app.editing_tree_uid.is_some() {
+        SuggestionEditor::TaskDescription
+    } else {
+        SuggestionEditor::TaskInput
     }
 }
 
