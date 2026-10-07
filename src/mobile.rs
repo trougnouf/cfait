@@ -1240,6 +1240,23 @@ fn load_all_calendar_entries(ctx: &dyn AppContext) -> Vec<crate::model::Calendar
     cals
 }
 
+/// The collection a journal entry should actually be written to: the
+/// requested one when it supports VJOURNAL, else the best fallback (see
+/// `resolve_journal_target`). Keeps journal entries off collections the
+/// server would reject, e.g. a VTODO-only calendar picked as the active
+/// tab.
+fn journal_write_target(ctx: &dyn AppContext, requested: &str) -> String {
+    let config = crate::config::Config::load(ctx).unwrap_or_default();
+    let calendars = load_all_calendar_entries(ctx);
+    crate::model::resolve_journal_target(
+        requested,
+        &calendars,
+        config.default_calendar.as_deref(),
+        &config.hidden_calendars,
+        &config.disabled_calendars,
+    )
+}
+
 /// Convert the FFI-facing `MobileCalendar` list into the core `CalendarListEntry` list.
 fn mobile_calendars_to_model(cals: &[MobileCalendar]) -> Vec<crate::model::CalendarListEntry> {
     cals.iter()
@@ -2865,8 +2882,9 @@ impl CfaitMobile {
     ) -> Result<String, MobileError> {
         let nd = chrono::NaiveDate::parse_from_str(&date_str, "%Y-%m-%d")
             .map_err(|e| MobileError::from(e.to_string()))?;
+        let target_href = journal_write_target(self.ctx.as_ref(), &calendar_href);
         let store = self.controller.store.lock().await;
-        if let Some(entry) = store.get_journal_entry(&calendar_href, nd) {
+        if let Some(entry) = store.get_journal_entry(&target_href, nd) {
             return Ok(entry.uid.clone());
         }
         drop(store);
@@ -2874,7 +2892,7 @@ impl CfaitMobile {
         let config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
         let mut new_note = crate::model::Task::new("", &config.tag_aliases, None);
         new_note.is_journal = true;
-        new_note.calendar_href = calendar_href;
+        new_note.calendar_href = target_href;
         new_note.dtstart = Some(crate::model::DateType::AllDay(nd));
         new_note.summary = date_str;
         let uid = new_note.uid.clone();
@@ -2897,7 +2915,7 @@ impl CfaitMobile {
         let config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
         let mut new_page = crate::model::Task::new("", &config.tag_aliases, None);
         new_page.is_journal = true;
-        new_page.calendar_href = calendar_href;
+        new_page.calendar_href = journal_write_target(self.ctx.as_ref(), &calendar_href);
         new_page.parent_uid = parent_uid;
         new_page.summary = if title.is_empty() {
             rust_i18n::t!("untitled_page", default = "Untitled page").to_string()
@@ -2925,6 +2943,7 @@ impl CfaitMobile {
         calendar_href: Option<String>,
     ) -> Result<String, MobileError> {
         let clean_title = title.trim_start_matches("[[").trim_end_matches("]]").trim();
+        let calendar_href = calendar_href.map(|h| journal_write_target(self.ctx.as_ref(), &h));
 
         // Try a direct resolution first (single-segment shortcut + full path match).
         {

@@ -35,6 +35,50 @@ pub struct CalendarListEntry {
     pub supports_vjournal: Option<bool>,
 }
 
+/// The collection a journal (VJOURNAL) entry should be written to.
+///
+/// Servers reject VJOURNAL components on collections whose supported
+/// calendar component set does not include them (e.g. a VTODO-only
+/// calendar), so writing to the plain active collection would queue an
+/// upload the server refuses. When the requested collection does not
+/// support VJOURNAL, redirect to the default calendar if it supports it,
+/// else the first visible collection that does, else the local calendar.
+/// Local collections always qualify: they are cfait's own storage.
+pub fn resolve_journal_target(
+    requested: &str,
+    calendars: &[CalendarListEntry],
+    default_calendar: Option<&str>,
+    hidden: &[String],
+    disabled: &[String],
+) -> String {
+    let supports = |href: &str| {
+        href.starts_with("local://")
+            || calendars
+                .iter()
+                .any(|c| c.href == href && c.supports_vjournal.unwrap_or(false))
+    };
+    let usable = |href: &str| supports(href) && !crate::storage::is_system_calendar(href);
+    let visible =
+        |href: &str| !hidden.iter().any(|h| h == href) && !disabled.iter().any(|h| h == href);
+
+    if usable(requested) {
+        return requested.to_string();
+    }
+    if let Some(default) = default_calendar
+        && usable(default)
+        && visible(default)
+    {
+        return default.to_string();
+    }
+    if let Some(c) = calendars
+        .iter()
+        .find(|c| usable(&c.href) && visible(&c.href))
+    {
+        return c.href.clone();
+    }
+    crate::storage::LOCAL_CALENDAR_HREF.to_string()
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub enum TaskStatus {
     NeedsAction,
@@ -1637,5 +1681,102 @@ impl Task {
             self.priority = parent_priority;
         }
         self.categories.sort();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cal(href: &str, supports: Option<bool>) -> CalendarListEntry {
+        CalendarListEntry {
+            name: href.to_string(),
+            href: href.to_string(),
+            color: None,
+            supports_vjournal: supports,
+        }
+    }
+
+    fn cals() -> Vec<CalendarListEntry> {
+        vec![
+            cal("/cal/tasks/", Some(false)),
+            cal("/cal/journal/", Some(true)),
+            cal("/cal/other/", None),
+        ]
+    }
+
+    #[test]
+    fn journal_target_passes_through_supported_collections() {
+        assert_eq!(
+            resolve_journal_target("/cal/journal/", &cals(), None, &[], &[]),
+            "/cal/journal/"
+        );
+        assert_eq!(
+            resolve_journal_target("local://default", &cals(), None, &[], &[]),
+            "local://default"
+        );
+    }
+
+    #[test]
+    fn journal_target_redirects_unsupported_collections() {
+        // A VTODO-only calendar (e.g. the active tab) must not receive
+        // VJOURNAL entries the server would reject.
+        assert_eq!(
+            resolve_journal_target("/cal/tasks/", &cals(), None, &[], &[]),
+            "/cal/journal/"
+        );
+        // Unknown collections (e.g. deleted server-side) also redirect.
+        assert_eq!(
+            resolve_journal_target("/cal/gone/", &cals(), None, &[], &[]),
+            "/cal/journal/"
+        );
+    }
+
+    #[test]
+    fn journal_target_prefers_the_default_calendar() {
+        let mut cals = cals();
+        cals.push(cal("/cal/favourite/", Some(true)));
+        assert_eq!(
+            resolve_journal_target("/cal/tasks/", &cals, Some("/cal/favourite/"), &[], &[]),
+            "/cal/favourite/"
+        );
+        // The default must be usable, not merely set; without it the first
+        // capable calendar in list order wins.
+        assert_eq!(
+            resolve_journal_target("/cal/tasks/", &cals, Some("/cal/other/"), &[], &[]),
+            "/cal/journal/"
+        );
+    }
+
+    #[test]
+    fn journal_target_skips_hidden_and_disabled_collections() {
+        assert_eq!(
+            resolve_journal_target(
+                "/cal/tasks/",
+                &cals(),
+                None,
+                &["/cal/journal/".to_string()],
+                &[]
+            ),
+            "local://default"
+        );
+        assert_eq!(
+            resolve_journal_target(
+                "/cal/tasks/",
+                &cals(),
+                Some("/cal/journal/"),
+                &[],
+                &["/cal/journal/".to_string()]
+            ),
+            "local://default"
+        );
+    }
+
+    #[test]
+    fn journal_target_never_writes_to_system_collections() {
+        assert_eq!(
+            resolve_journal_target("local://recovery", &cals(), None, &[], &[]),
+            "/cal/journal/"
+        );
     }
 }

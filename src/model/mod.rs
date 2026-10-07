@@ -16,7 +16,7 @@ pub mod session;
 // Re-export everything from `item.rs` so `crate::model::Task` and related types work.
 pub use item::{
     Alarm, AlarmTrigger, CalendarListEntry, DateType, PENDING_REFRESH_ETAG, RawProperty, Task,
-    TaskStatus,
+    TaskStatus, resolve_journal_target,
 };
 
 // Re-export specific parser helpers used across the codebase.
