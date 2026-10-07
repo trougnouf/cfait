@@ -314,6 +314,84 @@ fn step_task_list(app: &mut GuiApp, forward: bool) -> Task<Message> {
     Task::none()
 }
 
+/// Available actions of the currently open context menu, in display order.
+fn open_context_menu_actions(app: &GuiApp) -> Option<Vec<crate::config::TaskAction>> {
+    let (uid, is_full, _) = app.active_context_menu.as_ref()?;
+    let idx = app.find_task_index_by_uid(uid)?;
+    let task = app.get_task_at_index(idx)?;
+    Some(crate::gui::view::context_menu_actions(app, task, *is_full))
+}
+
+/// Steps the keyboard cursor inside the open context menu.
+fn step_context_menu(app: &mut GuiApp, forward: bool) -> Task<Message> {
+    let count = open_context_menu_actions(app).map(|a| a.len()).unwrap_or(0);
+    if count == 0 {
+        return Task::none();
+    }
+    let next = match app.context_menu_cursor {
+        Some(c) => {
+            if forward {
+                (c + 1) % count
+            } else {
+                (c + count - 1) % count
+            }
+        }
+        None => 0,
+    };
+    app.context_menu_cursor = Some(next);
+
+    // Snap the menu's scrollable (34px items) so the entry stays visible.
+    const ITEM_H: f32 = 34.0;
+    let content_h = count as f32 * ITEM_H;
+    let viewport_h = (app.current_window_size.height - 20.0)
+        .max(100.0)
+        .min(content_h);
+    let max_scroll_px = (content_h - viewport_h).max(0.0);
+    let item_center = (next as f32 + 0.5) * ITEM_H;
+    let desired_offset_px = (item_center - viewport_h / 2.0).clamp(0.0, max_scroll_px);
+    let y = if max_scroll_px > 0.0 {
+        (desired_offset_px / max_scroll_px).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    operation::snap_to(
+        iced::widget::Id::new("context_menu_scrollable"),
+        iced::widget::scrollable::RelativeOffset { x: 0.0, y },
+    )
+}
+
+/// Activates the keyboard-selected (or first) entry of the open context menu.
+fn activate_context_menu(app: &mut GuiApp) -> Task<Message> {
+    let Some((uid, _, _)) = app.active_context_menu.clone() else {
+        return Task::none();
+    };
+    let msg = {
+        let Some(actions) = open_context_menu_actions(app) else {
+            return Task::none();
+        };
+        let cursor = app
+            .context_menu_cursor
+            .unwrap_or(0)
+            .min(actions.len().saturating_sub(1));
+        let Some(action) = actions.get(cursor) else {
+            return Task::none();
+        };
+        let Some(idx) = app.find_task_index_by_uid(&uid) else {
+            return Task::none();
+        };
+        let Some(task) = app.get_task_at_index(idx) else {
+            return Task::none();
+        };
+        let Some(msg) = crate::gui::view::context_menu_action_message(action, task, idx) else {
+            return Task::none();
+        };
+        msg
+    };
+    app.active_context_menu = None;
+    app.context_menu_cursor = None;
+    crate::gui::update::update(app, msg)
+}
+
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {
         Message::TaskClick(index, uid) => {
@@ -594,10 +672,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
 
             app.active_context_menu = Some((uid, is_full, pt));
+            app.context_menu_cursor = None;
             Task::none()
         }
         Message::CloseContextMenu => {
             app.active_context_menu = None;
+            app.context_menu_cursor = None;
             Task::none()
         }
         Message::CategoryMatchModeToggle => {
@@ -734,6 +814,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             operation::focus("header_search_input")
         }
         Message::EnterPressed => {
+            // Enter activates the keyboard-selected entry when the context
+            // menu is already open (Up/Down move the selection).
+            if app.active_context_menu.is_some() {
+                return activate_context_menu(app);
+            }
+
             if let Some(uid) = &app.moving_task_uid {
                 if let Some(task) = app.store.get_task_ref(uid) {
                     let targets =
@@ -765,12 +851,20 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
 
             if let Some(uid) = app.selected_uid.clone() {
-                return crate::gui::update::view::handle(app, Message::OpenContextMenu(uid, true));
+                let task =
+                    crate::gui::update::view::handle(app, Message::OpenContextMenu(uid, true));
+                // Keyboard-opened menus start on the first entry so Enter
+                // twice activates it, mirroring the TUI action menu.
+                app.context_menu_cursor = Some(0);
+                return task;
             }
 
             Task::none()
         }
         Message::SelectNext => {
+            if app.active_context_menu.is_some() {
+                return step_context_menu(app, true);
+            }
             if app.active_focus == crate::gui::state::Focus::Sidebar {
                 return step_sidebar(app, true);
             }
@@ -783,6 +877,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             step_task_list(app, true)
         }
         Message::SelectPrev => {
+            if app.active_context_menu.is_some() {
+                return step_context_menu(app, false);
+            }
             if app.active_focus == crate::gui::state::Focus::Sidebar {
                 return step_sidebar(app, false);
             }

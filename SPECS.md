@@ -270,6 +270,7 @@ Tasks tagged with `is:permanent` act as endless trackers. When checked off (Comp
     *   *Right Click:* Opens **Full Context Menu** at cursor coordinates.
     *   *Ellipsis (`...`) Click:* Opens **Partial Context Menu** anchored to the button (shows unpinned actions).
 *   **Modals:** Hovering overlays with dimmed backdrops (Move Task, ICS Import, Alarm Notification).
+*   **Context Menu keyboard navigation:** `Enter` opens the selected task's context menu with the first entry highlighted; `Up`/`Down` (or `j`/`k`) move the highlight (the menu scrolls to follow), `Enter` activates the highlighted entry, and any other key closes the menu.
 *   **Privacy Mode:** When `blur_when_unfocused` is enabled, the window content is blurred when the app loses focus, preventing shoulder-surfing.
 *   **Tooltips:** Any GUI button that has an associated keyboard shortcut must include that shortcut in its tooltip (when applicable).
 
@@ -315,7 +316,7 @@ Daily notes and wiki pages are `VJOURNAL` components (see 1.2). They share a uni
 
 ## 6. Keyboard Shortcuts (GUI & TUI)
 
-*   **Navigation:** `j`/`k` or `Up`/`Down` (Select), `Tab` (Cycle focus between Sidebar, List, Input — applies an active suggestion in title fields and cycles through the suggestion list on repeated presses, indents the current line inside text editors). `1..5` (Switch Sidebar tabs: 1:Collections, 2:Tags, 3:Locations, 4:Goals, 5:Journal). From text fields, use `Ctrl+1..5` instead.
+*   **Navigation:** `j`/`k` or `Up`/`Down` (Select), `Tab` (Cycle focus between Sidebar, List, Input — applies an active suggestion in title fields and cycles through the suggestion list on repeated presses, indents the current line inside text editors). `1..5` (Switch Sidebar tabs: 1:Collections, 2:Tags, 3:Locations, 4:Goals, 5:Journal). From text fields, use `Ctrl+1..5` instead. `Enter` (GUI) opens the selected task's context menu; while it is open, `Up`/`Down` (or `j`/`k`) move the highlighted entry, `Enter` activates it, and any other key closes the menu.
 *   **Main Actions:** 
     *   `Space`: Toggle Done/NeedsAction.
     *   `Shift+Space`: Complete & Shift recurrence (Relative advance).
@@ -333,7 +334,7 @@ Daily notes and wiki pages are `VJOURNAL` components (see 1.2). They share a uni
     *   `z`: Fold/Unfold tree.
     *   `>` / `.` : Demote (Indent / Make child of previous).
     *   `<` / `,` : Promote (Outdent / Move one level up).
-    *   `L` : Open relationship browser.
+    *   `L` : Open relationship browser / toggle details. In the GUI, `Ctrl+Enter` is an alias that also works from text fields.
     *   `o`: Open URL attached to the selected task.
     *   `Ctrl+O` (TUI): Open the wiki link or URL under the text cursor.
 *   **App Actions:** 
@@ -343,8 +344,10 @@ Daily notes and wiki pages are `VJOURNAL` components (see 1.2). They share a uni
     *   `m`: Toggle Match AND/OR logic for sidebar tags.
     *   `H`: Toggle Hide Completed.
     *   `*`: Clear all filters.
+    *   `?` (and `F1` in the GUI): Open the shortcuts help.
     *   `Shift+R`: Jump to random actionable task (weighted by priority).
     *   `Ctrl+,`: Settings.
+*   **Layout independence (GUI):** Symbol shortcuts (`?`, `*`, `+`, `-`, `>`, `<`, `,`, `.`, `/`) match the character actually typed (`modified_key`, with Shift applied), not the unshifted key, so they fire on layouts where the symbol requires modifiers (e.g. `?` on Turkish-Q). `F1` is a layout-independent way to open the help.
 
 ---
 

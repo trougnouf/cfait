@@ -289,6 +289,9 @@ pub struct GuiApp {
 
     pub pinned_actions: Vec<crate::config::TaskAction>,
     pub active_context_menu: Option<(String, bool, iced::Point)>, // (UID, is_full_menu, pt)
+    /// Keyboard-selected entry in the open context menu (index into
+    /// `context_menu_actions`), when navigating with Up/Down/Enter.
+    pub context_menu_cursor: Option<usize>,
 
     // Config cache (New fields)
     // Optional selected language for the GUI. `None` => use system default.
@@ -825,6 +828,7 @@ impl Default for GuiApp {
 
             pinned_actions: config.pinned_actions,
             active_context_menu: None,
+            context_menu_cursor: None,
 
             last_click: None,
             last_title_click: None,

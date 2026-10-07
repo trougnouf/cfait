@@ -1388,6 +1388,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
         Message::StartMoveTask(uid) => {
             app.active_context_menu = None; // Hide context menu if open
+            app.context_menu_cursor = None;
             if let Some(task) = app.store.get_task_ref(&uid) {
                 let has_subtasks = app.store.children_index.contains_key(&uid);
                 // Without a valid target (e.g. the task's own calendar is the

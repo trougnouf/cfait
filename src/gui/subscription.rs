@@ -75,6 +75,19 @@ fn navigation_key_message(key: &keyboard::Key, shift: bool) -> Option<Message> {
     }
 }
 
+/// The character the user actually typed: `modified_key` carries the logical
+/// key with Shift applied (except Ctrl), so symbols that need Shift on a given
+/// layout (e.g. "?" on Turkish-Q, "*" on US) match regardless of the layout.
+fn typed_char(key: &keyboard::Key, modified_key: &keyboard::Key) -> Option<String> {
+    match modified_key.as_ref() {
+        keyboard::Key::Character(s) => Some(s.to_string()),
+        _ => match key.as_ref() {
+            keyboard::Key::Character(s) => Some(s.to_string()),
+            _ => None,
+        },
+    }
+}
+
 pub fn subscription(app: &GuiApp) -> Subscription<Message> {
     let mut subs = Vec::new();
 
@@ -183,7 +196,13 @@ fn handle_help_hotkey(
     if status == iced::event::Status::Captured {
         return None;
     }
-    if let iced::Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) = evt {
+    if let iced::Event::Keyboard(keyboard::Event::KeyPressed {
+        key,
+        modifiers,
+        modified_key,
+        ..
+    }) = evt
+    {
         match key.as_ref() {
             keyboard::Key::Named(keyboard::key::Named::Escape) => Some(Message::CloseHelp),
             keyboard::Key::Named(keyboard::key::Named::Tab) => {
@@ -195,11 +214,18 @@ fn handle_help_hotkey(
             keyboard::Key::Named(keyboard::key::Named::ArrowLeft) => {
                 Some(Message::SwitchHelpTab(false))
             }
-            keyboard::Key::Character(s) if s == "q" || s == "?" || s == "/" => {
-                Some(Message::CloseHelp)
+            keyboard::Key::Character(s) => {
+                let typed = typed_char(&key, &modified_key).unwrap_or_default();
+                if s == "q" || s == "/" || typed == "?" {
+                    Some(Message::CloseHelp)
+                } else if s == "l" {
+                    Some(Message::SwitchHelpTab(true))
+                } else if s == "h" {
+                    Some(Message::SwitchHelpTab(false))
+                } else {
+                    None
+                }
             }
-            keyboard::Key::Character("l") => Some(Message::SwitchHelpTab(true)),
-            keyboard::Key::Character("h") => Some(Message::SwitchHelpTab(false)),
             _ => None,
         }
     } else {
@@ -274,6 +300,11 @@ fn handle_hotkey(
                 }
             }
 
+            // Ctrl/Cmd + Enter: show details for the selected task
+            if is_cmd && *key == keyboard::Key::Named(Named::Enter) {
+                return Some(Message::KeyboardToggleDetails);
+            }
+
             // Ctrl/Cmd + digit: switch sidebar tab by logical character
             // (matches the typed digit on any layout; works even from a text field)
             if is_cmd && let Some(msg) = digit_sidebar_message(modified_key) {
@@ -330,6 +361,8 @@ fn handle_hotkey(
                 }
             } else if let keyboard::Key::Named(Named::Delete) = key.as_ref() {
                 return Some(Message::KeyboardDeleteTaskTree);
+            } else if let keyboard::Key::Named(Named::Enter) = key.as_ref() {
+                return Some(Message::KeyboardToggleDetails);
             }
 
             // Ctrl/Cmd + digit: switch sidebar tab by logical character
@@ -353,6 +386,21 @@ fn handle_hotkey(
         match key.as_ref() {
             // 1. Handle character-based keys first
             keyboard::Key::Character(s) => {
+                // Symbol shortcuts match the typed character (Shift applied via
+                // modified_key) so they fire on any layout, even when the symbol
+                // itself requires Shift (e.g. "?" or "*" on Turkish-Q).
+                if let Some(typed) = typed_char(&key, &modified_key) {
+                    match typed.as_str() {
+                        "?" => return Some(Message::OpenHelp(crate::help::HelpTab::Shortcuts)),
+                        "/" => return Some(Message::FocusSearch),
+                        "*" => return Some(Message::ClearAllFilters),
+                        "+" | "=" => return Some(Message::ChangePrioritySelected(1)),
+                        "-" => return Some(Message::ChangePrioritySelected(-1)),
+                        "." | ">" => return Some(Message::DemoteSelected),
+                        "," | "<" => return Some(Message::PromoteSelected),
+                        _ => {}
+                    }
+                }
                 let s_lower = s.to_lowercase();
                 // Match on lowercase char + shift state tuple for alphabetic keys
                 match (s_lower.as_ref(), modifiers.shift()) {
@@ -384,23 +432,14 @@ fn handle_hotkey(
                     ("w", false) => Some(Message::ToggleQuickFilter),
                     ("r", false) => Some(Message::Refresh),
                     ("r", true) => Some(Message::JumpToRandomTask),
-
-                    ("/", false) => Some(Message::FocusSearch),
-                    ("/", true) => Some(Message::OpenHelp(crate::help::HelpTab::Shortcuts)),
-                    ("?", _) => Some(Message::OpenHelp(crate::help::HelpTab::Shortcuts)),
-                    // Fallback to match exact char for symbols
-                    _ => match s {
-                        "*" => Some(Message::ClearAllFilters),
-                        "+" | "=" => Some(Message::ChangePrioritySelected(1)),
-                        "-" => Some(Message::ChangePrioritySelected(-1)),
-                        "." | ">" => Some(Message::DemoteSelected),
-                        "," | "<" => Some(Message::PromoteSelected),
-                        _ => None,
-                    },
+                    _ => None,
                 }
             }
 
             // 2. Handle Named keys
+            keyboard::Key::Named(Named::F1) => {
+                Some(Message::OpenHelp(crate::help::HelpTab::Shortcuts))
+            }
             keyboard::Key::Named(Named::PageDown) => Some(Message::SelectNextPage),
             keyboard::Key::Named(Named::PageUp) => Some(Message::SelectPrevPage),
             keyboard::Key::Named(Named::Escape) => Some(Message::EscapePressed),

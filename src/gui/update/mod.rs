@@ -22,9 +22,14 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
             | Message::Tick
             | Message::WindowResized(_)
             | Message::WindowFocused(_)
-            | Message::ApplyWindowResize(_) => {}
+            | Message::ApplyWindowResize(_)
+            // Keyboard navigation of the open menu itself
+            | Message::SelectNext
+            | Message::SelectPrev
+            | Message::EnterPressed => {}
             _ => {
                 app.active_context_menu = None;
+                app.context_menu_cursor = None;
             }
         }
     }

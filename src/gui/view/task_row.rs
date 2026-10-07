@@ -1186,7 +1186,7 @@ pub fn view_task_row<'a>(
                 let shortcut = match *action {
                     TaskAction::CompleteAndShift => " (Shift+Space)",
                     TaskAction::Focus => " (f)",
-                    TaskAction::ToggleDetails => " (L)",
+                    TaskAction::ToggleDetails => " (L / Ctrl+Enter)",
                     TaskAction::ToggleTimer => " (s)",
                     TaskAction::StopTimer => " (S)",
                     TaskAction::AddSession => " (t)",

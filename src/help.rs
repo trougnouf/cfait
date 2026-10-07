@@ -500,7 +500,11 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
 pub fn get_shortcuts_help(is_gui: bool) -> Vec<HelpSection> {
     let mut nav_items = vec![
         HelpItem {
-            keys: "?".to_string(),
+            keys: if is_gui {
+                "? / F1".to_string()
+            } else {
+                "?".to_string()
+            },
             desc: rust_i18n::t!("help_about").to_string(),
             example: "".to_string(),
         },
@@ -710,7 +714,11 @@ pub fn get_shortcuts_help(is_gui: bool) -> Vec<HelpSection> {
                     example: "".to_string(),
                 },
                 HelpItem {
-                    keys: "L".to_string(),
+                    keys: if is_gui {
+                        "L / Ctrl + Enter".to_string()
+                    } else {
+                        "L".to_string()
+                    },
                     desc: rust_i18n::t!("help_shortcut_browse_relations_details").to_string(),
                     example: "".to_string(),
                 },

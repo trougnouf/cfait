@@ -92,6 +92,119 @@ pub fn is_action_available(
     }
 }
 
+/// Ordered list of actions shown in a task's context menu, filtered by
+/// availability. Shared by the view (rendering) and the update side (keyboard
+/// navigation and activation) so both agree on the item indices.
+pub fn context_menu_actions(
+    app: &GuiApp,
+    task: &crate::model::Task,
+    is_full: bool,
+) -> Vec<crate::config::TaskAction> {
+    use crate::config::TaskAction;
+    let order: Vec<TaskAction> = if is_full {
+        vec![
+            TaskAction::OpenUrl,
+            TaskAction::CopyUrl,
+            TaskAction::OpenCoordinates,
+            TaskAction::OpenLocations,
+            TaskAction::ToggleDetails,
+            TaskAction::CompleteAndShift,
+            TaskAction::ToggleTimer,
+            TaskAction::StopTimer,
+            TaskAction::AddSession,
+            TaskAction::IncreasePriority,
+            TaskAction::DecreasePriority,
+            TaskAction::Edit,
+            TaskAction::EditTree,
+            TaskAction::Yank,
+            TaskAction::CreateSubtask,
+            TaskAction::DuplicateTree,
+            TaskAction::CompleteTree,
+            TaskAction::Promote,
+            TaskAction::Move,
+            TaskAction::Cancel,
+            TaskAction::Delete,
+            TaskAction::DeleteTree,
+            TaskAction::Focus,
+        ]
+    } else {
+        // For non-full menu, put OpenLocations at top of unpinned actions
+        let mut unpinned_actions: Vec<TaskAction> = TaskAction::ALL
+            .iter()
+            .filter(|a| !app.pinned_actions.contains(a))
+            .cloned()
+            .collect();
+
+        // Move preferred actions to the front, in this order
+        let preferred_order = [
+            TaskAction::OpenUrl,
+            TaskAction::CopyUrl,
+            TaskAction::OpenCoordinates,
+            TaskAction::Focus,
+            TaskAction::CompleteAndShift,
+            TaskAction::OpenLocations,
+        ];
+        let mut insert_idx = 0;
+        for preferred in preferred_order {
+            if let Some(pos) = unpinned_actions.iter().position(|&a| a == preferred) {
+                unpinned_actions.remove(pos);
+                unpinned_actions.insert(insert_idx, preferred);
+                insert_idx += 1;
+            }
+        }
+        unpinned_actions
+    };
+
+    order
+        .into_iter()
+        .filter(|a| is_action_available(a, task, app))
+        .collect()
+}
+
+/// The message dispatched when a context menu entry is activated.
+/// `idx` is the task's index in the filtered list. Returns None for actions
+/// that are never available in the GUI menu (TUI-only).
+pub fn context_menu_action_message(
+    action: &crate::config::TaskAction,
+    task: &crate::model::Task,
+    idx: usize,
+) -> Option<Message> {
+    use crate::config::TaskAction;
+    Some(match action {
+        TaskAction::OpenUrl => Message::OpenUrl(task.url.clone()?),
+        TaskAction::CopyUrl => Message::CopyTaskUrl(task.uid.clone()),
+        TaskAction::OpenCoordinates => Message::OpenCoordinates(task.uid.clone()),
+        TaskAction::OpenLocations => Message::OpenLocations(task.uid.clone()),
+        TaskAction::ToggleDetails => Message::ToggleDetails(task.uid.clone()),
+        TaskAction::CompleteAndShift => Message::ToggleTaskShift(task.uid.clone()),
+        TaskAction::ToggleTimer => {
+            if task.status == crate::model::TaskStatus::InProcess {
+                Message::PauseTask(task.uid.clone())
+            } else {
+                Message::StartTask(task.uid.clone())
+            }
+        }
+        TaskAction::StopTimer => Message::StopTask(task.uid.clone()),
+        TaskAction::AddSession => Message::StartAddSession(task.uid.clone()),
+        TaskAction::IncreasePriority => Message::ChangePriority(idx, 1),
+        TaskAction::DecreasePriority => Message::ChangePriority(idx, -1),
+        TaskAction::Edit => Message::EditTaskStart(idx),
+        TaskAction::EditTree => Message::EditTaskTree(task.uid.clone()),
+        TaskAction::Yank => Message::YankTask(task.uid.clone()),
+        TaskAction::CreateSubtask => Message::StartCreateChild(task.uid.clone()),
+        TaskAction::DuplicateTree => Message::DuplicateTask(task.uid.clone()),
+        TaskAction::CompleteTree => Message::CompleteTree(task.uid.clone()),
+        TaskAction::Promote => Message::RemoveParent(task.uid.clone()),
+        TaskAction::Move => Message::StartMoveTask(task.uid.clone()),
+        TaskAction::Cancel => Message::CancelTask(idx),
+        TaskAction::Delete => Message::DeleteTask(idx),
+        TaskAction::DeleteTree => Message::DeleteTaskTree(task.uid.clone()),
+        TaskAction::TogglePin => Message::TogglePin(task.uid.clone()),
+        TaskAction::Focus => Message::FocusSelected,
+        TaskAction::BrowseRelations => return None, // TUI-only
+    })
+}
+
 pub fn tooltip_style(theme: &Theme) -> container::Style {
     let palette = theme.extended_palette();
     container::Style {
@@ -749,39 +862,46 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
 
         let mut menu_actions = column![].spacing(2);
 
-        let menu_btn_style = |theme: &Theme, status: button::Status| -> button::Style {
+        // Menu entry style: highlighted on hover and when keyboard-selected.
+        let menu_style = |theme: &Theme,
+                          status: button::Status,
+                          is_selected: bool,
+                          danger: bool|
+         -> button::Style {
             let palette = theme.extended_palette();
+            let (highlight_color, highlight_text) = if danger {
+                (palette.danger.base.color, palette.danger.base.text)
+            } else {
+                (
+                    palette.background.strong.color,
+                    palette.background.strong.text,
+                )
+            };
+            let (idle_color, idle_text) = if danger {
+                (Color::TRANSPARENT, palette.danger.base.color)
+            } else {
+                (Color::TRANSPARENT, palette.background.base.text)
+            };
             match status {
                 button::Status::Hovered | button::Status::Pressed => button::Style {
-                    background: Some(palette.background.strong.color.into()),
-                    text_color: palette.background.strong.text,
+                    background: Some(highlight_color.into()),
+                    text_color: highlight_text,
+                    ..button::Style::default()
+                },
+                _ if is_selected => button::Style {
+                    background: Some(highlight_color.into()),
+                    text_color: highlight_text,
                     ..button::Style::default()
                 },
                 _ => button::Style {
-                    background: Some(Color::TRANSPARENT.into()),
-                    text_color: palette.background.base.text,
+                    background: Some(idle_color.into()),
+                    text_color: idle_text,
                     ..button::Style::default()
                 },
             }
         };
 
-        let danger_menu_style = |theme: &Theme, status: button::Status| -> button::Style {
-            let palette = theme.extended_palette();
-            match status {
-                button::Status::Hovered | button::Status::Pressed => button::Style {
-                    background: Some(palette.danger.base.color.into()),
-                    text_color: palette.danger.base.text,
-                    ..button::Style::default()
-                },
-                _ => button::Style {
-                    background: Some(Color::TRANSPARENT.into()),
-                    text_color: palette.danger.base.color,
-                    ..button::Style::default()
-                },
-            }
-        };
-
-        let build_btn = |action: &TaskAction| -> Option<Element<'_, Message>> {
+        let build_btn = |action: &TaskAction, is_selected: bool| -> Option<Element<'_, Message>> {
             if !crate::gui::view::is_action_available(action, task, app) {
                 return None;
             }
@@ -801,7 +921,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
 
             let shortcut = match *action {
                 TaskAction::CompleteAndShift => " (Shift+Space)",
-                TaskAction::ToggleDetails => " (L)",
+                TaskAction::ToggleDetails => " (L / Ctrl+Enter)",
                 TaskAction::ToggleTimer => " (s)",
                 TaskAction::StopTimer => " (S)",
                 TaskAction::AddSession => " (t)",
@@ -825,8 +945,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             };
             label.push_str(shortcut);
 
-            let (icon_element, msg, is_danger): (Element<'_, Message>, Message, bool) = match action
-            {
+            let (icon_element, is_danger): (Element<'_, Message>, bool) = match action {
                 TaskAction::ToggleDetails => {
                     let mut icon_row = row![].spacing(2).align_y(iced::Alignment::Center);
                     if has_info {
@@ -847,151 +966,53 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                     } else {
                         rust_i18n::t!("show_details").to_string()
                     };
-                    (
-                        icon_row.into(),
-                        Message::ToggleDetails(task.uid.clone()),
-                        false,
-                    )
+                    (icon_row.into(), false)
                 }
                 TaskAction::ToggleTimer => {
                     if task.status == crate::model::TaskStatus::InProcess {
                         label = rust_i18n::t!("pause_task").to_string();
-                        (
-                            icon::icon(icon::PAUSE).size(14).into(),
-                            Message::PauseTask(task.uid.clone()),
-                            false,
-                        )
+                        (icon::icon(icon::PAUSE).size(14).into(), false)
                     } else if task.is_paused() {
                         label = rust_i18n::t!("resume_task").to_string();
-                        (
-                            icon::icon(icon::PLAY).size(14).into(),
-                            Message::StartTask(task.uid.clone()),
-                            false,
-                        )
+                        (icon::icon(icon::PLAY).size(14).into(), false)
                     } else {
                         label = rust_i18n::t!("start_task").to_string();
-                        (
-                            icon::icon(icon::PLAY).size(14).into(),
-                            Message::StartTask(task.uid.clone()),
-                            false,
-                        )
+                        (icon::icon(icon::PLAY).size(14).into(), false)
                     }
                 }
-                TaskAction::StopTimer => (
-                    icon::icon(icon::DEBUG_STOP).size(14).into(),
-                    Message::StopTask(task.uid.clone()),
-                    false,
-                ),
-                TaskAction::AddSession => (
-                    icon::icon(icon::TIMER_PLUS).size(14).into(),
-                    Message::StartAddSession(task.uid.clone()),
-                    false,
-                ),
-                TaskAction::IncreasePriority => (
-                    icon::icon(icon::PLUS).size(14).into(),
-                    Message::ChangePriority(idx, 1),
-                    false,
-                ),
-                TaskAction::DecreasePriority => (
-                    icon::icon(icon::MINUS).size(14).into(),
-                    Message::ChangePriority(idx, -1),
-                    false,
-                ),
-                TaskAction::Focus => (
-                    icon::icon(app.focus_icon).size(14).into(),
-                    Message::FocusSelected,
-                    false,
-                ),
-                TaskAction::Edit => (
-                    icon::icon(icon::EDIT).size(14).into(),
-                    Message::EditTaskStart(idx),
-                    false,
-                ),
-                TaskAction::EditTree => (
-                    icon::icon(icon::EDIT_TREE).size(14).into(),
-                    Message::EditTaskTree(uid.clone()),
-                    false,
-                ),
-                TaskAction::Yank => (
-                    icon::icon(icon::LINK).size(14).into(),
-                    Message::YankTask(uid.clone()),
-                    false,
-                ),
-                TaskAction::CreateSubtask => (
-                    icon::icon(icon::CREATE_CHILD).size(14).into(),
-                    Message::StartCreateChild(uid.clone()),
-                    false,
-                ),
-                TaskAction::DuplicateTree => (
-                    icon::icon(icon::CLONE).size(14).into(),
-                    Message::DuplicateTask(uid.clone()),
-                    false,
-                ),
-                TaskAction::CompleteTree => (
-                    icon::icon(icon::LIST_CHECK).size(14).into(),
-                    Message::CompleteTree(uid.clone()),
-                    false,
-                ),
-                TaskAction::Promote => (
-                    icon::icon(icon::ELEVATOR_UP).size(14).into(),
-                    Message::RemoveParent(uid.clone()),
-                    false,
-                ),
-                TaskAction::Move => (
-                    icon::icon(icon::MOVE).size(14).into(),
-                    Message::StartMoveTask(uid.clone()),
-                    false,
-                ),
-                TaskAction::Cancel => (
-                    icon::icon(icon::CROSS).size(14).into(),
-                    Message::CancelTask(idx),
-                    true,
-                ),
-                TaskAction::Delete => (
-                    icon::icon(icon::TRASH).size(14).into(),
-                    Message::DeleteTask(idx),
-                    true,
-                ),
-                TaskAction::DeleteTree => (
-                    icon::icon(icon::TRASH).size(14).into(),
-                    Message::DeleteTaskTree(uid.clone()),
-                    true,
-                ),
-                TaskAction::OpenCoordinates => (
-                    icon::icon(icon::MAP_LOCATION_DOT).size(14).into(),
-                    Message::OpenCoordinates(uid.clone()),
-                    false,
-                ),
-                TaskAction::OpenLocations => (
-                    icon::icon(icon::MAP_MARKER_MULTIPLE).size(14).into(),
-                    Message::OpenLocations(uid.clone()),
-                    false,
-                ),
-                TaskAction::OpenUrl => (
-                    icon::icon(icon::URL_CHECK).size(14).into(),
-                    Message::OpenUrl(task.url.clone().unwrap()),
-                    false,
-                ),
-                TaskAction::CopyUrl => (
-                    icon::icon(icon::COPY).size(14).into(),
-                    Message::CopyTaskUrl(task.uid.clone()),
-                    false,
-                ),
-                TaskAction::CompleteAndShift => (
-                    icon::icon(icon::REPEAT).size(14).into(),
-                    Message::ToggleTaskShift(uid.clone()),
-                    false,
-                ),
-                TaskAction::TogglePin => (
-                    icon::icon(icon::THUMB_TACK).size(14).into(),
-                    Message::TogglePin(uid.clone()),
-                    false,
-                ),
-                TaskAction::BrowseRelations => {
-                    // TUI-only; filtered out by is_action_available above
-                    unreachable!()
+                TaskAction::StopTimer => (icon::icon(icon::DEBUG_STOP).size(14).into(), false),
+                TaskAction::AddSession => (icon::icon(icon::TIMER_PLUS).size(14).into(), false),
+                TaskAction::IncreasePriority => (icon::icon(icon::PLUS).size(14).into(), false),
+                TaskAction::DecreasePriority => (icon::icon(icon::MINUS).size(14).into(), false),
+                TaskAction::Focus => (icon::icon(app.focus_icon).size(14).into(), false),
+                TaskAction::Edit => (icon::icon(icon::EDIT).size(14).into(), false),
+                TaskAction::EditTree => (icon::icon(icon::EDIT_TREE).size(14).into(), false),
+                TaskAction::Yank => (icon::icon(icon::LINK).size(14).into(), false),
+                TaskAction::CreateSubtask => {
+                    (icon::icon(icon::CREATE_CHILD).size(14).into(), false)
                 }
+                TaskAction::DuplicateTree => (icon::icon(icon::CLONE).size(14).into(), false),
+                TaskAction::CompleteTree => (icon::icon(icon::LIST_CHECK).size(14).into(), false),
+                TaskAction::Promote => (icon::icon(icon::ELEVATOR_UP).size(14).into(), false),
+                TaskAction::Move => (icon::icon(icon::MOVE).size(14).into(), false),
+                TaskAction::Cancel => (icon::icon(icon::CROSS).size(14).into(), true),
+                TaskAction::Delete => (icon::icon(icon::TRASH).size(14).into(), true),
+                TaskAction::DeleteTree => (icon::icon(icon::TRASH).size(14).into(), true),
+                TaskAction::OpenCoordinates => {
+                    (icon::icon(icon::MAP_LOCATION_DOT).size(14).into(), false)
+                }
+                TaskAction::OpenLocations => {
+                    (icon::icon(icon::MAP_MARKER_MULTIPLE).size(14).into(), false)
+                }
+                TaskAction::OpenUrl => (icon::icon(icon::URL_CHECK).size(14).into(), false),
+                TaskAction::CopyUrl => (icon::icon(icon::COPY).size(14).into(), false),
+                TaskAction::CompleteAndShift => (icon::icon(icon::REPEAT).size(14).into(), false),
+                TaskAction::TogglePin => (icon::icon(icon::THUMB_TACK).size(14).into(), false),
+                // TUI-only; filtered out by is_action_available above
+                TaskAction::BrowseRelations => return None,
             };
+
+            let msg = crate::gui::view::context_menu_action_message(action, task, idx)?;
 
             let btn = button(
                 row![icon_element, text(label).size(14)]
@@ -1000,84 +1021,25 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             )
             .width(Length::Fill)
             .padding(8)
-            .style(if is_danger {
-                danger_menu_style
-            } else {
-                menu_btn_style
-            })
+            .style(move |theme, status| menu_style(theme, status, is_selected, is_danger))
             .on_press(msg);
 
             Some(btn.into())
         };
 
-        // Custom ordering for context menu - put location actions at top
-        let context_menu_order = if *is_full {
-            vec![
-                TaskAction::OpenUrl,         // Add this at the top
-                TaskAction::CopyUrl,         // Copy link second
-                TaskAction::OpenCoordinates, // Single coordinates
-                TaskAction::OpenLocations,   // GPX export
-                TaskAction::ToggleDetails,
-                TaskAction::CompleteAndShift,
-                TaskAction::ToggleTimer,
-                TaskAction::StopTimer,
-                TaskAction::AddSession,
-                TaskAction::IncreasePriority,
-                TaskAction::DecreasePriority,
-                TaskAction::Edit,
-                TaskAction::EditTree,
-                TaskAction::Yank,
-                TaskAction::CreateSubtask,
-                TaskAction::DuplicateTree,
-                TaskAction::CompleteTree,
-                TaskAction::Promote,
-                TaskAction::Move,
-                TaskAction::Cancel,
-                TaskAction::Delete,
-                TaskAction::DeleteTree,
-                TaskAction::Focus,
-            ]
-        } else {
-            // For non-full menu, put OpenLocations at top of unpinned actions
-            let mut unpinned_actions: Vec<TaskAction> = TaskAction::ALL
-                .iter()
-                .filter(|a| !app.pinned_actions.contains(a))
-                .cloned()
-                .collect();
+        let menu_actions_list = crate::gui::view::context_menu_actions(app, task, *is_full);
 
-            // Move preferred actions to the front, in this order
-            let preferred_order = [
-                TaskAction::OpenUrl,
-                TaskAction::CopyUrl,
-                TaskAction::OpenCoordinates,
-                TaskAction::Focus,
-                TaskAction::CompleteAndShift,
-                TaskAction::OpenLocations,
-            ];
-            let mut insert_idx = 0;
-            for preferred in preferred_order {
-                if let Some(pos) = unpinned_actions.iter().position(|&a| a == preferred) {
-                    unpinned_actions.remove(pos);
-                    unpinned_actions.insert(insert_idx, preferred);
-                    insert_idx += 1;
-                }
-            }
-            unpinned_actions
-        };
-
-        let mut added_unpinned = false;
         let mut num_items = 0;
-        for action in context_menu_order {
-            if let Some(btn) = build_btn(&action) {
+        for (i, action) in menu_actions_list.iter().enumerate() {
+            // Highlight the keyboard-selected entry (if any)
+            let is_selected = app.context_menu_cursor == Some(i);
+            if let Some(btn) = build_btn(action, is_selected) {
                 menu_actions = menu_actions.push(btn);
                 num_items += 1;
-                if !*is_full && !app.pinned_actions.contains(&action) {
-                    added_unpinned = true;
-                }
             }
         }
 
-        if !*is_full && !added_unpinned {
+        if !*is_full && num_items == 0 {
             menu_actions = menu_actions.push(
                 container(
                     text(rust_i18n::t!("all_actions_pinned"))
@@ -1091,9 +1053,11 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
 
         let max_available_height = (app.current_window_size.height - 20.0).max(100.0);
 
-        let menu_scrollable = scrollable(menu_actions).direction(Direction::Vertical(
-            Scrollbar::new().width(6).scroller_width(6).margin(0),
-        ));
+        let menu_scrollable = scrollable(menu_actions)
+            .id(iced::widget::Id::new("context_menu_scrollable"))
+            .direction(Direction::Vertical(
+                Scrollbar::new().width(6).scroller_width(6).margin(0),
+            ));
 
         let menu_container = container(menu_scrollable)
             .width(Length::Fixed(CONTEXT_MENU_WIDTH))
