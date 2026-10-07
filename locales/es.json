@@ -833,6 +833,7 @@
     "stop_reset": "Detener (reiniciar)",
     "strikethrough_completed": "Tachar las tareas completadas",
     "suggestions": "Recomendaciones",
+    "suggestions_cycle_hint": "tab: ciclo",
     "suggestions_hint": "Tab: aplicar, Esc: descartar",
     "sunday": "Domingo",
     "support_card_title": "Apoya el desarrollo",
