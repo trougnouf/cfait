@@ -10,9 +10,9 @@ use iced::{Color, Point, Rectangle, Size, Vector};
 pub const BURST_SECS: f32 = 2.0;
 
 const PARTICLE_COUNT: usize = 140;
-const GRAVITY: f32 = 500.0;
-const MIN_SPEED: f32 = 350.0;
-const MAX_SPEED: f32 = 900.0;
+const GRAVITY: f32 = 800.0;
+const MIN_SPEED: f32 = 250.0;
+const MAX_SPEED: f32 = 1300.0;
 
 const PALETTE: [Color; 6] = [
     Color::from_rgb(0.96, 0.26, 0.36),
@@ -27,6 +27,9 @@ const PALETTE: [Color; 6] = [
 struct Particle {
     origin: Point,
     velocity: Vector,
+    /// Linear air-drag coefficient (per second). Varies the flight arcs from
+    /// snappy to floaty.
+    drag: f32,
     color: Color,
     size: f32,
     spin: f32,
@@ -41,38 +44,43 @@ pub struct Confetti {
     particles: Vec<Particle>,
 }
 
-/// Tiny xorshift stream; the burst is purely decorative, so any
-/// deterministic-enough spread over `[0, 1)` is fine.
+/// splitmix64 finalizer: full avalanche, so any seed difference produces a
+/// completely different burst.
+pub fn mix64(mut z: u64) -> u64 {
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    z ^ (z >> 31)
+}
+
+/// splitmix64 stream over `[0, 1)`.
 fn rng(seed: u64) -> impl std::iter::Iterator<Item = f32> {
-    std::iter::successors(Some(seed), |s| {
-        Some(
-            s.wrapping_mul(6364136223846793005)
-                .wrapping_add(1442695040888963407),
-        )
-    })
-    .map(|s| (s >> 33) as f32 / u32::MAX as f32)
+    std::iter::successors(Some(seed), |s| Some(s.wrapping_add(0x9E37_79B9_7F4A_7C15)))
+        .map(mix64)
+        .map(|s| (s >> 40) as f32 / (1u64 << 24) as f32)
 }
 
 impl Confetti {
     pub fn new(window: Size, seed: u64) -> Self {
-        let mut rng = rng(seed | 1);
+        let mut rng = rng(seed);
         let origin = Point::new(window.width / 2.0, window.height);
         let particles = (0..PARTICLE_COUNT)
             .map(|i| {
-                let angle = -std::f32::consts::FRAC_PI_2
-                    + (rng.next().unwrap_or(0.5) - 0.5) * std::f32::consts::PI;
+                // Launch anywhere in the upper half-plane, not biased left or
+                // right.
+                let angle = -rng.next().unwrap_or(0.5) * std::f32::consts::PI;
                 let speed = MIN_SPEED + rng.next().unwrap_or(0.5) * (MAX_SPEED - MIN_SPEED);
                 Particle {
                     origin: Point::new(
-                        origin.x + (rng.next().unwrap_or(0.5) - 0.5) * window.width * 0.3,
+                        origin.x + (rng.next().unwrap_or(0.5) - 0.5) * window.width * 0.5,
                         origin.y,
                     ),
                     velocity: Vector::new(angle.cos() * speed, angle.sin() * speed),
+                    drag: 0.5 + rng.next().unwrap_or(0.5) * 3.0,
                     color: PALETTE[(i
                         + (rng.next().unwrap_or(0.5) * PALETTE.len() as f32) as usize)
                         % PALETTE.len()],
-                    size: 4.0 + rng.next().unwrap_or(0.5) * 5.0,
-                    spin: (rng.next().unwrap_or(0.5) - 0.5) * 10.0,
+                    size: 3.0 + rng.next().unwrap_or(0.5) * 9.0,
+                    spin: (rng.next().unwrap_or(0.5) - 0.5) * 14.0,
                     phase: rng.next().unwrap_or(0.5) * std::f32::consts::TAU,
                 }
             })
@@ -114,9 +122,14 @@ impl canvas::Program<crate::gui::Message> for ConfettiProgram {
         let mut frame = Frame::with_bounds(renderer, bounds);
 
         for p in &self.confetti.particles {
+            // Closed-form ballistic position under linear air drag:
+            // p(t) = p0 + v0 * (1 - e^(-d t))/d + (g/d) * (t - (1 - e^(-d t))/d)
+            let decay = 1.0 - (-p.drag * t).exp();
             let pos = Point::new(
-                p.origin.x + p.velocity.x * t,
-                p.origin.y + p.velocity.y * t + 0.5 * GRAVITY * t * t,
+                p.origin.x + p.velocity.x * decay / p.drag,
+                p.origin.y
+                    + p.velocity.y * decay / p.drag
+                    + (GRAVITY / p.drag) * (t - decay / p.drag),
             );
             // Fade out over the last 40% of the burst.
             let alpha = ((BURST_SECS - t) / (BURST_SECS * 0.4)).clamp(0.0, 1.0);

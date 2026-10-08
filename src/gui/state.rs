@@ -273,6 +273,8 @@ pub struct GuiApp {
     /// per-device `celebrate_completions` setting enabled. Cleared by
     /// `Message::ConfettiTick` once the burst is over.
     pub confetti: Option<crate::gui::confetti::Confetti>,
+    /// Monotonic count of confetti bursts, mixed into the burst seed.
+    pub confetti_bursts: u64,
     pub ob_urgent_days_input: String,
     pub ob_urgent_prio_input: String,
     pub ob_default_priority_input: String,
@@ -365,9 +367,14 @@ impl GuiApp {
         if let Some(task) = self.store.get_task_ref(uid)
             && !task.status.is_done()
         {
-            let seed = uid
-                .bytes()
-                .fold(0x9E37_79B9_7F4A_7C15u64, |acc, b| acc ^ (b as u64));
+            let uid_hash = uid.bytes().fold(0x9E37_79B9_7F4A_7C15u64, |acc, b| {
+                acc.wrapping_mul(31).wrapping_add(b as u64)
+            });
+            self.confetti_bursts = self.confetti_bursts.wrapping_add(1);
+            // Mix the uid with the burst counter so consecutive completions
+            // produce completely different bursts.
+            let seed = crate::gui::confetti::mix64(uid_hash)
+                ^ crate::gui::confetti::mix64(self.confetti_bursts);
             self.confetti = Some(crate::gui::confetti::Confetti::new(
                 self.current_window_size,
                 seed,
@@ -808,6 +815,7 @@ impl Default for GuiApp {
             current_window_size: iced::Size::new(1024.0, 768.0),
             resize_debounce_version: 0,
             confetti: None,
+            confetti_bursts: 0,
             ob_urgent_days_input: "1".to_string(),
             ob_urgent_prio_input: "1".to_string(),
             ob_default_priority_input: "5".to_string(),
