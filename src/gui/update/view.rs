@@ -724,7 +724,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     suggestions: cycle.suggestions,
                     editor: cycle.editor,
                 });
-                return handle(app, Message::ApplySuggestion(cycle.range, replacement));
+                return tasks::handle(app, Message::ApplySuggestion(cycle.range, replacement));
             }
 
             if let Some((range, suggs)) = crate::model::autocomplete::suggest(
@@ -742,7 +742,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     suggestions: suggs,
                     editor,
                 });
-                return handle(app, Message::ApplySuggestion(range, s.replacement));
+                return tasks::handle(app, Message::ApplySuggestion(range, s.replacement));
             }
 
             // No suggestion to apply: fall back to the editor's normal Tab
@@ -752,7 +752,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     handle(app, Message::JournalIndent(forward))
                 }
                 crate::gui::state::SuggestionEditor::TaskDescription => {
-                    handle(app, Message::DescriptionIndent(forward))
+                    tasks::handle(app, Message::DescriptionIndent(forward))
                 }
                 crate::gui::state::SuggestionEditor::TaskInput => {
                     handle(app, Message::CycleFocus(forward))
