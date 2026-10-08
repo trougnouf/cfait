@@ -63,6 +63,11 @@ impl Confetti {
     pub fn new(window: Size, seed: u64) -> Self {
         let mut rng = rng(seed);
         let origin = Point::new(window.width / 2.0, window.height);
+        // Per-burst launch style: from a single point (party popper) to
+        // particles spread along the whole bottom edge. Squared for a bias
+        // towards tighter bursts.
+        let spread = rng.next().unwrap_or(0.5).powi(2) * window.width;
+        let burst_x = origin.x + (rng.next().unwrap_or(0.5) - 0.5) * (window.width - spread);
         let particles = (0..PARTICLE_COUNT)
             .map(|i| {
                 // Launch anywhere in the upper half-plane, not biased left or
@@ -71,7 +76,7 @@ impl Confetti {
                 let speed = MIN_SPEED + rng.next().unwrap_or(0.5) * (MAX_SPEED - MIN_SPEED);
                 Particle {
                     origin: Point::new(
-                        origin.x + (rng.next().unwrap_or(0.5) - 0.5) * window.width * 0.5,
+                        burst_x + (rng.next().unwrap_or(0.5) - 0.5) * spread,
                         origin.y,
                     ),
                     velocity: Vector::new(angle.cos() * speed, angle.sin() * speed),
