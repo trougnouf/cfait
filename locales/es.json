@@ -86,6 +86,7 @@
     "cancel": "Cancelar",
     "cancel_task": "Cancelar tarea",
     "cannot_open_battery_settings": "No se pueden abrir los ajustes de batería",
+    "celebrate_completions": "Celebra las tareas completadas (confeti)",
     "clear_all_locations": "Borrar ubicaciones",
     "clear_all_tags": "Borrar etiquetas",
     "cli_action_commands_heading": "Comandos de tareas (No interactivo):",
