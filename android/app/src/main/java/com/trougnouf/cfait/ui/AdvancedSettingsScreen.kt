@@ -56,6 +56,7 @@ fun AdvancedSettingsScreen(
     val trashRetentionState = remember { TextFieldState("14") }
     var deleteEventsOnCompletion by remember { mutableStateOf(false) }
     var strikethroughCompleted by remember { mutableStateOf(false) }
+    var celebrateCompletions by remember { mutableStateOf(false) }
     var showInlineDescriptions by remember { mutableStateOf(true) }
     var showQuickFilter by remember { mutableStateOf(true) }
     val quickFilterTermState = remember { TextFieldState("is:ready") }
@@ -111,6 +112,7 @@ fun AdvancedSettingsScreen(
                 newTrashRetention = cfg.trashRetention.toString()
                 deleteEventsOnCompletion = cfg.deleteEventsOnCompletion
                 strikethroughCompleted = cfg.strikethroughCompleted
+                celebrateCompletions = cfg.celebrateCompletions
                 showInlineDescriptions = cfg.showInlineDescriptions
                 showQuickFilter = cfg.showQuickFilter
                 newQuickFilterTerm = cfg.quickFilterTerm
@@ -191,6 +193,7 @@ fun AdvancedSettingsScreen(
                     trashRetention = trashRetentionStr.toUIntOrNull() ?: 14u,
                     deleteEventsOnCompletion = deleteEventsOnCompletion,
                     strikethroughCompleted = strikethroughCompleted,
+                    celebrateCompletions = celebrateCompletions,
                     showInlineDescriptions = showInlineDescriptions,
                     showQuickFilter = showQuickFilter,
                     quickFilterTerm = quickFilterTermStr,
@@ -454,6 +457,11 @@ fun AdvancedSettingsScreen(
                 Switch(checked = strikethroughCompleted, onCheckedChange = { strikethroughCompleted = it })
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.strikethrough_completed))
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                Switch(checked = celebrateCompletions, onCheckedChange = { celebrateCompletions = it })
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.celebrate_completions))
             }
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                 Switch(checked = showInlineDescriptions, onCheckedChange = { showInlineDescriptions = it })

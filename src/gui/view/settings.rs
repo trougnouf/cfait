@@ -576,6 +576,12 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                         crate::gui::message::BoolField::StrikethroughCompleted,
                         v
                     )),
+                cb(app.core_config.celebrate_completions)
+                    .label(rust_i18n::t!("celebrate_completions"))
+                    .on_toggle(|v| Message::ToggleField(
+                        crate::gui::message::BoolField::CelebrateCompletions,
+                        v
+                    )),
                 Space::new().height(10),
                 text(rust_i18n::t!("settings_sorting"))
                     .size(16)

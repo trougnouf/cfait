@@ -69,6 +69,7 @@ pub enum BoolField {
     ShowTaskGoalsInSidebar,
     SortCollectionsBySize,
     StrikethroughCompleted,
+    CelebrateCompletions,
     ObInsecure,
 }
 
@@ -290,6 +291,7 @@ pub enum Message {
     ToggleAllCalendars(bool),
     Tick,
     SpinnerTick,
+    ConfettiTick,
     InitBackgroundWorker(mpsc::Sender<crate::gui::async_ops::WorkerCommand>),
     BackgroundSyncComplete(Vec<TodoTask>),
     BackgroundSyncFailed,

@@ -926,11 +926,15 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     app.sort_calendars();
                 }
                 BoolField::StrikethroughCompleted => app.strikethrough_completed = val,
+                BoolField::CelebrateCompletions => {
+                    app.core_config.celebrate_completions = val;
+                }
             }
             save_config(app);
             if field != BoolField::ObInsecure
                 && field != BoolField::AutoReminders
                 && field != BoolField::DeleteEventsOnCompletion
+                && field != BoolField::CelebrateCompletions
             {
                 refresh_filtered_tasks(app);
             }

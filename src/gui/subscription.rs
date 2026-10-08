@@ -137,6 +137,13 @@ pub fn subscription(app: &GuiApp) -> Subscription<Message> {
         );
     }
 
+    // While a completion celebration is on screen, keep animating it.
+    if app.confetti.is_some() {
+        subs.push(
+            iced::time::every(std::time::Duration::from_millis(33)).map(|_| Message::ConfettiTick),
+        );
+    }
+
     // Tick every minute if any task is running, so the timer updates visually.
     // Scan the whole store (not the filtered list): a visible parent may
     // aggregate session time from a running child that is hidden by filters.

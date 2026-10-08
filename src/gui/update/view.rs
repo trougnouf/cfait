@@ -1215,6 +1215,16 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.spinner_frame = (app.spinner_frame + 1) % crate::gui::icon::SPINNER_FRAMES.len();
             Task::none()
         }
+        Message::ConfettiTick => {
+            if app
+                .confetti
+                .as_ref()
+                .is_some_and(crate::gui::confetti::Confetti::is_finished)
+            {
+                app.confetti = None;
+            }
+            Task::none()
+        }
         Message::SaveJournal(version) => {
             if version == app.journal_debounce_version {
                 flush_journal_save(app);

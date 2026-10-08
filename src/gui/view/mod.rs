@@ -638,6 +638,14 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
 
     let mut stack_children: Vec<Element<'_, Message>> = vec![base_content];
 
+    // Confetti celebration for completed tasks (per-device setting).
+    if let Some(confetti) = app.confetti.clone() {
+        let burst = iced::widget::canvas(crate::gui::confetti::ConfettiProgram { confetti })
+            .width(Length::Fill)
+            .height(Length::Fill);
+        stack_children.push(iced::widget::opaque(burst));
+    }
+
     if app.ics_import_dialog_open {
         stack_children.push(view_ics_import_overlay(app));
     } else if app.confirm_delete_all_open {

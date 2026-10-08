@@ -846,6 +846,9 @@ pub struct Config {
     pub enable_local_mode: bool,
     pub hide_completed: bool,
     pub strikethrough_completed: bool,
+    /// Per-device: celebrate completing a task (confetti overlay in the GUI,
+    /// confetti + haptic on Android, terminal bell in the TUI). Never synced.
+    pub celebrate_completions: bool,
     pub hide_fully_completed_tags: bool,
     pub hide_aliases_in_sidebar: bool,
     pub show_inline_descriptions: bool,
@@ -1070,6 +1073,7 @@ impl Default for Config {
             default_duration_goal_mins: 60,
             sessions_count_as_completions: false,
             strikethrough_completed: false,
+            celebrate_completions: true,
             max_done_roots: 20,
             max_done_subtasks: 5,
             show_ongoing_notifications: true,
@@ -1688,6 +1692,14 @@ impl Config {
                 None,
                 None,
                 Some(" # Boolean: Apply strikethrough styling to completed task titles."),
+            ),
+            (
+                "celebrate_completions =",
+                None,
+                None,
+                Some(
+                    " # Boolean: Celebrate completing a task (confetti overlay in the GUI, confetti and haptic on Android, terminal bell in the TUI).",
+                ),
             ),
             (
                 "hide_fully_completed_tags =",

@@ -348,6 +348,9 @@ fun HomeScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
     var showUndoSnackbar by remember { mutableStateOf(true) }
+    var celebrateCompletions by remember { mutableStateOf(false) }
+    // Incremented on each celebrated completion; drives ConfettiOverlay.
+    var confettiTrigger by remember { mutableStateOf(0) }
 
     // Load config-driven UI state in a single pass. getConfig() touches the OS
     // keyring, so keep it off the per-refresh getViewTasks path.
@@ -361,6 +364,7 @@ fun HomeScreen(
                 hasInitializedExpansions = true
             }
             showUndoSnackbar = cfg.showUndoSnackbar
+            celebrateCompletions = cfg.celebrateCompletions
         } catch (e: Exception) {
             // Ignore
         }
@@ -637,7 +641,13 @@ fun HomeScreen(
     }
 
     fun toggleTask(task: MobileTaskSummary) {
-        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+        // Only celebrate actual completions, not undoing a done task.
+        if (celebrateCompletions && !task.isDone) {
+            confettiTrigger++
+            hapticFeedback.performHapticFeedback(HapticFeedbackType.Confirm)
+        } else {
+            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+        }
         scope.launch {
             activeOpCount++
             try {
@@ -3035,6 +3045,8 @@ fun HomeScreen(
                     }
                 }
             }
+
+            ConfettiOverlay(confettiTrigger)
         }
     }
 }

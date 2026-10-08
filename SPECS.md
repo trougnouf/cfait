@@ -401,6 +401,7 @@ All persistent state and settings live here. Unrecognized TOML keys must not be 
 *   `hide_completed`, `hide_fully_completed_tags`, `hide_aliases_in_sidebar`: Booleans.
 *   `blur_when_unfocused`: Boolean. Privacy mode — hides task content when the window loses focus.
 *   `strikethrough_completed`: Boolean. Line-through styling for done tasks.
+*   `celebrate_completions`: Boolean (per-device, never synced). Celebrate completing a task: a confetti burst in the GUI, confetti plus a `Confirm` haptic on Android, and a terminal bell in the TUI. Celebrations trigger only on user-initiated completions (never on completions arriving via sync or undo).
 *   `show_inline_descriptions`: Boolean. Previews up to 3 lines of the description in the list.
 *   `ui_scale`: Float (0.5-3.0). Global zoom.
 *   `theme`: Enum (RustyDark, Light, Dracula, Nord, Catppuccin variants, etc.).

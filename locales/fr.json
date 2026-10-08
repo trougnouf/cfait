@@ -830,6 +830,7 @@
     "status_saved": "Enregistré.",
     "stop_reset": "Arrêter (réinit.)",
     "strikethrough_completed": "Barrer les tâches terminées",
+    "celebrate_completions": "Célébrer les tâches terminées (confettis)",
     "suggestions": "Suggestions",
     "suggestions_cycle_hint": "tab : défiler",
     "suggestions_hint": "tab : appliquer, Échap : fermer",

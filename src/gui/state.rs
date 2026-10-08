@@ -268,6 +268,11 @@ pub struct GuiApp {
     pub resize_direction: Option<ResizeDirection>,
     pub current_window_size: iced::Size,
     pub resize_debounce_version: usize,
+
+    /// Active confetti burst, spawned when the user completes a task with the
+    /// per-device `celebrate_completions` setting enabled. Cleared by
+    /// `Message::ConfettiTick` once the burst is over.
+    pub confetti: Option<crate::gui::confetti::Confetti>,
     pub ob_urgent_days_input: String,
     pub ob_urgent_prio_input: String,
     pub ob_default_priority_input: String,
@@ -350,6 +355,26 @@ pub struct GuiApp {
 }
 
 impl GuiApp {
+    /// Start a confetti burst if celebrations are enabled and the task is not
+    /// done yet. Call before dispatching the completion intent, so the
+    /// pre-completion status decides whether this is a completion or an undo.
+    pub fn maybe_celebrate(&mut self, uid: &str) {
+        if !self.core_config.celebrate_completions {
+            return;
+        }
+        if let Some(task) = self.store.get_task_ref(uid)
+            && !task.status.is_done()
+        {
+            let seed = uid
+                .bytes()
+                .fold(0x9E37_79B9_7F4A_7C15u64, |acc, b| acc ^ (b as u64));
+            self.confetti = Some(crate::gui::confetti::Confetti::new(
+                self.current_window_size,
+                seed,
+            ));
+        }
+    }
+
     pub fn get_sidebar_len(&self) -> usize {
         match self.sidebar_mode {
             SidebarMode::Calendars => self.get_filtered_calendars().len(),
@@ -782,6 +807,7 @@ impl Default for GuiApp {
             resize_direction: None,
             current_window_size: iced::Size::new(1024.0, 768.0),
             resize_debounce_version: 0,
+            confetti: None,
             ob_urgent_days_input: "1".to_string(),
             ob_urgent_prio_input: "1".to_string(),
             ob_default_priority_input: "5".to_string(),

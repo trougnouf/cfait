@@ -50,6 +50,30 @@ fn is_undo(key: &KeyEvent) -> bool {
         && !key.modifiers.contains(KeyModifiers::SHIFT)
 }
 
+/// Ring the terminal bell when the user completes a task, if the per-device
+/// `celebrate_completions` setting is enabled. Reads the task's *current*
+/// status, so call before applying the completion intent.
+fn celebrate_completion_bell(state: &AppState, uid: &str) {
+    if !Config::load(state.ctx.as_ref())
+        .map(|c| c.celebrate_completions)
+        .unwrap_or(false)
+    {
+        return;
+    }
+    if !state
+        .store
+        .get_task_ref(uid)
+        .is_some_and(|t| !t.status.is_done())
+    {
+        return;
+    }
+    use std::io::Write;
+    let mut stdout = std::io::stdout();
+    // Terminal bell: rings or flashes the window depending on the terminal.
+    let _ = stdout.write_all(b"\x07");
+    let _ = stdout.flush();
+}
+
 fn dispatch_intent_tui(state: &mut AppState, intent: AppIntent, action_tx: &Sender<Action>) {
     let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
     let actions = state.apply_task_intent(&intent, &config);
@@ -444,6 +468,7 @@ async fn execute_task_action(
             state.message = rust_i18n::t!("tui_view_details_help").to_string();
         }
         CompleteAndShift => {
+            celebrate_completion_bell(state, &uid);
             intent = Some(AppIntent::ToggleTaskShift { uid });
         }
         ToggleTimer => {
@@ -619,6 +644,7 @@ async fn execute_task_action(
             intent = Some(AppIntent::FocusTaskTree { uid: Some(uid) });
         }
         CompleteTree => {
+            celebrate_completion_bell(state, &uid);
             intent = Some(AppIntent::CompleteTree { uid });
         }
         BrowseRelations => {
@@ -1639,6 +1665,7 @@ pub async fn handle_key_event(
                         t.dismiss_alarm(&alarm_uid);
                         let uid = t.uid.clone();
                         state.active_alarm = None;
+                        celebrate_completion_bell(state, &uid);
                         dispatch_intent_tui(state, AppIntent::ToggleTask { uid }, action_tx);
                         update_alarms(state);
                     }
@@ -2978,6 +3005,7 @@ pub async fn handle_key_event(
                         } else {
                             AppIntent::ToggleTask { uid: uid.clone() }
                         };
+                        celebrate_completion_bell(state, &uid);
                         dispatch_intent_tui(state, intent, action_tx);
                         update_alarms(state);
                     }

@@ -4795,6 +4795,7 @@ data class MobileConfig(
     var `expandedLocations`: List<kotlin.String>,
     var `expandedDoneGroups`: List<kotlin.String>,
     var `showUndoSnackbar`: kotlin.Boolean,
+    var `celebrateCompletions`: kotlin.Boolean,
     var `firstDayOfWeek`: MobileFirstDayOfWeek,
 ) {
     companion object
@@ -4858,6 +4859,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
             FfiConverterSequenceString.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
             FfiConverterTypeMobileFirstDayOfWeek.read(buf),
         )
 
@@ -4915,6 +4917,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
                 FfiConverterSequenceString.allocationSize(value.`expandedLocations`) +
                 FfiConverterSequenceString.allocationSize(value.`expandedDoneGroups`) +
                 FfiConverterBoolean.allocationSize(value.`showUndoSnackbar`) +
+                FfiConverterBoolean.allocationSize(value.`celebrateCompletions`) +
                 FfiConverterTypeMobileFirstDayOfWeek.allocationSize(value.`firstDayOfWeek`)
         )
 
@@ -4974,6 +4977,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
         FfiConverterSequenceString.write(value.`expandedLocations`, buf)
         FfiConverterSequenceString.write(value.`expandedDoneGroups`, buf)
         FfiConverterBoolean.write(value.`showUndoSnackbar`, buf)
+        FfiConverterBoolean.write(value.`celebrateCompletions`, buf)
         FfiConverterTypeMobileFirstDayOfWeek.write(value.`firstDayOfWeek`, buf)
     }
 }

@@ -765,11 +765,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::ToggleTaskShift(uid) => {
+            app.maybe_celebrate(&uid);
             dispatch_and_select_next_row(app, AppIntent::ToggleTaskShift { uid: uid.clone() }, uid);
             Task::none()
         }
 
         Message::CompleteTree(uid) => {
+            app.maybe_celebrate(&uid);
             dispatch_and_select_next_row(app, AppIntent::CompleteTree { uid: uid.clone() }, uid);
             Task::none()
         }
@@ -789,6 +791,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 } else {
                     AppIntent::ToggleTask { uid: uid.clone() }
                 };
+                app.maybe_celebrate(&uid);
                 dispatch_and_select_next_row(app, intent, uid);
             }
             Task::none()
@@ -813,6 +816,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         &uid,
                     );
                 } else {
+                    app.maybe_celebrate(&uid);
                     dispatch_and_select_next_row(
                         app,
                         AppIntent::ToggleTask { uid: uid.clone() },
@@ -1476,6 +1480,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 if task.etag == PENDING_REFRESH_ETAG {
                     return Task::none();
                 }
+                app.maybe_celebrate(&t_uid);
                 dispatch_and_select_next_row(
                     app,
                     AppIntent::ToggleTask { uid: t_uid.clone() },

@@ -20,6 +20,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
             Message::OpenContextMenu(_, _)
             | Message::CloseContextMenu
             | Message::Tick
+            | Message::ConfettiTick
             | Message::WindowResized(_)
             | Message::WindowFocused(_)
             | Message::ApplyWindowResize(_)
@@ -294,7 +295,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::JournalDateInputSubmit
         | Message::JournalTitleInputChanged(_)
         | Message::SaveJournal(_)
-        | Message::SpinnerTick => view::handle(app, message),
+        | Message::SpinnerTick
+        | Message::ConfettiTick => view::handle(app, message),
 
         Message::SnapToSelected { focus } => {
             if let Some(_uid) = &app.selected_uid {

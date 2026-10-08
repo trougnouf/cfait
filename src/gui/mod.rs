@@ -3,6 +3,7 @@
 // Entry point and setup for the GUI application.
 
 pub mod async_ops;
+pub mod confetti;
 pub mod icon;
 pub mod message;
 pub mod state;

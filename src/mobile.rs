@@ -571,6 +571,7 @@ pub struct MobileConfig {
     pub expanded_locations: Vec<String>,
     pub expanded_done_groups: Vec<String>,
     pub show_undo_snackbar: bool,
+    pub celebrate_completions: bool,
     pub first_day_of_week: MobileFirstDayOfWeek,
 }
 
@@ -1642,6 +1643,7 @@ impl CfaitMobile {
             expanded_locations: c.expanded_locations,
             expanded_done_groups: Vec::new(),
             show_undo_snackbar: c.show_undo_snackbar,
+            celebrate_completions: c.celebrate_completions,
             first_day_of_week: match c.first_day_of_week {
                 crate::config::FirstDayOfWeek::Monday => MobileFirstDayOfWeek::Monday,
                 crate::config::FirstDayOfWeek::Sunday => MobileFirstDayOfWeek::Sunday,
@@ -1779,6 +1781,7 @@ impl CfaitMobile {
         c.quick_filter_icon = config.quick_filter_icon;
         c.sync_settings = config.sync_settings;
         c.show_undo_snackbar = config.show_undo_snackbar;
+        c.celebrate_completions = config.celebrate_completions;
 
         c.goals = config
             .goals
