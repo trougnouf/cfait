@@ -345,3 +345,230 @@ async fn test_412_conflict_fetch_405_makes_conflict_copy() {
         "the conflict copy must be pushed, not parked"
     );
 }
+
+/// Rapid done/undo race across sibling frontends sharing one journal: the
+/// "done" toggle was already pushed by the other process (server holds it at
+/// SEQUENCE 1), the queued "undo" still carries the stale pre-toggle etag and
+/// 412s. The undo is the newer link of the same edit chain (SEQUENCE 2), so
+/// it must win against the server — no "Conflict Copy" and no silent revert
+/// to the done state.
+#[tokio::test]
+async fn test_412_rapid_toggle_newer_local_sequence_wins_no_copy() {
+    let ctx = Arc::new(TestContext::new());
+
+    let mut server = Server::new_async().await;
+    let url = server.url();
+    let task_uid = "rapid-toggle-uid";
+    let task_path = format!("/cal/{}.ics", task_uid);
+
+    // 1. The undo PUT carries the stale pre-toggle etag and 412s.
+    let mock_412 = server
+        .mock("PUT", task_path.as_str())
+        .match_header("If-Match", "old-etag")
+        .with_status(412)
+        .expect(1)
+        .create_async()
+        .await;
+
+    // 2. The server holds our own "done" link: completed at SEQUENCE 1.
+    let server_ics = "BEGIN:VCALENDAR\nBEGIN:VTODO\nUID:rapid-toggle-uid\nSUMMARY:water the ferns\nSTATUS:COMPLETED\nPERCENT-COMPLETE:100\nCOMPLETED:20261008T120000Z\nSEQUENCE:1\nEND:VTODO\nEND:VCALENDAR".to_string();
+    let mock_fetch = server
+        .mock("REPORT", "/cal/")
+        .with_status(207)
+        .with_body(format!(
+            r#"
+            <d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+                <d:response>
+                    <d:href>{}</d:href>
+                    <d:propstat>
+                        <d:prop>
+                            <cal:calendar-data>{}</cal:calendar-data>
+                            <d:getetag>"server-etag"</d:getetag>
+                        </d:prop>
+                        <d:status>HTTP/1.1 200 OK</d:status>
+                    </d:propstat>
+                </d:response>
+            </d:multistatus>
+            "#,
+            task_path, server_ics
+        ))
+        .expect(1)
+        .create_async()
+        .await;
+
+    // 3. The undo is retried against the server's etag and must carry the
+    //    local (undone) content, not a merge back to the done state.
+    let mock_retry_ok = server
+        .mock("PUT", task_path.as_str())
+        .match_header("If-Match", "\"server-etag\"")
+        .match_body(mockito::Matcher::Regex(r"SEQUENCE:2".to_string()))
+        .with_status(201)
+        .with_header("ETag", "\"new-etag\"")
+        .expect(1)
+        .create_async()
+        .await;
+
+    // 4. No conflict copy, and no PUT that resurrects the done state.
+    let mock_conflict_copy = server
+        .mock(
+            "PUT",
+            mockito::Matcher::Regex(r"^/cal/.*\.ics$".to_string()),
+        )
+        .match_body(mockito::Matcher::Regex(r"Conflict Copy".to_string()))
+        .with_status(201)
+        .expect(0)
+        .create_async()
+        .await;
+    let mock_done_put = server
+        .mock(
+            "PUT",
+            mockito::Matcher::Regex(r"^/cal/.*\.ics$".to_string()),
+        )
+        .match_body(mockito::Matcher::Regex(r"STATUS:COMPLETED".to_string()))
+        .with_status(201)
+        .expect(0)
+        .create_async()
+        .await;
+
+    let client = RustyClient::new(ctx.clone(), &url, "u", "p", true, None).unwrap();
+
+    // The cache still holds the pre-toggle base (a racing fetch rewrote it
+    // after the sibling's push persisted the done state), with a percent
+    // value the done/undo toggles clobber — the exact input combination
+    // that hard-conflicts the 3-way merge.
+    let mut base_task = Task::new("water the ferns", &HashMap::new(), None);
+    base_task.uid = task_uid.to_string();
+    base_task.href = format!("{}{}", url, task_path);
+    base_task.calendar_href = format!("{}/cal/", url);
+    base_task.etag = "\"old-etag\"".to_string();
+    base_task.percent_complete = Some(50);
+    Cache::save(
+        ctx.as_ref(),
+        &base_task.calendar_href,
+        &[base_task.clone()],
+        Some("token".to_string()),
+    )
+    .unwrap();
+
+    // The queued undo: same fields as the base except the toggles bumped
+    // SEQUENCE to 2 and reset the percent; its etag is stale.
+    let mut local_task = base_task.clone();
+    local_task.sequence = 2;
+    local_task.percent_complete = None;
+    local_task.etag = "old-etag".to_string();
+    Journal::push(ctx.as_ref(), Action::Update(local_task)).unwrap();
+
+    let result = client.sync_journal().await;
+    assert!(result.is_ok(), "Sync failed: {:?}", result.err());
+
+    mock_412.assert();
+    mock_fetch.assert();
+    mock_retry_ok.assert();
+    mock_conflict_copy.assert();
+    mock_done_put.assert();
+
+    let journal = Journal::load(ctx.as_ref());
+    assert!(
+        journal.is_empty(),
+        "the undo must be pushed, not parked or duplicated"
+    );
+    let (_, synced) = result.unwrap();
+    assert!(
+        synced.iter().any(|t| t.uid == task_uid),
+        "the undo should be reported as synced"
+    );
+}
+
+/// A hard conflict at equal SEQUENCE (two devices edited the same field from
+/// the same fork) must keep producing a conflict copy: neither edit is
+/// provably newer, so both sides are preserved.
+#[tokio::test]
+async fn test_412_sequence_tie_still_makes_conflict_copy() {
+    let ctx = Arc::new(TestContext::new());
+
+    let mut server = Server::new_async().await;
+    let url = server.url();
+    let task_uid = "tie-uid";
+    let task_path = format!("/cal/{}.ics", task_uid);
+
+    let mock_412 = server
+        .mock("PUT", task_path.as_str())
+        .match_header("If-Match", "old-etag")
+        .with_status(412)
+        .expect(1)
+        .create_async()
+        .await;
+
+    // The server edit carries the same SEQUENCE as ours: a genuine tie.
+    let server_ics = "BEGIN:VCALENDAR\nBEGIN:VTODO\nUID:tie-uid\nSUMMARY:Server Title\nSEQUENCE:1\nEND:VTODO\nEND:VCALENDAR".to_string();
+    let mock_fetch = server
+        .mock("REPORT", "/cal/")
+        .with_status(207)
+        .with_body(format!(
+            r#"
+            <d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+                <d:response>
+                    <d:href>{}</d:href>
+                    <d:propstat>
+                        <d:prop>
+                            <cal:calendar-data>{}</cal:calendar-data>
+                            <d:getetag>"server-etag"</d:getetag>
+                        </d:prop>
+                        <d:status>HTTP/1.1 200 OK</d:status>
+                    </d:propstat>
+                </d:response>
+            </d:multistatus>
+            "#,
+            task_path, server_ics
+        ))
+        .expect(1)
+        .create_async()
+        .await;
+
+    let mock_conflict_copy = server
+        .mock(
+            "PUT",
+            mockito::Matcher::Regex(r"^/cal/.*\.ics$".to_string()),
+        )
+        .match_header("If-None-Match", "*")
+        .match_body(mockito::Matcher::Regex(r"Conflict Copy".to_string()))
+        .with_status(201)
+        .with_header("ETag", "\"copy-etag\"")
+        .expect(1)
+        .create_async()
+        .await;
+
+    let client = RustyClient::new(ctx.clone(), &url, "u", "p", true, None).unwrap();
+
+    let mut base_task = Task::new("Base Title", &HashMap::new(), None);
+    base_task.uid = task_uid.to_string();
+    base_task.href = format!("{}{}", url, task_path);
+    base_task.calendar_href = format!("{}/cal/", url);
+    base_task.etag = "\"old-etag\"".to_string();
+    Cache::save(
+        ctx.as_ref(),
+        &base_task.calendar_href,
+        &[base_task.clone()],
+        Some("token".to_string()),
+    )
+    .unwrap();
+
+    let mut local_task = base_task.clone();
+    local_task.summary = "Local Title".to_string();
+    local_task.sequence = 1;
+    local_task.etag = "old-etag".to_string();
+    Journal::push(ctx.as_ref(), Action::Update(local_task)).unwrap();
+
+    let result = client.sync_journal().await;
+    assert!(result.is_ok(), "Sync failed: {:?}", result.err());
+
+    mock_412.assert();
+    mock_fetch.assert();
+    mock_conflict_copy.assert();
+
+    let journal = Journal::load(ctx.as_ref());
+    assert!(
+        journal.is_empty(),
+        "the conflict copy must be pushed, not parked"
+    );
+}

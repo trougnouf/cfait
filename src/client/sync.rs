@@ -1054,6 +1054,28 @@ impl RustyClient {
             )
             .to_string();
             ConflictResolution::Resolved(Box::new(Action::Update(merged)), msg)
+        } else if local_task.sequence > server_task.sequence {
+            // The merge is unresolvable, but the queued edit's SEQUENCE is
+            // strictly higher than the server's: the server holds an earlier
+            // link of our own edit chain, not a foreign edit. This is the
+            // common same-machine race — a sibling frontend sharing the
+            // journal pushed the previous link (e.g. the "done" of a rapid
+            // done/undo) while our queued action still carried the older
+            // etag. The newer edit wins instead of duplicating the task,
+            // mirroring the re-parent rule; a tie falls through to the
+            // conflict copy so genuinely concurrent cross-device edits are
+            // still preserved on both sides.
+            let mut resolved = local_task.clone();
+            resolved.etag = server_task.etag.clone();
+            resolved.href = server_task.href.clone();
+            ConflictResolution::Resolved(
+                Box::new(Action::Update(resolved)),
+                rust_i18n::t!(
+                    "sync_conflict_resolved",
+                    summary = local_task.summary.clone()
+                )
+                .to_string(),
+            )
         } else {
             ConflictResolution::HardConflict
         }
