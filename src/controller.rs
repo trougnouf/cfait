@@ -393,14 +393,14 @@ impl TaskController {
             }
         }
 
-        Journal::modify(self.ctx.as_ref(), |queue| {
-            queue.extend(remote_actions);
+        Journal::modify(self.ctx.as_ref(), |journal| {
+            journal.queue.extend(remote_actions);
             let mut tmp_j = Journal {
-                queue: std::mem::take(queue),
+                queue: std::mem::take(&mut journal.queue),
                 ..Default::default()
             };
             tmp_j.compact();
-            *queue = tmp_j.queue;
+            journal.queue = tmp_j.queue;
         })
         .map_err(|e| e.to_string())?;
 

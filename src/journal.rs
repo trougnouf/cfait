@@ -116,7 +116,23 @@ pub struct Journal {
     pub queue: Vec<Action>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_error: Option<JournalError>,
+    /// Last server-agreed state per task uid, recorded when an action for
+    /// that uid is successfully pushed (insertion-ordered, bounded).
+    ///
+    /// This is the exact parent a queued edit forked from whenever the
+    /// editing process knew the pushed etag, which the queued action
+    /// carries. The per-calendar cache holds the same kind of state for
+    /// fetched tasks, but sibling frontends and in-flight fetches can leave
+    /// it older or newer than an edit's true parent; the recorded base is
+    /// consulted first (etag-matched) by the 412 conflict resolution.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub bases: Vec<(String, Task)>,
 }
+
+/// Bounded recent-history window: only pushes from the last few hundred
+/// distinct tasks can matter to a 412 race, and journal.json is rewritten
+/// on every persist, so the map must not grow without limit.
+const MAX_BASES: usize = 256;
 
 impl Journal {
     /// Return the on-disk journal path for the given context, if available.
@@ -147,19 +163,19 @@ impl Journal {
         Self::default()
     }
 
-    /// Modify the journal by applying a closure to the queue, persisting changes.
+    /// Modify the journal by applying a closure to it, persisting changes.
     ///
     /// Invariant: an empty queue cannot be failing, so `last_error` is cleared
     /// once no actions remain. This also drops stale errors after a manual
     /// journal edit or an undo that removes the failing action.
     pub fn modify<F>(ctx: &dyn AppContext, f: F) -> Result<()>
     where
-        F: FnOnce(&mut Vec<Action>),
+        F: FnOnce(&mut Self),
     {
         if let Some(path) = Self::get_path(ctx) {
             LocalStorage::with_lock(&path, || {
                 let mut journal = Self::load_internal(&path);
-                f(&mut journal.queue);
+                f(&mut journal);
                 if journal.queue.is_empty() {
                     journal.last_error = None;
                 }
@@ -203,7 +219,7 @@ impl Journal {
 
     /// Push a new action into the journal.
     pub fn push(ctx: &dyn AppContext, action: Action) -> Result<()> {
-        Self::modify(ctx, |queue| queue.push(action))
+        Self::modify(ctx, |journal| journal.queue.push(action))
     }
 
     /// Return the front of the journal queue without touching the file.
@@ -229,6 +245,27 @@ impl Journal {
     /// Is the in-memory journal empty?
     pub fn is_empty(&self) -> bool {
         self.queue.is_empty()
+    }
+
+    /// The last server-agreed state recorded for `uid`, if any.
+    pub fn base_for(&self, uid: &str) -> Option<&Task> {
+        self.bases.iter().find(|(u, _)| u == uid).map(|(_, t)| t)
+    }
+
+    /// Record the last server-agreed state for `uid`. Re-recording moves the
+    /// entry to the back of the eviction order; the oldest entries are
+    /// dropped past [`MAX_BASES`].
+    pub fn set_base(&mut self, uid: &str, task: Task) {
+        self.bases.retain(|(u, _)| u != uid);
+        self.bases.push((uid.to_string(), task));
+        while self.bases.len() > MAX_BASES {
+            self.bases.remove(0);
+        }
+    }
+
+    /// Forget the recorded state for `uid` (e.g. its Delete was pushed).
+    pub fn remove_base(&mut self, uid: &str) {
+        self.bases.retain(|(u, _)| u != uid);
     }
 
     /// Compact the journal by merging redundant operations for the same UID.
@@ -419,13 +456,13 @@ mod tests {
 
         // Compaction through modify keeps the recorded reason while the
         // failing action is still queued.
-        Journal::modify(&ctx, |queue| {
+        Journal::modify(&ctx, |journal| {
             let mut tmp_j = Journal {
-                queue: std::mem::take(queue),
+                queue: std::mem::take(&mut journal.queue),
                 ..Default::default()
             };
             tmp_j.compact();
-            *queue = tmp_j.queue;
+            journal.queue = tmp_j.queue;
         })
         .unwrap();
         let err = Journal::load(&ctx).last_error.expect("reason kept");
@@ -441,7 +478,7 @@ mod tests {
         assert_eq!(Journal::load(&ctx).last_error.unwrap().attempts, 1);
 
         // Draining the queue clears the reason.
-        Journal::modify(&ctx, |queue| queue.clear()).unwrap();
+        Journal::modify(&ctx, |journal| journal.queue.clear()).unwrap();
         assert!(Journal::load(&ctx).last_error.is_none());
     }
 
@@ -453,13 +490,13 @@ mod tests {
             Journal::push(&ctx, Action::Delete(task_in(cal))).unwrap();
         }
 
-        Journal::modify(&ctx, |queue| {
+        Journal::modify(&ctx, |journal| {
             let mut tmp_j = Journal {
-                queue: std::mem::take(queue),
+                queue: std::mem::take(&mut journal.queue),
                 ..Default::default()
             };
             tmp_j.compact();
-            *queue = tmp_j.queue;
+            journal.queue = tmp_j.queue;
         })
         .unwrap();
 
@@ -473,13 +510,13 @@ mod tests {
         // A delete of the same uid from a different calendar is a distinct
         // action and must be kept.
         Journal::push(&ctx, Action::Delete(task_in("cal://user/1/other/"))).unwrap();
-        Journal::modify(&ctx, |queue| {
+        Journal::modify(&ctx, |journal| {
             let mut tmp_j = Journal {
-                queue: std::mem::take(queue),
+                queue: std::mem::take(&mut journal.queue),
                 ..Default::default()
             };
             tmp_j.compact();
-            *queue = tmp_j.queue;
+            journal.queue = tmp_j.queue;
         })
         .unwrap();
         assert_eq!(Journal::load(&ctx).queue.len(), 2);

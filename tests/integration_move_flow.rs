@@ -113,7 +113,7 @@ fn journal_apply_move_removes_from_source_and_adds_to_target() {
     let mut old_tasks = vec![task.clone()];
     let mut new_tasks: Vec<Task> = Vec::new();
 
-    let _ = Journal::modify(&ctx, |q: &mut Vec<Action>| q.clear());
+    let _ = Journal::modify(&ctx, |j: &mut Journal| j.queue.clear());
     let _ = Journal::push(&ctx, Action::Move(task.clone(), new_href.to_string()));
 
     Journal::apply_to_tasks(&ctx, &mut old_tasks, old_href);

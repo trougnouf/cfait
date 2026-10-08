@@ -678,13 +678,13 @@ impl RustyClient {
         //    compacts the full queue on every push), so recompacting inside the
         //    loop is redundant and turns an O(n) sync into O(n^2) for large
         //    batches (e.g. deleting a big task tree).
-        Journal::modify(self.ctx.as_ref(), |queue| {
+        Journal::modify(self.ctx.as_ref(), |journal| {
             let mut tmp_j = Journal {
-                queue: std::mem::take(queue),
+                queue: std::mem::take(&mut journal.queue),
                 ..Default::default()
             };
             tmp_j.compact();
-            *queue = tmp_j.queue;
+            journal.queue = tmp_j.queue;
         })
         .map_err(|e| e.to_string())?;
 
@@ -874,8 +874,8 @@ impl RustyClient {
                     }
 
                     // 3. Pop the item from the disk queue and propagate metadata
-                    Journal::modify(self.ctx.as_ref(), |queue| {
-                        let should_remove = if let Some(head) = queue.first() {
+                    Journal::modify(self.ctx.as_ref(), |journal| {
+                        let should_remove = if let Some(head) = journal.queue.first() {
                             actions_match_identity(head, &next_action)
                         } else {
                             false
@@ -891,7 +891,7 @@ impl RustyClient {
                                 _ => (String::new(), String::new()),
                             };
                             if !target_uid.is_empty() {
-                                for item in queue.iter_mut() {
+                                for item in journal.queue.iter_mut() {
                                     match item {
                                         Action::Update(t) | Action::Delete(t)
                                             if t.uid == target_uid
@@ -918,7 +918,7 @@ impl RustyClient {
                                 Action::Update(t) => (t.uid.clone(), t.calendar_href.clone()),
                                 _ => (String::new(), String::new()),
                             };
-                            for item in queue.iter_mut() {
+                            for item in journal.queue.iter_mut() {
                                 match item {
                                     Action::Update(t) | Action::Delete(t)
                                         if (t.uid == target_uid
@@ -942,15 +942,39 @@ impl RustyClient {
                         }
 
                         if should_remove {
-                            queue.remove(0);
+                            journal.queue.remove(0);
 
                             if let Some(act) = conflict_resolved_action {
-                                queue.insert(0, act);
+                                journal.queue.insert(0, act);
                             }
                             if let Some(acts) = replaced_actions {
                                 for act in acts.into_iter().rev() {
-                                    queue.insert(0, act);
+                                    journal.queue.insert(0, act);
                                 }
+                            }
+
+                            // Record the last server-agreed state: the action
+                            // was accepted, so this is the exact version any
+                            // edit queued against it forked from. The 412
+                            // resolution etag-matches queued actions against
+                            // these records; without a fresh etag (unknown
+                            // server agreement) there is nothing to match.
+                            match &next_action {
+                                Action::Create(t) | Action::Update(t) | Action::Move(t, _) => {
+                                    if let Some(etag) = &new_etag_to_propagate {
+                                        let mut base = t.clone();
+                                        base.etag = etag.clone();
+                                        if let Some((_, new_href)) = &new_href_to_propagate {
+                                            base.href = new_href.clone();
+                                            if let Some(last_slash) = new_href.rfind('/') {
+                                                base.calendar_href =
+                                                    new_href[..=last_slash].to_string();
+                                            }
+                                        }
+                                        journal.set_base(&t.uid, base);
+                                    }
+                                }
+                                Action::Delete(t) => journal.remove_base(&t.uid),
                             }
                         }
                     })
@@ -1038,13 +1062,31 @@ impl RustyClient {
             return ConflictResolution::HardConflict;
         }
 
-        let (cached_tasks, _) =
-            match crate::cache::Cache::load(self.ctx.as_ref(), &local_task.calendar_href) {
-                Ok(v) => v,
-                Err(_) => return ConflictResolution::HardConflict,
+        // Merge base: prefer the recorded server-agreed state for the exact
+        // version this action forked from. The queued action carries the etag
+        // its edit was applied to, so an etag match proves the record is the
+        // action's true parent — the on-disk cache can be older or newer than
+        // that (sibling frontends share it, and a fetch in flight during a
+        // push can rewrite it), which silently reverts or hard-conflicts the
+        // merge. Fall back to the cache for legacy entries without a record.
+        let journal = Journal::load(self.ctx.as_ref());
+        let recorded_base = journal
+            .base_for(&local_task.uid)
+            .filter(|b| clean_etag(&b.etag) == clean_etag(&local_task.etag));
+
+        let cached_tasks;
+        let base_task: &Task = if let Some(base) = recorded_base {
+            base
+        } else {
+            cached_tasks =
+                match crate::cache::Cache::load(self.ctx.as_ref(), &local_task.calendar_href) {
+                    Ok((tasks, _)) => tasks,
+                    Err(_) => return ConflictResolution::HardConflict,
+                };
+            let Some(base) = cached_tasks.iter().find(|t| t.uid == local_task.uid) else {
+                return ConflictResolution::HardConflict;
             };
-        let Some(base_task) = cached_tasks.iter().find(|t| t.uid == local_task.uid) else {
-            return ConflictResolution::HardConflict;
+            base
         };
 
         if let Some(merged) = three_way_merge(base_task, local_task, &server_task) {

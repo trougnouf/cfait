@@ -572,3 +572,217 @@ async fn test_412_sequence_tie_still_makes_conflict_copy() {
         "the conflict copy must be pushed, not parked"
     );
 }
+
+/// The recorded base fixes the silent-revert variant of the rapid-toggle race:
+/// the queued undo forked from the done state the previous push recorded
+/// (etag match), the shared cache is stale (a racing fetch rewrote it), and the
+/// server additionally holds a foreign description edit. The merge must use
+/// the recorded base so the undo survives AND the foreign edit is preserved —
+/// neither the stale cache base (reverts the undo) nor a local-wins fallback
+/// (drops the foreign edit) is correct.
+#[tokio::test]
+async fn test_412_recorded_base_merges_undo_and_foreign_edit() {
+    use cfait::model::{RawProperty, TaskStatus};
+
+    let ctx = Arc::new(TestContext::new());
+
+    let mut server = Server::new_async().await;
+    let url = server.url();
+    let task_uid = "recorded-base-uid";
+    let task_path = format!("/cal/{}.ics", task_uid);
+
+    // 1. The undo PUT carries the etag the store learned from the done push
+    //    and 412s because the server has since gained a foreign edit.
+    let mock_412 = server
+        .mock("PUT", task_path.as_str())
+        .match_header("If-Match", "\"e1\"")
+        .with_status(412)
+        .expect(1)
+        .create_async()
+        .await;
+
+    // 2. The server holds our done link plus a foreign description edit.
+    let server_ics = "BEGIN:VCALENDAR\nBEGIN:VTODO\nUID:recorded-base-uid\nSUMMARY:water the ferns\nDESCRIPTION:foreign edit from colleague\nSTATUS:COMPLETED\nPERCENT-COMPLETE:100\nCOMPLETED:20261008T120000Z\nSEQUENCE:1\nEND:VTODO\nEND:VCALENDAR".to_string();
+    let mock_fetch = server
+        .mock("REPORT", "/cal/")
+        .with_status(207)
+        .with_body(format!(
+            r#"
+            <d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+                <d:response>
+                    <d:href>{}</d:href>
+                    <d:propstat>
+                        <d:prop>
+                            <cal:calendar-data>{}</cal:calendar-data>
+                            <d:getetag>"e2"</d:getetag>
+                        </d:prop>
+                        <d:status>HTTP/1.1 200 OK</d:status>
+                    </d:propstat>
+                </d:response>
+            </d:multistatus>
+            "#,
+            task_path, server_ics
+        ))
+        .expect(1)
+        .create_async()
+        .await;
+
+    // 3. The merged retry keeps the foreign description and the undo.
+    let mock_retry_ok = server
+        .mock("PUT", task_path.as_str())
+        .match_header("If-Match", "\"e2\"")
+        .match_body(mockito::Matcher::Regex(
+            r"foreign edit from colleague".to_string(),
+        ))
+        .with_status(201)
+        .with_header("ETag", "\"e3\"")
+        .expect(1)
+        .create_async()
+        .await;
+
+    // 4. No conflict copy, and no retry that resurrects the done state.
+    let mock_conflict_copy = server
+        .mock(
+            "PUT",
+            mockito::Matcher::Regex(r"^/cal/.*\.ics$".to_string()),
+        )
+        .match_body(mockito::Matcher::Regex(r"Conflict Copy".to_string()))
+        .with_status(201)
+        .expect(0)
+        .create_async()
+        .await;
+    let mock_done_put = server
+        .mock(
+            "PUT",
+            mockito::Matcher::Regex(r"^/cal/.*\.ics$".to_string()),
+        )
+        .match_body(mockito::Matcher::Regex(r"PERCENT-COMPLETE:100".to_string()))
+        .with_status(201)
+        .expect(0)
+        .create_async()
+        .await;
+
+    let client = RustyClient::new(ctx.clone(), &url, "u", "p", true, None).unwrap();
+
+    // The done state our own previous push landed, recorded in the journal.
+    let mut done_base = Task::new("water the ferns", &HashMap::new(), None);
+    done_base.uid = task_uid.to_string();
+    done_base.href = format!("{}{}", url, task_path);
+    done_base.calendar_href = format!("{}/cal/", url);
+    done_base.etag = "\"e1\"".to_string();
+    done_base.status = TaskStatus::Completed;
+    done_base.percent_complete = Some(100);
+    done_base.sequence = 1;
+    done_base.unmapped_properties.push(RawProperty {
+        key: "COMPLETED".to_string(),
+        value: "20261008T120000Z".to_string(),
+        params: vec![],
+    });
+    Journal::modify(ctx.as_ref(), |journal| {
+        journal.set_base(task_uid, done_base.clone())
+    })
+    .unwrap();
+
+    // The shared cache went stale (a fetch in flight before the push landed).
+    let mut stale_cache = Task::new("water the ferns", &HashMap::new(), None);
+    stale_cache.uid = task_uid.to_string();
+    stale_cache.href = format!("{}{}", url, task_path);
+    stale_cache.calendar_href = format!("{}/cal/", url);
+    stale_cache.etag = "\"e0\"".to_string();
+    stale_cache.percent_complete = Some(50);
+    Cache::save(
+        ctx.as_ref(),
+        &stale_cache.calendar_href,
+        &[stale_cache.clone()],
+        Some("token".to_string()),
+    )
+    .unwrap();
+
+    // The queued undo: undone again, sequence bumped twice, etag from the
+    // done push.
+    let mut local_task = Task::new("water the ferns", &HashMap::new(), None);
+    local_task.uid = task_uid.to_string();
+    local_task.href = format!("{}{}", url, task_path);
+    local_task.calendar_href = format!("{}/cal/", url);
+    local_task.etag = "\"e1\"".to_string();
+    local_task.sequence = 2;
+    Journal::push(ctx.as_ref(), Action::Update(local_task)).unwrap();
+
+    let result = client.sync_journal().await;
+    assert!(result.is_ok(), "Sync failed: {:?}", result.err());
+
+    mock_412.assert();
+    mock_fetch.assert();
+    mock_retry_ok.assert();
+    mock_conflict_copy.assert();
+    mock_done_put.assert();
+
+    let journal = Journal::load(ctx.as_ref());
+    assert!(
+        journal.is_empty(),
+        "the merged undo must be pushed, not parked or duplicated"
+    );
+    // The retry's own push recorded the new server-agreed state.
+    let recorded = journal.base_for(task_uid).expect("base recorded for uid");
+    assert_eq!(recorded.etag, "\"e3\"");
+    assert!(!recorded.status.is_done());
+}
+
+/// A successful update push records the server-agreed state (fresh etag) in
+/// the journal; a pushed delete forgets it.
+#[tokio::test]
+async fn test_pushed_update_records_and_delete_forgets_base() {
+    let ctx = Arc::new(TestContext::new());
+
+    let mut server = Server::new_async().await;
+    let url = server.url();
+    let task_uid = "push-writer-uid";
+    let task_path = format!("/cal/{}.ics", task_uid);
+
+    let mock_put = server
+        .mock("PUT", task_path.as_str())
+        .match_header("If-Match", "e0")
+        .with_status(201)
+        .with_header("ETag", "\"fresh-etag\"")
+        .expect(1)
+        .create_async()
+        .await;
+
+    let mock_delete = server
+        .mock("DELETE", task_path.as_str())
+        .match_header("If-Match", "e0")
+        .with_status(200)
+        .expect(1)
+        .create_async()
+        .await;
+
+    let client = RustyClient::new(ctx.clone(), &url, "u", "p", true, None).unwrap();
+
+    let mut task = Task::new("mulch the garden beds", &HashMap::new(), None);
+    task.uid = task_uid.to_string();
+    task.href = format!("{}{}", url, task_path);
+    task.calendar_href = format!("{}/cal/", url);
+    task.etag = "e0".to_string();
+
+    Journal::push(ctx.as_ref(), Action::Update(task.clone())).unwrap();
+    let result = client.sync_journal().await;
+    assert!(result.is_ok(), "Sync failed: {:?}", result.err());
+    mock_put.assert();
+
+    let journal = Journal::load(ctx.as_ref());
+    let recorded = journal
+        .base_for(task_uid)
+        .expect("successful push records the server-agreed state");
+    assert_eq!(recorded.etag, "\"fresh-etag\"");
+    assert_eq!(recorded.summary, "mulch the garden beds");
+
+    Journal::push(ctx.as_ref(), Action::Delete(task)).unwrap();
+    let result = client.sync_journal().await;
+    assert!(result.is_ok(), "Sync failed: {:?}", result.err());
+    mock_delete.assert();
+
+    assert!(
+        Journal::load(ctx.as_ref()).base_for(task_uid).is_none(),
+        "a pushed delete must forget the recorded base"
+    );
+}
