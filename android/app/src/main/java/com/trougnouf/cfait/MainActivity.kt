@@ -55,6 +55,7 @@ import com.trougnouf.cfait.ui.SettingsScreen
 import com.trougnouf.cfait.ui.AdvancedSettingsScreen
 import com.trougnouf.cfait.ui.TaskDetailScreen
 import com.trougnouf.cfait.util.AlarmScheduler
+import com.trougnouf.cfait.util.showToast
 import com.trougnouf.cfait.util.NotificationHelper
 import com.trougnouf.cfait.widget.EXTRA_CALENDAR_HREF
 import com.trougnouf.cfait.widget.EXTRA_FOCUS_TASK_UID
@@ -282,7 +283,7 @@ fun CfaitNavHost(
             if (currentWorkInfo?.state == WorkInfo.State.SUCCEEDED) {
                 val msg = currentWorkInfo.outputData.getString(CalendarSyncWorker.OUTPUT_MESSAGE)
                 if (msg != null) {
-                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                    showToast(context, msg, Toast.LENGTH_LONG)
                 }
             } else if (currentWorkInfo?.state == WorkInfo.State.FAILED) {
                 // Do not show a toast for periodic/background sync failures to avoid alarming the user.
@@ -307,7 +308,7 @@ fun CfaitNavHost(
         try {
             if (currentMigration?.state == WorkInfo.State.SUCCEEDED) {
                 val msg = currentMigration.outputData.getString(CalendarMigrationWorker.OUTPUT_MESSAGE)
-                Toast.makeText(context, msg ?: context.getString(R.string.migration_complete), Toast.LENGTH_LONG).show()
+                showToast(context, msg ?: context.getString(R.string.migration_complete), Toast.LENGTH_LONG)
 
                 // Force refresh UI
                 val intent = Intent(NotificationActionWorker.BROADCAST_REFRESH)
@@ -318,7 +319,7 @@ fun CfaitNavHost(
                 workManager.pruneWork()
             } else if (currentMigration?.state == WorkInfo.State.FAILED) {
                 val msg = currentMigration.outputData.getString(CalendarMigrationWorker.OUTPUT_MESSAGE)
-                Toast.makeText(context, msg ?: context.getString(R.string.migration_failed, "unknown error"), Toast.LENGTH_LONG).show()
+                showToast(context, msg ?: context.getString(R.string.migration_failed, "unknown error"), Toast.LENGTH_LONG)
 
                 // Prune failed work too so user can retry immediately without UI glitch
                 workManager.pruneWork()
@@ -418,7 +419,7 @@ fun CfaitNavHost(
                         lastSyncFailed = true
                         val authErrorStr = context?.getString(R.string.error_auth_failed) ?: "Authentication failed"
                         if (syncError.contains(authErrorStr) || syncError.contains("401") || syncError.contains("Unauthorized") || syncError.contains("403") || syncError.contains("Forbidden")) {
-                            Toast.makeText(context, authErrorStr, Toast.LENGTH_LONG).show()
+                            showToast(context, authErrorStr, Toast.LENGTH_LONG)
                         }
                     } else {
                         // We do not set lastSyncFailed to false here because a manual sync might be running
@@ -461,7 +462,7 @@ fun CfaitNavHost(
                 val syncError = e.message ?: ""
                 val authErrorStr = context.getString(R.string.error_auth_failed)
                 if (syncError.contains(authErrorStr) || syncError.contains("401") || syncError.contains("Unauthorized") || syncError.contains("403") || syncError.contains("Forbidden")) {
-                    Toast.makeText(context, authErrorStr, Toast.LENGTH_LONG).show()
+                    showToast(context, authErrorStr, Toast.LENGTH_LONG)
                 }
             }
             isLoading = false
@@ -485,11 +486,11 @@ fun CfaitNavHost(
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e // IGNORE CANCELLATION (don't show to user)
-                Toast.makeText(
+                showToast(
                     context,
                     context.getString(R.string.save_failed, e.message ?: ""),
                     Toast.LENGTH_LONG
-                ).show()
+                )
                 refreshLists()
             }
         }
@@ -505,7 +506,7 @@ fun CfaitNavHost(
             ExistingWorkPolicy.REPLACE,
             workRequest
         )
-        Toast.makeText(context, context.getString(R.string.deleting_events_background), Toast.LENGTH_SHORT).show()
+        showToast(context, context.getString(R.string.deleting_events_background), Toast.LENGTH_SHORT)
     }
 
     fun handleCreateMissingEvents() {
@@ -518,7 +519,7 @@ fun CfaitNavHost(
             ExistingWorkPolicy.REPLACE,
             workRequest
         )
-        Toast.makeText(context, context.getString(R.string.creating_events_background), Toast.LENGTH_SHORT).show()
+        showToast(context, context.getString(R.string.creating_events_background), Toast.LENGTH_SHORT)
     }
 
     fun handleMigration(sourceHref: String, targetHref: String) {
@@ -536,7 +537,7 @@ fun CfaitNavHost(
             ExistingWorkPolicy.KEEP,
             workRequest
         )
-        Toast.makeText(context, context.getString(R.string.migrating_tasks_background), Toast.LENGTH_SHORT).show()
+        showToast(context, context.getString(R.string.migrating_tasks_background), Toast.LENGTH_SHORT)
     }
 
     LaunchedEffect("fastStart") { fastStart() }
@@ -588,19 +589,19 @@ fun CfaitNavHost(
                                     navController.navigate("ics_import")
                                 }
                             } else {
-                                Toast.makeText(
+                                showToast(
                                     context,
                                     context.getString(R.string.failed_to_read_ics_file),
                                     Toast.LENGTH_LONG
-                                ).show()
+                                )
                             }
                         } catch (e: Exception) {
                             if (e is CancellationException) throw e
-                            Toast.makeText(
+                            showToast(
                                 context,
                                 context.getString(R.string.error_opening_file, e.message ?: ""),
                                 Toast.LENGTH_LONG
-                            ).show()
+                            )
                         }
                     }
                 }
@@ -765,7 +766,7 @@ fun CfaitNavHost(
                         scope.launch(Dispatchers.IO) {
                             try {
                                 val result = api.importLocalIcs(calendarHref, content)
-                                Toast.makeText(context, result, Toast.LENGTH_LONG).show()
+                                showToast(context, result, Toast.LENGTH_LONG)
                                 withContext(Dispatchers.Main) {
                                     icsContentToImport = null
                                     refreshLists()
@@ -774,11 +775,11 @@ fun CfaitNavHost(
                                 triggerBackgroundSync(context, api)
                             } catch (e: Exception) {
                                 if (e is CancellationException) throw e
-                                Toast.makeText(
+                                showToast(
                                     context,
                                     context.getString(R.string.import_failed, e.message ?: ""),
                                     Toast.LENGTH_LONG
-                                ).show()
+                                )
                             }
                         }
                     },

@@ -76,6 +76,7 @@ import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.*
 import com.trougnouf.cfait.ui.StableTaskSummary
 import androidx.core.content.ContextCompat
+import com.trougnouf.cfait.util.showToast
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -670,7 +671,7 @@ fun HomeScreen(
                         checkSyncStatus()
                         onDataChanged()
                         if (desc != null) {
-                            Toast.makeText(context, context.getString(R.string.task_action_undone, desc), Toast.LENGTH_SHORT).show()
+                            showToast(context, context.getString(R.string.task_action_undone, desc), Toast.LENGTH_SHORT)
                         }
                     }
                 }
@@ -695,8 +696,7 @@ fun HomeScreen(
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 lastSyncFailed = true
-                Toast.makeText(context, context.getString(R.string.sync_error, e.message ?: ""), Toast.LENGTH_SHORT)
-                    .show()
+                showToast(context, context.getString(R.string.sync_error, e.message ?: ""), Toast.LENGTH_SHORT)
                 api.loadFromCache()
                 updateTaskList()
             } finally {
@@ -721,7 +721,7 @@ fun HomeScreen(
                             checkSyncStatus()
                             triggerBackgroundSync(context, api)
                             if (desc != null) {
-                                Toast.makeText(context, context.getString(R.string.task_action_undone, desc), Toast.LENGTH_SHORT).show()
+                                showToast(context, context.getString(R.string.task_action_undone, desc), Toast.LENGTH_SHORT)
                             }
                         } finally {
                             activeOpCount--
@@ -739,7 +739,7 @@ fun HomeScreen(
                             checkSyncStatus()
                             triggerBackgroundSync(context, api)
                             if (desc != null) {
-                                Toast.makeText(context, context.getString(R.string.task_action_redone, desc), Toast.LENGTH_SHORT).show()
+                                showToast(context, context.getString(R.string.task_action_redone, desc), Toast.LENGTH_SHORT)
                             }
                         } finally {
                             activeOpCount--
@@ -770,7 +770,7 @@ fun HomeScreen(
                 }
                 else -> {
                     // Keep the text so the user can fix the typo.
-                    Toast.makeText(context, context.getString(R.string.error_unknown_command, text), Toast.LENGTH_SHORT).show()
+                    showToast(context, context.getString(R.string.error_unknown_command, text), Toast.LENGTH_SHORT)
                     return
                 }
             }
@@ -861,7 +861,7 @@ fun HomeScreen(
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
                     lastSyncFailed = true
-                    Toast.makeText(context, context.getString(R.string.error_general, e.message ?: ""), Toast.LENGTH_LONG).show()
+                    showToast(context, context.getString(R.string.error_general, e.message ?: ""), Toast.LENGTH_LONG)
                 } finally {
                     checkSyncStatus()
                     activeOpCount--
@@ -894,11 +894,11 @@ fun HomeScreen(
                         ), desc
                     )
                 } else {
-                    Toast.makeText(
+                    showToast(
                         context,
                         context.getString(R.string.could_not_determine_location),
                         Toast.LENGTH_SHORT
-                    ).show()
+                    )
                     addTask(text, desc)
                 }
             } else {
@@ -929,11 +929,11 @@ fun HomeScreen(
                             ), desc
                         )
                     } else {
-                        Toast.makeText(
+                        showToast(
                             context,
                             context.getString(R.string.could_not_determine_location),
                             Toast.LENGTH_SHORT
-                        ).show()
+                        )
                         addTask(text, desc)
                     }
                 }
@@ -973,7 +973,7 @@ fun HomeScreen(
                         )
                     )
                 } catch (e: Exception) {
-                    Toast.makeText(context, context.getString(R.string.error_general, e.message ?: ""), Toast.LENGTH_SHORT).show()
+                    showToast(context, context.getString(R.string.error_general, e.message ?: ""), Toast.LENGTH_SHORT)
                 }
             }
             return
@@ -1071,7 +1071,7 @@ fun HomeScreen(
                             checkSyncStatus()
                             onDataChanged()
                             if (desc != null) {
-                                Toast.makeText(context, context.getString(R.string.task_action_undone, desc), Toast.LENGTH_SHORT).show()
+                                showToast(context, context.getString(R.string.task_action_undone, desc), Toast.LENGTH_SHORT)
                             }
                         }
                     }
@@ -1096,8 +1096,7 @@ fun HomeScreen(
                 updateTaskList()
             } catch (e: Exception) {
                 lastSyncFailed = true
-                Toast.makeText(context, context.getString(R.string.sync_error, e.message ?: ""), Toast.LENGTH_SHORT)
-                    .show()
+                showToast(context, context.getString(R.string.sync_error, e.message ?: ""), Toast.LENGTH_SHORT)
                 api.loadFromCache()
                 updateTaskList()
             } finally {
@@ -1358,17 +1357,17 @@ fun HomeScreen(
                                                     checkSyncStatus()
                                                     onDataChanged()
                                                     if (desc != null) {
-                                                        Toast.makeText(context, context.getString(R.string.task_action_undone, desc), Toast.LENGTH_SHORT).show()
+                                                        showToast(context, context.getString(R.string.task_action_undone, desc), Toast.LENGTH_SHORT)
                                                     }
                                                 }
                                             }
                                         } catch (e: Exception) {
                                             if (e is CancellationException) throw e
-                                            Toast.makeText(
+                                            showToast(
                                                 context,
                                                 context.getString(R.string.move_failed, e.message ?: ""),
                                                 Toast.LENGTH_SHORT
-                                            ).show()
+                                            )
                                         }
                                     }
                                 },
@@ -1454,7 +1453,7 @@ fun HomeScreen(
                             triggerBackgroundSync(context, api)
                         } catch (e: Exception) {
                             if (e is CancellationException) throw e
-                            Toast.makeText(context, context.getString(R.string.error_general, e.message ?: ""), Toast.LENGTH_SHORT).show()
+                            showToast(context, context.getString(R.string.error_general, e.message ?: ""), Toast.LENGTH_SHORT)
                         }
                     }
                 }) { Text(stringResource(R.string.add)) }
@@ -1523,7 +1522,7 @@ fun HomeScreen(
                                     checkSyncStatus()
                                     onDataChanged()
                                     if (desc != null) {
-                                        Toast.makeText(context, context.getString(R.string.task_action_undone, desc), Toast.LENGTH_SHORT).show()
+                                        showToast(context, context.getString(R.string.task_action_undone, desc), Toast.LENGTH_SHORT)
                                     }
                                 }
                             }

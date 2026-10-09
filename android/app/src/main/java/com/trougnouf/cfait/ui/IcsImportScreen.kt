@@ -52,6 +52,7 @@ import com.trougnouf.cfait.ui.MarkdownTransformation
 import com.trougnouf.cfait.ui.NfIcon
 import com.trougnouf.cfait.ui.NfIcons
 import com.trougnouf.cfait.ui.triggerBackgroundSync
+import com.trougnouf.cfait.util.showToast
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -408,11 +409,11 @@ fun JournalMainView(
                                             triggerBackgroundSync(context, api)
                                         } catch (e: Exception) {
                                             if (e is CancellationException) throw e
-                                            Toast.makeText(
+                                            showToast(
                                                 context,
                                                 context.getString(R.string.error_general, e.message ?: ""),
                                                 Toast.LENGTH_SHORT
-                                            ).show()
+                                            )
                                         }
                                     }
                                 }, modifier = Modifier.fillMaxWidth()) { Text(cal.name) }

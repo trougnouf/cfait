@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.CfaitMobile
+import com.trougnouf.cfait.util.showToast
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -102,7 +103,7 @@ fun TreeEditorScreen(
                         onClick = {
                             scope.launch {
                                 clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("tree_markdown", markdownText.text.toString())))
-                                Toast.makeText(context, context.getString(R.string.copied_to_clipboard), Toast.LENGTH_SHORT).show()
+                                showToast(context, context.getString(R.string.copied_to_clipboard), Toast.LENGTH_SHORT)
                             }
                         },
                         enabled = !isLoading
@@ -120,7 +121,7 @@ fun TreeEditorScreen(
                                     triggerBackgroundSync(context, api)
                                     onSaveComplete()
                                 } catch (e: Exception) {
-                                    Toast.makeText(context, context.getString(R.string.error_general, e.message ?: ""), Toast.LENGTH_LONG).show()
+                                    showToast(context, context.getString(R.string.error_general, e.message ?: ""), Toast.LENGTH_LONG)
                                     isSaving = false
                                 }
                             }

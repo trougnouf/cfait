@@ -34,6 +34,7 @@ import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.core.HelpTab
 import com.trougnouf.cfait.core.MobileHelpCategoryData
 import com.trougnouf.cfait.core.MobileHelpItem
+import com.trougnouf.cfait.util.showToast
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -236,11 +237,11 @@ fun DonationRow(icon: String, name: String, value: String, isCopy: Boolean = fal
                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 val clip = ClipData.newPlainText("Donation Address", value)
                 clipboard.setPrimaryClip(clip)
-                Toast.makeText(
+                showToast(
                     context,
                     context.getString(R.string.copied_to_clipboard),
                     Toast.LENGTH_SHORT
-                ).show()
+                )
             } else {
                 onClick()
             }

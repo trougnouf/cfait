@@ -49,6 +49,7 @@ import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.core.MobileCalendar
 import com.trougnouf.cfait.core.MobileTask
 import com.trougnouf.cfait.core.MobileRelatedTask
+import com.trougnouf.cfait.util.showToast
 import java.time.Instant
 import java.time.ZoneId
 import kotlinx.coroutines.CancellationException
@@ -115,11 +116,11 @@ fun TaskDetailScreen(
                     )
                     if (keepOpen) onApply(resolved, desc) else onSave(resolved, desc)
                 } else {
-                    Toast.makeText(
+                    showToast(
                         context,
                         context.getString(R.string.could_not_determine_location),
                         Toast.LENGTH_SHORT
-                    ).show()
+                    )
                     if (keepOpen) onApply(input, desc) else onSave(input, desc)
                 }
             } else {
@@ -197,11 +198,11 @@ fun TaskDetailScreen(
                         )
                         if (keepOpen) onApply(resolved, desc) else onSave(resolved, desc)
                     } else {
-                        Toast.makeText(
+                        showToast(
                             context,
                             context.getString(R.string.could_not_determine_location),
                             Toast.LENGTH_SHORT
-                        ).show()
+                        )
                         if (keepOpen) onApply(input, desc) else onSave(input, desc)
                     }
                 }
@@ -249,11 +250,11 @@ fun TaskDetailScreen(
                                         triggerBackgroundSync(context, api)
                                     } catch (e: Exception) {
                                         if (e is CancellationException) throw e
-                                        Toast.makeText(
+                                        showToast(
                                             context,
                                             context.getString(R.string.error_general, e.message ?: ""),
                                             Toast.LENGTH_SHORT
-                                        ).show()
+                                        )
                                     }
                                 }
                             }, modifier = Modifier.fillMaxWidth()) { Text(cal.name) }
@@ -470,11 +471,11 @@ fun TaskDetailScreen(
                                     triggerBackgroundSync(context, api)
                                 } catch (e: Exception) {
                                     if (e is CancellationException) throw e
-                                    Toast.makeText(
+                                    showToast(
                                         context,
                                         context.getString(R.string.error_general, e.message ?: ""),
                                         Toast.LENGTH_SHORT
-                                    ).show()
+                                    )
                                 }
                             }
                         },
@@ -526,11 +527,11 @@ fun TaskDetailScreen(
                                         triggerBackgroundSync(context, api)
                                     } catch (e: Exception) {
                                         if (e is CancellationException) throw e
-                                        Toast.makeText(
+                                        showToast(
                                             context,
                                             context.getString(R.string.error_general, e.message ?: ""),
                                             Toast.LENGTH_SHORT
-                                        ).show()
+                                        )
                                     }
                                 }
                             },
@@ -585,11 +586,11 @@ fun TaskDetailScreen(
                                         triggerBackgroundSync(context, api)
                                     } catch (e: Exception) {
                                         if (e is CancellationException) throw e
-                                        Toast.makeText(
+                                        showToast(
                                             context,
                                             context.getString(R.string.error_general, e.message ?: ""),
                                             Toast.LENGTH_SHORT
-                                        ).show()
+                                        )
                                     }
                                 }
                             },
@@ -643,11 +644,11 @@ fun TaskDetailScreen(
                                         triggerBackgroundSync(context, api)
                                     } catch (e: Exception) {
                                         if (e is CancellationException) throw e
-                                        Toast.makeText(
+                                        showToast(
                                             context,
                                             context.getString(R.string.error_general, e.message ?: ""),
                                             Toast.LENGTH_SHORT
-                                        ).show()
+                                        )
                                     }
                                 }
                             },
@@ -762,11 +763,11 @@ fun TaskDetailScreen(
                                         if (e is CancellationException) throw e
                                         val msg = e.message ?: ""
                                         if (msg.contains("Invalid time format") || msg.contains("Task not found")) {
-                                            Toast.makeText(
+                                            showToast(
                                                 context,
                                                 context.getString(R.string.error_format, msg),
                                                 Toast.LENGTH_SHORT
-                                            ).show()
+                                            )
                                         } else {
                                             // The time session was successfully saved locally, but the
                                             // subsequent network sync encountered an error.
@@ -821,7 +822,7 @@ fun TaskDetailScreen(
                                             triggerBackgroundSync(context, api)
                                         } catch (e: Exception) {
                                             if (e !is CancellationException) {
-                                                Toast.makeText(context, context.getString(R.string.error_general, e.message ?: ""), Toast.LENGTH_SHORT).show()
+                                                showToast(context, context.getString(R.string.error_general, e.message ?: ""), Toast.LENGTH_SHORT)
                                             }
                                         }
                                     }
@@ -880,11 +881,11 @@ fun TaskDetailScreen(
                                         triggerBackgroundSync(context, api)
                                     } catch (e: Exception) {
                                         if (e is CancellationException) throw e
-                                        Toast.makeText(
+                                        showToast(
                                             context,
                                             context.getString(R.string.error_deleting_session, e.message ?: ""),
                                             Toast.LENGTH_SHORT
-                                        ).show()
+                                        )
                                     }
                                 }
                             },
@@ -956,11 +957,11 @@ fun TaskDetailScreen(
                                         triggerBackgroundSync(context, api)
                                     } catch (e: Exception) {
                                         if (e is CancellationException) throw e
-                                        Toast.makeText(
+                                        showToast(
                                             context,
                                             context.getString(R.string.error_general, e.message ?: ""),
                                             Toast.LENGTH_SHORT
-                                        ).show()
+                                        )
                                     }
                                 }
                             },
