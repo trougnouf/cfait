@@ -116,6 +116,26 @@ fn is_deterministic_rejection(status: &StatusCode) -> bool {
         && code != 429
 }
 
+/// Build the `If-Match` value for conditional requests.
+///
+/// RFC 9110 compares `If-Match` entity-tags with the strong comparison
+/// function, so a `W/`-marked etag can never match — even against itself.
+/// Some servers (GMX, mail.com and the rest of the United Internet CalDAV
+/// stack) hand out weak etags in PUT responses and REPORT `getetag`s while
+/// rejecting the weak form in `If-Match`, which turns every conditional
+/// update into a spurious 412 and, through the conflict resolution, into a
+/// "Conflict Copy". Strip the weakness marker and add the quotes that are
+/// part of the entity-tag syntax (RFC 9110 section 8.8.3); `*` passes
+/// through untouched.
+fn strong_etag(etag: &str) -> String {
+    let trimmed = etag.trim();
+    let bare = trimmed.strip_prefix("W/").unwrap_or(trimmed);
+    if bare.is_empty() || bare == "*" || bare.starts_with('"') {
+        return bare.to_string();
+    }
+    format!("\"{}\"", bare)
+}
+
 /// Drop the given uids from the per-calendar disk caches.
 ///
 /// A Delete popped from the journal (successfully pushed, or discarded because
@@ -334,17 +354,22 @@ impl RustyClient {
         };
 
         let ics_string = IcsAdapter::to_ics(task);
-        let etag_val = if task.etag == PENDING_REFRESH_ETAG {
-            ""
+        // A pending-refresh or missing etag means the server resource exists
+        // but its version is unknown: match any current representation (`*`)
+        // instead of sending a malformed empty If-Match header. Otherwise
+        // send the strong form of the etag; weak etags can never satisfy
+        // If-Match's strong comparison and some servers emit them anyway.
+        let etag_val = if task.etag.is_empty() || task.etag == PENDING_REFRESH_ETAG {
+            "*".to_string()
         } else {
-            &task.etag
+            strong_etag(&task.etag)
         };
 
         match client
             .request(PutResource::new(&path).update(
                 ics_string,
                 "text/calendar; charset=utf-8",
-                etag_val,
+                &etag_val,
             ))
             .await
         {
@@ -503,7 +528,7 @@ impl RustyClient {
 
         let resp = if !task.etag.is_empty() && task.etag != PENDING_REFRESH_ETAG {
             client
-                .request(Delete::new(&path).with_etag(&task.etag))
+                .request(Delete::new(&path).with_etag(strong_etag(&task.etag)))
                 .await
         } else {
             client.request(Delete::new(&path).force()).await
@@ -1173,5 +1198,37 @@ impl RustyClient {
         } else {
             Err(format!("MOVE failed: {}", parts.status))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::strong_etag;
+
+    #[test]
+    fn strong_etag_strips_weakness_marker() {
+        // The United Internet CalDAV stack (GMX, mail.com) emits weak etags in
+        // PUT responses and REPORT getetags but rejects them in If-Match.
+        assert_eq!(
+            strong_etag("W/\"G8FPiVebEYI3Zv4RJxxrUWF7EXQ=\""),
+            "\"G8FPiVebEYI3Zv4RJxxrUWF7EXQ=\""
+        );
+    }
+
+    #[test]
+    fn strong_etag_keeps_valid_forms_untouched() {
+        assert_eq!(strong_etag("\"abc123\""), "\"abc123\"");
+        assert_eq!(strong_etag("*"), "*");
+        assert_eq!(strong_etag(""), "");
+        // leading whitespace tolerance
+        assert_eq!(strong_etag(" \"abc\" "), "\"abc\"");
+    }
+
+    #[test]
+    fn strong_etag_quotes_bare_values() {
+        // Some servers (Yandex et al.) return getetags without quotes; the
+        // quotes are part of the entity-tag, not decoration around it.
+        assert_eq!(strong_etag("abc123"), "\"abc123\"");
+        assert_eq!(strong_etag("W/abc123"), "\"abc123\"");
     }
 }
