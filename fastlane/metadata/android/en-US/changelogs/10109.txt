@@ -1,0 +1,329 @@
+## [1.1.9] - 2026-10-09
+
+### 🚀 Features
+
+- *(view)* Show start date and recurrence in cfait view and task details ( https://github.com/trougnouf/cfait/issues/84 )
+- *(extractor)* Serialize journals as is:page and scope subtask extraction by journal context
+- Show today/tomorrow/yesterday relative dates in task lists ( https://git.disroot.org/trougnouf/cfait/issues/11 )
+- *(cli)* Add cfait login command
+- *(tui)* Add :settings/:config to edit config.toml in $EDITOR and reload
+- Add :delete-all command with confirmation dialog ( https://github.com/trougnouf/cfait/issues/86 https://github.com/trougnouf/cfait/issues/6 )
+- Watch data and cache dirs for cross-instance change detection
+- *(adapter)* Honor TZID on DUE, DTSTART and EXDATE
+- *(editors)* Word navigation and deletion in GUI/TUI text editors ( https://git.disroot.org/trougnouf/cfait/issues/12 )
+- *(client)* Add a 120s backstop timeout for HTTP requests
+- *(client)* Merge the 120s HTTP backstop timeout (chore/http-timeout)
+- *(android)* Save task without leaving the detail screen
+- *(tui)* Auto-complete smart-input tokens with a navigable suggestion popup
+- *(cli)* Print version with --version and -V ( https://github.com/trougnouf/cfait/issues/90 )
+- *(i18n)* Localize task intent descriptions shown in undo and redo
+- *(cli)* Include the commit hash in --version output
+- *(aliases)* Warn about useless alias values and enforce integrity in cli
+- *(gui)* Hint at Nextcloud /remote.php/dav URL in onboarding and 404 errors
+- *(gui)* Describe recurrence on hover of the repeat icon
+- *(cli)* Add collection default subcommand to pick the active collection
+- *(journal)* Hint that a VJOURNAL-capable collection can be created from cfait
+- *(cli)* Add --plain flag to tree command for copy without UIDs
+- *(cli)* Add --fields to list/search for scriptable field output ( https://github.com/trougnouf/cfait/issues/92 )
+- Add copy-link action to tasks ( https://github.com/trougnouf/cfait/issues/77 )
+- *(search)* Add is:recurrent filter for recurring and non-recurring tasks (suggested by montherlant)
+- *(config)* Add date_format setting for explicit typed-date digit order ( https://github.com/trougnouf/cfait/issues/85 )
+- *(hierarchy)* Add parent: token, resolve re-parent sync conflicts toward the newest move
+- *(gui)* Cycle through autocomplete suggestions with repeated tab presses (suggested by Michael)
+- *(gui)* Highlight the applied suggestion chip and let clicks join the tab cycle
+- Celebrate completed tasks with confetti (GUI, Android) and a terminal bell (TUI), behind the per-device celebrate_completions setting (https://github.com/trougnouf/cfait/discussions/98)
+- *(gui)* Randomize confetti launch style per burst, from a single party-popper point to spread along the bottom edge (https://github.com/trougnouf/cfait/discussions/98)
+- *(android)* Randomize confetti launch style per burst and add air drag so some bursts stay in one screen region instead of always covering it (https://github.com/trougnouf/cfait/discussions/98)
+
+### 🐛 Bug Fixes
+
+- *(parser)* Fall back to rec: format for RRULEs the prettifier can't represent
+- *(mobile)* Use setOnlyAlertOnce so already-fired alarms don't re-alert (reported by montherlant)
+- *(journal)* Fall back to walk_or_create_wiki_path for missing links in gui, tui, and android
+- *(editor)* Keep journal sub-pages out of the parent's markdown buffer
+- *(gui)* Always yield at least one span per line to avoid iced layout cache panic
+- *(store)* Snapshot referencing tasks so undoing a delete restores them ( https://github.com/trougnouf/cfait/issues/86 https://github.com/trougnouf/cfait/issues/6 )
+- *(gui)* Fill delete-all dialog list width so the scrollbar sits at the right edge ( https://github.com/trougnouf/cfait/issues/86 https://github.com/trougnouf/cfait/issues/6 )
+- *(android)* Stop journal tab from blanking the task list on return
+- *(android)* Stop journal tab from blanking the task list on return
+- *(store)* Undo of start-timer and delete no longer hard-deletes ancestors/children
+- *(store)* Sidebar has_children false-negative when a sibling sorts between a key and its children
+- *(tui)* Convert char-count cursor to byte offset before slicing input buffer
+- *(gui)* Demote no-ops instead of panicking when the row above is a group header
+- *(config)* Treat an empty config file as missing so the app re-onboards
+- *(config)* Don't delete the keyring credential when the keyring is unreadable
+- *(tui)* Restore the terminal on any exit path via a Drop guard
+- *(tui)* Use the DST-safe date conversion in the date picker
+- *(tui)* Skip auto-refresh when the interval is zero
+- *(parser)* Capture the full RHS of the spaced alias form
+- *(parser)* Convert two-token duration units and saturate on overflow
+- *(parser)* Keep the DAILY interval when rewriting blocked weekdays
+- *(adapter)* Tolerate malformed and lowercase ICS input
+- *(adapter)* Treat property and parameter names as case-insensitive
+- *(adapter)* Scope relations and alarms to the master component
+- *(cli)* Exit non-zero when cfait sync leaves remote calendars unfetched
+- *(tui)* Guard stale journal pointer and session timestamps
+- Guard non-ASCII uid truncation and session timestamp prefill
+- *(cli)* Propagate background sync failures and report partial imports
+- Skip task creation for pure alias and goal definitions in tui and gui
+- *(cli)* Surface argument and export errors that were silently ignored
+- Make trash operations disk-based and report failures
+- *(gui)* Report invalid snooze and session input instead of guessing
+- *(gui)* Convert caret column to byte offset for description link lookup
+- *(tui)* Guard rendering panics on short terminals and fix blocked-row width
+- *(gui)* Sync journal editing uid and report empty wiki links and bad dates
+- *(tui)* Give the help modal its own scroll offset and speed up goal panels
+- *(gui)* Dedupe journal daily-note loading and keep sidebar mode valid when clearing filters
+- *(tui)* Keep the calendar list when a network fetch fails
+- *(gui)* Support undo and redo in the journal editor
+- *(parser)* Do not panic on multibyte month tokens
+- *(extractor)* Start a new numbered block when the list number decreases
+- *(adapter)* Parse alarms from the unfolded ICS so folded lines survive
+- *(storage)* Match import component markers at line starts only
+- *(merge)* Respect deletions of unmapped properties in 3-way merge
+- *(gui)* Keep the minute timer tick running when a running task is hidden by filters
+- *(gui)* Never make a disabled calendar the active one after a load
+- *(gui)* Ctrl+Delete in journal mode now deletes the visible page, not a stale main-list selection
+- *(cli)* Make done idempotent, honor list query, apply add aliases retroactively, drop complete, wrap help
+- *(android)* Run blocking FFI syncs and edits off the main thread
+- *(android)* Fire overdue alarms instead of dropping them
+- *(android)* Stop recreating the activity on notification and widget taps
+- *(android)* Guard widget config FFI calls and color palette indices
+- *(android)* Report unknown calendar sync mode as failure
+- *(android)* Give feedback when background operations fail
+- *(android)* Localize user-facing errors and labels
+- *(i18n)* Use automatic plural selection for count messages
+- *(tui)* Repair keyboard nav, post-migration refresh, and alarm prune
+- *(android)* Await cache load in background workers and centralize intent extras
+- *(android)* Await cache load in widget callbacks and offload calendar reads
+- *(android)* Restart live session timer when logged time changes
+- *(android)* Preserve unsaved edits when changing sessions or links
+- *(recurrence)* Increment sequence on advance instead of resetting to 1
+- *(android)* Keep the Done notification action from un-completing an already done task
+- *(sync)* Retry task move with overwrite when the destination already exists
+- *(android)* Count running not paused tasks in the widget active badge
+- *(android)* Show the collection picker in search mode of the entry widget config
+- *(ics)* Stop double-unescaping text properties in the vtodo parse path
+- *(client)* Match companion events by exact uid so cleanup can't delete other tasks' events
+- *(client)* Degrade to cached tasks instead of erroring when the cache file is unreadable
+- *(store)* Complete the root before descendants so recurring resets can't undo tree completion
+- *(store)* Skip history snapshots when resetting descendants on recurring completion
+- *(mobile)* Keep description-extracted subtasks in the parent's target collection
+- *(tui)* Never drop persist batches when the action channel is full
+- Honour col: on description-extracted tasks across tui, gui, and mobile
+- *(android)* Mask sign bit of hash-based icon colors to avoid negative indices
+- *(android)* Render the advanced-settings error status that was written but never shown
+- *(alarm)* Anchor relative reminders on all-day and fuzzy dates so they actually fire
+- *(journal)* Treat same-calendar moves as no-ops so tasks don't vanish on replay
+- *(tui)* Keep recovery calendar hidden when showing all calendars
+- *(android)* Migrate text fields to state-based TextFieldState so cursor handle can scroll beyond visible text ( https://git.disroot.org/trougnouf/cfait/issues/13 )
+- *(matcher)* Route prefix stripping through byte-safe extract_prefix
+- *(sync)* Keep all unsynced cached tasks when matching server hrefs
+- *(logging)* Fall back to terminal logging when the log file cannot be created
+- *(android)* Keep post-action navigation on the main thread and avoid duplicate home entries
+- *(android)* Fix stale home screen refreshes and auto-scroll, and move per-keystroke FFI off the main thread
+- *(android)* Guard stale suggestion taps, coalesce background syncs, and move screen FFI off the main thread
+- *(gui)* Log persist failures, surface event deletion failures, and fix migration loading state
+- *(parser)* Cap brace expansion depth to prevent stack overflow on nested input
+- *(tui)* Bump edit generation when wiki links create pages from the relationship browser
+- *(tui)* Fill the whole main pane in journal mode instead of leaving a blank details strip
+- *(ics)* Escape semicolons, commas, and newlines in serialized categories, summaries, and alarm descriptions
+- *(tree)* Resolve a numbered dependency to the last parallel sibling, not all members sharing its number
+- *(deps)* Stop dropping explicit dep: tokens when creating description subtasks
+- *(i18n)* Translate the completed-group toggle labels in the gui and tui
+- *(gui)* Render indented list bullets in inline descriptions like the expanded view
+- *(gui)* Route settings success messages through the green info banner
+- *(i18n)* Translate the sidebar goal and journal tooltips and help examples in gui and tui
+- *(android)* Resave journal edits that land while a save is in flight
+- *(recycle)* Start next occurrence with fresh time tracking
+- *(store)* Clamp alias priority consistently in retroactive sync
+- *(sync)* Keep pause percent when saving the tree editor
+- *(parser)* Treat word-attached quotes as literals so an inch mark no longer pairs with a later quote
+- *(gui)* Stop background worker debounce starvation and self-heal failed syncs
+- *(gui)* Keep Settings/Help open when a background sync completes
+- *(alarms)* Show auto-reminders in-app and stop re-firing after restart
+- *(journal)* Keep sub-pages out of the main task list
+- *(help)* Only list the maximize-editor shortcut in the GUI help
+- *(gui)* Localize the editor context banner strings
+- *(gui)* Stop duplicating the time range in the session input placeholder
+- *(gui)* Restore the missing spacing in the settings form
+- Localize the journal date headers
+- *(tui)* Actually move the task when Move is picked from the action menu
+- *(tui)* Fall back to the daily entry when the journal page pointer is stale
+- *(gui)* Hide the move action when the picker would have no targets
+- *(gui)* Reject bare + wiki links instead of panicking in journal mode
+- *(gui)* Don't open the move modal when no calendar is a valid target
+- *(i18n)* Localize leftover hardcoded strings in header, delete-all and journal views
+- *(store)* Allow unchecking completed tasks in the tree editor
+- *(android)* Keep cross-collection parents visible when focusing a collection
+- *(gui)* Keep daily layout for date-bound journal entries and dedupe repasted sub-pages
+- *(gui)* Save remote collection color changes immediately
+- *(sync)* Prune deleted tasks from the calendar caches once their Delete is pushed
+- *(gui)* Keep editor cursor relative to line text on tab indent
+- Scope dep:/rel:/parent: reference resolution to visible collections, surface ambiguous references as a GUI error banner, and offer short-UID autocomplete suggestions; also re-tag minted lines in the journal editor so typing doesn't accumulate duplicates
+- *(sync)* Rescue any deterministic 4xx rejection, persist the queue head's failure reason in journal.json, and surface it in the GUI unsynced tooltip ( https://github.com/trougnouf/cfait/issues/96 )
+- *(sync)* Rescue rejected 412 creations instead of assuming success, retry ghost updates as creations, and stop parking on deterministic conflict-fetch failures ( https://github.com/trougnouf/cfait/issues/96 )
+- *(journal)* Merge duplicate same-calendar deletes so stalled producers cannot pile up the queue ( https://github.com/trougnouf/cfait/issues/96 )
+- *(android)* Write journal entries to a VJOURNAL-capable collection instead of the active tab ( https://github.com/trougnouf/cfait/issues/96 )
+- *(gui)* Keyboard-friendly context menu and layout-safe hotkeys
+- *(gui)* Actually wire Tab into the suggestion cycle
+- *(gui)* Dispatch applied suggestions to tasks::handle so Tab actually completes words
+- *(sync)* Resolve 412s against our own previous edit chain by SEQUENCE instead of duplicating the task
+- *(sync)* Record the server-agreed state per pushed task and etag-match it as the 412 merge base
+- *(gui)* Debias confetti bursts with splitmix64 seeding and widen the randomized speed, drag, and spin ranges (https://github.com/trougnouf/cfait/discussions/98)
+
+### 💼 Other
+
+- *(release)* Split build-windows from publish
+- Store settings as collection properties with VEVENT fallback ( https://github.com/trougnouf/cfait/issues/91 )
+
+Synchronize the Cfait settings payload as custom WebDAV properties
+(CF:settings / CF:settings-rev in the http://trougnouf.com/ns/cfait/
+namespace) on the default calendar collection, after probing for
+arbitrary-property support with a temporary CF:probe property. On
+servers that reject custom properties, fall back to a 1970 CANCELLED
+VEVENT carrier that most calendar clients filter out by time range.
+A deleted or changed target collection is healed by re-provisioning
+the property on the new target and removing the stale properties from
+the old one. Includes unit tests, ICS round-trip tests and mockito
+integration tests, plus a fix for CATEGORIES parsing on VEVENTs.
+
+### 🚜 Refactor
+
+- *(tui)* Deduplicate GPX, journal-calendar, and external-editor logic
+- *(android)* Dedupe journal date navigation into selectJournalDate
+- *(client)* Remove dead calendar discovery fallbacks and url correction plumbing
+- *(mobile)* Drop unused get_next_global_alarm_time FFI surface
+- *(mobile)* Drop unused get_all_tags, get_all_locations, and yank_task FFI stubs
+- *(tui)* Extract shared goal and journal page deletion helpers
+- *(tui)* Drop unused Ok(None) variant from run_editor_cli
+- *(gui)* Dedupe journal header and drop dead editor closures
+- Name pending-refresh etag and dedupe gui task handlers
+- *(gui)* Extract shared helpers for task row labels and description text
+- *(gui)* Dedupe scroll-snap and cursor-offset logic in view update
+- *(gui)* Dedupe settings form widgets and localize hardcoded labels
+- *(gui)* Dedupe ics import and form resets in settings update
+- *(gui)* Dedupe sidebar goal rows and clear-all button
+- *(gui)* Tidy state helpers and default construction
+- *(gui)* Dedupe local disk load and move it to the blocking pool
+- *(gui)* Dedupe help section headers and card styles
+- *(gui)* Dedupe modal, sidebar and journal view helpers in view/mod.rs
+- *(gui)* Dedupe undo, focus, alarm and batch helpers in update/tasks.rs
+- *(gui)* Dedupe relation rows and markdown helpers in task_row.rs
+- *(gui)* Dedupe focus, search and navigation boilerplate in update handlers
+- *(gui)* Dedupe settings form rows into numeric_row, pick_row and add_cancel_buttons
+- *(gui)* Extract ringing-task validity and placeholder helpers in update dispatcher, dedupe highlighter formats
+- *(gui)* Dedupe cmd shortcuts and navigation keys across captured and normal hotkey paths
+- *(gui)* Extract with_timeout, offline_fallback and flush_and_load in async ops
+- *(gui)* Normalize stale headers and remove dead icon constants
+- *(gui)* Drop stale dev comments, hoist rusty-dark theme helper, serve --help before config load
+- *(parser)* Remove unreachable done: datetime branch and add completion round-trip test
+- *(tui)* Share calendar fetch helper and one controller in the network actor
+- *(tui)* Dedupe journal target uid resolution into a state helper
+- *(tui)* Extract yank, navigation and move-target logic into state helpers
+- *(tui)* Build goal sidebar entries via a shared helper
+- *(parser)* Dedupe recurrence time and start/due assignment in smart input
+- *(recurrence)* Reuse to_date_naive and Ord for exdate handling
+- *(adapter)* Dedupe ics insertion and related-to routing
+- *(storage)* Name recovery calendar, centralize system-calendar checks, dedupe interval merging
+- *(tui)* Share calendar-merge and cached-task-load helpers in the network actor
+- *(client)* Share companion event directory derivation
+- *(controller)* Dedup trash purging and drop dead config flag
+- *(gui)* Remove eight dead message variants and the help_expanded_sections field
+- *(merge)* Sort merged alarms by uid so merge output is deterministic
+- *(gui)* Guard truncate_chars against small limits and drop a dead style mode
+- *(core)* Dedupe hex color parsing and take &Path in the journal loader
+- *(gui)* Drop the dead non-gui cfg branch in settings
+- *(store)* Reuse the shared month-name helper in the journal tree
+- *(tui)* Drop dead cursor-movement branches in normal mode
+
+### 📚 Documentation
+
+- *(cli)* Simplify non-interactive help, drop -n/-w and replace extras
+- *(specs)* List :delete-all among the smart commands in SPECS.md ( https://github.com/trougnouf/cfait/issues/86 https://github.com/trougnouf/cfait/issues/6 )
+- Localize the journal calendar weekday header in all three clients
+- Specify incremental remote fetch
+- Correct alarm firing grace period comment
+
+### ⚡ Performance
+
+- *(model)* Strip inline data: URI payloads from task descriptions
+- *(client)* Per-calendar timeout and cache fallback in get_all_tasks
+- *(store)* Batch relation-index rebuilds via insert_many
+- *(store)* Cut filter() cost with search memo, plain short-circuit, O(N) ancestry maps
+- *(store)* Compute goal progress and history in a single store scan
+- *(gui)* Use the single-scan goal stats in the sidebar and detail panel
+- *(tui)* Redraw only on state change or once per second instead of every tick
+- *(android)* Avoid redundant FFI and notification work in widgets and refreshes
+- *(android)* Move store FFI calls off the main thread
+- *(android)* Hoist regex and formatter compilation out of hot paths
+- *(android)* Memoize task row description spans and session placeholder example
+- *(android)* Count ICS tasks without allocating split lists and off the main thread
+- *(android)* Stop re-reading the keyring on every task refresh
+- *(android)* Keep settings disk IO off the main thread
+- *(android)* Keep advanced settings disk IO off the main thread
+- *(android)* Keep home screen store calls off the main thread
+- *(android)* Move remaining settings and task detail store calls off the main thread
+- *(store)* Compute the local date once in filter instead of per task
+- *(mobile)* Score goal progress and history in a single store scan
+- *(mobile)* Only save config in dispatch when the expanded sidebar state changed
+- *(tui)* Index journal entries by date once instead of re-scanning every task per calendar day
+- *(tui)* Look up calendar colors via a per-frame map instead of a per-row scan
+- *(sync)* Peek journal front read-only to skip a full fsync per action
+- Skip descendant walks in get_aggregated_time_seconds for tasks without time data
+- *(gui)* Load cached disk data on the blocking pool in the connect path
+- *(mobile)* Precompute subtree time in one store pass and reuse filter's location counts
+- *(mobile)* Read calendar colors directly in get_view_tasks to avoid a blocking store lock
+- *(gui)* Collect journal month dates in one pass instead of scanning per day
+
+### 🎨 Styling
+
+- *(android)* Replace fully-qualified names with imports in ui screens
+- *(android)* Replace fully-qualified names with imports in HomeScreen
+- *(android)* Replace fully-qualified names with imports in Shared
+- *(android)* Replace fully-qualified names with imports in MainActivity
+- *(android)* Replace fully-qualified names with imports in CfaitApplication
+- *(android)* Replace fully-qualified names with imports in TaskListWidget
+- *(android)* Replace fully-qualified names with imports in workers
+- *(android)* Replace fully-qualified names with imports in remaining files
+- *(tui)* Localise the wiki-link fallback search message
+- *(tui)* Replace stale refactor note above the modal popups with an accurate one
+
+### 🧪 Testing
+
+- *(adapter)* Add robustness tests for malformed input, TZID and case
+- *(tui)* Cover suggestion refresh, navigation, apply and undo paths
+- *(store)* Lock in auto-heal of recurring history snapshots mislinked as sub-tasks
+
+### ⚙️ Miscellaneous Tasks
+
+- *(mobile)* Add data dir migration to external storage ( https://github.com/trougnouf/cfait/issues/83 )
+- *(mobile)* Replace data dir migration with config-only switch ( https://github.com/trougnouf/cfait/issues/83 )
+- Remove unused string
+- *(mobile)* Switch external storage to Android/media for file-manager visibility ( https://github.com/trougnouf/cfait/issues/83 )
+- *(android)* Stop ghost-clear from skipping legitimately empty lists
+- *(sync)* Make the cross-instance file watcher apply external changes and suppress its own writes
+- *(watch)* Coalesce reloads during in-flight loads, surface failures
+- *(sync)* Serialize journal syncs across processes with a bounded flock
+- *(android)* Remove dead ACTION_CANCEL branch and unused OUTPUT_COUNT
+- Regenerate Android bindings
+- Update dependencies
+- *(tui)* Dispatch :commands in task edit mode, matching create mode
+- *(android)* Respect error color in tag alias status banner
+- *(android)* Silence compiler warnings and migrate to PrimaryScrollableTabRow
+- *(android)* Replace deprecated ClickableText with LinkAnnotation links
+- Clarify action_bar_position wording
+- Silence android build warnings in tui sync strategy and journal lock
+- Silence remaining android target warnings in system stubs and locking tests
+- *(model)* Only autocomplete [[wiki links]] while they are still open
+- *(config)* Namespace keyring passwords by server host
+- *(gui)* Journal editing, sync indicator, and search bar polish
+- *(i18n)* Select plural subkeys explicitly since rust_i18n returns the key itself for plural parents
+- *(android)* Pass fallback error to migration_failed toast, template needs a param
+- *(android)* Let the description editor keep its newline key
+- Update Rust toolchain to 1.99.0
+- *(journal)* Make the is:note token the single source of truth for page note state
+- *(cli)* Accept -c short flag for import collection target ( https://github.com/trougnouf/cfait/issues/97 )
+- *(cli)* Accept -c short flag for export collection target
+- *(i18n)* Restore the parent: parser token in the Spanish locale
+- *(i18n)* Rm English-default and accent-duplicate parser tokens from the German locale
