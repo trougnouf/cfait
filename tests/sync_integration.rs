@@ -21,7 +21,7 @@ async fn test_sync_recovers_from_412() {
     // 1. Mock the initial PUT that fails with a 412
     let mock_412 = server
         .mock("PUT", &*task_path)
-        .match_header("If-Match", "old-etag")
+        .match_header("If-Match", "\"old-etag\"")
         .with_status(412)
         .create_async()
         .await;

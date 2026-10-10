@@ -29,7 +29,7 @@ async fn test_412_resolves_via_three_way_merge_no_copy() {
     // 1. Initial update PUT fails with 412 (server changed since we last fetched).
     let mock_412 = server
         .mock("PUT", task_path.as_str())
-        .match_header("If-Match", "old-etag")
+        .match_header("If-Match", "\"old-etag\"")
         .with_status(412)
         .create_async()
         .await;
@@ -103,7 +103,7 @@ async fn test_412_resolves_via_three_way_merge_no_copy() {
     // Local edit: changed summary only.
     let mut local_task = base_task.clone();
     local_task.summary = "Local Title".to_string();
-    local_task.etag = "old-etag".to_string(); // sent raw; server stores quoted
+    local_task.etag = "old-etag".to_string(); // bare server etag; cfait sends it quoted
 
     Journal::push(ctx.as_ref(), Action::Update(local_task)).unwrap();
 
@@ -138,7 +138,7 @@ async fn test_412_fetch_failure_leaves_queued_no_copy() {
     // 1. Update PUT fails with 412.
     let mock_412 = server
         .mock("PUT", task_path.as_str())
-        .match_header("If-Match", "old-etag")
+        .match_header("If-Match", "\"old-etag\"")
         .with_status(412)
         .create_async()
         .await;
@@ -280,7 +280,7 @@ async fn test_412_conflict_fetch_405_makes_conflict_copy() {
 
     let mock_412 = server
         .mock("PUT", task_path.as_str())
-        .match_header("If-Match", "old-etag")
+        .match_header("If-Match", "\"old-etag\"")
         .with_status(412)
         .expect(1)
         .create_async()
@@ -364,7 +364,7 @@ async fn test_412_rapid_toggle_newer_local_sequence_wins_no_copy() {
     // 1. The undo PUT carries the stale pre-toggle etag and 412s.
     let mock_412 = server
         .mock("PUT", task_path.as_str())
-        .match_header("If-Match", "old-etag")
+        .match_header("If-Match", "\"old-etag\"")
         .with_status(412)
         .expect(1)
         .create_async()
@@ -493,7 +493,7 @@ async fn test_412_sequence_tie_still_makes_conflict_copy() {
 
     let mock_412 = server
         .mock("PUT", task_path.as_str())
-        .match_header("If-Match", "old-etag")
+        .match_header("If-Match", "\"old-etag\"")
         .with_status(412)
         .expect(1)
         .create_async()
@@ -741,7 +741,7 @@ async fn test_pushed_update_records_and_delete_forgets_base() {
 
     let mock_put = server
         .mock("PUT", task_path.as_str())
-        .match_header("If-Match", "e0")
+        .match_header("If-Match", "\"e0\"")
         .with_status(201)
         .with_header("ETag", "\"fresh-etag\"")
         .expect(1)
@@ -750,7 +750,7 @@ async fn test_pushed_update_records_and_delete_forgets_base() {
 
     let mock_delete = server
         .mock("DELETE", task_path.as_str())
-        .match_header("If-Match", "e0")
+        .match_header("If-Match", "\"e0\"")
         .with_status(200)
         .expect(1)
         .create_async()
