@@ -218,6 +218,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 .collect();
 
             app.ob_url = config.url.clone();
+            app.ob_local_url = config.local_url.clone();
+            app.ob_local_url_expanded = false;
             app.ob_user = config.username.clone();
             app.ob_pass = config.password.clone();
             app.ob_insecure = config.allow_insecure_certs;
@@ -325,6 +327,14 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.ob_url = v;
             Task::none()
         }
+        Message::ObLocalUrlChanged(v) => {
+            app.ob_local_url = v;
+            Task::none()
+        }
+        Message::ToggleObLocalUrl => {
+            app.ob_local_url_expanded = !app.ob_local_url_expanded;
+            Task::none()
+        }
         Message::ObUserChanged(v) => {
             app.ob_user = v;
             Task::none()
@@ -381,6 +391,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             let cfg = &app.core_config;
             app.ob_password_visible = false;
             app.ob_url = cfg.url.clone();
+            app.ob_local_url = cfg.local_url.clone();
+            app.ob_local_url_expanded = false;
             app.ob_user = cfg.username.clone();
             // app.ob_pass is already securely held in memory from startup
 
@@ -446,6 +458,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::ObSubmitOffline => {
             app.ob_password_visible = false;
             app.ob_url.clear();
+            app.ob_local_url.clear();
             app.ob_user.clear();
             app.ob_pass.clear();
 

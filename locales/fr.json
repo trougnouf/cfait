@@ -74,6 +74,10 @@
     "date_format_dym": "Jour-An-Mois (02/2026/01)",
     "caldav_url": "URL du serveur CalDAV :",
     "caldav_url_hint": "Si vous utilisez Nextcloud, l'URL doit se terminer par /remote.php/dav (ex. https://cloud.example.com/remote.php/dav).",
+    "caldav_local_url": "Adresse locale (optionnelle, privilégiée si joignable) :",
+    "caldav_local_url_hint": "Le même serveur sur le réseau local (ex. https://192.168.1.10:5232). Utilisée à la place de l'URL ci-dessus quand elle répond, pour synchroniser sans VPN.",
+    "caldav_local_url_toggle": "Adresse locale (optionnelle)",
+    "caldav_local_url_toggle_set": "Adresse locale (configurée)",
     "calendar_action_created": "Créé",
     "calendar_action_deleted": "Supprimé",
     "calendar_events_changed": {

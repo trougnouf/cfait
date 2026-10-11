@@ -77,6 +77,8 @@ pub enum BoolField {
 pub enum Message {
     // --- Settings & Onboarding ---
     ObUrlChanged(String),
+    ObLocalUrlChanged(String),
+    ToggleObLocalUrl,
     ObUserChanged(String),
     ObPassChanged(String),
     ToggleObPasswordVisibility,

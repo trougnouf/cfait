@@ -830,6 +830,11 @@ pub struct Config {
     pub data_dir: Option<String>,
 
     pub url: String,
+    /// Per-device alternate CalDAV address reachable on the local network
+    /// (e.g. `https://192.168.1.10:5232`). Preferred over `url` whenever it is
+    /// reachable, so clients keep syncing on the LAN without a VPN tunnel.
+    /// Never synced across devices.
+    pub local_url: String,
     pub username: String,
 
     #[serde(skip_serializing)]
@@ -1035,6 +1040,7 @@ impl Default for Config {
             config_version: CURRENT_CONFIG_VERSION,
             data_dir: None,
             url: String::new(),
+            local_url: String::new(),
             username: String::new(),
             password: String::new(),
             tls_client_cert_path: None,
@@ -1584,6 +1590,14 @@ impl Config {
                     "# URL: The full address to your CalDAV server endpoint (e.g. https://cloud.example.com/remote.php/dav/).\n",
                 ),
                 None,
+            ),
+            (
+                "local_url =",
+                None,
+                None,
+                Some(
+                    " # String (Optional): LAN address preferred over `url` when reachable (e.g. https://192.168.1.10:5232). Same credentials and TLS rules apply.",
+                ),
             ),
             (
                 "default_calendar =",

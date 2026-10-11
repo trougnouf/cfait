@@ -37,6 +37,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -84,6 +85,8 @@ fun SettingsScreen(
     onFontScaleChange: (Float) -> Unit
 ) {
     val urlState = remember { TextFieldState() }
+    val localUrlState = remember { TextFieldState() }
+    var localUrlExpanded by remember { mutableStateOf(false) }
     val userState = remember { TextFieldState() }
     val passState = remember { TextFieldState() }
     var passwordVisible by remember { mutableStateOf(false) }
@@ -228,6 +231,7 @@ fun SettingsScreen(
     suspend fun reload() {
         val cfg = withContext(Dispatchers.IO) { api.getConfig() }
         urlState.setTextAndPlaceCursorAtEnd(cfg.url)
+        localUrlState.setTextAndPlaceCursorAtEnd(cfg.localUrl)
         userState.setTextAndPlaceCursorAtEnd(cfg.username)
         passState.setTextAndPlaceCursorAtEnd(cfg.password)
         insecure = cfg.allowInsecure
@@ -299,6 +303,7 @@ fun SettingsScreen(
 
             val newCfg = cfg.copy(
                 url = urlStr,
+                localUrl = localUrlState.text.toString(),
                 username = userStr,
                 password = passStr,
                 allowInsecure = insecure,
@@ -391,6 +396,47 @@ fun SettingsScreen(
                     ),
                     lineLimits = TextFieldLineLimits.SingleLine
                 )
+                // Local address: niche option, collapsed behind a quiet toggle by default.
+                val localUrlToggleLabel = if (localUrlState.text.isBlank()) {
+                    R.string.caldav_local_url_toggle
+                } else {
+                    R.string.caldav_local_url_toggle_set
+                }
+                val localUrlToggleArrow =
+                    if (localUrlExpanded) NfIcons.ARROW_UP else NfIcons.ARROW_DOWN
+                TextButton(
+                    onClick = { localUrlExpanded = !localUrlExpanded },
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    NfIcon(localUrlToggleArrow, 12.sp)
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        stringResource(localUrlToggleLabel),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.alpha(0.7f)
+                    )
+                }
+                AnimatedVisibility(visible = localUrlExpanded) {
+                    Column {
+                        OutlinedTextField(
+                            state = localUrlState,
+                            label = { Text(stringResource(R.string.caldav_local_url)) },
+                            modifier = Modifier.fillMaxWidth(),
+                            textStyle = MaterialTheme.typography.bodySmall,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Uri,
+                                autoCorrectEnabled = false,
+                                capitalization = KeyboardCapitalization.None
+                            ),
+                            lineLimits = TextFieldLineLimits.SingleLine
+                        )
+                        Text(
+                            stringResource(R.string.caldav_local_url_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.alpha(0.7f)
+                        )
+                    }
+                }
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     state = userState,

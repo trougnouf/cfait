@@ -520,6 +520,7 @@ pub struct MobileGoalProgress {
 #[derive(uniffi::Record)]
 pub struct MobileConfig {
     pub url: String,
+    pub local_url: String,
     pub username: String,
     pub password: String,
     pub tls_client_cert_path: Option<String>,
@@ -1566,6 +1567,7 @@ impl CfaitMobile {
         let c = load_mobile_config_with_credentials(self.ctx.as_ref());
         MobileConfig {
             url: c.url,
+            local_url: c.local_url,
             username: c.username,
             password: c.password,
             tls_client_cert_path: c.tls_client_cert_path,
@@ -1743,6 +1745,7 @@ impl CfaitMobile {
         let mut c = load_mobile_config_with_credentials(self.ctx.as_ref());
         let old_c = c.clone();
         c.url = config.url;
+        c.local_url = config.local_url;
         apply_mobile_credentials_update(&mut c, &config.username, &config.password);
         c.tls_client_cert_path = config.tls_client_cert_path;
         c.tls_client_key_path = config.tls_client_key_path;

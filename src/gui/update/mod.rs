@@ -50,6 +50,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::ConfigLoaded(_)
         | Message::ConfigUpdated(_)
         | Message::ObUrlChanged(_)
+        | Message::ObLocalUrlChanged(_)
+        | Message::ToggleObLocalUrl
         | Message::ObUserChanged(_)
         | Message::ObPassChanged(_)
         | Message::ToggleObPasswordVisibility

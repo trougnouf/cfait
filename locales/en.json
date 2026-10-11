@@ -67,6 +67,10 @@
     "busy_working_on_things": "Working on things",
     "caldav_url": "CalDAV server URL:",
     "caldav_url_hint": "If you use Nextcloud, the URL should end with /remote.php/dav (e.g. https://cloud.example.com/remote.php/dav).",
+    "caldav_local_url": "Local address (optional, preferred when reachable):",
+    "caldav_local_url_hint": "Same server on the local network (e.g. https://192.168.1.10:5232). Used instead of the URL above when it answers, so syncing works without a VPN.",
+    "caldav_local_url_toggle": "Local address (optional)",
+    "caldav_local_url_toggle_set": "Local address (set)",
     "calendar_action_created": "Created",
     "calendar_action_deleted": "Deleted",
     "calendar_events_changed": {

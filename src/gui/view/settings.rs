@@ -1339,6 +1339,42 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         Space::new().height(0).into()
     };
 
+    // Local (LAN) address: niche option, collapsed behind a quiet toggle by default.
+    let local_url_toggle_arrow = if app.ob_local_url_expanded {
+        icon::ARROW_EXPAND_UP
+    } else {
+        icon::ARROW_EXPAND_DOWN
+    };
+    let local_url_toggle_label = if app.ob_local_url.is_empty() {
+        rust_i18n::t!("caldav_local_url_toggle").to_string()
+    } else {
+        rust_i18n::t!("caldav_local_url_toggle_set").to_string()
+    };
+    let local_url_toggle_button = button(
+        row![
+            icon::icon(local_url_toggle_arrow).size(12),
+            muted_note(local_url_toggle_label),
+        ]
+        .spacing(4)
+        .align_y(iced::Alignment::Center),
+    )
+    .style(button::text)
+    .padding(0)
+    .on_press(Message::ToggleObLocalUrl);
+    let local_url_section: Element<_> = if app.ob_local_url_expanded {
+        column![
+            local_url_toggle_button,
+            text_input("https://192.168.1.10:5232", &app.ob_local_url)
+                .on_input(Message::ObLocalUrlChanged)
+                .size(12)
+                .padding(6),
+            muted_note(rust_i18n::t!("caldav_local_url_hint")),
+        ]
+        .into()
+    } else {
+        local_url_toggle_button.into()
+    };
+
     // --- FORM LAYOUT ---
     let form = column![
         // 1. Connection Section
@@ -1350,6 +1386,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                     .on_input(Message::ObUrlChanged)
                     .padding(10),
                 muted_note(rust_i18n::t!("caldav_url_hint")),
+                local_url_section,
                 text(rust_i18n::t!("username")),
                 text_input(&rust_i18n::t!("username"), &app.ob_user)
                     .on_input(Message::ObUserChanged)

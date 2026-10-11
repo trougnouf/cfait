@@ -245,6 +245,8 @@ pub struct GuiApp {
 
     // Onboarding / Config
     pub ob_url: String,
+    pub ob_local_url: String,
+    pub ob_local_url_expanded: bool,
     pub ob_user: String,
     pub ob_pass: String,
     pub ob_password_visible: bool,
@@ -795,6 +797,8 @@ impl Default for GuiApp {
             pending_external_reload: false,
             pending_refresh: false,
             ob_url: String::new(),
+            ob_local_url: String::new(),
+            ob_local_url_expanded: false,
             ob_user: String::new(),
             ob_pass: String::new(),
             ob_password_visible: false,

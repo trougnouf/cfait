@@ -223,6 +223,7 @@ pub fn save_config(app: &mut GuiApp) -> Config {
     let mut cfg = app.core_config.clone();
 
     cfg.url = app.ob_url.clone();
+    cfg.local_url = app.ob_local_url.clone();
     cfg.username = app.ob_user.clone();
     cfg.password = app.ob_pass.clone();
     cfg.tls_client_cert_path = if app.ob_tls_client_cert_path.trim().is_empty() {

@@ -36,6 +36,7 @@ use libdav::{CalDavClient, PropertyName, names};
 use roxmltree::Document;
 
 use anyhow;
+use std::net::ToSocketAddrs;
 
 fn xml_escape(s: &str) -> String {
     s.replace('&', "&amp;")
@@ -225,6 +226,105 @@ fn companion_event_dir(task: &Task) -> String {
 }
 
 // -----------------------------
+// Local (LAN) address preference.
+//
+// `Config::local_url` names an alternate address of the same CalDAV server
+// that is only reachable on the local network. When it answers, it is
+// preferred over `url`, so devices keep syncing without a VPN tunnel; when it
+// does not, `url` is used unchanged. The reachability decision is cached
+// briefly so frequent client constructions do not re-probe.
+
+/// How long a reachability decision for `local_url` stays valid.
+const LOCAL_URL_PROBE_TTL: std::time::Duration = std::time::Duration::from_secs(60);
+/// Upper bound for one TCP connect attempt against `local_url`.
+const LOCAL_URL_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(500);
+
+/// Cached `(local_url, probed_at, reachable)` decision.
+static LOCAL_URL_PROBE: std::sync::Mutex<Option<(String, std::time::Instant, bool)>> =
+    std::sync::Mutex::new(None);
+
+/// Extract `(host, port)` from an http(s) CalDAV URL. IPv6 literals must be
+/// bracketed. Returns `None` for anything that is not http(s) or has no host.
+fn host_port_of(url: &str) -> Option<(String, u16)> {
+    let (scheme, rest) = url.split_once("://")?;
+    let default_port = if scheme.eq_ignore_ascii_case("https") {
+        443
+    } else {
+        80
+    };
+    if !scheme.eq_ignore_ascii_case("http") && !scheme.eq_ignore_ascii_case("https") {
+        return None;
+    }
+    let authority = rest.split('/').next()?;
+    let authority = authority
+        .rsplit_once('@')
+        .map(|(_, host)| host)
+        .unwrap_or(authority);
+    if let Some(rest) = authority.strip_prefix('[') {
+        let (host, after) = rest.split_once(']')?;
+        let port = after
+            .strip_prefix(':')
+            .and_then(|p| p.parse().ok())
+            .unwrap_or(default_port);
+        return Some((host.to_string(), port));
+    }
+    match authority.rsplit_once(':') {
+        Some((host, port)) => Some((host.to_string(), port.parse().ok()?)),
+        None => Some((authority.to_string(), default_port)),
+    }
+}
+
+/// Try a bounded TCP connect against the host:port of `local_url`.
+fn probe_local_url(local_url: &str) -> bool {
+    let Some((host, port)) = host_port_of(local_url) else {
+        return false;
+    };
+    let mut cache = LOCAL_URL_PROBE.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((cached_url, at, reachable)) = cache.as_ref()
+        && cached_url == local_url
+        && at.elapsed() < LOCAL_URL_PROBE_TTL
+    {
+        return *reachable;
+    }
+    let reachable = (host.as_str(), port)
+        .to_socket_addrs()
+        .map(|mut addrs| {
+            addrs.any(|addr| {
+                std::net::TcpStream::connect_timeout(&addr, LOCAL_URL_PROBE_TIMEOUT).is_ok()
+            })
+        })
+        .unwrap_or(false);
+    *cache = Some((local_url.to_string(), std::time::Instant::now(), reachable));
+    reachable
+}
+
+/// Pick the base URL for a new client: `config.local_url` when set and
+/// reachable, otherwise `url`. The reachability oracle is injectable for tests.
+fn resolve_preferred_url_with(
+    config: &Config,
+    url: &str,
+    reachable: impl Fn(&str) -> bool,
+) -> String {
+    if config.local_url.is_empty() || config.local_url == url || url.is_empty() {
+        return url.to_string();
+    }
+    if reachable(&config.local_url) {
+        log::info!(
+            "using local CalDAV address {} (primary: {})",
+            config.local_url,
+            url
+        );
+        config.local_url.clone()
+    } else {
+        url.to_string()
+    }
+}
+
+fn resolve_preferred_url(config: &Config, url: &str) -> String {
+    resolve_preferred_url_with(config, url, probe_local_url)
+}
+
+// -----------------------------
 // High-level RustyClient - network construction and high-level APIs.
 // Lower-level sync steps are implemented in src/client/sync.rs (impl RustyClient there).
 #[derive(Clone, Debug)]
@@ -286,11 +386,12 @@ impl RustyClient {
             });
         }
 
+        let config = crate::config::Config::load(ctx.as_ref()).unwrap_or_default();
+        let url = resolve_preferred_url(&config, url);
         let uri: Uri = url
             .parse()
             .map_err(|e: http::uri::InvalidUri| anyhow::anyhow!("Invalid URI: {}", e))?;
 
-        let config = crate::config::Config::load(ctx.as_ref()).unwrap_or_default();
         let mut client_auth_cert = None;
 
         if let (Some(cert_path), Some(key_path)) =
@@ -2301,7 +2402,10 @@ impl RustyClient {
 
 #[cfg(test)]
 mod tests {
+    use super::host_port_of;
     use super::is_companion_event_file;
+    use super::resolve_preferred_url_with;
+    use crate::config::Config;
 
     #[test]
     fn companion_event_file_matches_only_own_uid() {
@@ -2320,5 +2424,65 @@ mod tests {
         // non-event files never match
         assert!(!is_companion_event_file("abc", "abc.ics"));
         assert!(!is_companion_event_file("abc", "evt-abc.txt"));
+    }
+
+    #[test]
+    fn host_port_parses_ipv4_ports_and_scheme_defaults() {
+        assert_eq!(
+            host_port_of("https://192.168.1.10:5232/"),
+            Some(("192.168.1.10".into(), 5232))
+        );
+        assert_eq!(
+            host_port_of("http://raspberrypi.local"),
+            Some(("raspberrypi.local".into(), 80))
+        );
+        assert_eq!(
+            host_port_of("https://cloud.example.com/remote.php/dav/"),
+            Some(("cloud.example.com".into(), 443))
+        );
+        assert_eq!(
+            host_port_of("https://user:pass@[::1]:8443/dav/"),
+            Some(("::1".into(), 8443))
+        );
+        assert_eq!(host_port_of("local://default"), None);
+    }
+
+    #[test]
+    fn resolve_prefers_local_url_only_when_reachable() {
+        let primary = "https://tailnet.example:5232/";
+        let config = Config {
+            url: primary.to_string(),
+            ..Default::default()
+        };
+
+        // no local address configured: primary wins, probe never consulted
+        assert_eq!(
+            resolve_preferred_url_with(&config, primary, |_| panic!("must not probe")),
+            primary
+        );
+
+        let config = Config {
+            url: primary.to_string(),
+            local_url: "https://192.168.1.10:5232/".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(
+            resolve_preferred_url_with(&config, primary, |_| true),
+            config.local_url
+        );
+        assert_eq!(
+            resolve_preferred_url_with(&config, primary, |_| false),
+            primary
+        );
+
+        // identical addresses collapse to the primary without probing
+        let config = Config {
+            local_url: primary.to_string(),
+            ..config
+        };
+        assert_eq!(
+            resolve_preferred_url_with(&config, primary, |_| panic!("must not probe")),
+            primary
+        );
     }
 }

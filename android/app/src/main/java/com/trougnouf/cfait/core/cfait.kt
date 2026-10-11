@@ -4744,6 +4744,7 @@ public object FfiConverterTypeMobileCalendar : FfiConverterRustBuffer<MobileCale
 
 data class MobileConfig(
     var `url`: kotlin.String,
+    var `localUrl`: kotlin.String,
     var `username`: kotlin.String,
     var `password`: kotlin.String,
     var `tlsClientCertPath`: kotlin.String?,
@@ -4810,6 +4811,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
@@ -4866,6 +4868,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
     override fun allocationSize(value: MobileConfig) =
         (
             FfiConverterString.allocationSize(value.`url`) +
+                FfiConverterString.allocationSize(value.`localUrl`) +
                 FfiConverterString.allocationSize(value.`username`) +
                 FfiConverterString.allocationSize(value.`password`) +
                 FfiConverterOptionalString.allocationSize(value.`tlsClientCertPath`) +
@@ -4926,6 +4929,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
         buf: ByteBuffer,
     ) {
         FfiConverterString.write(value.`url`, buf)
+        FfiConverterString.write(value.`localUrl`, buf)
         FfiConverterString.write(value.`username`, buf)
         FfiConverterString.write(value.`password`, buf)
         FfiConverterOptionalString.write(value.`tlsClientCertPath`, buf)
