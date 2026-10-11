@@ -2203,18 +2203,33 @@ fn minutes_for(amt: u32, unit: &str) -> u32 {
     amt.saturating_mul(per_unit)
 }
 
+/// Parse a compact duration. Every segment must be `<digits><unit>` with an
+/// explicit unit, so compound forms like `2h20m` work while `2h20` (bare
+/// trailing minutes) and `2:20h` (clock-time lookalike) are rejected.
 pub fn parse_duration_with_lex(val: &str, lex: &ParserLexicon) -> Option<u32> {
     let lower = val.to_lowercase();
-    let (amt_str, unit_str) = {
-        let idx = lower.find(|c: char| !c.is_numeric())?;
-        lower.split_at(idx)
-    };
-    if let Ok(n) = amt_str.parse::<u32>()
-        && let Some(ExactToken::Unit(u)) = lex.exact.get(unit_str)
-    {
-        return Some(minutes_for(n, u.to_canonical()));
+    if lower.is_empty() {
+        return None;
     }
-    None
+    let mut rest = lower.as_str();
+    let mut total: u32 = 0;
+    while !rest.is_empty() {
+        let (amt_str, unit_str) = {
+            let idx = rest.find(|c: char| !c.is_numeric())?;
+            rest.split_at(idx)
+        };
+        let unit_end = unit_str
+            .find(|c: char| c.is_numeric())
+            .unwrap_or(unit_str.len());
+        let (unit, tail) = unit_str.split_at(unit_end);
+        let amt = amt_str.parse::<u32>().ok()?;
+        let Some(ExactToken::Unit(u)) = lex.exact.get(unit) else {
+            return None;
+        };
+        total = total.saturating_add(minutes_for(amt, u.to_canonical()));
+        rest = tail;
+    }
+    Some(total)
 }
 
 pub fn parse_duration_range(val: &str) -> Option<(u32, Option<u32>)> {
@@ -3118,21 +3133,34 @@ pub fn apply_smart_input(
                 || clean_val.eq_ignore_ascii_case("next");
 
             if is_in && i + consumed < stream.len() {
-                let next_str = &stream[i + consumed];
-                let next_next = if i + consumed + 1 < stream.len() {
-                    Some(stream[i + consumed + 1].as_str())
-                } else {
-                    None
-                };
-
-                if let Some((amt, unit, extra)) =
-                    parse_amount_and_unit_with_lex(next_str, next_next, false, lex)
-                {
-                    let mins = minutes_for(amt, &unit);
+                // Greedily consume consecutive duration tokens so compound
+                // reminders like `rem:in 2h 20m` sum instead of leaking the
+                // tail into the summary.
+                let mut mins: u32 = 0;
+                let mut matched = false;
+                let mut idx = i + consumed;
+                while idx < stream.len() {
+                    let cur = stream[idx].as_str();
+                    let next = stream.get(idx + 1).map(|s| s.as_str());
+                    if let Some(d) = parse_duration_with_lex(cur, lex) {
+                        mins = mins.saturating_add(d);
+                        idx += 1;
+                        matched = true;
+                    } else if let Some((amt, unit, extra)) =
+                        parse_amount_and_unit_with_lex(cur, next, false, lex)
+                    {
+                        mins = mins.saturating_add(minutes_for(amt, &unit));
+                        idx += 1 + extra;
+                        matched = true;
+                    } else {
+                        break;
+                    }
+                }
+                if matched {
                     let now = Local::now();
                     let target = now + Duration::minutes(mins as i64);
                     pending_alarms.push(PendingAlarm::Absolute(target.with_timezone(&Utc)));
-                    consumed += 1 + extra;
+                    consumed = idx - i;
                 } else if !is_bg {
                     summary_words.push(unescape(token));
                 }
@@ -3157,7 +3185,19 @@ pub fn apply_smart_input(
                 }
             } else if !clean_val.is_empty() {
                 if let Some(d) = parse_duration_with_lex(clean_val, lex) {
-                    pending_alarms.push(PendingAlarm::Relative(d));
+                    // Consume following duration tokens so `rem:2h 20m` sums
+                    // into one reminder instead of leaking into the summary.
+                    let mut total = d;
+                    let mut idx = i + consumed;
+                    while let Some(d) = stream
+                        .get(idx)
+                        .and_then(|s| parse_duration_with_lex(s, lex))
+                    {
+                        total = total.saturating_add(d);
+                        consumed += 1;
+                        idx += 1;
+                    }
+                    pending_alarms.push(PendingAlarm::Relative(total));
                 } else if let Some(t) = parse_time_string(clean_val) {
                     pending_alarms.push(PendingAlarm::TimeOnly(t));
                 } else if let Some(d) = parse_smart_date_with_lex(clean_val, lex)
@@ -3732,7 +3772,18 @@ pub fn apply_smart_input(
 
     for pending in pending_alarms {
         match pending {
-            PendingAlarm::Relative(mins) => task.alarms.push(Alarm::new_relative(mins)),
+            PendingAlarm::Relative(mins) => {
+                if task.due.is_some() || task.dtstart.is_some() {
+                    task.alarms.push(Alarm::new_relative(mins));
+                } else {
+                    // A relative alarm with no due/start to anchor to never
+                    // fires; fall back to an absolute reminder from now.
+                    let now = Local::now();
+                    let target = now + Duration::minutes(mins as i64);
+                    task.alarms
+                        .push(Alarm::new_absolute(target.with_timezone(&Utc)));
+                }
+            }
             PendingAlarm::Absolute(dt) => task.alarms.push(Alarm::new_absolute(dt)),
             PendingAlarm::TimeOnly(t) => {
                 let anchor_date = task

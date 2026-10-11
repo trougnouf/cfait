@@ -90,7 +90,7 @@ Reference resolution (`dep:`/`rel:`/`parent:`): fuzzy references resolve within 
 | `geo:` | Geo-coordinates. | `geo:50.1,4.2`, `geo:here` (Mobile: Fetches GPS) |
 | `- ` or `is:note` | Mark task as a note/header (hides checkbox). On journal pages, `is:note` is the explicit note marker in the page line (a plain `is:page` line is a standard page). | `- Pantry`, `is:note` |
 | `desc:` | Append text to the description. | `desc:"Buy milk"` or `desc:{...}` |
-| `rem:` | Reminder / Alarm. | `rem:10m`, `rem:in 1h`, `rem:8pm`, `rem:next friday` |
+| `rem:` | Reminder / Alarm. | `rem:10m`, `rem:in 2h20m`, `rem:8pm`, `rem:next friday` |
 | `done:` | Mark completed / Set percentage. | `done:now`, `done:yesterday`, `done:50%` |
 | `spent:` | Log time spent manually. | `spent:1h` |
 | `rec:` or `@` | Recurrence (`RRULE`). | `@daily`, `rec:every 2 weeks` |
@@ -107,6 +107,8 @@ Reference resolution (`dep:`/`rel:`/`parent:`): fuzzy references resolve within 
 *Rules:* 
 * Double prefixes (`##tag`, `@@@loc`) apply metadata but *keep* the word in the display title.
 * Use `\` to escape special characters (e.g., `\#not-a-tag`).
+* **Durations** accept compound forms wherever a duration is parsed (`rem:`, `~`, `spent:`, `goal:`, snooze input): every segment carries an explicit unit and segments sum (`2h20m` = 140 minutes, `~1h30m-2h`). Segments without a trailing unit (`2h20`) and clock-time lookalikes (`2:20h`) are rejected.
+* **Reminder anchoring:** `rem:in <duration>` counts from now (absolute). `rem:<duration>` counts backwards from the task's due/start date; if the task has no due/start date it falls back to an absolute reminder from now. `rem:<clock time>` (e.g. `rem:2:20`, `rem:8am`) fires at that time on the due/start date, or today/tomorrow when the task has no date.
 
 ### 2.2. Aliases (Macros)
 Users can define reusable shortcuts that physically expand into multiple tags, locations, or priorities.

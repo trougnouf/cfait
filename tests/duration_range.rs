@@ -512,3 +512,48 @@ fn test_format_duration_short_none() {
 
     assert_eq!(formatted, "");
 }
+
+// ============================================================================
+// PARSER TESTS: Compound durations
+// ============================================================================
+
+#[test]
+fn test_parse_duration_compound() {
+    // Every segment carries an explicit unit; segments sum.
+    assert_eq!(cfait::model::parser::parse_duration("2h20m"), Some(140));
+    assert_eq!(cfait::model::parser::parse_duration("1h30m"), Some(90));
+    assert_eq!(cfait::model::parser::parse_duration("1d2h30m"), Some(1590));
+    assert_eq!(cfait::model::parser::parse_duration("1h0m"), Some(60));
+    // Single-unit forms are unchanged
+    assert_eq!(cfait::model::parser::parse_duration("30m"), Some(30));
+    assert_eq!(cfait::model::parser::parse_duration("2h"), Some(120));
+}
+
+#[test]
+fn test_parse_duration_compound_requires_units() {
+    // Bare trailing minutes and clock-time lookalikes are rejected
+    assert_eq!(cfait::model::parser::parse_duration("2h20"), None);
+    assert_eq!(cfait::model::parser::parse_duration("2:20h"), None);
+    assert_eq!(cfait::model::parser::parse_duration("2:20"), None);
+    assert_eq!(cfait::model::parser::parse_duration("h20m"), None);
+    assert_eq!(cfait::model::parser::parse_duration("2h 20m"), None);
+}
+
+#[test]
+fn test_parse_duration_range_compound() {
+    // Compound durations inside ranges
+    assert_eq!(parse_duration_range("1h30m-2h"), Some((90, Some(120))));
+    assert_eq!(parse_duration_range("2h-2h30m"), Some((120, Some(150))));
+}
+
+#[test]
+fn test_est_compound_duration() {
+    // ~1h30m sets a compound estimated duration
+    let t = parse("Water the tomatoes ~1h30m");
+    assert_eq!(t.estimated_duration, Some(90));
+    assert_eq!(t.estimated_duration_max, None);
+
+    // Spent time also accepts compound durations
+    let t = parse("Water the tomatoes spent:1h30m");
+    assert_eq!(t.time_spent_seconds, 90 * 60);
+}

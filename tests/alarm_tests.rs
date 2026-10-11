@@ -89,20 +89,140 @@ fn test_reminder_absolute() {
 }
 
 #[test]
-fn test_reminder_no_anchor_ignored() {
-    // Relative reminder on a task with no date at all -> no anchor, never fires
+fn test_reminder_no_anchor_falls_back_to_absolute() {
+    // Relative reminder on a task with no date at all: a relative trigger
+    // would have no anchor and never fire, so the parser falls back to an
+    // absolute reminder counted from now (like `rem:in`).
+    let before = Local::now();
     let t = Task::new("Vague Task rem:10m", &mock_aliases(), None);
+    let after = Local::now();
 
-    // It is parsed into the list...
     assert_eq!(t.alarms.len(), 1);
+    match t.alarms[0].trigger {
+        AlarmTrigger::Absolute(dt) => {
+            let target = dt.with_timezone(&Local);
+            assert!(target >= before + Duration::minutes(10));
+            assert!(target <= after + Duration::minutes(10));
+        }
+        _ => panic!("Expected absolute trigger fallback"),
+    }
+}
 
-    // ...but next_trigger_timestamp should ignore it because there is no anchor
-    let default_time = NaiveTime::from_hms_opt(9, 0, 0).unwrap();
-    let ts = t.next_trigger_timestamp(default_time);
+#[test]
+fn test_reminder_compound_relative() {
+    // rem:2h20m on a dated task stays relative: 140 minutes before the due date
+    let t = Task::new("Deadline @15:00 rem:2h20m", &mock_aliases(), None);
+    assert_eq!(t.alarms.len(), 1);
+    match t.alarms[0].trigger {
+        AlarmTrigger::Relative(mins) => assert_eq!(mins, -140),
+        _ => panic!("Expected relative trigger"),
+    }
+}
+
+#[test]
+fn test_reminder_compound_in_absolute() {
+    // rem:in 2h20m counts from now, compact compound form
+    let before = Local::now();
+    let t = Task::new("Water the basil rem:in 2h20m", &mock_aliases(), None);
+    let after = Local::now();
+
+    assert_eq!(t.alarms.len(), 1);
+    match t.alarms[0].trigger {
+        AlarmTrigger::Absolute(dt) => {
+            let target = dt.with_timezone(&Local);
+            assert!(target >= before + Duration::minutes(140));
+            assert!(target <= after + Duration::minutes(140));
+        }
+        _ => panic!("Expected absolute trigger"),
+    }
+}
+
+#[test]
+fn test_reminder_compound_spaced_in() {
+    // Spaced compound segments must be consumed, not leaked into the summary
+    let before = Local::now();
+    let t = Task::new("Water the basil rem:in 2h 20m", &mock_aliases(), None);
+    let after = Local::now();
+
+    assert_eq!(t.alarms.len(), 1);
     assert!(
-        ts.is_none(),
-        "Should not trigger relative alarm on a task with no date"
+        !t.summary.contains("20m"),
+        "duration tail leaked into title"
     );
+    match t.alarms[0].trigger {
+        AlarmTrigger::Absolute(dt) => {
+            let target = dt.with_timezone(&Local);
+            assert!(target >= before + Duration::minutes(140));
+            assert!(target <= after + Duration::minutes(140));
+        }
+        _ => panic!("Expected absolute trigger"),
+    }
+}
+
+#[test]
+fn test_reminder_compound_spaced_relative() {
+    // Spaced compound segments in the bare form sum into the relative reminder
+    let t = Task::new("Deadline @15:00 rem:2h 20m", &mock_aliases(), None);
+    assert_eq!(t.alarms.len(), 1);
+    assert!(
+        !t.summary.contains("20m"),
+        "duration tail leaked into title"
+    );
+    match t.alarms[0].trigger {
+        AlarmTrigger::Relative(mins) => assert_eq!(mins, -140),
+        _ => panic!("Expected relative trigger"),
+    }
+}
+
+#[test]
+fn test_reminder_compound_english_words() {
+    // English word units across spaced tokens
+    let before = Local::now();
+    let t = Task::new(
+        "Water the basil rem:in 1 hour 30 minutes",
+        &mock_aliases(),
+        None,
+    );
+    let after = Local::now();
+
+    assert_eq!(t.alarms.len(), 1);
+    assert!(
+        !t.summary.contains("30") && !t.summary.contains("minutes"),
+        "duration tail leaked into title"
+    );
+    match t.alarms[0].trigger {
+        AlarmTrigger::Absolute(dt) => {
+            let target = dt.with_timezone(&Local);
+            assert!(target >= before + Duration::minutes(90));
+            assert!(target <= after + Duration::minutes(90));
+        }
+        _ => panic!("Expected absolute trigger"),
+    }
+}
+
+#[test]
+fn test_reminder_clock_time_stays_time() {
+    // rem:2:20 is a clock-time reminder (2:20 AM), not a 140-minute duration
+    let t = Task::new("Vague Task rem:2:20", &mock_aliases(), None);
+    assert_eq!(t.alarms.len(), 1);
+    match t.alarms[0].trigger {
+        AlarmTrigger::Absolute(dt) => {
+            let local = dt.with_timezone(&Local);
+            assert_eq!(local.hour(), 2);
+            assert_eq!(local.minute(), 20);
+        }
+        _ => panic!("Expected absolute clock-time trigger"),
+    }
+}
+
+#[test]
+fn test_reminder_compound_requires_units() {
+    // Bare trailing minutes (2h20) and the clock-time lookalike (2:20h) are
+    // rejected: they stay in the title and create no reminder.
+    for input in ["Call mom rem:2h20", "Call mom rem:2:20h"] {
+        let t = Task::new(input, &mock_aliases(), None);
+        assert!(t.alarms.is_empty(), "{input:?} should not create an alarm");
+    }
 }
 
 #[test]
