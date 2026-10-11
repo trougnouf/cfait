@@ -72,36 +72,50 @@ fn parse_inline_elements(
     let elements = crate::model::parser::parse_inline_markdown(text);
 
     for el in elements {
-        let (txt, style) = match el {
-            crate::model::parser::InlineElement::Text(s) => (s, base_style),
-            crate::model::parser::InlineElement::Bold { inner, raw } => (
+        let styled = match el {
+            crate::model::parser::InlineElement::UidComment { raw } => {
+                if !strip_markers {
+                    spans.push(Span::styled(
+                        raw.to_string(),
+                        Style::default()
+                            .fg(Color::DarkGray)
+                            .add_modifier(Modifier::ITALIC),
+                    ));
+                }
+                None
+            }
+            crate::model::parser::InlineElement::Text(s) => Some((s, base_style)),
+            crate::model::parser::InlineElement::Bold { inner, raw } => Some((
                 if strip_markers { inner } else { raw },
                 base_style.add_modifier(Modifier::BOLD),
-            ),
-            crate::model::parser::InlineElement::Italic { inner, raw } => (
+            )),
+            crate::model::parser::InlineElement::Italic { inner, raw } => Some((
                 if strip_markers { inner } else { raw },
                 base_style.add_modifier(Modifier::ITALIC),
-            ),
-            crate::model::parser::InlineElement::Strikethrough { inner, raw } => (
+            )),
+            crate::model::parser::InlineElement::Strikethrough { inner, raw } => Some((
                 if strip_markers { inner } else { raw },
                 base_style.add_modifier(Modifier::CROSSED_OUT),
-            ),
-            crate::model::parser::InlineElement::Code { inner, raw } => (
+            )),
+            crate::model::parser::InlineElement::Code { inner, raw } => Some((
                 if strip_markers { inner } else { raw },
                 Style::default().fg(if is_dark_theme {
                     Color::Yellow
                 } else {
                     Color::Rgb(150, 100, 0)
                 }),
-            ),
-            crate::model::parser::InlineElement::Link { text, raw, .. } => (
+            )),
+            crate::model::parser::InlineElement::Link { text, raw, .. } => Some((
                 if strip_markers { text } else { raw },
                 Style::default().fg(if is_dark_theme {
                     Color::Cyan
                 } else {
                     Color::Blue
                 }),
-            ),
+            )),
+        };
+        let Some((txt, style)) = styled else {
+            continue;
         };
         push_highlighted_spans_tui(&mut spans, txt, style, highlight_regex);
     }

@@ -67,6 +67,7 @@ pub fn parse_inline_markdown(
 
     for el in elements {
         let (text, mut sp) = match el {
+            crate::model::parser::InlineElement::UidComment { .. } => continue,
             crate::model::parser::InlineElement::Text(s) => {
                 (s, span(String::new()).color(base_color))
             }

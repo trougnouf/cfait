@@ -46,6 +46,42 @@ fn mailto() {
     );
 }
 
+#[test]
+fn uid_comment_is_its_own_element() {
+    let els = parse_inline_markdown(
+        "Build the raised bed col:wl <!-- uid:112b78da-c0eb-4b0d-a710-7f4649374034 -->",
+    );
+    assert_eq!(
+        els,
+        vec![
+            InlineElement::Text("Build the raised bed col:wl "),
+            InlineElement::UidComment {
+                raw: "<!-- uid:112b78da-c0eb-4b0d-a710-7f4649374034 -->"
+            },
+        ]
+    );
+}
+
+#[test]
+fn uid_comment_keeps_following_elements() {
+    let els = parse_inline_markdown("plan <!-- uid:abc-123 --> then visit https://example.com");
+    assert_eq!(
+        els,
+        vec![
+            InlineElement::Text("plan "),
+            InlineElement::UidComment {
+                raw: "<!-- uid:abc-123 -->"
+            },
+            InlineElement::Text(" then visit "),
+            InlineElement::Link {
+                text: "https://example.com",
+                url: "https://example.com",
+                raw: "https://example.com",
+            },
+        ]
+    );
+}
+
 fn task_with(description: &str, url: Option<&str>) -> Task {
     let mut t = Task::new("Water the herbs", &HashMap::new(), None);
     t.description = description.to_string();

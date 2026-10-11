@@ -4111,6 +4111,11 @@ pub enum InlineElement<'a> {
         url: &'a str,
         raw: &'a str,
     },
+    /// A `<!-- uid:... -->` round-trip marker. Renderers dim it in raw
+    /// editors and hide it in clean views.
+    UidComment {
+        raw: &'a str,
+    },
 }
 
 pub fn parse_inline_markdown(text_str: &str) -> Vec<InlineElement<'_>> {
@@ -4236,6 +4241,7 @@ pub fn parse_inline_markdown(text_str: &str) -> Vec<InlineElement<'_>> {
             let inner_chunk = &text_str[abs_start + start_len..abs_end - end_len];
 
             if start_marker == "<!-- uid:" {
+                spans.push(InlineElement::UidComment { raw: chunk });
                 current_idx = abs_end;
                 continue;
             }

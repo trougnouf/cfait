@@ -430,6 +430,7 @@ impl Highlighter for MarkdownHighlighter {
                 InlineElement::Strikethrough { raw: r, .. } => (*r, false),
                 InlineElement::Code { raw: r, .. } => (*r, false),
                 InlineElement::Link { raw: r, .. } => (*r, false),
+                InlineElement::UidComment { raw: r } => (*r, false),
             };
 
             if is_plain {
@@ -468,6 +469,10 @@ impl Highlighter for MarkdownHighlighter {
                             weight: iced::font::Weight::Bold,
                             ..Default::default()
                         });
+                    }
+                    InlineElement::UidComment { .. } => {
+                        format.color = dim_color;
+                        format.font = Some(italic_font());
                     }
                     _ => {}
                 }
