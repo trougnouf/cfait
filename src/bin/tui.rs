@@ -172,12 +172,6 @@ async fn apply_markdown_update(
             .map(|t| t.is_journal)
             .unwrap_or(false);
         let mut task = store.get_task_ref(full_uid).unwrap().clone();
-        let (clean_desc, extracted) = cfait::model::extractor::extract_markdown_tasks(
-            description,
-            is_journal,
-            &mut task.inline_media,
-        );
-        task.description = clean_desc.to_string();
         task.apply_smart_input(smart_input, &config.tag_aliases, def_time);
 
         warnings.extend(store.resolve_dependencies(&mut task));
@@ -186,53 +180,26 @@ async fn apply_markdown_update(
         actions.push(cfait::journal::Action::Update(task.clone()));
         store.update_or_add_task(task.clone());
 
-        let mut resolved_props = std::collections::HashMap::new();
-        resolved_props.insert(
-            full_uid.to_string(),
-            (
-                task.categories.clone(),
-                task.locations.clone(),
-                task.priority,
-            ),
-        );
-
-        for ext in extracted {
-            let mut sub = cfait::model::Task::new(&ext.raw_text, &config.tag_aliases, def_time);
-            sub.uid = ext.uid;
-            let p_uid_str = ext
-                .parent_uid
-                .clone()
-                .unwrap_or_else(|| full_uid.to_string());
-            if let Some((p_cats, p_loc, p_prio)) = resolved_props.get(&p_uid_str) {
-                sub.inherit_properties(p_cats, p_loc, *p_prio);
+        // The buffer below the first line is the serialized subtree minus
+        // the root line (see the editor content builder): reconcile it as a
+        // tree so shadow-bound children update in place instead of
+        // duplicating, and deleted lines soft-delete.
+        let mut cals = cfait::cache::Cache::load_calendars(ctx.as_ref()).unwrap_or_default();
+        if let Ok(locals) = cfait::storage::LocalCalendarRegistry::load(ctx.as_ref()) {
+            cals.extend(locals);
+        }
+        let sync_options = cfait::store::SyncTreeOptions {
+            aliases: &config.tag_aliases,
+            default_reminder_time: def_time,
+            trash_retention_days: config.trash_retention_days,
+            calendars: &cals,
+        };
+        match store.sync_tree_from_markdown(full_uid, description, &sync_options, is_journal) {
+            Ok((tree_actions, tree_warnings, _mints)) => {
+                actions.extend(tree_actions);
+                warnings.extend(tree_warnings);
             }
-            resolved_props.insert(
-                sub.uid.clone(),
-                (sub.categories.clone(), sub.locations.clone(), sub.priority),
-            );
-
-            warnings.extend(store.resolve_dependencies(&mut sub));
-            if !ext.description.is_empty() {
-                if sub.description.is_empty() {
-                    sub.description = ext.description;
-                } else {
-                    sub.description
-                        .push_str(&format!("\n\n{}", ext.description));
-                }
-            }
-            sub.inline_media = ext.inline_media;
-
-            sub.apply_extracted_status(ext.status);
-
-            sub.parent_uid = Some(p_uid_str);
-            sub.dependencies.extend(ext.dependencies);
-            sub.dependencies.sort();
-            sub.dependencies.dedup();
-            sub.calendar_href = task.calendar_href.clone();
-            sub.percent_complete = ext.percent_complete;
-            sub.is_note = ext.is_note;
-            store.add_task(sub.clone());
-            actions.push(cfait::journal::Action::Create(sub));
+            Err(e) => return Err(e),
         }
     }
     Ok((actions, warnings))
@@ -1475,9 +1442,18 @@ async fn main() -> Result<()> {
             } else {
                 let task = store.get_task_ref(&full_uid).unwrap();
                 let mut content = task.to_smart_string();
-                if !task.description.is_empty() {
+                // The subtree minus the root line: child shadows render
+                // inline, and the save re-binds what the user saw.
+                let mut cals =
+                    cfait::cache::Cache::load_calendars(ctx.as_ref()).unwrap_or_default();
+                if let Ok(locals) = cfait::storage::LocalCalendarRegistry::load(ctx.as_ref()) {
+                    cals.extend(locals);
+                }
+                let desc_md =
+                    cfait::model::extractor::serialize_merged_description(&store, &full_uid, &cals);
+                if !desc_md.is_empty() {
                     content.push_str("\n\n");
-                    content.push_str(&task.description);
+                    content.push_str(&desc_md);
                 }
                 content
             };

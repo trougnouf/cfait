@@ -126,10 +126,14 @@ fn typing_a_checkbox_line_across_debounced_saves() {
         subtasks.iter().map(|t| &t.summary).collect::<Vec<_>>()
     );
     assert_eq!(subtasks[0].summary, "Buy milk");
-    assert_eq!(
-        store.get_task_ref("root-1").unwrap().description.trim(),
-        "Woke up early.",
-        "plain text must stay in the daily note's description"
+    let desc = store.get_task_ref("root-1").unwrap().description.clone();
+    assert!(
+        desc.lines().any(|l| l.trim() == "Woke up early."),
+        "plain text must stay in the daily note's description: {desc}"
+    );
+    assert!(
+        desc.contains(&format!("<!-- uid:{} -->", subtasks[0].uid)),
+        "the subtask's shadow line must pin its position: {desc}"
     );
     assert!(
         trashed_tasks(&store).is_empty(),

@@ -633,8 +633,19 @@ fn test_extract_markdown_tasks_full() {
     let (root_desc, tasks) =
         cfait::model::extract_markdown_tasks(input, false, &mut std::collections::HashMap::new());
 
-    assert_eq!(root_desc, "Root description.");
+    assert_eq!(root_desc.lines().next().unwrap(), "Root description.");
     assert_eq!(tasks.len(), 4);
+
+    // Each extracted task leaves a shadow line in the parent description,
+    // pinning where it renders back.
+    for (i, t) in tasks.iter().enumerate() {
+        assert!(
+            root_desc
+                .lines()
+                .any(|l| l.contains(&format!("<!-- uid:{} -->", t.uid))),
+            "shadow line for extracted task {i} missing: {root_desc}"
+        );
+    }
 
     assert_eq!(tasks[0].raw_text, "Subtask 1");
     assert_eq!(tasks[0].status, cfait::model::TaskStatus::NeedsAction);
@@ -1418,8 +1429,21 @@ fn test_tree_sync_preserves_paused_percent() {
         "an unchanged paused task must not be re-saved"
     );
     assert!(
-        actions.is_empty(),
-        "no journal actions expected for an unchanged tree"
+        actions
+            .iter()
+            .all(|a| matches!(a, cfait::journal::Action::Update(t) if t.uid == "root-1")),
+        "only the root's shadow line may be recorded: {actions:?}"
+    );
+
+    // Once the shadow line is recorded, the round-trip is action-free.
+    let markdown2 = cfait::model::extractor::serialize_task_tree(&store, "root-1", &[], false);
+    let (actions2, warnings2, _mints2) = store
+        .sync_tree_from_markdown("root-1", &markdown2, &options, false)
+        .expect("tree sync should succeed");
+    assert!(warnings2.is_empty());
+    assert!(
+        actions2.is_empty(),
+        "no journal actions expected for an unchanged tree: {actions2:?}"
     );
 }
 

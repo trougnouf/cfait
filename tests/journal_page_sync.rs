@@ -88,21 +88,39 @@ fn journal_page_roundtrip_is_idempotent() {
     assert!(md.contains("Water the tomatoes"));
     assert!(md.contains("Tomatoes"));
 
+    // The first save records the sub-page's shadow line in the description
+    // so it renders exactly where it sits; the second is a no-op.
     let (actions, warnings, _mints) = store
         .sync_tree_from_markdown("page-1", &md, &opts, true)
         .unwrap();
     assert!(warnings.is_empty());
     assert!(
-        actions.is_empty(),
-        "an unchanged journal page must produce no actions: {actions:?}"
+        actions
+            .iter()
+            .any(|a| matches!(a, cfait::journal::Action::Update(t) if t.uid == "page-1")),
+        "the shadow line must be recorded in the description: {actions:?}"
     );
 
     let page_after = store.get_task_ref("page-1").unwrap();
     assert_eq!(
         page_after.description,
-        "This week in the garden:\n- Water the tomatoes\n- Deadhead the roses"
+        "This week in the garden:\n- Water the tomatoes\n- Deadhead the roses\n- Tomatoes is:page <!-- uid:page-2 -->"
     );
     assert_eq!(children_of(&store, "page-1").len(), 1);
+
+    let md2 = cfait::model::extractor::serialize_task_tree(&store, "page-1", &cals, true);
+    assert_eq!(
+        md2, md,
+        "the serialized tree must be stable once the shadow is recorded:\n{md2}"
+    );
+    let (actions2, warnings2, _mints2) = store
+        .sync_tree_from_markdown("page-1", &md2, &opts, true)
+        .unwrap();
+    assert!(warnings2.is_empty());
+    assert!(
+        actions2.is_empty(),
+        "an unchanged journal page must produce no actions: {actions2:?}"
+    );
 }
 
 #[test]
@@ -299,14 +317,21 @@ fn journal_note_token_round_trips_through_sync() {
         "the list marker must not double up: {line}"
     );
 
-    // Re-saving the identical tree is a no-op.
-    let (actions, warnings, _mints) = store
+    // Re-saving the identical tree first records the sub-page's shadow
+    // line, then settles: the second round-trip is a no-op.
+    let (_actions, warnings, _mints) = store
         .sync_tree_from_markdown("page-1", &md, &opts, true)
         .unwrap();
     assert!(warnings.is_empty());
+    let md2 = cfait::model::extractor::serialize_task_tree(&store, "page-1", &cals, true);
+    assert_eq!(md2, md, "the serialized tree must be stable:\n{md2}");
+    let (actions2, warnings2, _mints2) = store
+        .sync_tree_from_markdown("page-1", &md2, &opts, true)
+        .unwrap();
+    assert!(warnings2.is_empty());
     assert!(
-        actions.is_empty(),
-        "a no-op round-trip of a journal note must produce no actions: {actions:?}"
+        actions2.is_empty(),
+        "a no-op round-trip of a journal note must produce no actions: {actions2:?}"
     );
     assert!(
         store.get_task_ref("page-2").unwrap().is_note,

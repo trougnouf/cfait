@@ -685,13 +685,20 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::EditTaskStart(index) => {
             let data = app
                 .get_task_at_index(index)
-                .map(|t| (t.uid.clone(), t.to_smart_string(), t.description.clone()));
-            if let Some((task_uid, task_summary, task_description)) = data {
+                .map(|t| (t.uid.clone(), t.to_smart_string()));
+            if let Some((task_uid, task_summary)) = data {
                 app.input_value = text_editor::Content::with_text(&task_summary);
                 app.input_value
                     .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
 
-                app.description_value = text_editor::Content::with_text(&task_description);
+                // The subtree minus the root line: a save re-binds what the
+                // user saw (child shadows render inline).
+                let desc_md = crate::model::extractor::serialize_merged_description(
+                    &app.store,
+                    &task_uid,
+                    &app.calendars,
+                );
+                app.description_value = text_editor::Content::with_text(&desc_md);
 
                 app.input_history.clear();
                 app.desc_history.clear();
@@ -1870,13 +1877,6 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
             app.edit_generation = app.edit_generation.wrapping_add(1);
             let old_href = task_ref.calendar_href.clone();
             let mut task = task_ref.clone();
-            let (cleaned_desc, extracted_subtasks) =
-                crate::model::extractor::extract_markdown_tasks(
-                    &desc_text,
-                    is_journal,
-                    &mut task.inline_media,
-                );
-            task.description = cleaned_desc.clone();
             task.apply_smart_input(&clean_input, &app.tag_aliases, config_time);
 
             let warnings = app
@@ -1901,7 +1901,6 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                 app.editor_maximized = false;
             } else {
                 app.input_value = text_editor::Content::with_text(&clean_input);
-                app.description_value = text_editor::Content::with_text(&cleaned_desc);
             }
             app.selected_uid = Some(task_copy.uid.clone());
 
@@ -1914,61 +1913,40 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
             }
             actions.push(crate::journal::Action::Update(task_copy.clone()));
 
-            let mut resolved_props = std::collections::HashMap::new();
-            resolved_props.insert(
-                edit_uid.clone(),
-                (
-                    task_copy.categories.clone(),
-                    task_copy.locations.clone(),
-                    task_copy.priority,
-                ),
-            );
-
-            for ext in extracted_subtasks {
-                let mut sub = TodoTask::new(&ext.raw_text, &app.tag_aliases, config_time);
-                sub.uid = ext.uid;
-
-                let p_uid_str = ext.parent_uid.clone().unwrap_or_else(|| edit_uid.clone());
-                if let Some((p_cats, p_loc, p_prio)) = resolved_props.get(&p_uid_str) {
-                    sub.inherit_properties(p_cats, p_loc, *p_prio);
+            // The description editor holds the serialized subtree minus the
+            // root line (see EditTaskStart): reconcile it as a tree so
+            // shadow-bound children update in place instead of duplicating,
+            // and deleted lines soft-delete.
+            let sync_options = crate::store::SyncTreeOptions {
+                aliases: &app.tag_aliases,
+                default_reminder_time: config_time,
+                trash_retention_days: app.core_config.trash_retention_days,
+                calendars: &app.calendars,
+            };
+            match app.store.sync_tree_from_markdown(
+                &edit_uid,
+                &desc_text,
+                &sync_options,
+                is_journal,
+            ) {
+                Ok((tree_actions, warnings, mints)) => {
+                    handle_dependency_warnings(app, warnings);
+                    actions.extend(tree_actions);
+                    if keep_editing && !mints.is_empty() {
+                        // Re-tag the lines this sync minted so the next save
+                        // matches them by uid; the cursor keeps its position.
+                        let cursor_pos = app.description_value.cursor().position;
+                        let retagged = crate::model::extractor::inject_uid_tags(&desc_text, &mints);
+                        app.description_value = text_editor::Content::with_text(&retagged);
+                        app.description_value.move_to(text_editor::Cursor {
+                            position: cursor_pos,
+                            selection: None,
+                        });
+                    }
                 }
-                resolved_props.insert(
-                    sub.uid.clone(),
-                    (sub.categories.clone(), sub.locations.clone(), sub.priority),
-                );
-
-                let warnings = app
-                    .store
-                    .resolve_dependencies_scoped(&mut sub, &app.visible_calendar_hrefs());
-                handle_dependency_warnings(app, warnings);
-
-                append_description(&mut sub.description, &ext.description);
-                sub.inline_media = ext.inline_media.clone();
-
-                sub.apply_extracted_status(ext.status);
-
-                sub.parent_uid = Some(ext.parent_uid.unwrap_or(edit_uid.clone()));
-                sub.dependencies.extend(ext.dependencies);
-                sub.dependencies.sort();
-                sub.dependencies.dedup();
-                if let Some(target) = sub.target_collection.take() {
-                    sub.calendar_href =
-                        crate::model::resolve_collection(&target, &app.calendars, &new_href);
-                } else {
-                    sub.calendar_href = new_href.clone();
+                Err(e) => {
+                    app.error_msg = Some(e);
                 }
-                if let Some(pc) = ext.percent_complete {
-                    sub.percent_complete = Some(pc);
-                }
-                // Journal components are never serialized with a checkbox, so
-                // `ext.is_note` is noise for them; `Task::new` already derived
-                // the note state from the explicit `is:note` token.
-                if !sub.is_journal {
-                    sub.is_note = ext.is_note;
-                }
-
-                app.store.add_task(sub.clone());
-                actions.push(crate::journal::Action::Create(sub));
             }
 
             refresh_filtered_tasks(app);
@@ -2007,6 +1985,13 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
         }
 
         append_description(&mut new_task.description, &cleaned_desc);
+        // Pasted lines may carry the uid tags of unrelated existing tasks:
+        // re-mint them so the new tree is a copy, never a hijack.
+        let extracted_subtasks = crate::model::extractor::remint_existing_uids(
+            &app.store,
+            &mut new_task.description,
+            extracted_subtasks,
+        );
 
         let parent = if let Some(parent_uid) = &app.creating_child_of {
             app.store.get_task_ref(parent_uid).cloned()

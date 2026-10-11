@@ -511,7 +511,8 @@ pub fn view_task_row<'a>(
                 container(row_content).width(Length::Shrink).into()
             };
 
-            let has_desc = !task.description.is_empty();
+            let has_desc =
+                !crate::model::extractor::description_prose(&task.description).is_empty();
             let has_valid_parent = task.parent_uid.as_ref().is_some_and(|uid| !uid.is_empty());
             let has_deps = !task.dependencies.is_empty();
             let has_related = !task.related_to.is_empty();
@@ -1394,7 +1395,8 @@ pub fn view_task_row<'a>(
             let mut details_col = column![].spacing(5);
 
             if has_content_to_show && is_expanded {
-                if !task.description.is_empty() {
+                let task_desc_prose = crate::model::extractor::description_prose(&task.description);
+                if !task_desc_prose.is_empty() {
                     let mut desc_col = column![].spacing(4);
                     let base_text_color = if is_dark_theme {
                         Color::from_rgb(0.7, 0.7, 0.7)
@@ -1420,7 +1422,7 @@ pub fn view_task_row<'a>(
                         };
                     }
 
-                    for line in task.description.lines() {
+                    for line in task_desc_prose.lines() {
                         let trimmed = line.trim_start();
 
                         let is_fence = trimmed.starts_with("```");

@@ -1138,6 +1138,14 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
 }
 
 fn task_to_summary(t: &Task, subtree_time: &HashMap<String, u64>) -> MobileTaskSummary {
+    // Prose-only view for previews: child shadow lines stay in the
+    // description to pin positions but read as uid-tagged noise in rows.
+    let prose_desc = if t.description.is_empty() {
+        String::new()
+    } else {
+        crate::model::extractor::description_prose(&t.description)
+    };
+
     let status_str = format!("{:?}", t.status);
 
     let (due_iso, due_allday) = match &t.due {
@@ -1212,17 +1220,13 @@ fn task_to_summary(t: &Task, subtree_time: &HashMap<String, u64>) -> MobileTaskS
         is_recurring: t.rrule.is_some(),
         is_relative_recurrence: t.is_relative_recurrence(),
         parent_uid: t.parent_uid.clone(),
-        has_description: !t.description.is_empty(),
-        description_inline: if !t.description.is_empty() {
-            t.description
-                .lines()
-                .filter(|l| !l.trim().is_empty())
-                .take(3)
-                .collect::<Vec<&str>>()
-                .join("\n")
-        } else {
-            String::new()
-        },
+        has_description: !prose_desc.is_empty(),
+        description_inline: prose_desc
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .take(3)
+            .collect::<Vec<&str>>()
+            .join("\n"),
         has_related_to: !t.related_to.is_empty(),
         is_search_context: t.is_search_context,
         visible: true,
@@ -2415,7 +2419,14 @@ impl CfaitMobile {
         if let Some(task) = store.get_task_ref(&uid) {
             let mut cloned = task.clone();
             populate_transient(&mut cloned, &store, &config.tag_aliases);
-            Some(task_to_mobile(&cloned, &store))
+            let mut mobile = task_to_mobile(&cloned, &store);
+            // The description editor loads — and saves back — this field,
+            // so hand it the serialized subtree (child shadows render
+            // inline): a save then re-binds exactly what the user saw.
+            let cals = load_all_calendar_entries(self.ctx.as_ref());
+            mobile.description =
+                crate::model::extractor::serialize_merged_description(&store, &uid, &cals);
+            Some(mobile)
         } else {
             None
         }
@@ -3148,6 +3159,16 @@ impl CfaitMobile {
             }
         }
 
+        // Pasted lines may carry the uid tags of unrelated existing tasks:
+        // re-mint them so the new tree is a copy, never a hijack.
+        let store_guard = self.controller.store.lock().await;
+        let extracted_subtasks = crate::model::extractor::remint_existing_uids(
+            &store_guard,
+            &mut task.description,
+            extracted_subtasks,
+        );
+        drop(store_guard);
+
         self.resolve_task_calendar(&mut task, &config).await;
         let parent_href = task.calendar_href.clone();
 
@@ -3324,91 +3345,27 @@ impl CfaitMobile {
         let sub_calendars = mobile_calendars_to_model(&self.get_calendars());
 
         let mut store = self.controller.store.lock().await;
+        if store.get_task_ref(&uid).is_none() {
+            return Ok(());
+        }
         let is_journal = store
             .get_task_ref(&uid)
             .map(|t| t.is_journal)
             .unwrap_or(false);
-        let mut parent_media = store
-            .get_task_ref(&uid)
-            .map(|t| t.inline_media.clone())
-            .unwrap_or_default();
-        let (clean_desc, extracted) = crate::model::extractor::extract_markdown_tasks(
-            &description,
-            is_journal,
-            &mut parent_media,
-        );
 
-        let mut actions = Vec::new();
-        let mut resolved_props = std::collections::HashMap::new();
-
-        let parent_href = if let Some((task, _)) = store.get_task_mut(&uid) {
-            task.description = clean_desc;
-            task.inline_media = parent_media;
-            task.sequence += 1;
-            let href = task.calendar_href.clone();
-            resolved_props.insert(
-                uid.clone(),
-                (
-                    task.categories.clone(),
-                    task.locations.clone(),
-                    task.priority,
-                ),
-            );
-            actions.push(crate::journal::Action::Update(task.clone()));
-            href
-        } else {
-            return Ok(());
+        let sync_options = crate::store::SyncTreeOptions {
+            aliases: &config.tag_aliases,
+            default_reminder_time: def_time,
+            trash_retention_days: config.trash_retention_days,
+            calendars: &sub_calendars,
         };
-
-        for ext in extracted {
-            let mut sub = crate::model::Task::new(&ext.raw_text, &config.tag_aliases, def_time);
-            sub.uid = ext.uid;
-
-            let p_uid_str = ext.parent_uid.clone().unwrap_or_else(|| uid.clone());
-            if let Some((p_cats, p_loc, p_prio)) = resolved_props.get(&p_uid_str) {
-                sub.inherit_properties(p_cats, p_loc, *p_prio);
-            }
-            resolved_props.insert(
-                sub.uid.clone(),
-                (sub.categories.clone(), sub.locations.clone(), sub.priority),
-            );
-
-            if !ext.description.is_empty() {
-                if sub.description.is_empty() {
-                    sub.description = ext.description;
-                } else {
-                    sub.description
-                        .push_str(&format!("\n\n{}", ext.description));
-                }
-            }
-            sub.inline_media = ext.inline_media.clone();
-
-            sub.apply_extracted_status(ext.status);
-
-            sub.parent_uid = Some(ext.parent_uid.unwrap_or(uid.clone()));
-            sub.dependencies.extend(ext.dependencies);
-            sub.dependencies.sort();
-            sub.dependencies.dedup();
-            sub.calendar_href = if let Some(target) = sub.target_collection.take() {
-                crate::model::resolve_collection(&target, &sub_calendars, &parent_href)
-            } else {
-                parent_href.clone()
-            };
-            if let Some(pc) = ext.percent_complete {
-                sub.percent_complete = Some(pc);
-            }
-            // Journal components are never serialized with a checkbox, so
-            // `ext.is_note` is noise for them; `Task::new` already derived the
-            // note state from the explicit `is:note` token.
-            if !sub.is_journal {
-                sub.is_note = ext.is_note;
-            }
-
-            let _warnings = store.resolve_dependencies(&mut sub);
-
-            store.add_task(sub.clone());
-            actions.push(crate::journal::Action::Create(sub));
-        }
+        // The description editor holds the serialized subtree minus the
+        // root line (see get_task_by_uid): reconcile it as a tree so
+        // shadow-bound children update in place instead of duplicating,
+        // and deleted lines soft-delete.
+        let (actions, _warnings, _mints) = store
+            .sync_tree_from_markdown(&uid, &description, &sync_options, is_journal)
+            .map_err(MobileError::from)?;
 
         drop(store);
         if !actions.is_empty() {

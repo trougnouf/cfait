@@ -1540,9 +1540,11 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
                         let mut lines = vec![Line::from(spans)];
 
-                        if state.show_inline_descriptions && !t.description.is_empty() {
+                        let t_desc_prose =
+                            crate::model::extractor::description_prose(&t.description);
+                        if state.show_inline_descriptions && !t_desc_prose.is_empty() {
                             let mut line_count = 0;
-                            for desc_line in t.description.lines() {
+                            for desc_line in t_desc_prose.lines() {
                                 if desc_line.trim().is_empty() {
                                     continue;
                                 }
@@ -1615,8 +1617,9 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 details_md.push_str("\n\n");
             }
 
-            if !task.description.is_empty() {
-                let formatted_desc = format_description_for_markdown(&task.description);
+            let task_desc_prose = crate::model::extractor::description_prose(&task.description);
+            if !task_desc_prose.is_empty() {
+                let formatted_desc = format_description_for_markdown(&task_desc_prose);
                 details_md.push_str(&formatted_desc);
                 details_md.push_str("\n\n");
             }

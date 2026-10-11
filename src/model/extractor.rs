@@ -273,6 +273,121 @@ pub fn has_extractable_subtasks(input: &str, is_journal: bool) -> bool {
     is_task.into_iter().any(|b| b)
 }
 
+const UID_TAG_PREFIX: &str = "<!-- uid:";
+
+/// Whether `s` (already indent-stripped) starts with a markdown list or
+/// heading marker: the shape every task line has.
+fn starts_with_task_marker(s: &str) -> bool {
+    if s.starts_with('#') {
+        s.find(' ')
+            .is_some_and(|idx| idx <= 6 && s[..idx].chars().all(|c| c == '#'))
+    } else if s.starts_with("- ") || s.starts_with("* ") || s.starts_with("+ ") {
+        true
+    } else {
+        let digit_bytes = leading_digit_bytes(s);
+        digit_bytes > 0 && s[digit_bytes..].starts_with(". ")
+    }
+}
+
+/// A description line that stands in for a child task: a marker line
+/// carrying a `<!-- uid:... -->` tag. The child owns the state; the line
+/// only pins where the child renders inside its parent's description.
+/// Returns the list/heading marker to render the child with, and the uid.
+pub fn shadow_marker(line: &str) -> Option<(&str, &str)> {
+    let trimmed = line.trim_start();
+    if !starts_with_task_marker(trimmed) {
+        return None;
+    }
+    let idx = trimmed.find(UID_TAG_PREFIX)?;
+    let after = &trimmed[idx + UID_TAG_PREFIX.len()..];
+    let end = after.find("-->")?;
+    let uid = after[..end].trim();
+    if uid.is_empty() {
+        return None;
+    }
+    let marker_len = if trimmed.starts_with('#') {
+        trimmed.find(' ').unwrap_or(0)
+    } else if trimmed.starts_with("- ") || trimmed.starts_with("* ") || trimmed.starts_with("+ ") {
+        1
+    } else {
+        leading_digit_bytes(trimmed) + 1
+    };
+    Some((&trimmed[..marker_len], uid))
+}
+
+/// Reconcile the uid-tagged lines of pasted content in a create flow:
+/// every line whose uid already exists in the store gets a fresh uid, so
+/// the new tree is a copy and never a hijack (re-parent) of the original
+/// tasks. Shadow tags in the new root's description and in each line's
+/// continuation prose are rewritten to match; parent and dependency
+/// references between the reminted lines follow.
+pub fn remint_existing_uids(
+    store: &crate::store::TaskStore,
+    root_desc: &mut String,
+    extracted: Vec<ExtractedTask>,
+) -> Vec<ExtractedTask> {
+    let mut map: HashMap<String, String> = HashMap::new();
+    let mut out = Vec::with_capacity(extracted.len());
+    for mut ext in extracted {
+        if let Some(p) = &ext.parent_uid
+            && let Some(np) = map.get(p)
+        {
+            ext.parent_uid = Some(np.clone());
+        }
+        for dep in &mut ext.dependencies {
+            if let Some(nd) = map.get(dep) {
+                *dep = nd.clone();
+            }
+        }
+        if store.get_task_ref(&ext.uid).is_some() {
+            let old_uid = ext.uid.clone();
+            let fresh = Uuid::new_v4().to_string();
+            let from = format!("<!-- uid:{} -->", ext.uid);
+            let to = format!("<!-- uid:{} -->", fresh);
+            *root_desc = root_desc.replace(&from, &to);
+            ext.description = ext.description.replace(&from, &to);
+            ext.uid = fresh;
+            map.insert(old_uid, ext.uid.clone());
+        }
+        out.push(ext);
+    }
+    out
+}
+
+/// The description without child shadow lines: the prose-only view for
+/// inline previews. Only tagged lines are dropped, so plain list prose
+/// typed by the user survives.
+pub fn description_prose(desc: &str) -> String {
+    let mut out = String::new();
+    for line in desc.lines() {
+        if shadow_marker(line).is_some() {
+            continue;
+        }
+        if !out.is_empty() {
+            out.push('\n');
+        }
+        out.push_str(line);
+    }
+    out.trim_end().to_string()
+}
+
+/// Whether the shadow line for `uid` changed between the stored description
+/// and the freshly extracted one. Raw description editors echo the stored
+/// description verbatim, so an untouched line must not re-apply its —
+/// possibly stale — text to the child (which may have moved on elsewhere).
+pub fn shadow_line_changed(old_desc: &str, new_desc: &str, uid: &str) -> bool {
+    let find = |desc: &str| -> Option<String> {
+        desc.lines()
+            .find(|l| shadow_marker(l).is_some_and(|(_, u)| u == uid))
+            .map(|l| l.trim().to_string())
+    };
+    match (find(old_desc), find(new_desc)) {
+        (Some(old_line), Some(new_line)) => old_line != new_line,
+        (None, _) => true,
+        (Some(_), None) => false,
+    }
+}
+
 #[derive(PartialEq, Clone, Copy, Debug)]
 enum StackItemKind {
     Heading(usize), // level 1, 2, 3...
@@ -418,6 +533,7 @@ pub fn extract_markdown_tasks(
                 }
             }
 
+            let parent_idx = indent_stack.last().map(|(_, _, idx)| *idx);
             let parent_uid = indent_stack.last().map(|(_, id, _)| id.clone());
             let new_idx = extracted.len();
 
@@ -442,6 +558,8 @@ pub fn extract_markdown_tasks(
 
             indent_stack.push((current_kind, uid.clone(), new_idx));
 
+            let shadow_uid = uid.clone();
+            let shadow_had_tag = parsed_uid.is_some();
             extracted.push(ExtractedTask {
                 uid,
                 parsed_existing_uid: parsed_uid,
@@ -456,6 +574,24 @@ pub fn extract_markdown_tasks(
                 inline_media: std::collections::HashMap::new(),
             });
             active_task_idx = Some(new_idx);
+
+            // Shadow line: the task line stays in its parent's description,
+            // tagged with the child's uid, so the child renders exactly
+            // where the user placed it. The child owns the state; the line
+            // only pins the position.
+            let mut shadow = rest.trim_end().to_string();
+            if !shadow_had_tag {
+                shadow.push_str(&format!(" <!-- uid:{shadow_uid} -->"));
+            }
+            let parent_desc = match parent_idx {
+                Some(idx) => &mut extracted[idx].description,
+                None => &mut cleaned_root_desc,
+            };
+            if !parent_desc.is_empty() && !parent_desc.ends_with('\n') {
+                parent_desc.push('\n');
+            }
+            parent_desc.push_str(&shadow);
+            parent_desc.push('\n');
         } else {
             // Not a task line -> treat as plain text.
             item_kind_at_indent.remove(&indent);
@@ -625,40 +761,191 @@ fn child_prefixes(children: &[&crate::model::Task]) -> Vec<String> {
     prefixes
 }
 
-pub fn serialize_task_tree(
-    store: &crate::store::TaskStore,
-    root_uid: &str,
-    calendars: &[crate::model::CalendarListEntry],
-    is_journal: bool,
-) -> String {
-    serialize_task_tree_inner(store, root_uid, calendars, is_journal, false)
-}
-
-/// Same as `serialize_task_tree`, but omits the `<!-- uid -->` comments and
-/// the `dep:`/`rel:` UID tags, for clean copy-paste into external documents.
-pub fn serialize_task_tree_plain(
-    store: &crate::store::TaskStore,
-    root_uid: &str,
-    calendars: &[crate::model::CalendarListEntry],
-    is_journal: bool,
-) -> String {
-    serialize_task_tree_inner(store, root_uid, calendars, is_journal, true)
-}
-
-fn serialize_task_tree_inner(
-    store: &crate::store::TaskStore,
-    root_uid: &str,
-    calendars: &[crate::model::CalendarListEntry],
-    is_journal: bool,
+struct SerializeContext<'a> {
+    children_map: &'a std::collections::HashMap<String, Vec<&'a crate::model::Task>>,
+    store: &'a crate::store::TaskStore,
+    calendars: &'a [crate::model::CalendarListEntry],
     plain: bool,
-) -> String {
-    let mut out = String::new();
-    let root = if let Some(r) = store.get_task_ref(root_uid) {
-        r
+}
+
+/// Emit `task`'s description, rendering child shadows inline where their
+/// line sits. Returns the uids rendered inline, so the caller appends
+/// only the unreferenced children afterwards. `child_depth` is the depth
+/// inline children render at (0 under a raw journal root, `depth + 1`
+/// under a serialized node).
+fn emit_description<'a>(
+    ctx: &SerializeContext<'a>,
+    task: &'a crate::model::Task,
+    child_depth: usize,
+    out: &mut String,
+    line_prefix: &str,
+) -> std::collections::HashSet<&'a str> {
+    let mut rendered = std::collections::HashSet::new();
+    if task.description.is_empty() {
+        return rendered;
+    }
+    let children = ctx.children_map.get(&task.uid);
+    for line in task.description.lines() {
+        if let Some((marker, uid)) = shadow_marker(line) {
+            if let Some(child) = children.and_then(|cs| cs.iter().find(|c| c.uid == uid)) {
+                rendered.insert(uid);
+                serialize_node(ctx, child, child_depth, out, marker, &task.calendar_href);
+                continue;
+            }
+            // The tagged task exists but is no longer a child here
+            // (moved, trashed, re-parented): drop the stale shadow so
+            // the next save cannot resurrect its text as a duplicate.
+            if ctx.store.get_task_ref(uid).is_some() {
+                continue;
+            }
+            // Unknown tag: keep the line as typed; the next save binds
+            // or mints a child for it.
+        }
+        out.push_str(line_prefix);
+        out.push_str(line);
+        out.push('\n');
+    }
+    rendered
+}
+
+fn serialize_node(
+    ctx: &SerializeContext,
+    task: &crate::model::Task,
+    depth: usize,
+    out: &mut String,
+    prefix: &str,
+    parent_href: &str,
+) {
+    let status_str = if task.is_note || task.is_journal {
+        String::new()
     } else {
-        return out;
+        format!(
+            "{} ",
+            match task.status {
+                crate::model::TaskStatus::NeedsAction => {
+                    if task.is_paused() { "[/]" } else { "[ ]" }
+                }
+                crate::model::TaskStatus::InProcess => "[>]",
+                crate::model::TaskStatus::Completed => "[x]",
+                crate::model::TaskStatus::Cancelled => "[-]",
+            }
+        )
+    };
+    let mut smart_string = task.to_smart_string();
+    // Notes and journal pages carry a leading dash in their smart string as
+    // the list marker; the parent's child prefix already provides the
+    // marker, so strip it for both (a journal page that is NOT a note would
+    // otherwise serialize as `- - Title`).
+    if task.is_note || task.is_journal {
+        if smart_string.starts_with("- ") || smart_string.starts_with("* ") {
+            smart_string = smart_string[2..].trim_start().to_string();
+        } else if smart_string == "-" || smart_string == "*" {
+            smart_string = String::new();
+        }
+    }
+    if task.calendar_href != parent_href {
+        let cal_name = ctx
+            .calendars
+            .iter()
+            .find(|c| c.href == task.calendar_href)
+            .map(|c| c.name.as_str())
+            .unwrap_or(task.calendar_href.as_str());
+
+        smart_string.push_str(&format!(
+            " col:{}",
+            crate::model::parser::quote_value(cal_name)
+        ));
+    }
+
+    let uid_tag = if ctx.plain {
+        String::new()
+    } else {
+        format!("<!-- uid:{} -->", task.uid)
+    };
+    let indent = "    ".repeat(depth);
+
+    // Output short UID dependencies and relations to guarantee they are never ambiguous upon re-parsing
+    let mut dep_str = String::new();
+
+    let process_relations = |uids: &[String], prefix: &str, out: &mut String| {
+        for uid in uids {
+            // Skip trashed/recovered/missing references so they self-heal (disappear) on save
+            if let Some(target_task) = ctx.store.get_task_ref(uid) {
+                if crate::storage::is_system_calendar(&target_task.calendar_href) {
+                    continue;
+                }
+            } else {
+                // Task is completely missing (hard-deleted). Skip to self-heal.
+                continue;
+            }
+
+            // Only truncate if it is actually a valid UUID. If another client injected a raw string,
+            // quote it so it can be cleanly resolved upon re-parsing.
+            let display_val = if uid.len() == 36 && uuid::Uuid::parse_str(uid).is_ok() {
+                &uid[..8]
+            } else {
+                uid
+            };
+            out.push_str(&format!(
+                " {}:{}",
+                prefix,
+                crate::model::parser::quote_value(display_val)
+            ));
+        }
     };
 
+    if !ctx.plain {
+        process_relations(&task.dependencies, "dep", &mut dep_str);
+        process_relations(&task.related_to, "rel", &mut dep_str);
+    }
+
+    if ctx.plain {
+        out.push_str(&format!(
+            "{}{}{}{}{}\n",
+            indent,
+            prefix,
+            if prefix.ends_with(' ') { "" } else { " " },
+            status_str,
+            smart_string
+        ));
+    } else {
+        out.push_str(&format!(
+            "{}{}{}{}{}{} {}\n",
+            indent,
+            prefix,
+            if prefix.ends_with(' ') { "" } else { " " },
+            status_str,
+            smart_string,
+            dep_str,
+            uid_tag
+        ));
+    }
+
+    let rendered_inline = emit_description(ctx, task, depth + 1, out, &format!("{}  ", indent));
+
+    if let Some(children) = ctx.children_map.get(&task.uid) {
+        let remaining: Vec<&crate::model::Task> = children
+            .iter()
+            .copied()
+            .filter(|c| !rendered_inline.contains(c.uid.as_str()))
+            .collect();
+        let prefixes = child_prefixes(&remaining);
+        for (child, prefix) in remaining.iter().zip(prefixes.iter()) {
+            serialize_node(ctx, child, depth + 1, out, prefix, &task.calendar_href);
+        }
+    }
+}
+
+/// Children of every task, grouped by parent uid: trashed/recovered tasks
+/// are skipped unless their parent lives in the same system calendar.
+/// Each sibling list is deterministically pre-sorted (created date, then
+/// summary), then topologically ordered so blocked tasks follow their
+/// dependencies — this preserves sequence numbering (1., 2., 3.) when
+/// re-extracting the markdown.
+fn collect_children_map<'a>(
+    store: &'a crate::store::TaskStore,
+    root_href: &str,
+) -> std::collections::HashMap<String, Vec<&'a crate::model::Task>> {
     let mut children_map: std::collections::HashMap<String, Vec<&crate::model::Task>> =
         std::collections::HashMap::new();
     for map in store.calendars.values() {
@@ -667,7 +954,7 @@ fn serialize_task_tree_inner(
                 // Skip trashed/recovered tasks so they don't appear as ghost subtasks,
                 // unless we are explicitly serializing a tree that is ALREADY in the trash.
                 if crate::storage::is_system_calendar(&t.calendar_href)
-                    && t.calendar_href != root.calendar_href
+                    && t.calendar_href != root_href
                 {
                     continue;
                 }
@@ -763,140 +1050,83 @@ fn serialize_task_tree_inner(
             list.push(opt_list[idx].take().unwrap());
         }
     }
+    children_map
+}
 
-    struct SerializeContext<'a> {
-        children_map: &'a std::collections::HashMap<String, Vec<&'a crate::model::Task>>,
-        store: &'a crate::store::TaskStore,
-        calendars: &'a [crate::model::CalendarListEntry],
-        plain: bool,
+pub fn serialize_task_tree(
+    store: &crate::store::TaskStore,
+    root_uid: &str,
+    calendars: &[crate::model::CalendarListEntry],
+    is_journal: bool,
+) -> String {
+    serialize_task_tree_inner(store, root_uid, calendars, is_journal, false)
+}
+
+/// Same as `serialize_task_tree`, but omits the `<!-- uid -->` comments and
+/// the `dep:`/`rel:` UID tags, for clean copy-paste into external documents.
+pub fn serialize_task_tree_plain(
+    store: &crate::store::TaskStore,
+    root_uid: &str,
+    calendars: &[crate::model::CalendarListEntry],
+    is_journal: bool,
+) -> String {
+    serialize_task_tree_inner(store, root_uid, calendars, is_journal, true)
+}
+
+/// A task's full subtree minus its own line: the description-editor view.
+/// Child shadows render inline where they sit and unreferenced children
+/// append below, so a save through `sync_tree_from_markdown` re-binds
+/// exactly what the user saw — including deletions.
+pub fn serialize_merged_description(
+    store: &crate::store::TaskStore,
+    uid: &str,
+    calendars: &[crate::model::CalendarListEntry],
+) -> String {
+    let Some(task) = store.get_task_ref(uid) else {
+        return String::new();
+    };
+    // A journal page serializes its description raw at depth 0 already.
+    if task.is_journal {
+        return serialize_task_tree_inner(store, uid, calendars, true, false);
     }
-
-    fn serialize_node(
-        ctx: &SerializeContext,
-        task: &crate::model::Task,
-        depth: usize,
-        out: &mut String,
-        prefix: &str,
-        parent_href: &str,
-    ) {
-        let status_str = if task.is_note || task.is_journal {
-            String::new()
-        } else {
-            format!(
-                "{} ",
-                match task.status {
-                    crate::model::TaskStatus::NeedsAction => {
-                        if task.is_paused() { "[/]" } else { "[ ]" }
-                    }
-                    crate::model::TaskStatus::InProcess => "[>]",
-                    crate::model::TaskStatus::Completed => "[x]",
-                    crate::model::TaskStatus::Cancelled => "[-]",
-                }
-            )
-        };
-        let mut smart_string = task.to_smart_string();
-        // Notes and journal pages carry a leading dash in their smart string as
-        // the list marker; the parent's child prefix already provides the
-        // marker, so strip it for both (a journal page that is NOT a note would
-        // otherwise serialize as `- - Title`).
-        if task.is_note || task.is_journal {
-            if smart_string.starts_with("- ") || smart_string.starts_with("* ") {
-                smart_string = smart_string[2..].trim_start().to_string();
-            } else if smart_string == "-" || smart_string == "*" {
-                smart_string = String::new();
-            }
-        }
-        if task.calendar_href != parent_href {
-            let cal_name = ctx
-                .calendars
-                .iter()
-                .find(|c| c.href == task.calendar_href)
-                .map(|c| c.name.as_str())
-                .unwrap_or(task.calendar_href.as_str());
-
-            smart_string.push_str(&format!(
-                " col:{}",
-                crate::model::parser::quote_value(cal_name)
-            ));
-        }
-
-        let uid_tag = if ctx.plain {
-            String::new()
-        } else {
-            format!("<!-- uid:{} -->", task.uid)
-        };
-        let indent = "    ".repeat(depth);
-
-        // Output short UID dependencies and relations to guarantee they are never ambiguous upon re-parsing
-        let mut dep_str = String::new();
-
-        let process_relations = |uids: &[String], prefix: &str, out: &mut String| {
-            for uid in uids {
-                // Skip trashed/recovered/missing references so they self-heal (disappear) on save
-                if let Some(target_task) = ctx.store.get_task_ref(uid) {
-                    if crate::storage::is_system_calendar(&target_task.calendar_href) {
-                        continue;
-                    }
-                } else {
-                    // Task is completely missing (hard-deleted). Skip to self-heal.
-                    continue;
-                }
-
-                // Only truncate if it is actually a valid UUID. If another client injected a raw string,
-                // quote it so it can be cleanly resolved upon re-parsing.
-                let display_val = if uid.len() == 36 && uuid::Uuid::parse_str(uid).is_ok() {
-                    &uid[..8]
-                } else {
-                    uid
-                };
-                out.push_str(&format!(
-                    " {}:{}",
-                    prefix,
-                    crate::model::parser::quote_value(display_val)
-                ));
-            }
-        };
-
-        if !ctx.plain {
-            process_relations(&task.dependencies, "dep", &mut dep_str);
-            process_relations(&task.related_to, "rel", &mut dep_str);
-        }
-
-        if ctx.plain {
-            out.push_str(&format!(
-                "{}{}{}{}{}\n",
-                indent,
-                prefix,
-                if prefix.ends_with(' ') { "" } else { " " },
-                status_str,
-                smart_string
-            ));
-        } else {
-            out.push_str(&format!(
-                "{}{}{}{}{}{} {}\n",
-                indent,
-                prefix,
-                if prefix.ends_with(' ') { "" } else { " " },
-                status_str,
-                smart_string,
-                dep_str,
-                uid_tag
-            ));
-        }
-
-        if !task.description.is_empty() {
-            for line in task.description.lines() {
-                out.push_str(&format!("{}  {}\n", indent, line));
-            }
-        }
-
-        if let Some(children) = ctx.children_map.get(&task.uid) {
-            let prefixes = child_prefixes(children);
-            for (child, prefix) in children.iter().zip(prefixes.iter()) {
-                serialize_node(ctx, child, depth + 1, out, prefix, &task.calendar_href);
-            }
+    let children_map = collect_children_map(store, &task.calendar_href);
+    let ctx = SerializeContext {
+        children_map: &children_map,
+        store,
+        calendars,
+        plain: false,
+    };
+    let mut out = String::new();
+    let rendered_inline = emit_description(&ctx, task, 0, &mut out, "");
+    if let Some(children) = children_map.get(&task.uid) {
+        let remaining: Vec<&crate::model::Task> = children
+            .iter()
+            .copied()
+            .filter(|c| !rendered_inline.contains(c.uid.as_str()))
+            .collect();
+        let prefixes = child_prefixes(&remaining);
+        for (child, prefix) in remaining.iter().zip(prefixes.iter()) {
+            serialize_node(&ctx, child, 0, &mut out, prefix, &task.calendar_href);
         }
     }
+    out.trim_end().to_string()
+}
+
+fn serialize_task_tree_inner(
+    store: &crate::store::TaskStore,
+    root_uid: &str,
+    calendars: &[crate::model::CalendarListEntry],
+    is_journal: bool,
+    plain: bool,
+) -> String {
+    let mut out = String::new();
+    let root = if let Some(r) = store.get_task_ref(root_uid) {
+        r
+    } else {
+        return out;
+    };
+
+    let children_map = collect_children_map(store, &root.calendar_href);
 
     let ctx = SerializeContext {
         children_map: &children_map,
@@ -906,13 +1136,15 @@ fn serialize_task_tree_inner(
     };
 
     if is_journal {
-        if !root.description.is_empty() {
-            out.push_str(&root.description);
-            out.push('\n');
-        }
+        let rendered_inline = emit_description(&ctx, root, 0, &mut out, "");
         if let Some(children) = children_map.get(&root.uid) {
-            let prefixes = child_prefixes(children);
-            for (child, prefix) in children.iter().zip(prefixes.iter()) {
+            let remaining: Vec<&crate::model::Task> = children
+                .iter()
+                .copied()
+                .filter(|c| !rendered_inline.contains(c.uid.as_str()))
+                .collect();
+            let prefixes = child_prefixes(&remaining);
+            for (child, prefix) in remaining.iter().zip(prefixes.iter()) {
                 serialize_node(&ctx, child, 0, &mut out, prefix, &root.calendar_href);
             }
         }

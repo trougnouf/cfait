@@ -2043,6 +2043,10 @@ impl TaskStore {
         let mut active_uids = std::collections::HashSet::new();
         let mut tasks_to_update = Vec::new();
         let mut tasks_to_create = Vec::new();
+        // Minted uid -> dedup-bound uid: the shadow lines written during
+        // extraction carry the minted tag and must be rewritten to the task
+        // the sync actually bound the line to.
+        let mut rebound_uids: Vec<(String, String)> = Vec::new();
 
         let mut resolved_hrefs = HashMap::new();
         resolved_hrefs.insert(root_uid.to_string(), root_calendar_href.clone());
@@ -2078,6 +2082,9 @@ impl TaskStore {
                 if let Some(existing_uid) = self.find_child_uid_by_summary(&parent, &probe.summary)
                 {
                     task_uid = existing_uid;
+                    if task_uid != ext.uid {
+                        rebound_uids.push((ext.uid.clone(), task_uid.clone()));
+                    }
                 }
             }
 
@@ -2339,6 +2346,21 @@ impl TaskStore {
         }
 
         // --- Validate dependencies atomically before mutating the store ---
+        // The dedup rebind above may have re-pointed a pasted sub-page line
+        // at an existing child; fix the shadow tags minted during
+        // extraction so the stored descriptions match the bound tasks.
+        for (minted, bound) in &rebound_uids {
+            let from = format!("<!-- uid:{minted} -->");
+            let to = format!("<!-- uid:{bound} -->");
+            root_clone.description = root_clone.description.replace(&from, &to);
+            for t in &mut tasks_to_update {
+                t.description = t.description.replace(&from, &to);
+            }
+            for t in &mut tasks_to_create {
+                t.description = t.description.replace(&from, &to);
+            }
+        }
+
         let mut all_warnings = Vec::new();
         if root_changed {
             all_warnings.extend(self.resolve_dependencies(&mut root_clone));

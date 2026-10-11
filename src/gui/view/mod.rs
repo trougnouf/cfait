@@ -49,7 +49,7 @@ pub fn is_action_available(
         task.status.is_done() || task.status == crate::model::TaskStatus::Cancelled;
     let is_paused = task.is_paused();
 
-    let has_info = !task.description.is_empty()
+    let has_info = !crate::model::extractor::description_prose(&task.description).is_empty()
         || !task.dependencies.is_empty()
         || !task.related_to.is_empty()
         || task.has_blocking_tasks
@@ -743,9 +743,12 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             .width(Length::Fill)
             .align_x(Horizontal::Center);
 
-        let task_desc_content = if !task.description.is_empty() {
+        // Prose-only view: child shadow lines pin positions but read as
+        // uid-tagged noise outside the editors.
+        let task_desc_prose = crate::model::extractor::description_prose(&task.description);
+        let task_desc_content = if !task_desc_prose.is_empty() {
             column![
-                text(&task.description)
+                text(task_desc_prose)
                     .size(14)
                     .color(Color::from_rgb(0.9, 0.9, 0.9)),
                 Space::new().height(Length::Fixed(10.0))
@@ -914,7 +917,8 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                 return None;
             }
 
-            let has_info = !task.description.is_empty()
+            let has_info = !crate::model::extractor::description_prose(&task.description)
+                .is_empty()
                 || !task.dependencies.is_empty()
                 || !task.related_to.is_empty()
                 || task.has_blocking_tasks

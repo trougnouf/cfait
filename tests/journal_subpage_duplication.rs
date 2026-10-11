@@ -73,10 +73,15 @@ fn is_page_line_becomes_subpage_and_resave_is_idempotent() {
         child.description
     );
 
-    // The root's own description is emptied because the body moved into the child.
+    // The root's prose moved into the child; what remains is the sub-page's
+    // shadow line, pinning where it renders in the daily note.
     let root = store.get_task_ref("root-daily").unwrap();
-    assert!(
-        root.description.trim().is_empty(),
+    assert_eq!(
+        root.description.trim(),
+        format!(
+            "- Morning ritual: check the tomato stakes is:page <!-- uid:{} -->",
+            child.uid
+        ),
         "root description: {:?}",
         root.description
     );
