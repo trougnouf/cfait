@@ -2856,7 +2856,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
         .style(crate::gui::view::tooltip_style);
 
         let yank_page_btn = tooltip(
-            iced::widget::button(icon::icon(icon::CLONE).size(14))
+            iced::widget::button(icon::icon(icon::LINK).size(14))
                 .style(iced::widget::button::secondary)
                 .padding(8)
                 .on_press(Message::YankTask(uid.clone())),
@@ -2864,6 +2864,33 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
             tooltip::Position::Bottom,
         )
         .style(crate::gui::view::tooltip_style);
+
+        // When a yank is active, expose the same relation action as task
+        // rows: make the page being edited a child of the yanked task or
+        // page, without leaving the journal.
+        let child_of_yanked_btn: Element<'_, Message> =
+            match app.yanked_uid.as_deref().filter(|y| *y != uid.as_str()) {
+                Some(yanked) => {
+                    let yanked_summary = app.store.get_summary(yanked).unwrap_or_default();
+                    let target_summary = app.store.get_summary(&uid).unwrap_or_default();
+                    tooltip(
+                        iced::widget::button(icon::icon(icon::CHILD).size(14))
+                            .style(iced::widget::button::secondary)
+                            .padding(8)
+                            .on_press(Message::MakeChild(uid.clone())),
+                        text(rust_i18n::t!(
+                            "yank_tooltip_child",
+                            target = target_summary,
+                            yanked = yanked_summary
+                        ))
+                        .size(12),
+                        tooltip::Position::Bottom,
+                    )
+                    .style(crate::gui::view::tooltip_style)
+                    .into()
+                }
+                None => Space::new().width(Length::Fixed(0.0)).into(),
+            };
 
         let create_subpage_btn = tooltip(
             iced::widget::button(icon::icon(icon::CREATE_CHILD).size(14))
@@ -2893,6 +2920,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
                 .width(Length::FillPortion(2)),
                 Space::new().width(Length::FillPortion(1)),
                 yank_page_btn,
+                child_of_yanked_btn,
                 create_subpage_btn,
                 move_btn,
                 delete_btn,
@@ -2908,6 +2936,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
                 }),
                 Space::new().width(Length::Fill),
                 yank_page_btn,
+                child_of_yanked_btn,
                 create_subpage_btn,
                 move_btn,
                 delete_btn,
