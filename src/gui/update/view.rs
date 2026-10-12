@@ -671,6 +671,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 pt = *pos;
             }
 
+            // The highlight must always reflect the task the menu acts on,
+            // otherwise right-clicking a different task than the selected one
+            // invites acting on the wrong row.
+            app.selected_uid = Some(uid.clone());
             app.active_context_menu = Some((uid, is_full, pt));
             app.context_menu_cursor = None;
             Task::none()
