@@ -2360,6 +2360,107 @@ async fn main() -> Result<()> {
             }
             return Ok(());
         }
+        "restore" => {
+            let mut partial_uid = String::new();
+            let mut no_wait = false;
+            let mut wait = false;
+            let mut i = 2;
+            while i < args.len() {
+                if args[i] == "--no-wait" || args[i] == "-n" {
+                    no_wait = true;
+                } else if args[i] == "--wait" || args[i] == "-w" {
+                    wait = true;
+                } else if partial_uid.is_empty() {
+                    partial_uid = args[i].clone();
+                }
+                i += 1;
+            }
+            if partial_uid.is_empty() {
+                eprintln!("{}", rust_i18n::t!("error_missing_uid"));
+                std::process::exit(1);
+            }
+            let mut store = build_store_cli(&ctx).await;
+            // resolve_uid ignores system calendars, so trash items are
+            // matched directly against the trash calendar.
+            let mut trash_tasks = cfait::storage::LocalStorage::load_for_href(
+                ctx.as_ref(),
+                cfait::storage::LOCAL_TRASH_HREF,
+            )
+            .unwrap_or_default();
+            cfait::journal::Journal::apply_to_tasks(
+                ctx.as_ref(),
+                &mut trash_tasks,
+                cfait::storage::LOCAL_TRASH_HREF,
+            );
+            if !trash_tasks.is_empty() {
+                store.insert(
+                    cfait::storage::LOCAL_TRASH_HREF.to_string(),
+                    trash_tasks.clone(),
+                );
+            }
+            let clean = partial_uid.trim();
+            let matches: Vec<String> = trash_tasks
+                .iter()
+                .filter(|t| {
+                    t.uid.starts_with(clean)
+                        || cfait::model::matcher::contains_ignore_case(&t.summary, clean)
+                })
+                .map(|t| t.uid.clone())
+                .collect();
+            let full_uid = match matches.len() {
+                1 => matches.into_iter().next().unwrap(),
+                0 => {
+                    eprintln!("{}", rust_i18n::t!("cli_restore_no_match"));
+                    std::process::exit(1);
+                }
+                _ => {
+                    eprintln!("{}", rust_i18n::t!("cli_restore_ambiguous"));
+                    std::process::exit(1);
+                }
+            };
+
+            let config =
+                cfait::config::Config::load_with_credentials(ctx.as_ref()).unwrap_or_default();
+            let store_arc = Arc::new(tokio::sync::Mutex::new(store));
+            let client_arc = Arc::new(tokio::sync::Mutex::new(None));
+            let controller =
+                cfait::controller::TaskController::new(store_arc, client_arc, ctx.clone());
+
+            let actions = {
+                let mut store_lock = controller.store.lock().await;
+                let intent = cfait::model::AppIntent::RestoreTaskTree {
+                    uid: full_uid.clone(),
+                };
+                let (forward, _, _, _) = store_lock.apply_task_intent(&intent, &config);
+                forward
+            };
+            if actions.is_empty() {
+                eprintln!("{}", rust_i18n::t!("cli_restore_not_trashed"));
+                std::process::exit(1);
+            }
+            controller
+                .persist_changes(actions)
+                .await
+                .map_err(|e| anyhow::anyhow!(e))?;
+            println!("{}", rust_i18n::t!("task_restored", uid = partial_uid));
+
+            let (effective_no_wait, is_auto) = get_sync_strategy(no_wait, wait, &ctx);
+
+            if !effective_no_wait {
+                // Best-effort background sync
+                if let Err(e) = maybe_sync(ctx.clone()).await {
+                    eprintln!(
+                        "{}",
+                        rust_i18n::t!("warning_background_sync_failed", error = e.to_string())
+                    );
+                }
+            } else if is_auto {
+                println!("{}", rust_i18n::t!("cli_action_queued_auto"));
+            } else {
+                println!("{}", rust_i18n::t!("cli_action_queued"));
+            }
+            return Ok(());
+        }
         "" => {
             // No non-interactive command provided; fall through to start the interactive TUI.
         }

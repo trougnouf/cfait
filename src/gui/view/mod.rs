@@ -62,6 +62,9 @@ pub fn is_action_available(
         crate::config::TaskAction::Move => !app
             .get_move_targets(&task.calendar_href, task.has_subtasks)
             .is_empty(),
+        crate::config::TaskAction::Restore => {
+            task.calendar_href == crate::storage::LOCAL_TRASH_HREF
+        }
         crate::config::TaskAction::OpenUrl => task.url.is_some(),
         crate::config::TaskAction::CopyUrl => task.first_url().is_some(),
         crate::config::TaskAction::DeleteTree => task.has_subtasks,
@@ -107,6 +110,7 @@ pub fn context_menu_actions(
             TaskAction::CopyUrl,
             TaskAction::OpenCoordinates,
             TaskAction::OpenLocations,
+            TaskAction::Restore,
             TaskAction::ToggleDetails,
             TaskAction::CompleteAndShift,
             TaskAction::ToggleTimer,
@@ -137,6 +141,7 @@ pub fn context_menu_actions(
 
         // Move preferred actions to the front, in this order
         let preferred_order = [
+            TaskAction::Restore,
             TaskAction::OpenUrl,
             TaskAction::CopyUrl,
             TaskAction::OpenCoordinates,
@@ -199,6 +204,7 @@ pub fn context_menu_action_message(
         TaskAction::Cancel => Message::CancelTask(idx),
         TaskAction::Delete => Message::DeleteTask(idx),
         TaskAction::DeleteTree => Message::DeleteTaskTree(task.uid.clone()),
+        TaskAction::Restore => Message::RestoreTask(task.uid.clone()),
         TaskAction::TogglePin => Message::TogglePin(task.uid.clone()),
         TaskAction::Focus => Message::FocusSelected,
         TaskAction::BrowseRelations => return None, // TUI-only
@@ -1010,6 +1016,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                 TaskAction::Cancel => (icon::icon(icon::CROSS).size(14).into(), true),
                 TaskAction::Delete => (icon::icon(icon::TRASH).size(14).into(), true),
                 TaskAction::DeleteTree => (icon::icon(icon::TRASH).size(14).into(), true),
+                TaskAction::Restore => (icon::icon(icon::RESTORE).size(14).into(), false),
                 TaskAction::OpenCoordinates => {
                     (icon::icon(icon::MAP_LOCATION_DOT).size(14).into(), false)
                 }

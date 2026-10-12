@@ -1006,6 +1006,7 @@ fun HomeScreen(
                 val intent = when(action) {
                     "delete" -> AppIntent.DeleteTask(task.uid)
                     "delete_tree" -> AppIntent.DeleteTaskTree(task.uid)
+                    "restore" -> AppIntent.RestoreTaskTree(task.uid)
                     "focus" -> AppIntent.FocusTaskTree(task.uid)
                     "toggle_pin" -> AppIntent.TogglePin(task.uid)
                     "duplicate" -> AppIntent.DuplicateTaskTree(task.uid)
@@ -1059,7 +1060,7 @@ fun HomeScreen(
                     lastSyncFailed = false
                     triggerBackgroundSync(context, api)
 
-                    if (showUndoSnackbar && (action == "delete" || action == "delete_tree" || action == "cancel" || action == "complete_and_shift" || action == "complete_tree" || action == "duplicate" || action == "promote" || action == "move")) {
+                    if (showUndoSnackbar && (action == "delete" || action == "delete_tree" || action == "restore" || action == "cancel" || action == "complete_and_shift" || action == "complete_tree" || action == "duplicate" || action == "promote" || action == "move")) {
                         val result = snackbarHostState.showSnackbar(
                             message = actionDesc,
                             actionLabel = context.getString(R.string.undo),

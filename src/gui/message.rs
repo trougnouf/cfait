@@ -171,6 +171,7 @@ pub enum Message {
     EnterPressed,
     DuplicateTask(String),
     DeleteTaskTree(String),
+    RestoreTask(String),
     ToggleActiveSelected,
     StopSelected,
     CancelSelected,

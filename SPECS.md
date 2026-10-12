@@ -51,7 +51,7 @@ Tasks map strictly to iCalendar `VTODO` components, while daily notes map to `VJ
 *   **Hierarchy:** `RELATED-TO` establishes the `parent_uid`.
 *   **Dependencies:** `RELATED-TO;RELTYPE=DEPENDS-ON` establishes blocking relationships. `RELTYPE=SIBLING` establishes related tasks.
 *   **Time Tracking:** Logged via `X-TIME-SPENT` (total seconds), `X-LAST-START` (unix timestamp), and `X-CFAIT-SESSION` (WorkSessions holding Unix start/end timestamps). The duration badge shown in task lists displays the aggregated time across the task's entire subtree (union-merged to avoid double-counting cascade overlaps), not just the task's own tracked time. Detail views and notifications show per-task time.
-*   **System Entities:** Local trash uses `local://trash`. Items here are soft-deleted and pruned based on `trash_retention_days`.
+*   **System Entities:** Local trash uses `local://trash`. Items here are soft-deleted and pruned based on `trash_retention_days`. A soft-deleted task keeps its `parent_uid` (the sub-tree structure survives in the trash) and records its deletion date (`X-TRASHED-DATE`) and origin collection (`X-TRASHED-FROM`). A *Restore* action (GUI/TUI context menus, Android long-press menu, `cfait restore <uid>`) moves a trashed task and its trash-resident sub-tree back to the recorded origin collection — falling back to the parent's collection, the default calendar, then `local://` — stripping the trash bookkeeping properties. `parent_uid` links are left untouched, so the tree lands where it was; dependencies that were cleaned from other tasks on delete are not resurrected.
 
 ### 1.3. System Integrations
 *   **Keyring:** Passwords are never stored in plaintext `config.toml`. They are vaulted via OS keyrings: Windows Credential Manager, macOS Keychain, Linux Secret Portal (oo7) or Keyutils, Android Keystore.
@@ -274,7 +274,7 @@ Tasks tagged with `is:permanent` act as endless trackers. When checked off (Comp
 *   **Mouse Interactions:**
     *   *Single Click:* Select row.
     *   *Double Click:* Triggers `EditTaskStart` (focus title input).
-    *   *Right Click:* Opens **Full Context Menu** at cursor coordinates.
+    *   *Right Click:* Opens **Full Context Menu** at cursor coordinates; the row highlight (selection) moves to the right-clicked task so the highlighted task is always the one the menu acts on.
     *   *Ellipsis (`...`) Click:* Opens **Partial Context Menu** anchored to the button (shows unpinned actions).
 *   **Modals:** Hovering overlays with dimmed backdrops (Move Task, ICS Import, Alarm Notification).
 *   **Context Menu keyboard navigation:** `Enter` opens the selected task's context menu with the first entry highlighted; `Up`/`Down` (or `j`/`k`) move the highlight (the menu scrolls to follow), `Enter` activates the highlighted entry, and any other key closes the menu.

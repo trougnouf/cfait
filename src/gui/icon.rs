@@ -66,6 +66,7 @@ pub const UNSYNCED: char = '\u{f0c2}'; //  (Cloud)
 pub const PLUS: char = '\u{f0603}'; // nf-md-priority_high
 pub const MINUS: char = '\u{f0604}'; // nf-md-priority_low
 pub const TRASH: char = '\u{f1f8}'; // 
+pub const RESTORE: char = '\u{ef90}'; // nf-fa-trash_can_arrow_up
 pub const CHECK: char = '\u{f00c}'; // 
 pub const CHECK_CIRCLE: char = '\u{f058}'; // nf-fa-check_circle
 pub const CROSS: char = '\u{f00d}'; // 

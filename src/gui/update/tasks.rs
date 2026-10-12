@@ -1079,6 +1079,15 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
 
+        Message::RestoreTask(uid) => {
+            dispatch_and_maintain_selection(
+                app,
+                AppIntent::RestoreTaskTree { uid: uid.clone() },
+                &uid,
+            );
+            Task::none()
+        }
+
         Message::ToggleActiveSelected => {
             if let Some(uid) = app.selected_uid.clone()
                 && let Some(idx) = app.find_task_index_by_uid(&uid)

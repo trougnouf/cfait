@@ -725,6 +725,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                             crate::config::TaskAction::EditTree => icon::EDIT_TREE,
                             crate::config::TaskAction::Delete
                             | crate::config::TaskAction::DeleteTree => icon::TRASH,
+                            crate::config::TaskAction::Restore => icon::RESTORE,
                             crate::config::TaskAction::Yank => icon::LINK,
                             crate::config::TaskAction::Focus => icon::FOCUS_FIELD,
                             crate::config::TaskAction::TogglePin => icon::THUMB_TACK,

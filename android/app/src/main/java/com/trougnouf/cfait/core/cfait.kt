@@ -937,6 +937,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_resolve_selection_aliases(): Int
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_restore_task_tree(): Int
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_reveal_task(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_save_config(): Int
@@ -1388,6 +1390,11 @@ internal object UniffiLib {
         `isLocation`: Byte,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_restore_task_tree(
+        `ptr`: Long,
+        `uid`: RustBuffer.ByValue,
+    ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_reveal_task(
         `ptr`: Long,
@@ -1953,6 +1960,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cfait_checksum_method_cfaitmobile_resolve_selection_aliases() and 0xFFFF) != 37748) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_cfait_checksum_method_cfaitmobile_restore_task_tree() and 0xFFFF) != 16780) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cfait_checksum_method_cfaitmobile_reveal_task() and 0xFFFF) != 2404) {
@@ -2796,6 +2806,8 @@ public interface CfaitMobileInterface {
         `selection`: kotlin.String,
         `isLocation`: kotlin.Boolean,
     ): List<kotlin.String>
+
+    suspend fun `restoreTaskTree`(`uid`: kotlin.String): kotlin.String
 
     suspend fun `revealTask`(`uid`: kotlin.String)
 
@@ -4143,6 +4155,25 @@ open class CfaitMobile :
                     )
                 }
             },
+        )
+
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `restoreTaskTree`(`uid`: kotlin.String): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_restore_task_tree(
+                    uniffiHandle,
+                    FfiConverterString.lower(`uid`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            MobileException.ErrorHandler,
         )
 
     @Throws(MobileException::class)
@@ -6362,6 +6393,12 @@ sealed class AppIntent {
         companion object
     }
 
+    data class RestoreTaskTree(
+        val `uid`: kotlin.String,
+    ) : AppIntent() {
+        companion object
+    }
+
     data class DeleteTasks(
         val `uids`: List<kotlin.String>,
     ) : AppIntent() {
@@ -6597,199 +6634,205 @@ public object FfiConverterTypeAppIntent : FfiConverterRustBuffer<AppIntent> {
             }
 
             5 -> {
+                AppIntent.RestoreTaskTree(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            6 -> {
                 AppIntent.DeleteTasks(
                     FfiConverterSequenceString.read(buf),
                 )
             }
 
-            6 -> {
+            7 -> {
                 AppIntent.TogglePin(
                     FfiConverterString.read(buf),
                 )
             }
 
-            7 -> {
+            8 -> {
                 AppIntent.CancelTask(
                     FfiConverterString.read(buf),
                 )
             }
 
-            8 -> {
+            9 -> {
                 AppIntent.ChangePriority(
                     FfiConverterString.read(buf),
                     FfiConverterByte.read(buf),
                 )
             }
 
-            9 -> {
+            10 -> {
                 AppIntent.StartTask(
                     FfiConverterString.read(buf),
                 )
             }
 
-            10 -> {
+            11 -> {
                 AppIntent.PauseTask(
                     FfiConverterString.read(buf),
                 )
             }
 
-            11 -> {
+            12 -> {
                 AppIntent.StopTask(
                     FfiConverterString.read(buf),
                 )
             }
 
-            12 -> {
+            13 -> {
                 AppIntent.MoveTask(
                     FfiConverterString.read(buf),
                     FfiConverterString.read(buf),
                 )
             }
 
-            13 -> {
+            14 -> {
                 AppIntent.MoveTaskTree(
                     FfiConverterString.read(buf),
                     FfiConverterString.read(buf),
                 )
             }
 
-            14 -> {
+            15 -> {
                 AppIntent.DuplicateTaskTree(
                     FfiConverterString.read(buf),
                 )
             }
 
-            15 -> {
+            16 -> {
                 AppIntent.RemoveParent(
                     FfiConverterString.read(buf),
                 )
             }
 
-            16 -> {
+            17 -> {
                 AppIntent.MakeChild(
                     FfiConverterString.read(buf),
                     FfiConverterString.read(buf),
                 )
             }
 
-            17 -> {
+            18 -> {
                 AppIntent.AddDependency(
                     FfiConverterString.read(buf),
                     FfiConverterString.read(buf),
                 )
             }
 
-            18 -> {
+            19 -> {
                 AppIntent.RemoveDependency(
                     FfiConverterString.read(buf),
                     FfiConverterString.read(buf),
                 )
             }
 
-            19 -> {
+            20 -> {
                 AppIntent.AddRelatedTo(
                     FfiConverterString.read(buf),
                     FfiConverterString.read(buf),
                 )
             }
 
-            20 -> {
+            21 -> {
                 AppIntent.RemoveRelatedTo(
                     FfiConverterString.read(buf),
                     FfiConverterString.read(buf),
                 )
             }
 
-            21 -> {
+            22 -> {
                 AppIntent.SetSearchTerm(
                     FfiConverterString.read(buf),
                 )
             }
 
-            22 -> {
+            23 -> {
                 AppIntent.ToggleTagFilter(
                     FfiConverterString.read(buf),
                 )
             }
 
-            23 -> {
+            24 -> {
                 AppIntent.ToggleLocationFilter(
                     FfiConverterString.read(buf),
                 )
             }
 
-            24 -> {
+            25 -> {
                 AppIntent.ClearFilters
             }
 
-            25 -> {
+            26 -> {
                 AppIntent.ToggleMatchAllCategories
             }
 
-            26 -> {
+            27 -> {
                 AppIntent.SetSidebarCalendar(
                     FfiConverterString.read(buf),
                 )
             }
 
-            27 -> {
+            28 -> {
                 AppIntent.ClearTagFilters
             }
 
-            28 -> {
+            29 -> {
                 AppIntent.ClearLocationFilters
             }
 
-            29 -> {
+            30 -> {
                 AppIntent.ToggleTreeCollapse(
                     FfiConverterString.read(buf),
                 )
             }
 
-            30 -> {
+            31 -> {
                 AppIntent.SetTreeCollapse(
                     FfiConverterString.read(buf),
                     FfiConverterBoolean.read(buf),
                 )
             }
 
-            31 -> {
+            32 -> {
                 AppIntent.ToggleDoneGroup(
                     FfiConverterString.read(buf),
                 )
             }
 
-            32 -> {
+            33 -> {
                 AppIntent.ToggleTagCollapse(
                     FfiConverterString.read(buf),
                 )
             }
 
-            33 -> {
+            34 -> {
                 AppIntent.ToggleLocationCollapse(
                     FfiConverterString.read(buf),
                 )
             }
 
-            34 -> {
+            35 -> {
                 AppIntent.FocusTaskTree(
                     FfiConverterOptionalString.read(buf),
                 )
             }
 
-            35 -> {
+            36 -> {
                 AppIntent.SelectJournalDate(
                     FfiConverterString.read(buf),
                 )
             }
 
-            36 -> {
+            37 -> {
                 AppIntent.CompleteTree(
                     FfiConverterString.read(buf),
                 )
             }
 
-            37 -> {
+            38 -> {
                 AppIntent.ReplaceDependency(
                     FfiConverterString.read(buf),
                     FfiConverterString.read(buf),
@@ -6797,7 +6840,7 @@ public object FfiConverterTypeAppIntent : FfiConverterRustBuffer<AppIntent> {
                 )
             }
 
-            38 -> {
+            39 -> {
                 AppIntent.ReplaceRelation(
                     FfiConverterString.read(buf),
                     FfiConverterString.read(buf),
@@ -6837,6 +6880,14 @@ public object FfiConverterTypeAppIntent : FfiConverterRustBuffer<AppIntent> {
             }
 
             is AppIntent.DeleteTaskTree -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`uid`)
+                )
+            }
+
+            is AppIntent.RestoreTaskTree -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL +
@@ -7155,205 +7206,211 @@ public object FfiConverterTypeAppIntent : FfiConverterRustBuffer<AppIntent> {
                 Unit
             }
 
-            is AppIntent.DeleteTasks -> {
+            is AppIntent.RestoreTaskTree -> {
                 buf.putInt(5)
+                FfiConverterString.write(value.`uid`, buf)
+                Unit
+            }
+
+            is AppIntent.DeleteTasks -> {
+                buf.putInt(6)
                 FfiConverterSequenceString.write(value.`uids`, buf)
                 Unit
             }
 
             is AppIntent.TogglePin -> {
-                buf.putInt(6)
-                FfiConverterString.write(value.`uid`, buf)
-                Unit
-            }
-
-            is AppIntent.CancelTask -> {
                 buf.putInt(7)
                 FfiConverterString.write(value.`uid`, buf)
                 Unit
             }
 
-            is AppIntent.ChangePriority -> {
+            is AppIntent.CancelTask -> {
                 buf.putInt(8)
+                FfiConverterString.write(value.`uid`, buf)
+                Unit
+            }
+
+            is AppIntent.ChangePriority -> {
+                buf.putInt(9)
                 FfiConverterString.write(value.`uid`, buf)
                 FfiConverterByte.write(value.`delta`, buf)
                 Unit
             }
 
             is AppIntent.StartTask -> {
-                buf.putInt(9)
-                FfiConverterString.write(value.`uid`, buf)
-                Unit
-            }
-
-            is AppIntent.PauseTask -> {
                 buf.putInt(10)
                 FfiConverterString.write(value.`uid`, buf)
                 Unit
             }
 
-            is AppIntent.StopTask -> {
+            is AppIntent.PauseTask -> {
                 buf.putInt(11)
                 FfiConverterString.write(value.`uid`, buf)
                 Unit
             }
 
-            is AppIntent.MoveTask -> {
+            is AppIntent.StopTask -> {
                 buf.putInt(12)
                 FfiConverterString.write(value.`uid`, buf)
-                FfiConverterString.write(value.`targetHref`, buf)
                 Unit
             }
 
-            is AppIntent.MoveTaskTree -> {
+            is AppIntent.MoveTask -> {
                 buf.putInt(13)
                 FfiConverterString.write(value.`uid`, buf)
                 FfiConverterString.write(value.`targetHref`, buf)
                 Unit
             }
 
-            is AppIntent.DuplicateTaskTree -> {
+            is AppIntent.MoveTaskTree -> {
                 buf.putInt(14)
                 FfiConverterString.write(value.`uid`, buf)
+                FfiConverterString.write(value.`targetHref`, buf)
                 Unit
             }
 
-            is AppIntent.RemoveParent -> {
+            is AppIntent.DuplicateTaskTree -> {
                 buf.putInt(15)
                 FfiConverterString.write(value.`uid`, buf)
                 Unit
             }
 
-            is AppIntent.MakeChild -> {
+            is AppIntent.RemoveParent -> {
                 buf.putInt(16)
+                FfiConverterString.write(value.`uid`, buf)
+                Unit
+            }
+
+            is AppIntent.MakeChild -> {
+                buf.putInt(17)
                 FfiConverterString.write(value.`uid`, buf)
                 FfiConverterString.write(value.`parentUid`, buf)
                 Unit
             }
 
             is AppIntent.AddDependency -> {
-                buf.putInt(17)
-                FfiConverterString.write(value.`uid`, buf)
-                FfiConverterString.write(value.`blockerUid`, buf)
-                Unit
-            }
-
-            is AppIntent.RemoveDependency -> {
                 buf.putInt(18)
                 FfiConverterString.write(value.`uid`, buf)
                 FfiConverterString.write(value.`blockerUid`, buf)
                 Unit
             }
 
-            is AppIntent.AddRelatedTo -> {
+            is AppIntent.RemoveDependency -> {
                 buf.putInt(19)
                 FfiConverterString.write(value.`uid`, buf)
-                FfiConverterString.write(value.`relatedUid`, buf)
+                FfiConverterString.write(value.`blockerUid`, buf)
                 Unit
             }
 
-            is AppIntent.RemoveRelatedTo -> {
+            is AppIntent.AddRelatedTo -> {
                 buf.putInt(20)
                 FfiConverterString.write(value.`uid`, buf)
                 FfiConverterString.write(value.`relatedUid`, buf)
                 Unit
             }
 
-            is AppIntent.SetSearchTerm -> {
+            is AppIntent.RemoveRelatedTo -> {
                 buf.putInt(21)
+                FfiConverterString.write(value.`uid`, buf)
+                FfiConverterString.write(value.`relatedUid`, buf)
+                Unit
+            }
+
+            is AppIntent.SetSearchTerm -> {
+                buf.putInt(22)
                 FfiConverterString.write(value.`term`, buf)
                 Unit
             }
 
             is AppIntent.ToggleTagFilter -> {
-                buf.putInt(22)
+                buf.putInt(23)
                 FfiConverterString.write(value.`tag`, buf)
                 Unit
             }
 
             is AppIntent.ToggleLocationFilter -> {
-                buf.putInt(23)
+                buf.putInt(24)
                 FfiConverterString.write(value.`location`, buf)
                 Unit
             }
 
             is AppIntent.ClearFilters -> {
-                buf.putInt(24)
-                Unit
-            }
-
-            is AppIntent.ToggleMatchAllCategories -> {
                 buf.putInt(25)
                 Unit
             }
 
-            is AppIntent.SetSidebarCalendar -> {
+            is AppIntent.ToggleMatchAllCategories -> {
                 buf.putInt(26)
+                Unit
+            }
+
+            is AppIntent.SetSidebarCalendar -> {
+                buf.putInt(27)
                 FfiConverterString.write(value.`href`, buf)
                 Unit
             }
 
             is AppIntent.ClearTagFilters -> {
-                buf.putInt(27)
-                Unit
-            }
-
-            is AppIntent.ClearLocationFilters -> {
                 buf.putInt(28)
                 Unit
             }
 
-            is AppIntent.ToggleTreeCollapse -> {
+            is AppIntent.ClearLocationFilters -> {
                 buf.putInt(29)
+                Unit
+            }
+
+            is AppIntent.ToggleTreeCollapse -> {
+                buf.putInt(30)
                 FfiConverterString.write(value.`uid`, buf)
                 Unit
             }
 
             is AppIntent.SetTreeCollapse -> {
-                buf.putInt(30)
+                buf.putInt(31)
                 FfiConverterString.write(value.`uid`, buf)
                 FfiConverterBoolean.write(value.`collapsed`, buf)
                 Unit
             }
 
             is AppIntent.ToggleDoneGroup -> {
-                buf.putInt(31)
+                buf.putInt(32)
                 FfiConverterString.write(value.`key`, buf)
                 Unit
             }
 
             is AppIntent.ToggleTagCollapse -> {
-                buf.putInt(32)
+                buf.putInt(33)
                 FfiConverterString.write(value.`tag`, buf)
                 Unit
             }
 
             is AppIntent.ToggleLocationCollapse -> {
-                buf.putInt(33)
+                buf.putInt(34)
                 FfiConverterString.write(value.`location`, buf)
                 Unit
             }
 
             is AppIntent.FocusTaskTree -> {
-                buf.putInt(34)
+                buf.putInt(35)
                 FfiConverterOptionalString.write(value.`uid`, buf)
                 Unit
             }
 
             is AppIntent.SelectJournalDate -> {
-                buf.putInt(35)
+                buf.putInt(36)
                 FfiConverterString.write(value.`date`, buf)
                 Unit
             }
 
             is AppIntent.CompleteTree -> {
-                buf.putInt(36)
+                buf.putInt(37)
                 FfiConverterString.write(value.`uid`, buf)
                 Unit
             }
 
             is AppIntent.ReplaceDependency -> {
-                buf.putInt(37)
+                buf.putInt(38)
                 FfiConverterString.write(value.`uid`, buf)
                 FfiConverterString.write(value.`oldDep`, buf)
                 FfiConverterString.write(value.`newDep`, buf)
@@ -7361,7 +7418,7 @@ public object FfiConverterTypeAppIntent : FfiConverterRustBuffer<AppIntent> {
             }
 
             is AppIntent.ReplaceRelation -> {
-                buf.putInt(38)
+                buf.putInt(39)
                 FfiConverterString.write(value.`uid`, buf)
                 FfiConverterString.write(value.`oldRel`, buf)
                 FfiConverterString.write(value.`newRel`, buf)

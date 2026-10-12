@@ -551,6 +551,14 @@ fun TaskRow(
                         )
                     }
 
+                    if (task.task.calendarHref == "local://trash") {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.action_restore)) },
+                            onClick = { expanded = false; onAction("restore") },
+                            leadingIcon = { NfIcon(NfIcons.RESTORE, 16.sp) }
+                        )
+                    }
+
                     if (task.task.isRecurring && !task.task.isRelativeRecurrence && !task.task.isDone && task.task.statusString != "Cancelled" && !task.task.isNote) {
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.action_complete_and_shift)) },

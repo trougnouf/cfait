@@ -1641,10 +1641,15 @@ impl TaskStore {
             let now_str = chrono::Utc::now().to_rfc3339();
             updated
                 .unmapped_properties
-                .retain(|p| p.key != "X-TRASHED-DATE");
+                .retain(|p| p.key != "X-TRASHED-DATE" && p.key != "X-TRASHED-FROM");
             updated.unmapped_properties.push(crate::model::RawProperty {
                 key: "X-TRASHED-DATE".to_string(),
                 value: now_str,
+                params: vec![],
+            });
+            updated.unmapped_properties.push(crate::model::RawProperty {
+                key: "X-TRASHED-FROM".to_string(),
+                value: orig.calendar_href.clone(),
                 params: vec![],
             });
             self.update_or_add_task(updated.clone());
@@ -1667,6 +1672,80 @@ impl TaskStore {
             }
         }
         results
+    }
+
+    /// Moves a trashed task and its trash-resident sub-tree back out of the
+    /// local trash, re-attaching every task to the calendar it was deleted
+    /// from. `parent_uid` links are left untouched, so the sub-tree lands
+    /// exactly where it was in the hierarchy. Returns one (original, updated,
+    /// target_href) triple per restored task, in ancestor-first order.
+    pub fn restore_task_tree(
+        &mut self,
+        root_uid: &str,
+        config: &Config,
+    ) -> Vec<(Task, Task, String)> {
+        let trash_href = crate::storage::LOCAL_TRASH_HREF;
+        if self
+            .get_task_ref(root_uid)
+            .map(|t| t.calendar_href != trash_href)
+            .unwrap_or(true)
+        {
+            return Vec::new();
+        }
+
+        let mut uids = self.get_descendant_uids(root_uid);
+        uids.push(root_uid.to_string());
+
+        let mut moves = Vec::new();
+        for uid in uids {
+            let Some(t) = self.get_task_ref(&uid) else {
+                continue;
+            };
+            if t.calendar_href != trash_href {
+                continue;
+            }
+            let target = self.restore_target_href(&uid, config);
+            let Some((orig, mut updated)) = self.move_task(&uid, target.clone()) else {
+                continue;
+            };
+            updated
+                .unmapped_properties
+                .retain(|p| p.key != "X-TRASHED-DATE" && p.key != "X-TRASHED-FROM");
+            self.update_or_add_task(updated.clone());
+            moves.push((orig, updated, target));
+        }
+        moves
+    }
+
+    /// Picks the calendar a trashed task returns to: the origin recorded at
+    /// delete time, then the parent's calendar (for tasks trashed before
+    /// origins were recorded), then the default calendar, then the local one.
+    fn restore_target_href(&self, uid: &str, config: &Config) -> String {
+        let is_valid_target = |href: &str| {
+            !crate::storage::is_system_calendar(href) && self.calendars.contains_key(href)
+        };
+        if let Some(t) = self.get_task_ref(uid)
+            && let Some(prop) = t
+                .unmapped_properties
+                .iter()
+                .find(|p| p.key == "X-TRASHED-FROM")
+            && is_valid_target(&prop.value)
+        {
+            return prop.value.clone();
+        }
+        if let Some(t) = self.get_task_ref(uid)
+            && let Some(parent_uid) = &t.parent_uid
+            && let Some(parent) = self.get_task_ref(parent_uid)
+            && is_valid_target(&parent.calendar_href)
+        {
+            return parent.calendar_href.clone();
+        }
+        if let Some(default) = &config.default_calendar
+            && is_valid_target(default)
+        {
+            return default.clone();
+        }
+        crate::storage::LOCAL_CALENDAR_HREF.to_string()
     }
 
     /// Toggle convenience: Completed <-> NeedsAction (returns primary, optional secondary, reset children)
@@ -4955,6 +5034,12 @@ impl TaskStore {
 
         for uid in to_update {
             if let Some(task_ref) = self.get_task_ref(&uid) {
+                // Referents already in a system calendar (trash / recovery) keep
+                // their references: a tree delete must leave the sub-tree
+                // structure intact inside the trash so it can be restored whole.
+                if crate::storage::is_system_calendar(&task_ref.calendar_href) {
+                    continue;
+                }
                 let mut task = task_ref.clone();
                 let mut changed = false;
 
@@ -5072,6 +5157,11 @@ impl TaskStore {
             AppIntent::MoveTaskTree { uid, .. }
             | AppIntent::DuplicateTaskTree { uid }
             | AppIntent::CompleteTree { uid } => {
+                primary_uid = Some(uid.clone());
+                potential_uids.push(uid.clone());
+                potential_uids.extend(self.get_descendant_uids(uid));
+            }
+            AppIntent::RestoreTaskTree { uid } => {
                 primary_uid = Some(uid.clone());
                 potential_uids.push(uid.clone());
                 potential_uids.extend(self.get_descendant_uids(uid));
@@ -5304,6 +5394,11 @@ impl TaskStore {
                 let new_tasks = self.duplicate_task_tree(uid);
                 actions.extend(new_tasks.into_iter().map(JournalAction::Create));
             }
+            AppIntent::RestoreTaskTree { uid } => {
+                for (orig, updated, target) in self.restore_task_tree(uid, config) {
+                    actions.extend(Self::move_journal_actions(orig, updated, target));
+                }
+            }
             AppIntent::ReplaceDependency {
                 uid,
                 old_dep,
@@ -5452,6 +5547,9 @@ impl TaskStore {
             }
             AppIntent::MoveTask { .. } => rust_i18n::t!("intent_desc_moved_task").to_string(),
             AppIntent::MoveTaskTree { .. } => rust_i18n::t!("intent_desc_moved_tree").to_string(),
+            AppIntent::RestoreTaskTree { .. } => {
+                rust_i18n::t!("intent_desc_restored_tree").to_string()
+            }
             AppIntent::ChangePriority { delta, .. } => {
                 if *delta > 0 {
                     rust_i18n::t!("intent_desc_increased_priority").to_string()

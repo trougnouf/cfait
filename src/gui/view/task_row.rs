@@ -1115,6 +1115,9 @@ pub fn view_task_row<'a>(
                     TaskAction::DeleteTree => {
                         (icon::TRASH, Message::DeleteTaskTree(task.uid.clone()), 1)
                     }
+                    TaskAction::Restore => {
+                        (icon::RESTORE, Message::RestoreTask(task.uid.clone()), 0)
+                    }
                     TaskAction::OpenCoordinates => (
                         icon::MAP_LOCATION_DOT,
                         Message::OpenCoordinates(task.uid.clone()),

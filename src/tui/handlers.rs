@@ -206,6 +206,7 @@ fn get_available_actions(state: &AppState, task: &Task) -> Vec<crate::config::Ta
             TaskAction::OpenUrl => task.url.is_some(),
             TaskAction::CopyUrl => task.first_url().is_some(),
             TaskAction::DeleteTree => task.has_subtasks,
+            TaskAction::Restore => task.calendar_href == crate::storage::LOCAL_TRASH_HREF,
             TaskAction::OpenCoordinates => task.geo.is_some(),
             TaskAction::OpenLocations => task.tree_location_count > 1,
             TaskAction::ToggleDetails => has_info,
@@ -639,6 +640,9 @@ async fn execute_task_action(
         }
         DeleteTree => {
             intent = Some(AppIntent::DeleteTaskTree { uid });
+        }
+        Restore => {
+            intent = Some(AppIntent::RestoreTaskTree { uid });
         }
         Focus => {
             intent = Some(AppIntent::FocusTaskTree { uid: Some(uid) });

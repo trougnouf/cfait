@@ -3430,6 +3430,11 @@ impl CfaitMobile {
             .await
     }
 
+    pub async fn restore_task_tree(&self, uid: String) -> Result<String, MobileError> {
+        self.dispatch(crate::model::AppIntent::RestoreTaskTree { uid })
+            .await
+    }
+
     pub async fn toggle_pin(&self, uid: String) -> Result<String, MobileError> {
         self.dispatch(crate::model::AppIntent::TogglePin { uid })
             .await

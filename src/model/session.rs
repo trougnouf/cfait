@@ -218,6 +218,9 @@ pub enum AppIntent {
     DeleteTaskTree {
         uid: String,
     },
+    RestoreTaskTree {
+        uid: String,
+    },
     DeleteTasks {
         uids: Vec<String>,
     },

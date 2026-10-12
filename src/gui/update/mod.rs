@@ -159,6 +159,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::KeyboardOpenUrl
         | Message::DuplicateTask(_)
         | Message::DeleteTaskTree(_)
+        | Message::RestoreTask(_)
         | Message::ToggleActiveSelected
         | Message::StopSelected
         | Message::CancelSelected
