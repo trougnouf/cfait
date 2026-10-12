@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.2.0] - 2026-10-12
+
+### 🚀 Features
+
+- *(parser)* Accept compound durations like 2h20m and anchor dateless rem: to now (suggested by wunter8)
+- *(sync)* Prefer a reachable local (LAN) address over the primary CalDAV URL
+- *(trash)* Restore a deleted sub-tree to its place in the tree
+- *(journal)* Group task-parented pages under dimmed context rows and add a header yank button
+- *(journal)* Group context rows under common task ancestors, align rows and highlight yank state
+- *(journal)* Merge context rows into an ancestor trie and unyank by pressing yank again
+
+### 🐛 Bug Fixes
+
+- *(sync)* Send strong entity-tags in If-Match so weak-etag servers stop conflict-copying every save ( https://codeberg.org/trougnouf/cfait/issues/102 )
+- *(markdown)* Dim uid round-trip comments in raw editors instead of dropping or rendering them plain
+- *(markdown)* Keep extracted tasks at their typed position via uid-tagged shadow lines
+- *(gui)* Submit the journal title input instead of leaking Enter to the selected task
+- *(gui)* Move the selection highlight to the right-clicked task so the highlighted row always reflects the context menu target
+- *(store)* Resolve uid-prefix references before fuzzy summary matches
+- *(journal)* Reuse the link yank icon and offer a child-of-yanked button in the header
+
+### 🧪 Testing
+
+- *(sync)* Expect the quoted strong entity-tag form in If-Match mocks ( https://codeberg.org/trougnouf/cfait/issues/102 )
+
+### ⚙️ Miscellaneous Tasks
+
+- Update dependencies
 ## [1.1.9] - 2026-10-09
 
 ### 🚀 Features
@@ -173,6 +201,7 @@
 - *(sync)* Resolve 412s against our own previous edit chain by SEQUENCE instead of duplicating the task
 - *(sync)* Record the server-agreed state per pushed task and etag-match it as the 412 merge base
 - *(gui)* Debias confetti bursts with splitmix64 seeding and widen the randomized speed, drag, and spin ranges (https://github.com/trougnouf/cfait/discussions/98)
+- *(android)* Show toasts on the main looper so background threads don't crash
 
 ### 💼 Other
 
