@@ -573,19 +573,27 @@ async fn execute_task_action(
             }
         }
         Yank => {
-            let summary = task.summary.clone();
-            let text = if task.description.is_empty() {
-                task.to_smart_string()
+            // Yanking the already-yanked task clears the yank state.
+            if state.yanked_uid.as_deref() == Some(uid.as_str()) {
+                state.yanked_uid = None;
+                state.yank_lock_active = false;
+                state.message = rust_i18n::t!("yank_cleared").to_string();
+                state.needs_redraw = true;
             } else {
-                format!("{}\n\n{}", task.to_smart_string(), task.description)
-            };
-            state.yanked_uid = Some(uid);
-            use base64::Engine;
-            let b64 = base64::engine::general_purpose::STANDARD.encode(text);
-            print!("\x1b]52;c;{}\x07", b64);
-            use std::io::Write;
-            let _ = std::io::stdout().flush();
-            state.message = rust_i18n::t!("yanked_and_copied", summary = summary).to_string();
+                let summary = task.summary.clone();
+                let text = if task.description.is_empty() {
+                    task.to_smart_string()
+                } else {
+                    format!("{}\n\n{}", task.to_smart_string(), task.description)
+                };
+                state.yanked_uid = Some(uid);
+                use base64::Engine;
+                let b64 = base64::engine::general_purpose::STANDARD.encode(text);
+                print!("\x1b]52;c;{}\x07", b64);
+                use std::io::Write;
+                let _ = std::io::stdout().flush();
+                state.message = rust_i18n::t!("yanked_and_copied", summary = summary).to_string();
+            }
         }
         TogglePin => {
             intent = Some(AppIntent::TogglePin { uid });
@@ -3171,26 +3179,34 @@ pub async fn handle_key_event(
                     let uid = t.uid.clone();
                     let summary = t.summary.clone();
 
-                    // Compute the text to copy while only holding the immutable borrow,
-                    // then mutate state (to avoid borrow-checker error).
-                    let text = if t.description.is_empty() {
-                        t.to_smart_string()
+                    // Yanking the already-yanked task clears the yank state.
+                    if state.yanked_uid.as_deref() == Some(uid.as_str()) {
+                        state.yanked_uid = None;
+                        state.yank_lock_active = false;
+                        state.message = rust_i18n::t!("yank_cleared").to_string();
+                        state.needs_redraw = true;
                     } else {
-                        format!("{}\n\n{}", t.to_smart_string(), t.description)
-                    };
+                        // Compute the text to copy while only holding the immutable borrow,
+                        // then mutate state (to avoid borrow-checker error).
+                        let text = if t.description.is_empty() {
+                            t.to_smart_string()
+                        } else {
+                            format!("{}\n\n{}", t.to_smart_string(), t.description)
+                        };
 
-                    // Now it's safe to update yank state
-                    state.yanked_uid = Some(uid);
+                        // Now it's safe to update yank state
+                        state.yanked_uid = Some(uid);
 
-                    // Copy to clipboard using OSC 52 (base64 payload)
-                    use base64::Engine;
-                    let b64 = base64::engine::general_purpose::STANDARD.encode(text);
-                    print!("\x1b]52;c;{}\x07", b64);
-                    use std::io::Write;
-                    let _ = std::io::stdout().flush();
+                        // Copy to clipboard using OSC 52 (base64 payload)
+                        use base64::Engine;
+                        let b64 = base64::engine::general_purpose::STANDARD.encode(text);
+                        print!("\x1b]52;c;{}\x07", b64);
+                        use std::io::Write;
+                        let _ = std::io::stdout().flush();
 
-                    state.message =
-                        rust_i18n::t!("yanked_and_copied", summary = summary).to_string();
+                        state.message =
+                            rust_i18n::t!("yanked_and_copied", summary = summary).to_string();
+                    }
                 }
             }
             KeyCode::Char('g') => {

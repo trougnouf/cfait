@@ -347,8 +347,14 @@ fn append_description(target: &mut String, extra: &str) {
 }
 
 /// Yank a task: mark it as the pending yank source and copy its text to the
-/// clipboard when it is visible in the list.
+/// clipboard when it is visible in the list. Yanking the already-yanked item
+/// clears the yank state instead.
 fn yank_task(app: &mut GuiApp, uid: &str) -> Task<Message> {
+    if app.yanked_uid.as_deref() == Some(uid) {
+        app.yanked_uid = None;
+        app.yank_lock_active = false;
+        return Task::none();
+    }
     app.yanked_uid = Some(uid.to_string());
     let mut tasks = vec![common::scroll_to_selected(app, false)];
     if let Some(idx) = app.find_task_index_by_uid(uid)

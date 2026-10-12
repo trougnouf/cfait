@@ -4473,11 +4473,25 @@ impl TaskStore {
         let mut root_pages = Vec::new();
         // Pages whose parent is a regular task (not a journal component) are
         // grouped under dimmed context rows naming that task, mirroring how
-        // search injects ancestor context from outside the scoped set.
-        let mut task_parent_children: HashMap<&str, Vec<&Task>> = HashMap::new();
-        let mut context_refs: HashMap<&str, &Task> = HashMap::new();
-        let mut chains: HashMap<&str, Vec<&str>> = HashMap::new();
-        let mut ancestor_pages: HashMap<&str, HashSet<&str>> = HashMap::new();
+        // search injects ancestor context from outside the scoped set. The
+        // ancestor chains of all such pages merge into a single tree, so
+        // pages sharing any ancestor nest under it instead of forming
+        // separate top-level groups.
+        // Merged ancestor trie of the task-parented pages: task refs, edges
+        // (ancestor uid -> descendant uid), topmost roots, and the pages
+        // attached to each node (their direct parent).
+        struct ContextTree<'a> {
+            refs: HashMap<&'a str, &'a Task>,
+            edges: HashMap<&'a str, Vec<&'a str>>,
+            roots: HashMap<&'a str, &'a Task>,
+            pages: HashMap<&'a str, Vec<&'a Task>>,
+        }
+        let mut context = ContextTree {
+            refs: HashMap::new(),
+            edges: HashMap::new(),
+            roots: HashMap::new(),
+            pages: HashMap::new(),
+        };
 
         for p in &pages {
             if let Some(parent) = &p.parent_uid {
@@ -4492,9 +4506,7 @@ impl TaskStore {
                     .is_some()
                 {
                     // Walk the page's chain of regular-task ancestors
-                    // (immediate parent first). Pages sharing a common
-                    // ancestor group under it, with their direct parent as a
-                    // nested context row; the chain stops at journal
+                    // (immediate parent first); the chain stops at journal
                     // components, system calendars and dangling parents.
                     let mut chain: Vec<&str> = Vec::new();
                     let mut seen = HashSet::new();
@@ -4506,24 +4518,28 @@ impl TaskStore {
                         if t.is_journal || crate::storage::is_system_calendar(&t.calendar_href) {
                             break;
                         }
-                        context_refs.insert(cursor, t);
+                        context.refs.insert(cursor, t);
                         chain.push(cursor);
                         match &t.parent_uid {
                             Some(pp) => cursor = pp.as_str(),
                             None => break,
                         }
                     }
-                    for uid in &chain {
-                        ancestor_pages
-                            .entry(uid)
-                            .or_default()
-                            .insert(p.uid.as_str());
+
+                    // Insert the chain into the trie (topmost ancestor as
+                    // root, direct parent as the leaf the page attaches to).
+                    let mut prev: Option<&str> = None;
+                    for uid in chain.iter().rev() {
+                        if let Some(prev) = prev {
+                            context.edges.entry(prev).or_default().push(uid);
+                        } else {
+                            context.roots.insert(uid, context.refs[uid]);
+                        }
+                        prev = Some(uid);
                     }
-                    chains.insert(p.uid.as_str(), chain);
-                    task_parent_children
-                        .entry(parent.as_str())
-                        .or_default()
-                        .push(p);
+                    if let Some(prev) = prev {
+                        context.pages.entry(prev).or_default().push(p);
+                    }
                     continue;
                 }
             }
@@ -4534,21 +4550,25 @@ impl TaskStore {
         for list in journal_children.values_mut() {
             list.sort_by(|a, b| a.summary.cmp(&b.summary));
         }
-        for list in task_parent_children.values_mut() {
+        for list in context.pages.values_mut() {
             list.sort_by(|a, b| a.summary.cmp(&b.summary));
         }
-
-        // The grouping anchor of a page is its most specific ancestor shared
-        // with at least one other page; pages without a shared ancestor keep
-        // their direct parent as the anchor.
-        let mut anchor_of: HashMap<&str, &str> = HashMap::new();
-        for (page_uid, chain) in &chains {
-            let anchor = chain
-                .iter()
-                .find(|uid| ancestor_pages[*uid].len() > 1)
-                .copied()
-                .unwrap_or(chain[0]);
-            anchor_of.insert(page_uid, anchor);
+        for children in context.edges.values_mut() {
+            children.sort_by(|a, b| {
+                context
+                    .refs
+                    .get(a)
+                    .map(|t| t.summary.as_str())
+                    .unwrap_or("")
+                    .cmp(
+                        context
+                            .refs
+                            .get(b)
+                            .map(|t| t.summary.as_str())
+                            .unwrap_or(""),
+                    )
+            });
+            children.dedup();
         }
 
         let mut timeline: std::collections::BTreeMap<
@@ -4611,6 +4631,66 @@ impl TaskStore {
             }
         }
 
+        /// Emit a node of the merged ancestor trie as a dimmed context row,
+        /// followed by its attached pages and nested ancestor nodes (merged
+        /// and sorted by summary). The `emitted` set guards against parent
+        /// cycles in the data.
+        fn emit_context_node<'a>(
+            uid: &'a str,
+            depth: usize,
+            context: &ContextTree<'a>,
+            journal_children: &HashMap<&'a str, Vec<&'a Task>>,
+            emitted: &mut HashSet<&'a str>,
+            out: &mut Vec<JournalPageItem>,
+        ) {
+            if !emitted.insert(uid) {
+                return;
+            }
+            let Some(task) = context.refs.get(uid) else {
+                return;
+            };
+            out.push(JournalPageItem {
+                key: uid.to_string(),
+                title: task.summary.clone(),
+                depth,
+                has_children: true,
+                is_expanded: true,
+                is_task: false,
+                is_context: true,
+                calendar_href: task.calendar_href.clone(),
+            });
+
+            let mut children: Vec<(&Task, Option<&str>)> = Vec::new();
+            if let Some(pages) = context.pages.get(uid) {
+                for p in pages {
+                    children.push((p, None));
+                }
+            }
+            if let Some(edges) = context.edges.get(uid) {
+                for child_uid in edges {
+                    if let Some(child_task) = context.refs.get(child_uid) {
+                        children.push((child_task, Some(child_task.uid.as_str())));
+                    }
+                }
+            }
+            children.sort_by(|a, b| a.0.summary.cmp(&b.0.summary));
+            for (task, child_uid) in children {
+                match child_uid {
+                    None => flatten_journal(task, journal_children, depth + 1, out),
+                    Some(child_uid) => {
+                        emit_context_node(
+                            child_uid,
+                            depth + 1,
+                            context,
+                            journal_children,
+                            emitted,
+                            out,
+                        );
+                    }
+                }
+            }
+        }
+
         if !root_pages.is_empty() {
             let pages_key = "j:pages";
             let pages_expanded = options.expanded_tags.contains(pages_key);
@@ -4631,99 +4711,21 @@ impl TaskStore {
                 }
 
                 // Dimmed context rows for pages parented to regular tasks,
-                // after the plain root pages. Pages sharing a common ancestor
-                // task nest under it: ancestor at depth 1, direct parent at
-                // depth 2, page at depth 3.
-                let mut anchor_groups: HashMap<&str, HashMap<&str, Vec<&Task>>> = HashMap::new();
-                for list in task_parent_children.values() {
-                    for p in list {
-                        let Some(anchor) = anchor_of.get(p.uid.as_str()) else {
-                            continue;
-                        };
-                        let direct = p.parent_uid.as_deref().unwrap_or_default();
-                        anchor_groups
-                            .entry(anchor)
-                            .or_default()
-                            .entry(direct)
-                            .or_default()
-                            .push(*p);
-                    }
-                }
-
-                let mut anchors: Vec<&str> = anchor_groups.keys().copied().collect();
-                anchors.sort_by(|a, b| {
-                    context_refs
-                        .get(a)
-                        .map(|t| t.summary.as_str())
-                        .unwrap_or("")
-                        .cmp(
-                            context_refs
-                                .get(b)
-                                .map(|t| t.summary.as_str())
-                                .unwrap_or(""),
-                        )
-                });
-                for anchor in anchors {
-                    let Some(anchor_task) = context_refs.get(anchor) else {
-                        continue;
-                    };
-                    journal_pages_out.push(JournalPageItem {
-                        key: anchor.to_string(),
-                        title: anchor_task.summary.clone(),
-                        depth: 1,
-                        has_children: true,
-                        is_expanded: true,
-                        is_task: false,
-                        is_context: true,
-                        calendar_href: anchor_task.calendar_href.clone(),
-                    });
-
-                    // Children of the anchor group — pages attached directly
-                    // to the anchor and nested direct-parent rows — sorted
-                    // together by summary.
-                    let mut children: Vec<(&Task, Option<&Task>, &Vec<&Task>)> = Vec::new();
-                    for (direct, plist) in &anchor_groups[anchor] {
-                        if *direct == anchor {
-                            for p in plist {
-                                children.push((p, None, plist));
-                            }
-                        } else if let Some(direct_task) = context_refs.get(direct) {
-                            children.push((direct_task, Some(direct_task), plist));
-                        }
-                    }
-                    children.sort_by(|a, b| a.0.summary.cmp(&b.0.summary));
-                    for (sort_task, direct_task, plist) in children {
-                        match direct_task {
-                            None => {
-                                flatten_journal(
-                                    sort_task,
-                                    &journal_children,
-                                    2,
-                                    &mut journal_pages_out,
-                                );
-                            }
-                            Some(direct_task) => {
-                                journal_pages_out.push(JournalPageItem {
-                                    key: direct_task.uid.clone(),
-                                    title: direct_task.summary.clone(),
-                                    depth: 2,
-                                    has_children: true,
-                                    is_expanded: true,
-                                    is_task: false,
-                                    is_context: true,
-                                    calendar_href: direct_task.calendar_href.clone(),
-                                });
-                                for p in plist {
-                                    flatten_journal(
-                                        p,
-                                        &journal_children,
-                                        3,
-                                        &mut journal_pages_out,
-                                    );
-                                }
-                            }
-                        }
-                    }
+                // after the plain root pages: the merged ancestor trie,
+                // roots at depth 1, pages at their chain depth + 1. The
+                // emitted set guards against parent cycles in the data.
+                let mut emitted: HashSet<&str> = HashSet::new();
+                let mut roots: Vec<&str> = context.roots.keys().copied().collect();
+                roots.sort_by(|a, b| context.roots[a].summary.cmp(&context.roots[b].summary));
+                for uid in roots {
+                    emit_context_node(
+                        uid,
+                        1,
+                        &context,
+                        &journal_children,
+                        &mut emitted,
+                        &mut journal_pages_out,
+                    );
                 }
             }
         }
@@ -6321,6 +6323,7 @@ mod tests {
         );
         let gutter = journal("gutter", Some("roof"));
         let petflap = journal("petflap", Some("phase5"));
+        let cyclone = journal("cyclone", Some("phase5"));
         let direct = journal("direct", Some("construction"));
         let solo_parent = make_task("solo_parent", None, TaskStatus::NeedsAction, false);
         let solo = journal("solo", Some("solo_parent"));
@@ -6335,6 +6338,7 @@ mod tests {
             phase5,
             gutter,
             petflap,
+            cyclone,
             direct,
             solo_parent,
             solo,
@@ -6395,11 +6399,13 @@ mod tests {
             .collect();
 
         // The pages section nests sub-pages under their page, and groups the
-        // task-attached pages under dimmed context rows after the plain root
-        // pages. Pages sharing a common ancestor task (gutter, petflap,
-        // direct) nest under it: ancestor at depth 1, direct parent at depth
-        // 2, page at depth 3. A page with no shared ancestor (solo) keeps its
-        // direct parent as the anchor. A dangling parent stays a root.
+        // task-attached pages after the plain root pages under their merged
+        // ancestor trie: one group per topmost ancestor task, with nested
+        // ancestor nodes and pages at increasing depths. Petflap and cyclone
+        // share phase5, gutter sits under roof — all inside the construction
+        // tree, so a single group nests them all. A page with a lone chain
+        // (solo) groups under its direct parent. A dangling parent stays a
+        // root.
         let expected = vec![
             ("j:pages", false, false, 0),
             ("container", true, false, 1),
@@ -6409,6 +6415,7 @@ mod tests {
             ("construction", false, true, 1),
             ("direct", true, false, 2),
             ("phase5", false, true, 2),
+            ("cyclone", true, false, 3),
             ("petflap", true, false, 3),
             ("roof", false, true, 2),
             ("gutter", true, false, 3),
