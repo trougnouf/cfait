@@ -1174,19 +1174,39 @@ impl TaskStore {
             }
         }
 
+        // A short UID prefix is the most specific form of reference: the app
+        // itself serializes dep:/rel: as 8-char UID prefixes, while a quoted
+        // summary can legitimately contain that same UID text verbatim (e.g.
+        // a pasted task line kept as-is). UID-prefix matches therefore take
+        // priority over fuzzy summary matches, so a unique UID prefix is
+        // never turned into an ambiguous reference.
         let mut matches = Vec::new();
 
-        for (href, map) in &self.calendars {
-            let is_system = crate::storage::is_system_calendar(href);
+        if path_segments.len() == 1 {
+            let single_ref = crate::model::parser::strip_quotes(&path_segments[0]);
+            for (href, map) in &self.calendars {
+                let is_system = crate::storage::is_system_calendar(href);
+                if !in_scope(href, is_system) {
+                    continue;
+                }
+                for (uid, task) in map {
+                    if uid.starts_with(&single_ref) {
+                        matches.push(task.clone());
+                    }
+                }
+            }
+        }
 
-            for (uid, task) in map {
-                if (path_segments.len() == 1
-                    && in_scope(href, is_system)
-                    && uid.starts_with(&crate::model::parser::strip_quotes(&path_segments[0])))
-                    || (in_scope(href, is_system)
-                        && self.task_matches_path(task, &path_segments, is_relative, context_uid))
-                {
-                    matches.push(task.clone());
+        if matches.is_empty() {
+            for (href, map) in &self.calendars {
+                let is_system = crate::storage::is_system_calendar(href);
+
+                for task in map.values() {
+                    if in_scope(href, is_system)
+                        && self.task_matches_path(task, &path_segments, is_relative, context_uid)
+                    {
+                        matches.push(task.clone());
+                    }
                 }
             }
         }
@@ -1359,22 +1379,40 @@ impl TaskStore {
             return Vec::new();
         }
 
+        // Mirror the resolver: UID-prefix matches take priority over fuzzy
+        // summary matches, so a quoted summary containing UID text verbatim
+        // does not surface as an extra candidate.
         let mut matches = Vec::new();
 
-        for (href, map) in &self.calendars {
-            let is_system = crate::storage::is_system_calendar(href);
-            let in_scope = match visible_hrefs {
-                Some(visible) => !is_system && visible.iter().any(|h| h == href),
-                None => !is_system,
-            };
-            for (uid, task) in map {
-                if (path_segments.len() == 1
-                    && in_scope
-                    && uid.starts_with(&crate::model::parser::strip_quotes(&path_segments[0])))
-                    || (in_scope
-                        && self.task_matches_path(task, &path_segments, is_relative, context_uid))
-                {
-                    matches.push((uid.clone(), task.summary.clone(), href.clone()));
+        let in_scope = |href: &str, is_system: bool| match visible_hrefs {
+            Some(visible) => !is_system && visible.iter().any(|h| h == href),
+            None => !is_system,
+        };
+
+        if path_segments.len() == 1 {
+            let single_ref = crate::model::parser::strip_quotes(&path_segments[0]);
+            for (href, map) in &self.calendars {
+                let is_system = crate::storage::is_system_calendar(href);
+                if !in_scope(href, is_system) {
+                    continue;
+                }
+                for (uid, task) in map {
+                    if uid.starts_with(&single_ref) {
+                        matches.push((uid.clone(), task.summary.clone(), href.clone()));
+                    }
+                }
+            }
+        }
+
+        if matches.is_empty() {
+            for (href, map) in &self.calendars {
+                let is_system = crate::storage::is_system_calendar(href);
+                for (uid, task) in map {
+                    if in_scope(href, is_system)
+                        && self.task_matches_path(task, &path_segments, is_relative, context_uid)
+                    {
+                        matches.push((uid.clone(), task.summary.clone(), href.clone()));
+                    }
                 }
             }
         }
