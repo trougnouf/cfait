@@ -2866,6 +2866,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
                 )
                 .id("journal_title")
                 .on_input(Message::JournalTitleInputChanged)
+                .on_submit(Message::FocusJournalEditor)
                 .size(22)
                 .font(iced::Font {
                     weight: iced::font::Weight::Bold,
