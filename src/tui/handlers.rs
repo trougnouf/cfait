@@ -3467,7 +3467,7 @@ pub async fn handle_key_event(
                                         },
                                         action_tx,
                                     );
-                                } else {
+                                } else if !page.is_context {
                                     state.toggle_expanded_tag(page.key.clone());
                                 }
                             }
@@ -3719,7 +3719,7 @@ pub async fn handle_key_event(
                                         },
                                         action_tx,
                                     );
-                                } else {
+                                } else if !page.is_context {
                                     state.toggle_expanded_tag(page.key.clone());
                                 }
                             }
@@ -3848,7 +3848,7 @@ pub async fn handle_key_event(
                                     state.active_focus = Focus::Main;
                                     state.details_scroll = 0;
                                     state.refresh_filtered_view();
-                                } else {
+                                } else if !page.is_context {
                                     state.toggle_expanded_tag(page.key.clone());
                                 }
                             }

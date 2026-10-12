@@ -1158,6 +1158,23 @@ pub fn view_sidebar_journal(app: &GuiApp) -> Element<'_, Message> {
         let display_name = &page.title;
         let indent = Space::new().width(Length::Fixed(page.depth as f32 * 12.0));
 
+        // Context rows name the regular task a page is parented to: dimmed,
+        // small and inert — purely a signpost, never navigable.
+        if page.is_context {
+            let context_color = Color::from_rgb(0.55, 0.55, 0.55);
+            index_col = index_col.push(
+                row![
+                    indent,
+                    icon::icon(icon::ARROW_RIGHT).size(10).color(context_color),
+                    text(display_name.clone()).size(12).color(context_color),
+                ]
+                .spacing(6)
+                .align_y(iced::Alignment::Center)
+                .padding([4, 4]),
+            );
+            continue;
+        }
+
         let icon_char = if page.is_task {
             icon::JOURNAL
         } else {

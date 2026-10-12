@@ -87,6 +87,9 @@ pub struct JournalPageItem {
     pub has_children: bool,
     pub is_expanded: bool,
     pub is_task: bool,
+    /// Dimmed context row naming the regular task a page is parented to;
+    /// never navigable, purely a signpost in the journal tree.
+    pub is_context: bool,
     pub calendar_href: String,
 }
 
@@ -4468,19 +4471,39 @@ impl TaskStore {
 
         let mut journal_children: HashMap<&str, Vec<&Task>> = HashMap::new();
         let mut root_pages = Vec::new();
+        // Pages whose parent is a regular task (not a journal component) are
+        // grouped under a dimmed context row naming that task, mirroring how
+        // search injects ancestor context from outside the scoped set.
+        let mut task_parents: HashMap<&str, &Task> = HashMap::new();
+        let mut task_parent_children: HashMap<&str, Vec<&Task>> = HashMap::new();
 
         for p in &pages {
-            if let Some(parent) = &p.parent_uid
-                && all_journal_uids.contains(parent.as_str())
-            {
-                journal_children.entry(parent.as_str()).or_default().push(p);
-                continue;
+            if let Some(parent) = &p.parent_uid {
+                if all_journal_uids.contains(parent.as_str()) {
+                    journal_children.entry(parent.as_str()).or_default().push(p);
+                    continue;
+                }
+                if let Some(parent_task) = self
+                    .get_task_ref(parent)
+                    .filter(|pt| !pt.is_journal)
+                    .filter(|pt| !crate::storage::is_system_calendar(&pt.calendar_href))
+                {
+                    task_parents.insert(parent.as_str(), parent_task);
+                    task_parent_children
+                        .entry(parent.as_str())
+                        .or_default()
+                        .push(p);
+                    continue;
+                }
             }
             root_pages.push(*p);
         }
 
         root_pages.sort_by(|a, b| a.summary.cmp(&b.summary));
         for list in journal_children.values_mut() {
+            list.sort_by(|a, b| a.summary.cmp(&b.summary));
+        }
+        for list in task_parent_children.values_mut() {
             list.sort_by(|a, b| a.summary.cmp(&b.summary));
         }
 
@@ -4533,6 +4556,7 @@ impl TaskStore {
                 has_children,
                 is_expanded,
                 is_task: true,
+                is_context: false,
                 calendar_href: node.calendar_href.clone(),
             });
 
@@ -4553,12 +4577,50 @@ impl TaskStore {
                 has_children: true,
                 is_expanded: pages_expanded,
                 is_task: false,
+                is_context: false,
                 calendar_href: String::new(),
             });
 
             if pages_expanded {
                 for p in &root_pages {
                     flatten_journal(p, &journal_children, 1, &mut journal_pages_out);
+                }
+
+                // Dimmed context rows for pages parented to regular tasks,
+                // after the plain root pages, sorted by parent summary.
+                let mut grouped_parents: Vec<&str> = task_parent_children.keys().copied().collect();
+                grouped_parents.sort_by(|a, b| {
+                    task_parents
+                        .get(a)
+                        .map(|t| t.summary.as_str())
+                        .unwrap_or("")
+                        .cmp(
+                            task_parents
+                                .get(b)
+                                .map(|t| t.summary.as_str())
+                                .unwrap_or(""),
+                        )
+                });
+                for parent_uid in grouped_parents {
+                    let Some(parent_task) = task_parents.get(parent_uid) else {
+                        continue;
+                    };
+                    journal_pages_out.push(JournalPageItem {
+                        key: parent_uid.to_string(),
+                        title: parent_task.summary.clone(),
+                        depth: 1,
+                        has_children: true,
+                        is_expanded: true,
+                        is_task: false,
+                        is_context: true,
+                        calendar_href: parent_task.calendar_href.clone(),
+                    });
+                    let Some(children) = task_parent_children.get(parent_uid) else {
+                        continue;
+                    };
+                    for child in children {
+                        flatten_journal(child, &journal_children, 2, &mut journal_pages_out);
+                    }
                 }
             }
         }
@@ -4573,6 +4635,7 @@ impl TaskStore {
                 has_children: true,
                 is_expanded: timeline_expanded,
                 is_task: false,
+                is_context: false,
                 calendar_href: String::new(),
             });
 
@@ -4587,6 +4650,7 @@ impl TaskStore {
                         has_children: true,
                         is_expanded: year_expanded,
                         is_task: false,
+                        is_context: false,
                         calendar_href: String::new(),
                     });
 
@@ -4603,6 +4667,7 @@ impl TaskStore {
                                 has_children: true,
                                 is_expanded: month_expanded,
                                 is_task: false,
+                                is_context: false,
                                 calendar_href: String::new(),
                             });
 
@@ -6125,6 +6190,99 @@ mod tests {
         // A pinned sub-page and a container page stay visible.
         assert!(uids.contains("pinned_subpage"));
         assert!(uids.contains("container"));
+    }
+
+    #[test]
+    fn journal_task_parent_pages_grouped_under_context_row() {
+        let ctx = std::sync::Arc::new(crate::context::StandardContext::new(Some(
+            std::env::temp_dir().join(format!("cfait-store-test-{}", uuid::Uuid::new_v4())),
+        )));
+        let mut store = TaskStore::new(ctx);
+
+        let journal = |uid: &str, parent: Option<&str>| {
+            let mut t = make_task(uid, parent, TaskStatus::NeedsAction, false);
+            t.is_journal = true;
+            t
+        };
+
+        // A regular task with two attached pages, a plain root page, a page
+        // nested under another page, and a page with a dangling parent.
+        let task1 = make_task("task1", None, TaskStatus::NeedsAction, false);
+        let attached_a = journal("attached_a", Some("task1"));
+        let attached_b = journal("attached_b", Some("task1"));
+        let root_page = journal("root_page", None);
+        let container = journal("container", None);
+        let subpage = journal("subpage", Some("container"));
+        let dangling = journal("dangling", Some("missing_uid"));
+
+        for t in [
+            task1, attached_a, attached_b, root_page, container, subpage, dangling,
+        ] {
+            store.add_task(t);
+        }
+
+        let mut expanded: HashSet<String> = HashSet::new();
+        expanded.insert("j:pages".to_string());
+        let hidden = HashSet::new();
+        let categories = HashSet::new();
+        let locations = HashSet::new();
+        let aliases = HashMap::new();
+        let collapsed = HashSet::new();
+        let done_groups = HashSet::new();
+        let locs_expanded = HashSet::new();
+        let res = store.filter(FilterOptions {
+            active_cal_href: None,
+            hidden_calendars: &hidden,
+            selected_categories: &categories,
+            selected_locations: &locations,
+            match_all_categories: false,
+            search_term: "",
+            hide_completed_global: false,
+            hide_fully_completed_tags: false,
+            hide_aliases_in_sidebar: false,
+            cutoff_date: None,
+            min_duration: None,
+            max_duration: None,
+            include_unset_duration: true,
+            urgent_days: 7,
+            urgent_prio: 9,
+            default_priority: 5,
+            start_grace_period_days: 0,
+            sort_standard_by_priority: false,
+            sort_preset: crate::config::SortPreset::UrgentStartedDue,
+            expanded_done_groups: &done_groups,
+            expanded_tags: &expanded,
+            expanded_locations: &locs_expanded,
+            max_done_roots: 10,
+            max_done_subtasks: 10,
+            tag_aliases: &aliases,
+            search_collapsed_tasks: &collapsed,
+            focused_task_uid: None,
+            paused_sort_behavior: crate::config::PausedSortBehavior::default(),
+            sort_tiebreak_recent: false,
+            default_reminder_time: chrono::NaiveTime::from_hms_opt(9, 0, 0).unwrap(),
+        });
+
+        let entries: Vec<(&str, bool, bool, usize)> = res
+            .journal_pages
+            .iter()
+            .map(|p| (p.key.as_str(), p.is_task, p.is_context, p.depth))
+            .collect();
+
+        // The pages section nests sub-pages under their page, and groups the
+        // task-attached pages under a single dimmed context row naming the
+        // task, after the plain root pages. A dangling parent stays a root.
+        let expected = vec![
+            ("j:pages", false, false, 0),
+            ("container", true, false, 1),
+            ("subpage", true, false, 2),
+            ("dangling", true, false, 1),
+            ("root_page", true, false, 1),
+            ("task1", false, true, 1),
+            ("attached_a", true, false, 2),
+            ("attached_b", true, false, 2),
+        ];
+        assert_eq!(entries, expected);
     }
 
     #[test]

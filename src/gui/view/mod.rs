@@ -2855,6 +2855,16 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
         )
         .style(crate::gui::view::tooltip_style);
 
+        let yank_page_btn = tooltip(
+            iced::widget::button(icon::icon(icon::CLONE).size(14))
+                .style(iced::widget::button::secondary)
+                .padding(8)
+                .on_press(Message::YankTask(uid.clone())),
+            text(rust_i18n::t!("menu_yank")).size(12),
+            tooltip::Position::Bottom,
+        )
+        .style(crate::gui::view::tooltip_style);
+
         let create_subpage_btn = tooltip(
             iced::widget::button(icon::icon(icon::CREATE_CHILD).size(14))
                 .style(iced::widget::button::secondary)
@@ -2882,6 +2892,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
                 .padding(5)
                 .width(Length::FillPortion(2)),
                 Space::new().width(Length::FillPortion(1)),
+                yank_page_btn,
                 create_subpage_btn,
                 move_btn,
                 delete_btn,
@@ -2896,6 +2907,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
                     ..Default::default()
                 }),
                 Space::new().width(Length::Fill),
+                yank_page_btn,
                 create_subpage_btn,
                 move_btn,
                 delete_btn,

@@ -663,31 +663,38 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             for page in &state.cached_journal_pages {
                 let indent = "  ".repeat(page.depth);
 
-                let icon_str = if page.is_task {
-                    if page.has_children {
+                let span = if page.is_context {
+                    Span::styled(
+                        format!("{}↳ {}", indent, page.title),
+                        Style::default().fg(Color::DarkGray),
+                    )
+                } else {
+                    let icon_str = if page.is_task {
+                        if page.has_children {
+                            if page.is_expanded {
+                                "▼ (z)"
+                            } else {
+                                "▶ (z)"
+                            }
+                        } else {
+                            "📔"
+                        }
+                    } else {
                         if page.is_expanded {
                             "▼ (z)"
                         } else {
                             "▶ (z)"
                         }
-                    } else {
-                        "📔"
-                    }
-                } else {
-                    if page.is_expanded {
-                        "▼ (z)"
-                    } else {
-                        "▶ (z)"
-                    }
-                };
+                    };
 
-                let prefix = if Some(&page.key) == state.journal_editing_uid.as_ref() {
-                    "> "
-                } else {
-                    "  "
-                };
+                    let prefix = if Some(&page.key) == state.journal_editing_uid.as_ref() {
+                        "> "
+                    } else {
+                        "  "
+                    };
 
-                let span = Span::raw(format!("{}{} {} {}", prefix, indent, icon_str, page.title));
+                    Span::raw(format!("{}{} {} {}", prefix, indent, icon_str, page.title))
+                };
 
                 let color = if page.is_task {
                     state
