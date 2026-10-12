@@ -2855,9 +2855,16 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
         )
         .style(crate::gui::view::tooltip_style);
 
+        // Highlighted while the page being edited is the yank source, so the
+        // yank state stays visible after pressing the button.
+        let yanked_here = app.yanked_uid.as_deref() == Some(uid.as_str());
         let yank_page_btn = tooltip(
             iced::widget::button(icon::icon(icon::LINK).size(14))
-                .style(iced::widget::button::secondary)
+                .style(if yanked_here {
+                    iced::widget::button::primary
+                } else {
+                    iced::widget::button::secondary
+                })
                 .padding(8)
                 .on_press(Message::YankTask(uid.clone())),
             text(rust_i18n::t!("menu_yank")).size(12),
@@ -2867,7 +2874,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
 
         // When a yank is active, expose the same relation action as task
         // rows: make the page being edited a child of the yanked task or
-        // page, without leaving the journal.
+        // page, without leaving the journal. Highlighted to stand out.
         let child_of_yanked_btn: Element<'_, Message> =
             match app.yanked_uid.as_deref().filter(|y| *y != uid.as_str()) {
                 Some(yanked) => {
@@ -2875,7 +2882,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
                     let target_summary = app.store.get_summary(&uid).unwrap_or_default();
                     tooltip(
                         iced::widget::button(icon::icon(icon::CHILD).size(14))
-                            .style(iced::widget::button::secondary)
+                            .style(iced::widget::button::primary)
                             .padding(8)
                             .on_press(Message::MakeChild(uid.clone())),
                         text(rust_i18n::t!(

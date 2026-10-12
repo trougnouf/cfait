@@ -91,6 +91,7 @@ pub const SQUARE: char = '\u{f096}'; //
 pub const EXPORT: char = '\u{f093}'; // nf-fa-upload
 pub const IMPORT: char = '\u{f019}'; // nf-fa-download
 pub const BLOCKED: char = '\u{f479}'; // nf-oct-blocked
+pub const TASKLIST: char = '\u{f4a0}'; // nf-oct-tasklist
 pub const CHILD: char = '\u{f0a89}'; // nf-md-account_child
 pub const CREATE_CHILD: char = '\u{f0014}'; // nf-md-account_plus
 pub const CLEAR_ALL: char = '\u{eabf}'; // nf-cod-clear_all
