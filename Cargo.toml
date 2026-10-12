@@ -40,7 +40,7 @@ name = "cfait"
 chrono = { version = "0.4", features = ["serde"] }
 chrono-tz = "0.10"
 icalendar = "0.17"
-uuid = { version = "1.26", features = ["v4"] }
+uuid = { version = "1.28", features = ["v4"] }
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros", "fs", "io-util"] }
 camino = "1.2"
 libdav = "0.11"
@@ -117,7 +117,7 @@ notify-rust = "4"
 webpki-roots = "1.0"
 android_logger = "0.15"
 log = "0.4"
-zip = "8.6"
+zip = "9.0"
 android-native-keyring-store = "1.0"
 jni = "0.22"
 ndk-context = "0.1"
@@ -125,7 +125,7 @@ ndk-context = "0.1"
 [dev-dependencies]
 mockito = "1.7" # For mocking the HTTP server
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros", "fs", "io-util"] }
-uuid = { version = "1.26", features = ["v4"] }
+uuid = { version = "1.28", features = ["v4"] }
 serial_test = "4.0"
 uniffi_meta = "0.32"
 # Required to run the bindgen binary
