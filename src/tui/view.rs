@@ -29,6 +29,14 @@ use ratatui::{
 };
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
+/// Render markdown for a content pane, wrapping tables to `width` columns so
+/// their box-drawn borders stay aligned. Without a table width, tui-markdown
+/// emits tables at their natural content width and the Paragraph's wrap slices
+/// them mid-cell, misaligning the borders.
+fn render_markdown(md: &str, width: u16) -> Text<'_> {
+    tui_markdown::from_str_with_options(md, &tui_markdown::Options::default().table_width(width))
+}
+
 fn push_highlighted_spans_tui(
     spans: &mut Vec<Span<'static>>,
     text: &str,
@@ -1065,7 +1073,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             }
         }
 
-        let mut md_text = tui_markdown::from_str(&desc);
+        let mut md_text = render_markdown(&desc, main_chunks[0].width.saturating_sub(2));
 
         md_text.lines.insert(0, Line::from(""));
         md_text.lines.insert(
@@ -2003,7 +2011,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             state.mode,
             InputMode::EditingDescription | InputMode::EditingTree(_)
         ) {
-            let md_text = tui_markdown::from_str(&details_md);
+            let md_text = render_markdown(&details_md, details_width);
             let details_block = Block::default()
                 .borders(Borders::ALL)
                 .title(format!(" {} ", rust_i18n::t!("details")))
@@ -2501,7 +2509,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
     if state.mode == InputMode::ViewingDetails {
         let area = centered_rect(80, 80, f.area());
         f.render_widget(Clear, area);
-        let md_text = tui_markdown::from_str(&details_md);
+        let md_text = render_markdown(&details_md, area.width.saturating_sub(2));
         let block = Block::default()
             .borders(Borders::ALL)
             .title(format!(" {} ", rust_i18n::t!("details")))
@@ -2884,4 +2892,25 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
             Constraint::Percentage((100 - percent_x) / 2),
         ])
         .split(popup_layout[1])[1]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn render_markdown_keeps_tables_within_the_pane_width() {
+        let md = "\
+### Garden notes
+| Bed | Seed | Sown |
+| :--- | :--- | :--- |
+| North | Tomatoes 'Cherry Gold' | March 12 |
+| South | Basil and chives, in the raised bed by the kitchen door | April 2 |
+";
+        let text = render_markdown(md, 40);
+        assert!(
+            text.lines.iter().all(|line| line.width() <= 40),
+            "every rendered line must fit the pane width"
+        );
+    }
 }
