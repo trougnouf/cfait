@@ -634,7 +634,7 @@ pub fn view_task_row<'a>(
                 }
 
                 for cat in visible_tags {
-                    let (r, g, b) = color_utils::generate_color(cat);
+                    let (r, g, b) = color_utils::generate_tag_color(cat, is_dark_theme);
                     let bg_color = Color::from_rgba(r, g, b, dim_factor);
 
                     let mut text_color = if color_utils::is_dark(r, g, b) {

@@ -433,7 +433,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         ListItem::new(Line::from(spans))
                     } else {
                         let (r, g, b) =
-                            color_utils::generate_tui_color(&item.full_key, is_dark_theme);
+                            color_utils::generate_tag_color(&item.full_key, is_dark_theme);
                         let color =
                             Color::Rgb((r * 255.0) as u8, (g * 255.0) as u8, (b * 255.0) as u8);
                         let prefix = if item.display_name.contains('=') {
@@ -1449,7 +1449,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         }
 
                         for cat in visible_tags {
-                            let (r, g, b) = color_utils::generate_tui_color(cat, is_dark_theme);
+                            let (r, g, b) = color_utils::generate_tag_color(cat, is_dark_theme);
                             if !right_spans.is_empty() {
                                 right_spans.push(Span::raw(" "));
                             }
@@ -2178,7 +2178,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         SyntaxType::Tag => {
                             let tag_name = text.trim_start_matches('#');
                             let (r, g, b) =
-                                color_utils::generate_tui_color(tag_name, is_dark_theme);
+                                color_utils::generate_tag_color(tag_name, is_dark_theme);
                             Style::default().fg(Color::Rgb(
                                 (r * 255.0) as u8,
                                 (g * 255.0) as u8,

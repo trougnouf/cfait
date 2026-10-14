@@ -42,7 +42,7 @@ pub fn get_syntax_style(kind: SyntaxType, text: &str, is_dark: bool) -> (Option<
         SyntaxType::Duration => (Some(Color::from_rgb(0.6, 0.6, 0.6)), false),
         SyntaxType::Tag => {
             let tag_name = text.trim_start_matches('#');
-            let (r, g, b) = color_utils::generate_color(tag_name);
+            let (r, g, b) = color_utils::generate_tag_color(tag_name, is_dark);
             (Some(Color::from_rgb(r, g, b)), true)
         }
         SyntaxType::Text => (None, false),

@@ -412,7 +412,7 @@ All persistent state and settings live here. Unrecognized TOML keys must not be 
 *   `celebrate_completions`: Boolean (per-device, never synced). Celebrate completing a task: a confetti burst in the GUI, confetti plus a `Confirm` haptic on Android, and a terminal bell in the TUI. Celebrations trigger only on user-initiated completions (never on completions arriving via sync or undo).
 *   `show_inline_descriptions`: Boolean. Previews up to 3 lines of the description in the list.
 *   `ui_scale`: Float (0.5-3.0). Global zoom.
-*   `theme`: Enum (RustyDark, Light, Dracula, Nord, Catppuccin variants, etc.).
+*   `theme`: Enum (RustyDark, Light, Dracula, Nord, Catppuccin variants, etc.). Tag colors are derived deterministically from the tag name and adapt to the theme's light/dark variant: on light themes the color is darkened (with a luminance cap so bright hues like yellow, green and cyan stay readable), so the same tag keeps its hue but stays legible on light backgrounds.
 *   `language`: String (`en`, `fr`). None = system locale.
 *   `first_day_of_week`: Enum (`Monday`, `Sunday`). Controls the first day in calendar/journal week views.
 *   `date_format`: Enum (`auto`, `ymd`, `dmy`, `mdy`, `ydm`, `myd`, `dym`). How typed dates (e.g. `due:01/02/2026`) are interpreted in task input. `auto` follows the language's format. Both `-` and `/` separators are accepted for the chosen order, and ISO 8601 (`2026-01-02`) plus compact (`20260102`) are always accepted regardless of the setting.

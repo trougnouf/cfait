@@ -8,14 +8,9 @@
 
 use std::hash::{Hash, Hasher};
 
-/// Generates a deterministic color tuple (r, g, b) in [0.0, 1.0] range based on the input string.
-/// Ranges selected produce reasonably saturated and bright colors suitable for UI accents.
-pub fn generate_color(tag: &str) -> (f32, f32, f32) {
-    generate_tui_color(tag, true)
-}
-
-/// Generates a deterministic color tuple (r, g, b) in [0.0, 1.0] range specifically tailored for the terminal's theme.
-pub fn generate_tui_color(tag: &str, is_dark_theme: bool) -> (f32, f32, f32) {
+/// Generates a deterministic tag color tuple (r, g, b) in [0.0, 1.0] range,
+/// adapted to the app theme so it stays readable on both light and dark backgrounds.
+pub fn generate_tag_color(tag: &str, is_dark_theme: bool) -> (f32, f32, f32) {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     tag.hash(&mut hasher);
     let hash = hasher.finish();
@@ -26,19 +21,41 @@ pub fn generate_tui_color(tag: &str, is_dark_theme: bool) -> (f32, f32, f32) {
     let hash_s = hash >> 16;
     let hash_l = hash >> 32;
 
-    let s = if is_dark_theme {
-        0.40 + ((hash_s % 51) as f32 / 100.0)
+    let (s, mut l) = if is_dark_theme {
+        (
+            0.40 + ((hash_s % 51) as f32 / 100.0),
+            0.65 + ((hash_l % 26) as f32 / 100.0), // 0.65 - 0.90
+        )
     } else {
-        0.60 + ((hash_s % 41) as f32 / 100.0) // slightly more saturation for light bg
+        (
+            0.60 + ((hash_s % 41) as f32 / 100.0), // slightly more saturation for light bg
+            0.25 + ((hash_l % 26) as f32 / 100.0), // 0.25 - 0.50 for light bg
+        )
     };
 
-    let l = if is_dark_theme {
-        0.65 + ((hash_l % 26) as f32 / 100.0) // 0.65 - 0.90
-    } else {
-        0.25 + ((hash_l % 26) as f32 / 100.0) // 0.25 - 0.50 for light bg
-    };
+    let mut rgb = hsl_to_rgb(h, s, l);
+    if !is_dark_theme {
+        // Bright hues (yellow, green, cyan) stay bright at any lightness and
+        // wash out on light backgrounds, so darken until the color's luminance
+        // keeps at least ~3:1 contrast against the lightest app themes.
+        while rel_luminance(rgb) > 0.22 && l > 0.10 {
+            l -= 0.01;
+            rgb = hsl_to_rgb(h, s, l);
+        }
+    }
+    rgb
+}
 
-    hsl_to_rgb(h, s, l)
+/// Relative luminance per WCAG, for sRGB components in [0.0, 1.0].
+fn rel_luminance((r, g, b): (f32, f32, f32)) -> f32 {
+    let channel = |v: f32| {
+        if v <= 0.03928 {
+            v / 12.92
+        } else {
+            ((v + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
 }
 
 /// Helper: HSL to RGB conversion
@@ -128,6 +145,33 @@ pub fn get_priority_rgb(priority: u8, is_dark_theme: bool) -> (f32, f32, f32) {
             8 => (0.4, 0.4, 0.5), // Dark Slate
             9 => (0.5, 0.5, 0.5), // Grey
             _ => (0.0, 0.0, 0.0), // Black
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tag_colors_respect_light_theme_luminance_cap() {
+        for tag in ["gardening", "baking", "hiking", "knitting", "sourdough"] {
+            let rgb = generate_tag_color(tag, false);
+            assert!(
+                rel_luminance(rgb) <= 0.22,
+                "tag '{tag}' is too bright for light themes"
+            );
+        }
+    }
+
+    #[test]
+    fn tag_colors_are_deterministic() {
+        for tag in ["gardening", "baking"] {
+            assert_eq!(generate_tag_color(tag, true), generate_tag_color(tag, true));
+            assert_eq!(
+                generate_tag_color(tag, false),
+                generate_tag_color(tag, false)
+            );
         }
     }
 }

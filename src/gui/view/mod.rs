@@ -3222,11 +3222,14 @@ fn build_context_banner<'a>(
             bottom: 8.0,
             ..Default::default()
         });
+        let is_dark = app.theme().extended_palette().is_dark;
         for (i, s) in suggs.iter().enumerate() {
             let active = Some(i) == active_index;
             let color = if s.display.starts_with('#') {
-                let (r, g, b) =
-                    crate::color_utils::generate_color(s.display.trim_start_matches('#'));
+                let (r, g, b) = crate::color_utils::generate_tag_color(
+                    s.display.trim_start_matches('#'),
+                    is_dark,
+                );
                 Color::from_rgb(r, g, b)
             } else if s.display.starts_with("@@") {
                 Color::from_rgb(0.8, 0.5, 0.0)

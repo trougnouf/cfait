@@ -248,7 +248,8 @@ fn build_aggregate_item_row<'a>(
     let count = item.count;
     let display_name = &item.display_name;
 
-    let (r, g, b) = color_utils::generate_color(key);
+    let is_dark = theme.extended_palette().is_dark;
+    let (r, g, b) = color_utils::generate_tag_color(key, is_dark);
     let item_color = Color::from_rgb(r, g, b);
 
     let icon_char = if is_selected {

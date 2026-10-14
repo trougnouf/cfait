@@ -760,7 +760,7 @@ fn test_color_utils_hex_parsing() {
 
     assert!(cfait::color_utils::parse_hex_to_floats("invalid").is_none());
 
-    let color = cfait::color_utils::generate_color("test_tag");
+    let color = cfait::color_utils::generate_tag_color("test_tag", true);
     assert!(color.0 >= 0.0 && color.0 <= 1.0);
     assert!(color.1 >= 0.0 && color.1 <= 1.0);
     assert!(color.2 >= 0.0 && color.2 <= 1.0);
