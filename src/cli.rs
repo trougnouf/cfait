@@ -143,7 +143,7 @@ pub fn print_help(binary_name: &str) {
         println!("{}", rust_i18n::t!("cli_action_commands_heading"));
         print_cmd(
             &format!(
-                "{} add <{}> [-c <id>] [--desc <txt>] [-p <uid>]",
+                "{} add <{}> [--edit] [-c <id>] [--desc <txt>] [-p <uid>]",
                 binary_name,
                 rust_i18n::t!("cli_task_placeholder")
             ),

@@ -97,7 +97,7 @@
     "cli_action_commands_heading": "Task commands (Non-interactive):",
     "cli_action_queued": "Action queued to local journal (--no-wait).",
     "cli_action_queued_auto": "Action queued (background sync delegated to running instance).",
-    "cli_desc_add": "Add a new task using smart input syntax.",
+    "cli_desc_add": "Add a new task using smart input syntax.\nWith --edit, opens your external editor ($VISUAL/$EDITOR) first:\nline 1 is the smart title, the lines below become the description.\nSaving an empty buffer cancels.",
     "cli_desc_daemon": "Run continuously in background and sync\nat the interval specified in settings.",
     "cli_desc_delete": "Delete a task by its UID.",
     "cli_desc_restore": "Restore a trashed task (with its sub-tree) where it was in the tree.",

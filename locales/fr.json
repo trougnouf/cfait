@@ -104,7 +104,7 @@
     "cli_action_commands_heading": "Commandes de tâches (non interactif) :",
     "cli_action_queued": "Action mise en file d'attente dans le journal local (--no-wait).",
     "cli_action_queued_auto": "Action mise en file d'attente (synchronisation déléguée à l'instance en cours d'exécution).",
-    "cli_desc_add": "Ajouter une nouvelle tâche en utilisant la syntaxe de saisie rapide.",
+    "cli_desc_add": "Ajouter une nouvelle tâche en utilisant la syntaxe de saisie rapide.\nAvec --edit, ouvre d'abord votre éditeur externe ($VISUAL/$EDITOR) :\nla ligne 1 est le titre en syntaxe intelligente, les lignes suivantes\ndeviennent la description. Enregistrer un tampon vide annule.",
     "cli_desc_append": "Ajouter en toute sécurité des jetons de syntaxe (tags, dates, dépendances) ou du texte à une tâche existante sans écraser.",
     "cli_desc_collection_create": "Créer une collection CalDAV distante.",
     "cli_desc_collection_default": "Définir la collection par défaut pour les nouvelles tâches (ou afficher la collection actuelle sans argument).",

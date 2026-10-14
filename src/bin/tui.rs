@@ -671,6 +671,7 @@ async fn main() -> Result<()> {
             let mut parent_uid_arg = None;
             let mut no_wait = false;
             let mut wait = false;
+            let mut use_editor = false;
             let mut i = 2;
             let mut task_args = Vec::new();
             while i < args.len() {
@@ -679,6 +680,9 @@ async fn main() -> Result<()> {
                     i += 1;
                 } else if args[i] == "--wait" || args[i] == "-w" {
                     wait = true;
+                    i += 1;
+                } else if args[i] == "--edit" || args[i] == "-e" {
+                    use_editor = true;
                     i += 1;
                 } else if args[i] == "--collection" || args[i] == "-c" {
                     if i + 1 < args.len() {
@@ -709,7 +713,7 @@ async fn main() -> Result<()> {
                     i += 1;
                 }
             }
-            let input = {
+            let mut input = {
                 let lex_guard = cfait::model::parser::LEXICON.read().unwrap();
                 let lex = &*lex_guard;
                 task_args
@@ -718,7 +722,7 @@ async fn main() -> Result<()> {
                     .collect::<Vec<_>>()
                     .join(" ")
             };
-            if input.trim().is_empty() {
+            if input.trim().is_empty() && !use_editor {
                 eprintln!("{}", rust_i18n::t!("error_empty_task_description"));
                 std::process::exit(1);
             }
@@ -727,6 +731,31 @@ async fn main() -> Result<()> {
                 cfait::config::Config::load_with_credentials(ctx.as_ref()).unwrap_or_default();
             let def_time =
                 chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
+
+            // `--edit`: let the user refine the buffer in the external editor
+            // before creating. Line 1 is the smart title, the lines below
+            // become the description (unless --desc was given). Saving the
+            // buffer unchanged creates the same task as without the flag.
+            if use_editor {
+                let new_content = match run_editor_cli(&input, &config) {
+                    Ok(content) => content,
+                    Err(e) => {
+                        eprintln!("Error running editor: {}", e);
+                        std::process::exit(1);
+                    }
+                };
+                if new_content.trim().is_empty() {
+                    eprintln!("{}", rust_i18n::t!("error_empty_task_description"));
+                    std::process::exit(1);
+                }
+                let (first_line, rest) = new_content
+                    .split_once('\n')
+                    .unwrap_or((new_content.as_str(), ""));
+                input = first_line.trim().to_string();
+                if desc_text.is_none() && !rest.trim().is_empty() {
+                    desc_text = Some(rest.trim().to_string());
+                }
+            }
 
             // Allow ad-hoc alias definition via CLI
             let (clean_input_1, new_goals) = cfait::model::extract_inline_goals(&input);
