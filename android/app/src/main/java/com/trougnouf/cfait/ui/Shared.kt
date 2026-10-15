@@ -909,6 +909,7 @@ private val mdItalicUnderlinePattern = Regex("""(?<!_)_(?!_).*?(?<!_)_(?!_)""")
 private val mdInlineCodePattern = Regex("""`.*?`""")
 private val mdNumberedCheckboxPattern = Regex("""^\d+\.\s*\[""")
 private val mdNumberedListItemPattern = Regex("""^\d+\.\s""")
+private val mdHeaderPattern = Regex("""^#{1,6} """)
 
 class MarkdownTransformation(val isDark: Boolean, val api: CfaitMobile? = null) : VisualTransformation {
     private val lineCache = LruCache<String, List<AnnotatedString.Range<SpanStyle>>>(1000)
@@ -966,7 +967,7 @@ class MarkdownTransformation(val isDark: Boolean, val api: CfaitMobile? = null) 
             if (trimmed.startsWith("```")) {
                 newStyles.add(AnnotatedString.Range(SpanStyle(color = codeColor, fontFamily = FontFamily.Monospace), 0, line.length))
                 afterMarker = line.length
-            } else if (trimmed.startsWith("#")) {
+            } else if (mdHeaderPattern.containsMatchIn(trimmed)) {
                 newStyles.add(AnnotatedString.Range(SpanStyle(color = headerColor, fontWeight = FontWeight.Bold), 0, line.length))
                 afterMarker = line.length
             } else if (trimmed.startsWith("> ")) {
