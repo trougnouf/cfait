@@ -59,7 +59,62 @@ jobs:
         with:
           name: linux-artifacts
           path: dist/*
-  # --- JOB 2: ANDROID BUILD (Ubuntu 24.04) ---
+  # --- JOB 2: LINUX AARCH64 (Debian, cross-compiled) ---
+  build-linux-aarch64:
+    runs-on: self-hosted-debian
+    container:
+      image: local/debian-builder
+      volumes:
+        - cargo-registry:/usr/local/cargo/registry
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build aarch64 Binaries
+        run: |
+          # Requires the aarch64 glibc cross toolchain (gcc-aarch64-linux-gnu,
+          # libc6-arm64-cross) and the aarch64-unknown-linux-gnu rust target,
+          # both baked into the debian-builder image.
+          export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+          export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+          export AWS_LC_SYS_NO_JITTER_ENTROPY=1
+          cargo build --release --target aarch64-unknown-linux-gnu --features gui
+
+      - name: Create Debian Package
+        run: |
+          cargo deb --no-build --target aarch64-unknown-linux-gnu --features gui
+          mkdir -p dist
+          mv target/debian/*.deb dist/
+
+      - name: Create aarch64 Linux Archive
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            RAW_VERSION="${{ github.ref_name }}"
+            CLEAN_VERSION=$(echo "$RAW_VERSION" | sed 's/^v//')
+          else
+            RAW_VERSION="debug-${{ github.sha }}"
+            CLEAN_VERSION="$RAW_VERSION"
+          fi
+
+          mkdir -p dist
+          mkdir "cfait-linux-aarch64-${CLEAN_VERSION}"
+          cp target/aarch64-unknown-linux-gnu/release/cfait "cfait-linux-aarch64-${CLEAN_VERSION}/"
+          cp target/aarch64-unknown-linux-gnu/release/cfait-gui "cfait-linux-aarch64-${CLEAN_VERSION}/cfait-gui"
+          cp README.md LICENSE "cfait-linux-aarch64-${CLEAN_VERSION}/"
+          cp assets/cfait.desktop "cfait-linux-aarch64-${CLEAN_VERSION}/"
+          cp assets/cfait.svg "cfait-linux-aarch64-${CLEAN_VERSION}/"
+          tar -cJvf "dist/cfait-linux-aarch64-${RAW_VERSION}.tar.xz" "cfait-linux-aarch64-${CLEAN_VERSION}"
+
+      - name: Upload aarch64 Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: linux-aarch64-artifacts
+          path: dist/*
+
+  # --- JOB 3: ANDROID BUILD (Debian) ---
   build-android:
     runs-on: self-hosted-debian
     container:
@@ -186,10 +241,10 @@ jobs:
           name: windows-artifacts
           path: dist/*
 
-  # --- JOB 4: PUBLISH (Arch) ---
+  # --- JOB 5: PUBLISH (Arch) ---
   # Collects all artifacts, signs, and publishes to disroot, GitLab, and AUR.
   publish:
-    needs: [build-linux, build-android, build-windows]
+    needs: [build-linux, build-linux-aarch64, build-android, build-windows]
     runs-on: self-hosted-arch
     container:
       image: local/arch-builder
@@ -207,6 +262,12 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: linux-artifacts
+          path: dist
+
+      - name: Download aarch64 Linux Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: linux-aarch64-artifacts
           path: dist
 
       # 2. Download Android Artifacts
