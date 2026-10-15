@@ -7,6 +7,7 @@ use crate::store::{FilterOptions, TaskListItem, TaskStore};
 use crate::system::SystemEvent;
 use crate::tui::action::SidebarMode;
 use fastrand;
+use ratatui::layout::{Position, Rect};
 use ratatui::widgets::ListState;
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
@@ -205,6 +206,13 @@ pub struct AppState {
     pub cached_task_goals: Vec<(String, String, crate::config::Goal, u32, Vec<f32>)>,
     pub needs_redraw: bool,
 
+    // Layout rects captured during the last draw(), so a mouse click can be
+    // mapped to the pane and list row that is actually on screen.
+    pub sidebar_pane_rect: Rect,
+    pub main_pane_rect: Rect,
+    pub sidebar_list_rect: Rect,
+    pub main_list_rect: Rect,
+
     pub undo_history: crate::journal::UndoHistory,
 
     pub text_history: crate::model::session::TextHistory,
@@ -346,6 +354,10 @@ impl AppState {
             cached_goals_progress: HashMap::new(),
             cached_task_goals: Vec::new(),
             needs_redraw: false,
+            sidebar_pane_rect: Rect::default(),
+            main_pane_rect: Rect::default(),
+            sidebar_list_rect: Rect::default(),
+            main_list_rect: Rect::default(),
             undo_history: crate::journal::UndoHistory::new(),
             text_history: crate::model::session::TextHistory::default(),
             search_highlight_regex: None,
@@ -1209,6 +1221,65 @@ impl AppState {
             Focus::Sidebar => Focus::Main,
         }
     }
+
+    /// Handles a left mouse click at `(x, y)` in terminal coordinates.
+    ///
+    /// Clicking a pane moves focus to it (the mouse equivalent of `Tab`).
+    /// Clicking a row in a list also selects that row. The layout rects are
+    /// read from the last `draw()`, so the mapping always matches the screen.
+    pub fn handle_mouse_click(&mut self, x: u16, y: u16) {
+        let point = Position { x, y };
+
+        if self.sidebar_pane_rect.contains(point) {
+            self.active_focus = Focus::Sidebar;
+            if self.sidebar_list_rect.contains(point) {
+                self.select_sidebar_row_at(y);
+            }
+        } else if self.main_pane_rect.contains(point) {
+            self.active_focus = Focus::Main;
+            // With inline descriptions enabled, task rows are multi-line, so a
+            // row index cannot be derived from the y coordinate; only focus.
+            if self.main_list_rect.contains(point) && !self.show_inline_descriptions {
+                self.select_main_row_at(y);
+            }
+        }
+    }
+
+    /// Selects the sidebar row rendered on the line `y` (within
+    /// `sidebar_list_rect`), mirroring the side effects of keyboard navigation.
+    fn select_sidebar_row_at(&mut self, y: u16) {
+        let row = self
+            .cal_state
+            .offset()
+            .saturating_add((y.saturating_sub(self.sidebar_list_rect.y)) as usize);
+        if row < self.get_sidebar_len() {
+            self.cal_state.select(Some(row));
+
+            if self.sidebar_mode == SidebarMode::Journal
+                && let Some(page) = self.cached_journal_pages.get(row)
+                && page.is_task
+            {
+                self.journal_editing_uid = Some(page.key.clone());
+                if let Some(task) = self.store.get_task_ref(&page.key) {
+                    self.active_cal_href = Some(task.calendar_href.clone());
+                }
+            }
+        }
+    }
+
+    /// Selects the main-list row rendered on the line `y` (within
+    /// `main_list_rect`).
+    fn select_main_row_at(&mut self, y: u16) {
+        let row = self
+            .list_state
+            .offset()
+            .saturating_add((y.saturating_sub(self.main_list_rect.y)) as usize);
+        if row < self.tasks.len() {
+            self.list_state.select(Some(row));
+            self.details_scroll = 0;
+        }
+    }
+
     /// Steps `selection` to the next (forward) or previous index among `len`
     /// items, wrapping around at the ends. No-op when the list is empty.
     fn step_selection(selection: &mut ListState, len: usize, forward: bool) {

@@ -312,6 +312,12 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         .constraints([Constraint::Percentage(20), Constraint::Percentage(80)])
         .split(v_chunks[0]);
 
+    // Record the pane geometry so mouse clicks can be mapped back to the
+    // sidebar / content pane (and their list rows) that are on screen.
+    state.sidebar_pane_rect = h_chunks[0];
+    state.main_pane_rect = h_chunks[1];
+    state.main_list_rect = Rect::default();
+
     // Placeholder for details text (built after task list rendering)
     let mut details_md = String::new();
     let mut selected_task_was_truncated = false;
@@ -873,6 +879,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             ])
             .split(inner_area);
 
+        state.sidebar_list_rect = split[3];
+
         f.render_widget(cal_p, split[0]);
 
         let wiki_header = Paragraph::new(Line::from(Span::styled(
@@ -888,6 +896,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         );
         f.render_stateful_widget(sidebar_list, split[3], &mut state.cal_state);
     } else {
+        state.sidebar_list_rect = sidebar_block.inner(sidebar_area);
+
         let sidebar = List::new(sidebar_items)
             .block(sidebar_block)
             .highlight_style(
@@ -1929,6 +1939,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             .direction(Direction::Vertical)
             .constraints([Constraint::Min(0), Constraint::Length(final_details_height)])
             .split(h_chunks[1]);
+
+        state.main_list_rect = Block::default().borders(Borders::ALL).inner(main_chunks[0]);
 
         let mut title = if let Some(focus_uid) = &state.focused_task_uid {
             if let Some(t) = state.store.get_task_ref(focus_uid) {

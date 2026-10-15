@@ -16,7 +16,7 @@ use crate::tui::view::draw;
 
 use anyhow::Result;
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, MouseEventKind},
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, MouseButton, MouseEventKind},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
@@ -473,6 +473,9 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
                 Event::Mouse(mouse) => match mouse.kind {
                     MouseEventKind::ScrollDown => app_state.next(),
                     MouseEventKind::ScrollUp => app_state.previous(),
+                    MouseEventKind::Down(MouseButton::Left) => {
+                        app_state.handle_mouse_click(mouse.column, mouse.row)
+                    }
                     _ => {}
                 },
                 Event::Key(key) => {
