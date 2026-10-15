@@ -86,8 +86,6 @@ Evaluated instantly during text input. Supported across all clients.
 | `dep:` or `depends:`| Set dependency (blocks the task). Supports short UIDs or fuzzy matching by summary. | `dep:"Install foundation"`, `dep:abc1234` |
 | `rel:` or `related:`| Set related task (sibling). Supports short UIDs or fuzzy matching by summary. | `rel:"Master plan"`, `rel:abc1234` |
 | `parent:` | Make the task a subtask of another task. Supports short UIDs or fuzzy matching by summary (resolved like `dep:`/`rel:` at save time). Replaces any previous parent; unresolvable, self- or cyclic references are kept as typed with a warning, like `dep:`. | `parent:"Home garden"`, `parent:abc1234` |
-
-Reference resolution (`dep:`/`rel:`/`parent:`): fuzzy references resolve within the collections the UI currently shows (exact UIDs resolve regardless of visibility). UID-prefix matches take priority over summary matches, so a short UID that is a unique prefix resolves even when a quoted summary elsewhere contains the same UID text verbatim (e.g. a pasted task line kept as-is). An ambiguous reference — several visible tasks match the same pool — is kept as typed with a visible warning listing the candidates; disambiguate with a short UID (e.g. `parent:abc12345`).
 | `geo:` | Geo-coordinates. | `geo:50.1,4.2`, `geo:here` (Mobile: Fetches GPS) |
 | `- ` or `is:note` | Mark task as a note/header (hides checkbox). On journal pages, `is:note` is the explicit note marker in the page line (a plain `is:page` line is a standard page). | `- Pantry`, `is:note` |
 | `desc:` | Append text to the description. | `desc:"Buy milk"` or `desc:{...}` |
@@ -104,6 +102,8 @@ Reference resolution (`dep:`/`rel:`/`parent:`): fuzzy references resolve within 
 | `is:permanent` | Mark task as a permanent/continuous tracker. | `is:permanent` |
 | `is:page` | Mark the line as a Wiki sub-page (VJOURNAL component). Parses identically from the task interface and the journal tab, and does not imply `is:note`. | `is:page`, `is:journal` |
 | `goal:` | Goal tracking target. | `goal:5/w`, `goal:2h/daily`, `goal:weekly` |
+
+Reference resolution (`dep:`/`rel:`/`parent:`): fuzzy references resolve within the collections the UI currently shows (exact UIDs resolve regardless of visibility). UID-prefix matches take priority over summary matches, so a short UID that is a unique prefix resolves even when a quoted summary elsewhere contains the same UID text verbatim (e.g. a pasted task line kept as-is). An ambiguous reference — several visible tasks match the same pool — is kept as typed with a visible warning listing the candidates; disambiguate with a short UID (e.g. `parent:abc12345`).
 
 *Rules:* 
 * Double prefixes (`##tag`, `@@@loc`) apply metadata but *keep* the word in the display title.
