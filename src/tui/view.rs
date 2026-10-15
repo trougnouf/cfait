@@ -2291,10 +2291,16 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         .title(format!(" {} ", rust_i18n::t!("status"))),
                 );
             let help_text = match state.active_focus {
-                Focus::Sidebar => rust_i18n::t!("tui_sidebar_help").to_string(),
+                Focus::Sidebar => {
+                    if state.sidebar_mode == SidebarMode::Journal {
+                        rust_i18n::t!("tui_journal_sidebar_help").to_string()
+                    } else {
+                        rust_i18n::t!("tui_sidebar_help").to_string()
+                    }
+                }
                 Focus::Main => {
                     if state.sidebar_mode == SidebarMode::Journal {
-                        " [/]: Collection | ←/→/↑/↓: Date | Shift+↑/↓: Scroll | t: Today | g: Go to | a/e/Enter: Edit | C: Subpage | Tab: Focus | q: Quit ".to_string()
+                        rust_i18n::t!("tui_journal_main_help").to_string()
                     } else if let Some(uid) = &state.yanked_uid {
                         let mut summary = state
                             .store

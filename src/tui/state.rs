@@ -524,16 +524,20 @@ impl AppState {
         self.cached_task_goals = task_goals;
 
         // The sidebar shrank (e.g. a calendar was hidden); clamp the selection
-        // so the highlight does not vanish past the end of the list.
+        // so the highlight does not vanish past the end of the list. A cleared
+        // selection (e.g. after visiting an empty tab) is re-anchored to the
+        // first item so keys like Enter are never a silent no-op.
         let sidebar_len = self.get_sidebar_len();
-        if let Some(current) = self.cal_state.selected()
-            && current >= sidebar_len
-        {
-            self.cal_state.select(if sidebar_len == 0 {
-                None
-            } else {
-                Some(sidebar_len - 1)
-            });
+        match self.cal_state.selected() {
+            Some(current) if current >= sidebar_len => {
+                self.cal_state.select(if sidebar_len == 0 {
+                    None
+                } else {
+                    Some(sidebar_len - 1)
+                });
+            }
+            None if sidebar_len > 0 => self.cal_state.select(Some(0)),
+            _ => {}
         }
 
         self.search_highlight_regex = if !search_term.trim().is_empty() {
