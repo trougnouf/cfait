@@ -98,7 +98,7 @@
     "cli_action_queued": "La acción se añade a la cola del registro interno (--no-wait).",
     "cli_action_queued_auto": "La acción se ha añadido a la cola (la sincronización en segundo plano se ha delegado a la instancia en ejecución).",
     "cli_author_label": "Autor:",
-    "cli_desc_add": "Añade nuevas tareas mediante la sintaxis de entrada inteligente.",
+    "cli_desc_add": "Agregue una nueva tarea utilizando la sintaxis de entrada rápida.\nPrimero, abre tu editor externo ($VISUAL/$EDITOR) usando --edit:\nLa línea 1 es el título en sintaxis inteligente, las siguientes líneas\nLa descripción estará disponible. Guardar un búfer vacío cancela la operación.",
     "cli_desc_append": "Añade de forma segura tokens de sintaxis inteligente (por ejemplo, fechas, etiquetas, dependencias)\no texto a una tarea existente sin perder su título.\nEjemplo: «cfait append <uid> @tomorrow»",
     "cli_desc_collection_create": "Crea una colección CalDAV remota.",
     "cli_desc_collection_default": "Establecer la colección predeterminada para las nuevas tareas (o mostrar la actual sin ningún argumento).",
