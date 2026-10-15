@@ -486,3 +486,41 @@ impl Highlighter for MarkdownHighlighter {
         spans.into_iter()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The token table from SPECS.md §2.1 (https://github.com/trougnouf/cfait/issues/103)
+    /// overflowed the TUI content pane. The GUI instead highlights the raw markdown line
+    /// by line, so make sure the highlighter survives these lines and emits contiguous
+    /// spans for both themes.
+    #[test]
+    fn markdown_highlighter_handles_the_syntax_reference_table() {
+        let lines = [
+            "### 2.1. Tokens",
+            "| Token | Meaning | Example |",
+            "| :--- | :--- | :--- |",
+            "| `!1` .. `!9` | Priority (1 is highest/most urgent). | `!1` |",
+            "| `@@` or `loc:`| Location (Supports multiple via <code>&#124;</code>). | `@@office`,  <code>@@aldi&#124;auchan</code> |",
+            "| `dep:` or `depends:`| Set dependency (blocks the task). Supports short UIDs or fuzzy matching by summary. | `dep:\"Install foundation\"`, `dep:abc1234` |",
+            "| `[[ ]]` | Wiki-link to jump to or create a task/page. Use `:` for absolute paths and `+` for relative sub-items. | `[[Master plan]]`, `[[+Child]]`, `[[Project:Phase 1]]` |",
+            "| `- ` or `is:note` | Mark task as a note/header (hides checkbox). On journal pages, `is:note` is the explicit note marker in the page line (a plain `is:page` line is a standard page). | `- Pantry`, `is:note` |",
+            "Reference resolution (`dep:`/`rel:`/`parent:`): an ambiguous reference — several visible tasks match the same pool — is kept as typed with a visible warning listing the candidates; disambiguate with a short UID (e.g. `parent:abc12345`).",
+        ];
+
+        for is_dark in [true, false] {
+            let mut highlighter = MarkdownHighlighter::new(&is_dark);
+            for line in &lines {
+                let spans: Vec<(Range<usize>, _)> = highlighter.highlight_line(line).collect();
+                assert!(!spans.is_empty(), "no spans for {line:?}");
+                let mut cursor = 0;
+                for (range, _) in &spans {
+                    assert_eq!(range.start, cursor, "gap or overlap in {line:?}");
+                    cursor = range.end;
+                }
+                assert_eq!(cursor, line.len(), "spans must cover {line:?}");
+            }
+        }
+    }
+}
