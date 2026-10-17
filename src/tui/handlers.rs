@@ -1259,8 +1259,8 @@ fn edit_journal_in_external_editor(state: &mut AppState, action_tx: &Sender<Acti
     // Load the text into the buffer and enter the matching edit mode: the
     // full-tree mode for pages (save = tree sync) and the daily-note mode
     // for the daily entry (save = tree sync of the daily entry).
-    let enter_in_tui_edit = |state: &mut AppState, page_uid: Option<String>| {
-        state.input_buffer = desc.clone();
+    let enter_in_tui_edit = |state: &mut AppState, page_uid: Option<String>, text: &str| {
+        state.input_buffer = text.to_string();
         state.cursor_position = state.input_buffer.chars().count();
         state.edit_scroll_offset = 0;
         state.edit_scroll_x = 0;
@@ -1276,15 +1276,17 @@ fn edit_journal_in_external_editor(state: &mut AppState, action_tx: &Sender<Acti
     match run_external_editor(&desc, state.ctx.as_ref()) {
         Ok(Some(new_desc)) => {
             if new_desc != desc {
-                enter_in_tui_edit(state, page_uid);
+                // Load what the external editor returned, not the original
+                // buffer — saving the old text would discard the user's edit.
+                enter_in_tui_edit(state, page_uid, &new_desc);
                 save_description(state, action_tx);
             }
             state.needs_redraw = true;
         }
-        Ok(None) => enter_in_tui_edit(state, page_uid),
+        Ok(None) => enter_in_tui_edit(state, page_uid, &desc),
         Err(e) => {
             state.message = e;
-            enter_in_tui_edit(state, page_uid);
+            enter_in_tui_edit(state, page_uid, &desc);
         }
     }
 }
