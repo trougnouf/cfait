@@ -3172,6 +3172,12 @@ impl CfaitMobile {
         );
         drop(store_guard);
 
+        // A plain task stores prose only: the extracted lines live on as
+        // child tasks, not as shadow text in the description. Journal pages
+        // keep their shadows (their description is the document).
+        task.description =
+            crate::model::extractor::stored_description(&task.description, task.is_journal);
+
         self.resolve_task_calendar(&mut task, &config).await;
         let parent_href = task.calendar_href.clone();
 
@@ -3209,12 +3215,15 @@ impl CfaitMobile {
             let _warnings2 = store.resolve_dependencies(&mut sub);
             drop(store);
 
-            if !ext.description.is_empty() {
+            // A plain subtask stores prose only; a journal sub-page keeps
+            // its shadow lines.
+            let ext_desc =
+                crate::model::extractor::stored_description(&ext.description, sub.is_journal);
+            if !ext_desc.is_empty() {
                 if sub.description.is_empty() {
-                    sub.description = ext.description;
+                    sub.description = ext_desc;
                 } else {
-                    sub.description
-                        .push_str(&format!("\n\n{}", ext.description));
+                    sub.description.push_str(&format!("\n\n{ext_desc}"));
                 }
             }
             sub.inline_media = ext.inline_media.clone();

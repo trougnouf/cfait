@@ -2007,6 +2007,11 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
             &mut new_task.description,
             extracted_subtasks,
         );
+        // A plain task stores prose only: the extracted lines live on as
+        // child tasks, not as shadow text in the description. Journal pages
+        // keep their shadows (their description is the document).
+        new_task.description =
+            crate::model::extractor::stored_description(&new_task.description, new_task.is_journal);
 
         let parent = if let Some(parent_uid) = &app.creating_child_of {
             app.store.get_task_ref(parent_uid).cloned()
@@ -2081,7 +2086,12 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                     .resolve_dependencies_scoped(&mut sub, &app.visible_calendar_hrefs());
                 handle_dependency_warnings(app, warnings);
 
-                append_description(&mut sub.description, &ext.description);
+                // A plain subtask stores prose only; a journal sub-page
+                // keeps its shadow lines.
+                append_description(
+                    &mut sub.description,
+                    &crate::model::extractor::stored_description(&ext.description, sub.is_journal),
+                );
                 sub.inline_media = ext.inline_media.clone();
 
                 sub.apply_extracted_status(ext.status);

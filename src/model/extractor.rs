@@ -371,6 +371,20 @@ pub fn description_prose(desc: &str) -> String {
     out.trim_end().to_string()
 }
 
+/// The description to persist for a task whose extraction produced
+/// `clean_desc` (shadow lines included). A journal page keeps its shadow
+/// lines: its description is the document, and the tags pin each child's
+/// position. A plain task stores prose only — the tree, not the text,
+/// remembers its children — so third-party clients see a clean `DESCRIPTION`
+/// and no subtask line can masquerade as a note.
+pub fn stored_description(clean_desc: &str, is_journal: bool) -> String {
+    if is_journal {
+        clean_desc.to_string()
+    } else {
+        description_prose(clean_desc)
+    }
+}
+
 /// Whether the shadow line for `uid` changed between the stored description
 /// and the freshly extracted one. Raw description editors echo the stored
 /// description verbatim, so an untouched line must not re-apply its —

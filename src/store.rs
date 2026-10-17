@@ -2150,11 +2150,15 @@ impl TaskStore {
             // The journal root is serialized raw (no uid tag), so it never
             // appears in `extracted`. Only touch it when the description or
             // media actually changed, keeping no-op round-trips action-free
-            // like the non-journal path.
+            // like the non-journal path. A plain task stores prose only:
+            // the extracted shadow lines live on as child tasks, not as
+            // text in the description.
+            let stored_desc =
+                crate::model::extractor::stored_description(&clean_desc, root_clone.is_journal);
             root_changed =
-                root_clone.description != clean_desc || root_clone.inline_media != tree_media;
+                root_clone.description != stored_desc || root_clone.inline_media != tree_media;
             if root_changed {
-                root_clone.description = clean_desc;
+                root_clone.description = stored_desc;
                 root_clone.inline_media = tree_media;
                 root_clone.sequence += 1;
             }
@@ -2326,7 +2330,10 @@ impl TaskStore {
                     clone.target_collection = dummy.target_collection;
                 }
 
-                clone.description = ext.description.clone();
+                // A plain task stores prose only; a journal page keeps its
+                // shadow lines (its description is the document).
+                clone.description =
+                    crate::model::extractor::stored_description(&ext.description, clone.is_journal);
                 clone.inline_media = ext.inline_media.clone();
                 if existing.is_journal {
                     // Journal components are never serialized with a checkbox,
@@ -2420,7 +2427,12 @@ impl TaskStore {
                     options.default_reminder_time,
                 );
                 new_task.uid = task_uid.clone();
-                new_task.description = ext.description;
+                // A plain task stores prose only; a journal sub-page keeps
+                // its shadow lines (its description is the document).
+                new_task.description = crate::model::extractor::stored_description(
+                    &ext.description,
+                    new_task.is_journal,
+                );
                 new_task.inline_media = ext.inline_media;
 
                 if let Some((p_cats, p_loc, p_prio)) = p_props {

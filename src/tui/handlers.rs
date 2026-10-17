@@ -1029,6 +1029,11 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
             &mut parent.description,
             extracted,
         );
+        // A plain task stores prose only: the extracted lines live on as
+        // child tasks, not as shadow text in the description. Journal pages
+        // keep their shadows (their description is the document).
+        parent.description =
+            crate::model::extractor::stored_description(&parent.description, parent.is_journal);
         parent.inline_media = parent_media;
         parent.parent_uid = state.creating_child_of.clone();
 
@@ -1098,12 +1103,15 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
                     log::warn!("Dependency resolution: {}", w);
                 }
             }
-            if !ext.description.is_empty() {
+            // A plain subtask stores prose only; a journal sub-page keeps
+            // its shadow lines.
+            let ext_desc =
+                crate::model::extractor::stored_description(&ext.description, sub.is_journal);
+            if !ext_desc.is_empty() {
                 if sub.description.is_empty() {
-                    sub.description = ext.description;
+                    sub.description = ext_desc;
                 } else {
-                    sub.description
-                        .push_str(&format!("\n\n{}", ext.description));
+                    sub.description.push_str(&format!("\n\n{ext_desc}"));
                 }
             }
             sub.inline_media = ext.inline_media.clone();

@@ -1429,13 +1429,19 @@ fn test_tree_sync_preserves_paused_percent() {
         "an unchanged paused task must not be re-saved"
     );
     assert!(
-        actions
-            .iter()
-            .all(|a| matches!(a, cfait::journal::Action::Update(t) if t.uid == "root-1")),
-        "only the root's shadow line may be recorded: {actions:?}"
+        actions.is_empty(),
+        "a VTODO stores prose-only descriptions: the child's shadow line must not be recorded: {actions:?}"
+    );
+    assert!(
+        store
+            .get_task_ref("root-1")
+            .expect("root should exist")
+            .description
+            .is_empty(),
+        "the root's stored description must stay prose-only (no shadow line)"
     );
 
-    // Once the shadow line is recorded, the round-trip is action-free.
+    // The round-trip is action-free.
     let markdown2 = cfait::model::extractor::serialize_task_tree(&store, "root-1", &[], false);
     let (actions2, warnings2, _mints2) = store
         .sync_tree_from_markdown("root-1", &markdown2, &options, false)

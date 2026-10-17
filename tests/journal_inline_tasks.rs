@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Shadow lines: extracted task lines stay in their parent's description as
-//! uid-tagged placeholders, so children render exactly where the user
-//! placed them instead of collapsing to the bottom of the page.
+//! Shadow lines: on journal pages, extracted task lines stay in the page's
+//! description as uid-tagged placeholders, so children render exactly where
+//! the user placed them instead of collapsing to the bottom of the page.
+//! Plain tasks store prose-only descriptions instead — the tree, not the
+//! text, remembers their children — while the merged description editor
+//! (which re-appends the children, uid-tagged) keeps deletions and round-trips
+//! working exactly the same.
 use cfait::context::TestContext;
 use cfait::model::{CalendarListEntry, Task};
 use cfait::store::{SyncTreeOptions, TaskStore};
@@ -275,6 +279,119 @@ fn desc_editor_merged_view_round_trips_through_tree_sync() {
     assert!(
         view2.starts_with("Beds to rotate this year.\n- [x] divide the rhubarb"),
         "merged view: {view2}"
+    );
+}
+
+#[test]
+fn plain_tasks_store_prose_only_descriptions() {
+    let mut store = make_store();
+    let aliases: HashMap<String, Vec<String>> = HashMap::new();
+    let cals = calendars();
+
+    let mut root = Task::new("Garden plan", &aliases, None);
+    root.uid = "root-1".to_string();
+    root.calendar_href = "local://default".to_string();
+    store.add_task(root);
+
+    // Prose plus a subtask that itself carries prose and a nested subtask.
+    let typed = "Beds to rotate this year.\n- [ ] divide the rhubarb\n  water deeply\n  - [ ] order the seeds";
+    let (actions, warnings, _mints) = store
+        .sync_tree_from_markdown("root-1", typed, &opts(&aliases, &cals), false)
+        .unwrap();
+    assert!(warnings.is_empty());
+    assert!(!actions.is_empty());
+
+    // A VTODO stores prose only: no uid-tagged shadow lines in the stored
+    // descriptions, for the root and for the child alike.
+    let root_after = store.get_task_ref("root-1").unwrap();
+    assert_eq!(root_after.description, "Beds to rotate this year.");
+    let child = children_of(&store, "root-1").pop().unwrap();
+    assert_eq!(child.summary, "divide the rhubarb");
+    assert_eq!(child.description, "water deeply");
+    let grandchild = children_of(&store, &child.uid).pop().unwrap();
+    assert_eq!(grandchild.summary, "order the seeds");
+    assert!(grandchild.description.is_empty());
+
+    // The merged view (what the description editor loads) still shows the
+    // whole subtree, with the children appended uid-tagged below the prose.
+    let view = cfait::model::extractor::serialize_merged_description(&store, "root-1", &cals);
+    assert_eq!(
+        view,
+        format!(
+            "Beds to rotate this year.\n- [ ] divide the rhubarb <!-- uid:{} -->\n  water deeply\n    - [ ] order the seeds <!-- uid:{} -->",
+            child.uid, grandchild.uid
+        ),
+        "merged view: {view}"
+    );
+
+    // Re-saving that view is a no-op and keeps the stored prose-only
+    // descriptions.
+    let (actions2, warnings2, _mints2) = store
+        .sync_tree_from_markdown("root-1", &view, &opts(&aliases, &cals), false)
+        .unwrap();
+    assert!(warnings2.is_empty());
+    assert!(
+        actions2.is_empty(),
+        "an unchanged merged view must be a no-op: {actions2:?}"
+    );
+    assert_eq!(
+        store.get_task_ref("root-1").unwrap().description,
+        "Beds to rotate this year."
+    );
+    assert_eq!(
+        store.get_task_ref(&child.uid).unwrap().description,
+        "water deeply"
+    );
+}
+
+#[test]
+fn plain_task_merged_view_deletion_still_soft_deletes_children() {
+    let mut store = make_store();
+    let aliases: HashMap<String, Vec<String>> = HashMap::new();
+    let cals = calendars();
+
+    let mut root = Task::new("Garden plan", &aliases, None);
+    root.uid = "root-1".to_string();
+    root.calendar_href = "local://default".to_string();
+    store.add_task(root);
+
+    store
+        .sync_tree_from_markdown(
+            "root-1",
+            "Beds to rotate.\n- [ ] divide the rhubarb",
+            &opts(&aliases, &cals),
+            false,
+        )
+        .unwrap();
+    let child = children_of(&store, "root-1").pop().unwrap();
+
+    // The merged view carries the child's uid-tagged line; the user deletes
+    // the line and saves.
+    let view = cfait::model::extractor::serialize_merged_description(&store, "root-1", &cals);
+    assert!(
+        view.contains(&format!("<!-- uid:{} -->", child.uid)),
+        "the merged view must carry the child's line: {view}"
+    );
+    let (actions, _warnings, _mints) = store
+        .sync_tree_from_markdown("root-1", "Beds to rotate.", &opts(&aliases, &cals), false)
+        .unwrap();
+
+    assert!(
+        store
+            .get_task_ref(&child.uid)
+            .is_some_and(|t| t.calendar_href == "local://trash"),
+        "deleting the line must soft-delete the task to the trash"
+    );
+    assert!(
+        actions
+            .iter()
+            .any(|a| matches!(a, cfait::journal::Action::Delete(t) if t.uid == child.uid)),
+        "the deletion must be recorded: {actions:?}"
+    );
+    assert_eq!(
+        store.get_task_ref("root-1").unwrap().description,
+        "Beds to rotate.",
+        "the root keeps its prose-only description"
     );
 }
 
