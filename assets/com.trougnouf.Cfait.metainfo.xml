@@ -78,6 +78,43 @@
   </requires>
 
   <releases>
+    <release version="1.2.1" date="2026-10-18">
+      <description>
+        <p>Features:</p>
+        <ul>
+          <li>(cli) Add --edit flag to create tasks from the external editor ( https://github.com/trougnouf/cfait/issues/93 )</li>
+          <li>(tui) Left-click switches pane focus and selects the clicked row ( https://github.com/trougnouf/cfait/issues/105 )</li>
+          <li>(release) Add aarch64 linux builds and aarch64 to the AUR package (https://github.com/trougnouf/cfait/issues/104)</li>
+          <li>Add is:flat/is:doc keyword for flat-document task descriptions</li>
+        </ul>
+        <p>Bug Fixes:</p>
+        <ul>
+          <li>(gui) Adapt tag colors to the theme's light/dark variant so they stay readable on light themes ( https://git.disroot.org/trougnouf/cfait/issues/22 )</li>
+          <li>(tui) Wrap markdown tables to the pane width so box-drawn borders stay aligned ( https://github.com/trougnouf/cfait/issues/103 )</li>
+          <li>(tui) Show journal key hints in the bottom bar and re-anchor the wiki index selection so Enter works</li>
+          <li>(android) Only style hash lines with a trailing space as markdown headers ( https://github.com/trougnouf/cfait/issues/103 )</li>
+          <li>(gui) Strip child shadow lines from description previews (https://git.disroot.org/trougnouf/cfait/issues/23)</li>
+          <li>Store prose-only descriptions on plain tasks; journal pages keep shadow lines (https://git.disroot.org/trougnouf/cfait/issues/23)</li>
+          <li>(tui) Apply external editor text when creating a journal entry</li>
+        </ul>
+        <p>Documentation:</p>
+        <ul>
+          <li>(readme) Remove GitLab mirror release links, uploads are not publicly downloadable</li>
+          <li>Move the reference resolution note after the token table so it no longer breaks the table ( https://github.com/trougnouf/cfait/issues/103 )</li>
+          <li>Explain item types (tasks, notes, pages, journal entries) in SPECS, ? help, and CLI</li>
+        </ul>
+        <p>Testing:</p>
+        <ul>
+          <li>(gui) Prove the markdown highlighter handles the syntax reference table ( https://github.com/trougnouf/cfait/issues/103 )</li>
+        </ul>
+        <p>Miscellaneous Tasks:</p>
+        <ul>
+          <li>Update dependencies</li>
+          <li>(i18n) Remove space in vi parser_is_page token so the parser can split arguments</li>
+          <li>(journal) Show sub-pages as links in document editors, full tree in the tree editor</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.2.0" date="2026-10-12">
       <description>
         <p>Features:</p>

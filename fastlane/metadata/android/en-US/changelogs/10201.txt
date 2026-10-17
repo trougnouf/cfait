@@ -1,0 +1,34 @@
+## [1.2.1] - 2026-10-17
+
+### 🚀 Features
+
+- *(cli)* Add --edit flag to create tasks from the external editor ( https://github.com/trougnouf/cfait/issues/93 )
+- *(tui)* Left-click switches pane focus and selects the clicked row ( https://github.com/trougnouf/cfait/issues/105 )
+- *(release)* Add aarch64 linux builds and aarch64 to the AUR package (https://github.com/trougnouf/cfait/issues/104)
+- Add is:flat/is:doc keyword for flat-document task descriptions
+
+### 🐛 Bug Fixes
+
+- *(gui)* Adapt tag colors to the theme's light/dark variant so they stay readable on light themes ( https://git.disroot.org/trougnouf/cfait/issues/22 )
+- *(tui)* Wrap markdown tables to the pane width so box-drawn borders stay aligned ( https://github.com/trougnouf/cfait/issues/103 )
+- *(tui)* Show journal key hints in the bottom bar and re-anchor the wiki index selection so Enter works
+- *(android)* Only style hash lines with a trailing space as markdown headers ( https://github.com/trougnouf/cfait/issues/103 )
+- *(gui)* Strip child shadow lines from description previews (https://git.disroot.org/trougnouf/cfait/issues/23)
+- Store prose-only descriptions on plain tasks; journal pages keep shadow lines (https://git.disroot.org/trougnouf/cfait/issues/23)
+- *(tui)* Apply external editor text when creating a journal entry
+
+### 📚 Documentation
+
+- *(readme)* Remove GitLab mirror release links, uploads are not publicly downloadable
+- Move the reference resolution note after the token table so it no longer breaks the table ( https://github.com/trougnouf/cfait/issues/103 )
+- Explain item types (tasks, notes, pages, journal entries) in SPECS, ? help, and CLI
+
+### 🧪 Testing
+
+- *(gui)* Prove the markdown highlighter handles the syntax reference table ( https://github.com/trougnouf/cfait/issues/103 )
+
+### ⚙️ Miscellaneous Tasks
+
+- Update dependencies
+- *(i18n)* Remove space in vi parser_is_page token so the parser can split arguments
+- *(journal)* Show sub-pages as links in document editors, full tree in the tree editor
