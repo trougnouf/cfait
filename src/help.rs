@@ -56,6 +56,8 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
     let p_desc = get_first("parser_desc");
     let p_goal = get_first("parser_goal");
     let is_permanent = get_first("parser_is_permanent");
+    let is_flat = get_first("parser_is_flat");
+    let is_flat_keys = rust_i18n::t!("parser_is_flat").replace(',', " / ");
     let p_url = get_first("parser_url");
     let p_dep = get_first("parser_dep");
     let p_rel = get_first("parser_rel");
@@ -292,6 +294,11 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                     keys: "is:pinned".to_string(),
                     desc: rust_i18n::t!("help_metadata_pin_task").to_string(),
                     example: format!("{} is:pinned", rust_i18n::t!("example_important_task")),
+                },
+                HelpItem {
+                    keys: is_flat_keys,
+                    desc: rust_i18n::t!("help_metadata_flat").to_string(),
+                    example: format!("{} {is_flat}", rust_i18n::t!("example_read_book")),
                 },
             ],
         },

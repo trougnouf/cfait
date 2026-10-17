@@ -1977,9 +1977,13 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
         }
     } else if !clean_input.is_empty() {
         let mut new_task = TodoTask::new(&clean_input, &app.tag_aliases, config_time);
+        // Extract the description with the new task's semantics: a flat
+        // document (a journal page or an is:flat/is:doc task) only turns
+        // explicit items into subtasks, while a plain task also turns list
+        // items and headings into subtasks.
         let (cleaned_desc, extracted_subtasks) = crate::model::extractor::extract_markdown_tasks(
             &desc_text,
-            is_journal,
+            new_task.is_flat_doc(),
             &mut new_task.inline_media,
         );
 
@@ -2008,10 +2012,12 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
             extracted_subtasks,
         );
         // A plain task stores prose only: the extracted lines live on as
-        // child tasks, not as shadow text in the description. Journal pages
-        // keep their shadows (their description is the document).
-        new_task.description =
-            crate::model::extractor::stored_description(&new_task.description, new_task.is_journal);
+        // child tasks, not as shadow text in the description. Flat documents
+        // (journal pages, is:flat/is:doc tasks) keep their shadows.
+        new_task.description = crate::model::extractor::stored_description(
+            &new_task.description,
+            new_task.is_flat_doc(),
+        );
 
         let parent = if let Some(parent_uid) = &app.creating_child_of {
             app.store.get_task_ref(parent_uid).cloned()
@@ -2086,12 +2092,14 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                     .resolve_dependencies_scoped(&mut sub, &app.visible_calendar_hrefs());
                 handle_dependency_warnings(app, warnings);
 
-                // A plain subtask stores prose only; a journal sub-page
-                // keeps its shadow lines.
-                append_description(
-                    &mut sub.description,
-                    &crate::model::extractor::stored_description(&ext.description, sub.is_journal),
+                // A plain subtask stores prose only; a flat document
+                // (journal sub-page, is:flat/is:doc task) keeps its shadow
+                // lines.
+                let ext_desc = crate::model::extractor::stored_description(
+                    &ext.description,
+                    sub.is_flat_doc(),
                 );
+                append_description(&mut sub.description, &ext_desc);
                 sub.inline_media = ext.inline_media.clone();
 
                 sub.apply_extracted_status(ext.status);

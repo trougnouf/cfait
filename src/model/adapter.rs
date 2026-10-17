@@ -105,6 +105,7 @@ const HANDLED_KEYS: &[&str] = &[
     "X-CFAIT-KIND",
     "X-CFAIT-BLOCKED",
     "X-CFAIT-PERMANENT",
+    "X-CFAIT-FLAT",
 ];
 
 /// Return the description to serialize into ICS, re-injecting original `data:`
@@ -626,6 +627,9 @@ impl IcsAdapter {
         if task.permanent {
             todo.add_property("X-CFAIT-PERMANENT", "TRUE");
         }
+        if task.flat {
+            todo.add_property("X-CFAIT-FLAT", "TRUE");
+        }
 
         if let Some(goal) = &task.goal {
             let type_str = if goal.goal_type == crate::config::GoalType::Duration {
@@ -1043,6 +1047,7 @@ impl IcsAdapter {
                 manual_block: false,
                 permanent: false,
                 is_journal: true,
+                flat: false,
                 is_event: false,
                 time_spent_seconds: 0,
                 last_started_at: None,
@@ -1156,6 +1161,7 @@ impl IcsAdapter {
                 manual_block: false,
                 permanent: false,
                 is_journal: false,
+                flat: false,
                 is_event: true,
                 time_spent_seconds: 0,
                 last_started_at: None,
@@ -1292,6 +1298,10 @@ impl IcsAdapter {
             .unwrap_or(false);
 
         let mut permanent = get_prop("X-CFAIT-PERMANENT")
+            .map(|v| v.trim().to_uppercase() == "TRUE")
+            .unwrap_or(false);
+
+        let flat = get_prop("X-CFAIT-FLAT")
             .map(|v| v.trim().to_uppercase() == "TRUE")
             .unwrap_or(false);
 
@@ -1790,6 +1800,7 @@ impl IcsAdapter {
             manual_block,
             permanent,
             is_journal: false,
+            flat,
             is_event: false,
             time_spent_seconds,
             last_started_at,

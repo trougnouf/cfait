@@ -2138,8 +2138,11 @@ impl TaskStore {
                 tree_media.extend(d.inline_media.clone());
             }
         }
+        // A flat document (journal page or `is:flat`/`is:doc` task) is parsed
+        // with journal rules: headers and plain list items stay prose.
+        let flat_doc = is_journal || root_clone.flat;
         let (clean_desc, extracted) =
-            crate::model::extractor::extract_markdown_tasks(markdown, is_journal, &mut tree_media);
+            crate::model::extractor::extract_markdown_tasks(markdown, flat_doc, &mut tree_media);
 
         let root_in_extracted = extracted
             .iter()
@@ -2152,9 +2155,9 @@ impl TaskStore {
             // media actually changed, keeping no-op round-trips action-free
             // like the non-journal path. A plain task stores prose only:
             // the extracted shadow lines live on as child tasks, not as
-            // text in the description.
+            // text in the description. A flat document keeps its shadows.
             let stored_desc =
-                crate::model::extractor::stored_description(&clean_desc, root_clone.is_journal);
+                crate::model::extractor::stored_description(&clean_desc, root_clone.is_flat_doc());
             root_changed =
                 root_clone.description != stored_desc || root_clone.inline_media != tree_media;
             if root_changed {
@@ -2192,7 +2195,10 @@ impl TaskStore {
             // fresh component on every save. Match an existing sibling by summary so
             // the round-trip is idempotent.
             if ext.parsed_existing_uid.is_none()
-                && (ext.raw_text.contains("is:page") || ext.raw_text.contains("is:journal"))
+                && (ext.raw_text.contains("is:page")
+                    || ext.raw_text.contains("is:journal")
+                    || ext.raw_text.contains("is:flat")
+                    || ext.raw_text.contains("is:doc"))
             {
                 let parent = ext
                     .parent_uid
@@ -2330,10 +2336,13 @@ impl TaskStore {
                     clone.target_collection = dummy.target_collection;
                 }
 
-                // A plain task stores prose only; a journal page keeps its
-                // shadow lines (its description is the document).
-                clone.description =
-                    crate::model::extractor::stored_description(&ext.description, clone.is_journal);
+                // A plain task stores prose only; a flat document (journal
+                // page or `is:flat`/`is:doc` task) keeps its shadow lines
+                // (its description is the document).
+                clone.description = crate::model::extractor::stored_description(
+                    &ext.description,
+                    clone.is_flat_doc(),
+                );
                 clone.inline_media = ext.inline_media.clone();
                 if existing.is_journal {
                     // Journal components are never serialized with a checkbox,
@@ -2388,6 +2397,7 @@ impl TaskStore {
                     || test_existing.percent_complete != test_clone.percent_complete
                     || test_existing.is_note != test_clone.is_note
                     || test_existing.pinned != test_clone.pinned
+                    || test_existing.flat != test_clone.flat
                     || test_existing.manual_block != test_clone.manual_block
                     || test_existing.permanent != test_clone.permanent
                     || test_existing.parent_uid != test_clone.parent_uid
@@ -2427,11 +2437,12 @@ impl TaskStore {
                     options.default_reminder_time,
                 );
                 new_task.uid = task_uid.clone();
-                // A plain task stores prose only; a journal sub-page keeps
-                // its shadow lines (its description is the document).
+                // A plain task stores prose only; a flat document (journal
+                // sub-page or `is:flat`/`is:doc` task) keeps its shadow lines
+                // (its description is the document).
                 new_task.description = crate::model::extractor::stored_description(
                     &ext.description,
-                    new_task.is_journal,
+                    new_task.is_flat_doc(),
                 );
                 new_task.inline_media = ext.inline_media;
 
@@ -5877,6 +5888,7 @@ mod tests {
             manual_block: false,
             permanent: false,
             is_journal: false,
+            flat: false,
             is_event: false,
             time_spent_seconds: 0,
             last_started_at: None,

@@ -63,6 +63,7 @@ pub fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task>
         manual_block: _,
         permanent: _,
         is_journal: _,
+        flat: _,
         is_event: _,
         time_spent_seconds: _,
         last_started_at: _,

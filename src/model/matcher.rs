@@ -60,6 +60,7 @@ enum StatusFilter {
     Ready,
     Note,
     Page,
+    Flat,
     Permanent,
     Canceled,
     Pinned,
@@ -104,6 +105,7 @@ pub fn extract_highlight_terms(query: &str) -> Vec<String> {
                 || lex_guard.search_is_blocked.contains(&lower)
                 || lex_guard.search_is_note.contains(&lower)
                 || lex_guard.search_is_page.contains(&lower)
+                || lex_guard.search_is_flat.contains(&lower)
                 || lex_guard.search_is_permanent.contains(&lower)
                 || lex_guard.search_is_canceled.contains(&lower)
                 || lex_guard.search_is_recurrent.contains(&lower)
@@ -492,6 +494,8 @@ fn compile_term(part: &str, lex: &crate::model::parser::ParserLexicon) -> Compil
         Some(StatusFilter::Note)
     } else if lower == "is:page" || lower == "is:journal" || lex.search_is_page.contains(&lower) {
         Some(StatusFilter::Page)
+    } else if lower == "is:flat" || lower == "is:doc" || lex.search_is_flat.contains(&lower) {
+        Some(StatusFilter::Flat)
     } else if lower == "is:permanent" || lex.search_is_permanent.contains(&lower) {
         Some(StatusFilter::Permanent)
     } else if lower == "is:canceled"
@@ -640,6 +644,7 @@ impl CompiledTerm {
                 StatusFilter::Ready => true,
                 StatusFilter::Note => task.is_note,
                 StatusFilter::Page => task.is_journal,
+                StatusFilter::Flat => task.flat,
                 StatusFilter::Permanent => task.permanent,
                 StatusFilter::Canceled => task.status == TaskStatus::Cancelled,
                 StatusFilter::Pinned => task.pinned,

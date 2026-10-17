@@ -996,12 +996,13 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
 
         let mut parent = Task::new(&clean_input, &state.tag_aliases, def_time);
 
-        // Extract the description with the parent's semantics: a journal
-        // page (is:page) only turns explicit items into subtasks, while a
-        // plain task also turns list items and headings into subtasks.
+        // Extract the description with the parent's semantics: a flat
+        // document (a journal page or an is:flat/is:doc task) only turns
+        // explicit items into subtasks, while a plain task also turns list
+        // items and headings into subtasks.
         let (clean_desc, extracted) = crate::model::extractor::extract_markdown_tasks(
             &desc_text,
-            parent.is_journal,
+            parent.is_flat_doc(),
             &mut parent_media,
         );
 
@@ -1030,10 +1031,10 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
             extracted,
         );
         // A plain task stores prose only: the extracted lines live on as
-        // child tasks, not as shadow text in the description. Journal pages
-        // keep their shadows (their description is the document).
+        // child tasks, not as shadow text in the description. Flat documents
+        // (journal pages, is:flat/is:doc tasks) keep their shadows.
         parent.description =
-            crate::model::extractor::stored_description(&parent.description, parent.is_journal);
+            crate::model::extractor::stored_description(&parent.description, parent.is_flat_doc());
         parent.inline_media = parent_media;
         parent.parent_uid = state.creating_child_of.clone();
 
@@ -1103,10 +1104,10 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
                     log::warn!("Dependency resolution: {}", w);
                 }
             }
-            // A plain subtask stores prose only; a journal sub-page keeps
-            // its shadow lines.
+            // A plain subtask stores prose only; a flat document (journal
+            // sub-page, is:flat/is:doc task) keeps its shadow lines.
             let ext_desc =
-                crate::model::extractor::stored_description(&ext.description, sub.is_journal);
+                crate::model::extractor::stored_description(&ext.description, sub.is_flat_doc());
             if !ext_desc.is_empty() {
                 if sub.description.is_empty() {
                     sub.description = ext_desc;

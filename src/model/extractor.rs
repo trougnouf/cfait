@@ -101,15 +101,27 @@ fn leading_digit_bytes(s: &str) -> usize {
         .count()
 }
 
-fn compute_task_lines(input: &str, global_is_journal: bool) -> Vec<bool> {
+/// Whether `after_marker` (a list item's text) carries a marker that makes
+/// the line an explicit task even in flat-document context, and scopes its
+/// sub-tree to flat-document parsing: `is:note`, `is:page`/`is:journal`,
+/// or `is:flat`/`is:doc`.
+fn flat_doc_marker(after_marker: &str) -> bool {
+    after_marker.contains("is:note")
+        || after_marker.contains("is:page")
+        || after_marker.contains("is:journal")
+        || after_marker.contains("is:flat")
+        || after_marker.contains("is:doc")
+}
+
+fn compute_task_lines(input: &str, global_flat_doc: bool) -> Vec<bool> {
     let lines_vec: Vec<&str> = input.lines().collect();
     let mut is_task_line = vec![false; lines_vec.len()];
     let mut indents = vec![0; lines_vec.len()];
     let mut is_list = vec![false; lines_vec.len()];
     let mut explicit_task = vec![false; lines_vec.len()];
 
-    // Stack of (indent, is_journal)
-    let mut context_stack: Vec<(usize, bool)> = vec![(0, global_is_journal)];
+    // Stack of (indent, flat_doc)
+    let mut context_stack: Vec<(usize, bool)> = vec![(0, global_flat_doc)];
 
     for (i, line) in lines_vec.iter().enumerate() {
         let (indent, byte_offset) = leading_indent(line);
@@ -124,17 +136,17 @@ fn compute_task_lines(input: &str, global_is_journal: bool) -> Vec<bool> {
             }
         }
 
-        let current_is_journal = context_stack
+        let current_flat_doc = context_stack
             .last()
             .map(|&(_, j)| j)
-            .unwrap_or(global_is_journal);
+            .unwrap_or(global_flat_doc);
 
         let rest = &line[byte_offset..];
         let mut list_marker = false;
         let mut after_marker = rest;
         let mut is_header = false;
 
-        if !current_is_journal
+        if !current_flat_doc
             && rest.starts_with('#')
             && rest
                 .find(' ')
@@ -163,19 +175,20 @@ fn compute_task_lines(input: &str, global_is_journal: bool) -> Vec<bool> {
             if list_marker {
                 let has_checkbox = parse_checkbox(after_marker).is_some();
                 let has_uid = after_marker.contains("<!-- uid:");
-                let has_is_note = after_marker.contains("is:note")
-                    || after_marker.contains("is:page")
-                    || after_marker.contains("is:journal");
+                let has_is_note = flat_doc_marker(after_marker);
 
-                if has_checkbox || has_uid || has_is_note || (!current_is_journal && !has_checkbox)
-                {
+                if has_checkbox || has_uid || has_is_note || (!current_flat_doc && !has_checkbox) {
                     is_task_line[i] = true;
                     if has_checkbox || has_uid || has_is_note {
                         explicit_task[i] = true;
                     }
 
-                    let looks_like_journal =
-                        after_marker.contains("is:page") || after_marker.contains("is:journal");
+                    // A journal page or flat doc scopes its sub-tree to
+                    // flat-document parsing (no shredding of plain text).
+                    let looks_like_journal = after_marker.contains("is:page")
+                        || after_marker.contains("is:journal")
+                        || after_marker.contains("is:flat")
+                        || after_marker.contains("is:doc");
 
                     context_stack.push((indent, looks_like_journal));
                 }
@@ -268,8 +281,8 @@ pub fn extract_list_prefix(line: &str) -> String {
     prefix
 }
 
-pub fn has_extractable_subtasks(input: &str, is_journal: bool) -> bool {
-    let is_task = compute_task_lines(input, is_journal);
+pub fn has_extractable_subtasks(input: &str, flat_doc: bool) -> bool {
+    let is_task = compute_task_lines(input, flat_doc);
     is_task.into_iter().any(|b| b)
 }
 
@@ -372,13 +385,14 @@ pub fn description_prose(desc: &str) -> String {
 }
 
 /// The description to persist for a task whose extraction produced
-/// `clean_desc` (shadow lines included). A journal page keeps its shadow
-/// lines: its description is the document, and the tags pin each child's
-/// position. A plain task stores prose only — the tree, not the text,
-/// remembers its children — so third-party clients see a clean `DESCRIPTION`
-/// and no subtask line can masquerade as a note.
-pub fn stored_description(clean_desc: &str, is_journal: bool) -> String {
-    if is_journal {
+/// `clean_desc` (shadow lines included). A flat document (a journal page or
+/// an `is:flat`/`is:doc` task) keeps its shadow lines: its description is the
+/// document, and the tags pin each child's position. A plain task stores
+/// prose only — the tree, not the text, remembers its children — so
+/// third-party clients see a clean `DESCRIPTION` and no subtask line can
+/// masquerade as a note.
+pub fn stored_description(clean_desc: &str, flat_doc: bool) -> String {
+    if flat_doc {
         clean_desc.to_string()
     } else {
         description_prose(clean_desc)
@@ -408,11 +422,12 @@ enum StackItemKind {
     List(usize),    // indent in spaces
 }
 
-/// Takes a raw markdown string.
+/// Takes a raw markdown string. `flat_doc` selects journal rules: Markdown
+/// headers and plain list items stay prose instead of becoming subtasks.
 /// Returns (Cleaned Root Description, List of Extracted Subtasks).
 pub fn extract_markdown_tasks(
     input: &str,
-    is_journal: bool,
+    flat_doc: bool,
     parent_media: &mut std::collections::HashMap<String, String>,
 ) -> (String, Vec<ExtractedTask>) {
     // Strip new data: URIs from user input, appending payloads to parent_media
@@ -424,7 +439,7 @@ pub fn extract_markdown_tasks(
     let mut extracted: Vec<ExtractedTask> = Vec::new();
 
     let lines_vec: Vec<&str> = input.lines().collect();
-    let is_task_line = compute_task_lines(input, is_journal);
+    let is_task_line = compute_task_lines(input, flat_doc);
 
     let mut indent_stack: Vec<(StackItemKind, String, usize)> = Vec::new();
     let mut item_kind_at_indent: HashMap<usize, (usize, usize)> = HashMap::new(); // indent -> (block_id, last_num)
@@ -459,7 +474,7 @@ pub fn extract_markdown_tasks(
             let mut is_header = false;
             let mut header_depth = 0;
 
-            if !is_journal {
+            if !flat_doc {
                 for depth in (1..=6).rev() {
                     let prefix = format!("{} ", "#".repeat(depth));
                     if let Some(stripped) = rest.strip_prefix(&prefix) {
@@ -784,13 +799,13 @@ struct SerializeContext<'a> {
 
 /// Emit `task`'s description, rendering child shadows inline where their
 /// line sits. Returns the uids rendered inline, so the caller appends
-/// only the unreferenced children afterwards. `child_depth` is the depth
-/// inline children render at (0 under a raw journal root, `depth + 1`
+/// only the unreferenced children afterwards. `child_indent` is the indent
+/// inline children render at (empty under a raw journal root, one level
 /// under a serialized node).
 fn emit_description<'a>(
     ctx: &SerializeContext<'a>,
     task: &'a crate::model::Task,
-    child_depth: usize,
+    child_indent: &str,
     out: &mut String,
     line_prefix: &str,
 ) -> std::collections::HashSet<&'a str> {
@@ -803,7 +818,7 @@ fn emit_description<'a>(
         if let Some((marker, uid)) = shadow_marker(line) {
             if let Some(child) = children.and_then(|cs| cs.iter().find(|c| c.uid == uid)) {
                 rendered.insert(uid);
-                serialize_node(ctx, child, child_depth, out, marker, &task.calendar_href);
+                serialize_node(ctx, child, child_indent, out, marker, &task.calendar_href);
                 continue;
             }
             // The tagged task exists but is no longer a child here
@@ -825,7 +840,7 @@ fn emit_description<'a>(
 fn serialize_node(
     ctx: &SerializeContext,
     task: &crate::model::Task,
-    depth: usize,
+    indent: &str,
     out: &mut String,
     prefix: &str,
     parent_href: &str,
@@ -876,7 +891,16 @@ fn serialize_node(
     } else {
         format!("<!-- uid:{} -->", task.uid)
     };
-    let indent = "    ".repeat(depth);
+    let desc_prefix = format!("{indent}  ");
+    // A flat document (`is:flat`/`is:doc`) renders its children at the same
+    // indent as its description lines: a child must never look nested under
+    // a plain list item of the document, or the structural-parent rule
+    // would re-extract that item as a note on the next save.
+    let child_indent = if task.flat {
+        desc_prefix.clone()
+    } else {
+        format!("{indent}    ")
+    };
 
     // Output short UID dependencies and relations to guarantee they are never ambiguous upon re-parsing
     let mut dep_str = String::new();
@@ -935,7 +959,7 @@ fn serialize_node(
         ));
     }
 
-    let rendered_inline = emit_description(ctx, task, depth + 1, out, &format!("{}  ", indent));
+    let rendered_inline = emit_description(ctx, task, &child_indent, out, &desc_prefix);
 
     if let Some(children) = ctx.children_map.get(&task.uid) {
         let remaining: Vec<&crate::model::Task> = children
@@ -945,7 +969,7 @@ fn serialize_node(
             .collect();
         let prefixes = child_prefixes(&remaining);
         for (child, prefix) in remaining.iter().zip(prefixes.iter()) {
-            serialize_node(ctx, child, depth + 1, out, prefix, &task.calendar_href);
+            serialize_node(ctx, child, &child_indent, out, prefix, &task.calendar_href);
         }
     }
 }
@@ -1111,7 +1135,7 @@ pub fn serialize_merged_description(
         plain: false,
     };
     let mut out = String::new();
-    let rendered_inline = emit_description(&ctx, task, 0, &mut out, "");
+    let rendered_inline = emit_description(&ctx, task, "", &mut out, "");
     if let Some(children) = children_map.get(&task.uid) {
         let remaining: Vec<&crate::model::Task> = children
             .iter()
@@ -1120,7 +1144,7 @@ pub fn serialize_merged_description(
             .collect();
         let prefixes = child_prefixes(&remaining);
         for (child, prefix) in remaining.iter().zip(prefixes.iter()) {
-            serialize_node(&ctx, child, 0, &mut out, prefix, &task.calendar_href);
+            serialize_node(&ctx, child, "", &mut out, prefix, &task.calendar_href);
         }
     }
     out.trim_end().to_string()
@@ -1150,7 +1174,7 @@ fn serialize_task_tree_inner(
     };
 
     if is_journal {
-        let rendered_inline = emit_description(&ctx, root, 0, &mut out, "");
+        let rendered_inline = emit_description(&ctx, root, "", &mut out, "");
         if let Some(children) = children_map.get(&root.uid) {
             let remaining: Vec<&crate::model::Task> = children
                 .iter()
@@ -1159,11 +1183,11 @@ fn serialize_task_tree_inner(
                 .collect();
             let prefixes = child_prefixes(&remaining);
             for (child, prefix) in remaining.iter().zip(prefixes.iter()) {
-                serialize_node(&ctx, child, 0, &mut out, prefix, &root.calendar_href);
+                serialize_node(&ctx, child, "", &mut out, prefix, &root.calendar_href);
             }
         }
     } else {
-        serialize_node(&ctx, root, 0, &mut out, "-", &root.calendar_href);
+        serialize_node(&ctx, root, "", &mut out, "-", &root.calendar_href);
     }
 
     out.trim_end().to_string()

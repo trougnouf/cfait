@@ -439,6 +439,18 @@ impl TaskDisplay for Task {
             s.push_str(" is:page");
         }
 
+        if self.flat {
+            let flat_str = rust_i18n::t!("parser_is_flat");
+            if flat_str == "parser_is_flat" || flat_str.is_empty() {
+                s.push_str(" is:flat");
+            } else {
+                s.push_str(&format!(
+                    " {}",
+                    flat_str.split(',').next().unwrap_or("is:flat").trim()
+                ));
+            }
+        }
+
         if self.manual_block {
             let block_str = rust_i18n::t!("search_is_blocked");
             if block_str == "search_is_blocked" || block_str.is_empty() {

@@ -426,6 +426,11 @@ pub struct Task {
     /// When `true`, this item represents a VJOURNAL note rather than a VTODO task.
     #[serde(default)]
     pub is_journal: bool,
+    /// When `true`, the task stays a `VTODO` but its description is parsed
+    /// like a journal page: Markdown headers and plain list items stay as
+    /// document text instead of being extracted into subtasks.
+    #[serde(default)]
+    pub flat: bool,
     /// When `true`, this item is serialized as a VEVENT (hidden settings
     /// object fallback). Only used for the settings object.
     #[serde(default)]
@@ -695,11 +700,19 @@ impl Task {
         None
     }
 
+    /// Whether the description is parsed as a flat document (journal rules):
+    /// Markdown headers and plain list items stay prose instead of being
+    /// extracted into subtasks. True for journal pages (`is:page`) and for
+    /// tasks tagged `is:flat` / `is:doc`.
+    pub fn is_flat_doc(&self) -> bool {
+        self.is_journal || self.flat
+    }
+
     pub fn has_extractable_subtasks(&self) -> bool {
         if let Some(cached) = self.cached_has_subtasks {
             return cached;
         }
-        crate::model::extractor::has_extractable_subtasks(&self.description, self.is_journal)
+        crate::model::extractor::has_extractable_subtasks(&self.description, self.is_flat_doc())
     }
 
     /// Returns the first openable link associated with this task.
@@ -874,6 +887,7 @@ impl Task {
             manual_block: false,
             permanent: false,
             is_journal: false,
+            flat: false,
             is_event: false,
             time_spent_seconds: 0,
             last_started_at: None,
@@ -929,9 +943,9 @@ impl Task {
         self.transient_desc_locs.clear();
         self.cached_has_subtasks = Some(crate::model::extractor::has_extractable_subtasks(
             &self.description,
-            self.is_journal,
+            self.is_flat_doc(),
         ));
-        if !self.is_journal {
+        if !self.is_flat_doc() {
             return;
         }
         let (tags, locs) =

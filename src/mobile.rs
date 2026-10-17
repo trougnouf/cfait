@@ -3137,7 +3137,7 @@ impl CfaitMobile {
         let mut task = Task::new(&clean_input, &config.tag_aliases, def_time);
         let (cleaned_desc, extracted_subtasks) = crate::model::extractor::extract_markdown_tasks(
             &description,
-            false,
+            task.is_flat_doc(),
             &mut task.inline_media,
         );
 
@@ -3173,10 +3173,10 @@ impl CfaitMobile {
         drop(store_guard);
 
         // A plain task stores prose only: the extracted lines live on as
-        // child tasks, not as shadow text in the description. Journal pages
-        // keep their shadows (their description is the document).
+        // child tasks, not as shadow text in the description. Flat documents
+        // (journal pages, is:flat/is:doc tasks) keep their shadows.
         task.description =
-            crate::model::extractor::stored_description(&task.description, task.is_journal);
+            crate::model::extractor::stored_description(&task.description, task.is_flat_doc());
 
         self.resolve_task_calendar(&mut task, &config).await;
         let parent_href = task.calendar_href.clone();
@@ -3215,10 +3215,10 @@ impl CfaitMobile {
             let _warnings2 = store.resolve_dependencies(&mut sub);
             drop(store);
 
-            // A plain subtask stores prose only; a journal sub-page keeps
-            // its shadow lines.
+            // A plain subtask stores prose only; a flat document (journal
+            // sub-page, is:flat/is:doc task) keeps its shadow lines.
             let ext_desc =
-                crate::model::extractor::stored_description(&ext.description, sub.is_journal);
+                crate::model::extractor::stored_description(&ext.description, sub.is_flat_doc());
             if !ext_desc.is_empty() {
                 if sub.description.is_empty() {
                     sub.description = ext_desc;
