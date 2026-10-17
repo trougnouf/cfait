@@ -71,7 +71,23 @@ Evaluated instantly during text input. Supported across all clients.
 *   **UI Strings (Android):** The Gradle task `generateStringsXml` (run automatically before any build) converts each `locales/*.json` into `android/app/src/main/res/values*/strings.xml`, rewriting `%{param}` to positional `%1$s`, `%2$s`, ... arguments. Plural keys (objects with `one`/`other`/`zero` subkeys) are emitted as a single `{one=..., other=...}` string and resolved at runtime by `resolvePluralMap()` in `Shared.kt`. Kotlin call sites must therefore pass arguments in the same order as the placeholders appear in the JSON.
 *   **Plural Selection:** rust_i18n does NOT select plural forms automatically — `t!("key", count = n)` on a plural key returns the key itself. Callers must pick the subkey, e.g. `i18n::t_plural("key", count)` (see `src/i18n.rs`) or `t!("key.one")` / `t!("key.other")` directly. A regression test (`i18n_tests::t_macro_keys_exist_in_fallback_locale`) fails the build if any `t!()` literal key is missing from `en.json`.
 
-### 2.1. Tokens
+### 2.1. Item Types: Tasks, Notes, Pages & Journal Entries
+Every item is created from the same smart-syntax line; the type tokens decide what the line becomes, where it is displayed, and how its body is parsed. The text typed on the input line always becomes the item's *title* — the body is written afterwards in the item's own editor (open a page from the journal's Pages section, a `[[link]]`, or search).
+
+| Type | Token | Component | Checkbox | Displayed in | Created by |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| Task | (default) | `VTODO` | yes | Task lists, day planner | Typing in the task input; `cfait add "Water the tomatoes" #gardening` |
+| Note / header | `- ` prefix or `is:note` | `VTODO` flagged as a note | no | Task lists, as a structural header that groups the items underneath | `cfait add "Pantry is:note"` |
+| Wiki page | `is:page` (alias: `is:journal`) | `VJOURNAL` without `DTSTART` | no | Journal tab → Pages section: a tree of long-form documents | `cfait add "Garden path ideas is:page"`, `[[My Page]]` typed in a page, or `Ctrl+N` in the journal tab |
+| Flat document | `is:flat` (alias: `is:doc`) | `VTODO` with `X-CFAIT-FLAT:TRUE` | yes | Task lists; its description is parsed like a page (see 2.4) | `cfait add "Reading list is:flat"` |
+| Journal entry (a day's note) | none — the date anchors it | `VJOURNAL` with `DTSTART;VALUE=DATE` | no | Journal tab, under its date | `Enter` on a date in the journal tab (TUI & GUI); CLI: `cfait add "2026-10-17 is:journal start:2026-10-17" --desc "..."` |
+
+*   `is:journal` is an alias of `is:page` — both create a wiki page. The name refers to the component type (`VJOURNAL`), not to the journal tab; a type token alone never creates a dated entry.
+*   A journal entry is a page anchored to a date: for each date the journal tab shows the `VJOURNAL` whose `DTSTART` is that date (when several share a date, the one titled with the date string wins — see 5.4). A wiki page given a `start:` date therefore appears as that day's entry, which is how the CLI creates one.
+*   `is:note` on a page line (`- My Page is:note is:page`) is the explicit note marker for pages: a plain `is:page` line is a standard page, and the token is the single source of truth on every tree sync.
+*   A page's body is a document, never a task tree: headers, plain text, and plain lists stay inside the `DESCRIPTION` (see 2.4); only checkbox lines (`- [ ]`), uid-tagged lines, and typed sub-items become children.
+
+### 2.2. Tokens
 | Token | Meaning | Example |
 | :--- | :--- | :--- |
 | `!1` .. `!9` | Priority (1 is highest/most urgent). | `!1` |
@@ -100,7 +116,7 @@ Evaluated instantly during text input. Supported across all clients.
 | `+cal` / `-cal` | Force/prevent companion Calendar Event. | `+cal` |
 | `is:pinned` | Pin task to the top of the list. | `is:pinned` |
 | `is:permanent` | Mark task as a permanent/continuous tracker. | `is:permanent` |
-| `is:page` | Mark the line as a Wiki sub-page (VJOURNAL component). Parses identically from the task interface and the journal tab, and does not imply `is:note`. | `is:page`, `is:journal` |
+| `is:page` | Mark the line as a Wiki page (VJOURNAL component, no `DTSTART` — see 2.1). `is:journal` is an alias. Parses identically from the task interface and the journal tab, and does not imply `is:note`. | `is:page`, `is:journal` |
 | `is:flat` | Keep the task a `VTODO` (checkbox stays), but parse its description like a wiki page: Markdown headers and plain list items stay as document text instead of being extracted into subtasks (checkbox items still are). The description also keeps child shadow lines, like a page. | `is:flat`, `is:doc` |
 | `goal:` | Goal tracking target. | `goal:5/w`, `goal:2h/daily`, `goal:weekly` |
 
@@ -112,12 +128,12 @@ Reference resolution (`dep:`/`rel:`/`parent:`): fuzzy references resolve within 
 * **Durations** accept compound forms wherever a duration is parsed (`rem:`, `~`, `spent:`, `goal:`, snooze input): every segment carries an explicit unit and segments sum (`2h20m` = 140 minutes, `~1h30m-2h`). Segments without a trailing unit (`2h20`) and clock-time lookalikes (`2:20h`) are rejected.
 * **Reminder anchoring:** `rem:in <duration>` counts from now (absolute). `rem:<duration>` counts backwards from the task's due/start date; if the task has no due/start date it falls back to an absolute reminder from now. `rem:<clock time>` (e.g. `rem:2:20`, `rem:8am`) fires at that time on the due/start date, or today/tomorrow when the task has no date.
 
-### 2.2. Aliases (Macros)
+### 2.3. Aliases (Macros)
 Users can define reusable shortcuts that physically expand into multiple tags, locations, or priorities.
 *   *Syntax:* `#gardening := #home:outside, @@garden, !4`
 *   Aliases act as one-way text macros. They are resolved retroactively across the database upon creation/edit, meaning the target tags are physically appended to matching tasks. Because provenance (whether a tag was added manually or via alias) is not tracked, removing a tag from an alias definition will *not* remove it from existing tasks to prevent data loss. Cycle detection is strictly enforced (max depth 10).
 
-### 2.3. Markdown Subtask Extraction & Round-Trip Editing (Context-Aware)
+### 2.4. Markdown Subtask Extraction & Round-Trip Editing (Context-Aware)
 If a task's description contains Markdown lists, Cfait extracts actionable items into distinct child tasks whenever the task is saved. 
 Users can also use the "Edit Tree" action (or `Ctrl+E`) to edit an entire existing task tree—including the root task's summary, metadata, and subtasks—as a single unified Markdown document.
 *   **Document Preservation & Transient Metadata:** 
@@ -148,7 +164,7 @@ Users can also use the "Edit Tree" action (or `Ctrl+E`) to edit an entire existi
     *   **Editor save cadence:** The GUI journal editor debounces its saves (500 ms after the last keystroke, not per keystroke), and each save re-parses the whole buffer. A line without a UID comment would otherwise be assigned a fresh identifier on every save (accumulating duplicates or trashed intermediate versions while typing), so the editor re-tags every line a save just minted — appending the comment at the line end, which preserves the cursor's (line, column) — and later saves match those components by uid. The other editors hold no buffer across saves: the TUI and mobile reload the tree (with UID comments) after each save, and the GUI tree editor re-serializes from the store, so none of them re-parses a stale buffer.
     *   **Absent lines are deletions:** A document-view buffer (journal page editor, description editors) holds the journal root's description plus every subtask and every *pinned* sub-page's reference line, each carrying its UID comment — so a line missing from the buffer is an explicit deletion. Exemptions: a sub-page's *body* is never part of the parent's buffer (see "Sub-pages Are Links, Not Embeds"), so the whole subtree of a sub-page shown as a bare reference line is protected; and an unplaced sub-page (never referenced by the document) is absent from the buffer by design and is likewise protected — only removing a *pinned* reference line soft-deletes a sub-page (and its subtree), as does deleting its parent page. A *tree-view* buffer (tree editor, `cfait edit --tree`, `cfait print`, Android task-tree markdown) is the whole tree — sub-page bodies expanded, unplaced sub-pages appended — so none of the sub-page exemptions apply: a sub-page line missing from the buffer is an explicit deletion, and deleting a sub-task line under a sub-page soft-deletes it. System-calendar components (trash, recovery) are exempt in both views: they are never serialized into the tree, and deleting them here would hard-delete them and bypass the retention window.
 
-### 2.4. Inline Markdown Formatting
+### 2.5. Inline Markdown Formatting
 Cfait natively supports rendering basic inline Markdown across task summaries, descriptions, and the raw text editors.
 *   **Supported Syntax:** `**bold**`, `__bold__`, `*italic*`, `_italic_`, `~~strikethrough~~`, `` `code` ``, standard Markdown links `[label](url)`, and bare URLs (any `scheme://` or `mailto:`).
 *   **Marker Visibility:** Formatting markers (e.g., `**`, `~~`, `` ` ``) are hidden in read-only views (such as the task list, sidebar, and read-only details) to keep the text clean. The markers are preserved and highlighted in the raw text editors and inputs to ensure a seamless text-based editing experience.
@@ -204,7 +220,7 @@ Instead of drag-and-drop, Cfait uses a robust "Yank" (Clipboard) system for hier
     *   `b` (Block): Target becomes blocked by Yanked.
     *   `l` (Link): Target becomes related (sibling) to Yanked.
 3.  **Clear (`Esc`):** Clears yank state. (`Y` locks the yanked state for multiple relations). Yanking the already-yanked item also clears the state (toggling), in the task list, the journal header and the TUI.
-4.  **Re-parent by text:** The `parent:` token (see §2.1) re-parents via the smart input from any client, accepting the same fuzzy references as `dep:`/`rel:`.
+4.  **Re-parent by text:** The `parent:` token (see §2.2) re-parents via the smart input from any client, accepting the same fuzzy references as `dep:`/`rel:`.
 
 ### 4.2. Recurrence Recycling & DST Safety
 When completing a recurring task:
@@ -321,7 +337,8 @@ Daily notes and wiki pages are `VJOURNAL` components (see 1.2). They share a uni
 *   **Page Re-parenting:** The journal tab has no re-parent affordance of its own: a `parent:` line typed in a page body stays as prose (journal context never extracts plain lines), and the title input is stored verbatim. Re-parent a page through a smart-input surface (task list title edit, add bar, tree editor) or the journal header's yank button (link icon, same as task rows), which marks the edited page as the yank source and highlights while active; while a yank is active the header also shows a highlighted child-of-yanked button that makes the page being edited a child of the yanked task or page, mirroring the task rows' relation buttons.
 *   **Page Creation:** Typing `[[My Page]]` in any text editor creates the page if it doesn't exist. The component type is inherited from the context (actionable `VTODO` from a task, `VJOURNAL` from a page). Use `is:page` or `is:journal` to force the type explicitly.
 *   **Page Creation Focus:** Creating a new page focuses the title field first; `Tab` moves focus to the note body.
-*   **TUI Journal Navigation:** When the Journal tab is active, `j`/`k` (or arrow keys) navigate the page list, `Enter` opens the selected page for editing, and `z` collapses/expands the wiki tree.
+*   **TUI Journal Navigation:** When the Journal tab is active, `j`/`k` (or arrow keys) navigate the page list in the sidebar, `Enter` opens the selected page for editing, and `z` collapses/expands the wiki tree. In the day pane, `←`/`→`/`↑`/`↓` change the selected date and `Enter` opens the editor for the day's entry.
+*   **Daily Entry Creation:** The day's entry is a `VJOURNAL` titled with the date string and anchored with `DTSTART;VALUE=DATE` to the selected date (see 2.1). In the GUI, typing in the day's editor creates it on the first keystroke; in the TUI, `Enter` opens the editor and saving non-empty text creates it (typing alone does nothing on an empty day — the TUI is modal). `Ctrl+N` in the journal tab creates a wiki *page* (no date), not a dated entry.
 *   **Android Journal:** A month-grid calendar view with daily-note indicators; tapping a day opens its note. Pages can be moved between dates via the context menu.
 
 ---
@@ -370,7 +387,7 @@ Used for headless automation, scripting, and piping. Operates directly on the `T
 
 *Global flags:* Most mutation commands accept `-n` / `--no-wait` (queue to journal and exit without syncing) and `-w` / `--wait` (block until network sync completes).
 
-*   `cfait add` (alias: `create`) `<task...>`: Smart input task creation. Inline alias definitions (`#key := #a, @@loc`) are saved and applied retroactively to existing tasks. Pass `--edit` to open the buffer in the external editor (`$VISUAL`/`$EDITOR`) before creating: line 1 is the smart title, the lines below become the description (unless `--desc` is given), and saving an empty buffer cancels. The buffer is seeded with the positional arguments, so saving it unchanged creates the same task as without the flag. Flags: `-c <href>`, `--desc <text>`, `-p <uid>` (set parent), `-n`, `-w`.
+*   `cfait add` (alias: `create`) `<task...>`: Smart input task creation. Inline alias definitions (`#key := #a, @@loc`) are saved and applied retroactively to existing tasks. Pass `--edit` to open the buffer in the external editor (`$VISUAL`/`$EDITOR`) before creating: line 1 is the smart title, the lines below become the description (unless `--desc` is given), and saving an empty buffer cancels. The buffer is seeded with the positional arguments, so saving it unchanged creates the same task as without the flag. Flags: `-c <href>`, `--desc <text>`, `-p <uid>` (set parent), `-n`, `-w`. Type recipes (see 2.1): `cfait add "Water the tomatoes" #gardening` (task), `cfait add "Pantry is:note"` (note/header), `cfait add "Garden path ideas is:page"` (wiki page), `cfait add "Reading list is:flat"` (flat document), `cfait add "2026-10-17 is:journal start:2026-10-17" --desc "..."` (journal entry for that date).
 *   `cfait append <uid> <task...>`: Appends smart syntax tokens (tags, dates, deps, etc.) or text to an existing task. Flags: `--desc <text>` (appends to existing description), `-n`, `-w`.
 *   `cfait edit <uid> [--tree]`: Opens an external editor (`$VISUAL`/`$EDITOR`) to edit the task's properties. Pass `--tree` to edit the entire task tree as a single Markdown document.
 *   `cfait replace <uid> <task...>`: Replaces the entire task summary and metadata. To safely add tags or dates without losing the title, use `append`. Flags: `--clear-due`, `--clear-start`, `--clear-tags`, `--clear-loc`, `--clear-deps`, `-p <uid>`, `--clear-parent`, `--desc <text>`, `--file <path>` (replaces from markdown file), `--tree` (when used with `--file`, replaces entire tree), `-n`, `-w`.

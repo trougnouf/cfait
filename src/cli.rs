@@ -278,6 +278,16 @@ pub fn print_help(binary_name: &str) {
             "    @@aldi:=#groceries,@@shops {}",
             rust_i18n::t!("cli_example_loc_alias")
         );
+        println!("    Pantry is:note {}", rust_i18n::t!("cli_ex_note"));
+        println!(
+            "    Garden path ideas is:page {}",
+            rust_i18n::t!("cli_ex_page")
+        );
+        println!("    Reading list is:flat {}", rust_i18n::t!("cli_ex_flat"));
+        println!(
+            "    2026-10-17 is:journal start:2026-10-17 {}",
+            rust_i18n::t!("cli_ex_entry")
+        );
     }
 
     println!();

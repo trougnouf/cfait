@@ -947,7 +947,9 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     &state.calendars,
                 )
             } else {
-                rust_i18n::t!("journal_no_notes", name = target_name).to_string()
+                // The TUI is modal: typing does nothing on an empty day, the
+                // gesture is Enter (opens the editor, creating the entry).
+                rust_i18n::t!("journal_no_notes_tui", name = target_name).to_string()
             };
             (
                 format!(

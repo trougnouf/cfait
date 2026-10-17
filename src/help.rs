@@ -157,6 +157,36 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
             ],
         },
         HelpSection {
+            title: rust_i18n::t!("help_types").to_string(),
+            items: vec![
+                HelpItem {
+                    keys: "(default)".to_string(),
+                    desc: rust_i18n::t!("help_types_task").to_string(),
+                    example: "Water the tomatoes #gardening".to_string(),
+                },
+                HelpItem {
+                    keys: "- / is:note".to_string(),
+                    desc: rust_i18n::t!("help_types_note").to_string(),
+                    example: format!("- {}", rust_i18n::t!("example_pantry")),
+                },
+                HelpItem {
+                    keys: "is:page / is:journal".to_string(),
+                    desc: rust_i18n::t!("help_types_page").to_string(),
+                    example: "Garden path ideas is:page".to_string(),
+                },
+                HelpItem {
+                    keys: is_flat_keys,
+                    desc: rust_i18n::t!("help_types_flat").to_string(),
+                    example: format!("{} {is_flat}", rust_i18n::t!("example_read_book")),
+                },
+                HelpItem {
+                    keys: "Enter (journal tab)".to_string(),
+                    desc: rust_i18n::t!("help_types_entry").to_string(),
+                    example: "cfait add \"2026-10-17 is:journal start:2026-10-17\"".to_string(),
+                },
+            ],
+        },
+        HelpSection {
             title: rust_i18n::t!("timeline").to_string(),
             items: vec![
                 HelpItem {
@@ -295,11 +325,6 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                     desc: rust_i18n::t!("help_metadata_pin_task").to_string(),
                     example: format!("{} is:pinned", rust_i18n::t!("example_important_task")),
                 },
-                HelpItem {
-                    keys: is_flat_keys,
-                    desc: rust_i18n::t!("help_metadata_flat").to_string(),
-                    example: format!("{} {is_flat}", rust_i18n::t!("example_read_book")),
-                },
             ],
         },
         HelpSection {
@@ -354,11 +379,6 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                     keys: format!("\\#{}", val_text),
                     desc: rust_i18n::t!("help_org_escape_special").to_string(),
                     example: "\\#not-a-tag".to_string(),
-                },
-                HelpItem {
-                    keys: "- / is:note".to_string(),
-                    desc: rust_i18n::t!("help_metadata_note").to_string(),
-                    example: format!("- {}", rust_i18n::t!("example_pantry")),
                 },
                 HelpItem {
                     keys: format!("{p_done}{val_date}"),
@@ -781,12 +801,17 @@ pub fn get_shortcuts_help(is_gui: bool) -> Vec<HelpSection> {
             items: {
                 let mut items = vec![
                     HelpItem {
+                        keys: "Enter (day pane)".to_string(),
+                        desc: rust_i18n::t!("help_journal_enter_day").to_string(),
+                        example: "".to_string(),
+                    },
+                    HelpItem {
                         keys: "j / k".to_string(),
                         desc: rust_i18n::t!("help_journal_nav").to_string(),
                         example: "".to_string(),
                     },
                     HelpItem {
-                        keys: "Enter".to_string(),
+                        keys: "Enter (Pages list)".to_string(),
                         desc: rust_i18n::t!("help_journal_open").to_string(),
                         example: "".to_string(),
                     },
