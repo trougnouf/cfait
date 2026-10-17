@@ -490,8 +490,11 @@ pub fn scroll_to_selected(app: &GuiApp, focus: bool) -> Task<Message> {
                     // Add height for expanded details
                     if app.expanded_tasks.contains(&t.uid) {
                         h += 15.0; // Margin
-                        if !t.description.is_empty() {
-                            h += t.description.lines().count() as f32 * 18.0;
+                        // The details pane renders the prose only; child
+                        // shadow lines are stripped and add no height.
+                        let desc_prose = crate::model::extractor::description_prose(&t.description);
+                        if !desc_prose.is_empty() {
+                            h += desc_prose.lines().count() as f32 * 18.0;
                         }
                         h += t.dependencies.len() as f32 * 24.0;
                         h += t.related_to.len() as f32 * 24.0;

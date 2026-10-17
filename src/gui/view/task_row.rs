@@ -1970,11 +1970,17 @@ pub fn view_task_row<'a>(
                 column![task_button, desc_row].spacing(5)
             } else {
                 let mut base_col = column![task_button];
-                if app.show_inline_descriptions && !task.description.is_empty() && !is_expanded {
+                // Prose-only preview: child shadow lines pin positions inside
+                // the description but are not description text, so they must
+                // not render here (SPECS.md: prose previews strip shadow
+                // lines via `description_prose`).
+                let inline_desc_prose =
+                    crate::model::extractor::description_prose(&task.description);
+                if app.show_inline_descriptions && !inline_desc_prose.is_empty() && !is_expanded {
                     let mut desc_col = column![].spacing(2);
                     let mut line_count = 0;
                     let mut in_code_block = false;
-                    for line in task.description.lines() {
+                    for line in inline_desc_prose.lines() {
                         if line.trim().is_empty() {
                             continue;
                         }

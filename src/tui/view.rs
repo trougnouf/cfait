@@ -2508,9 +2508,13 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             ]),
             Line::from(""),
         ];
-        if !task.description.is_empty() {
+        // Prose-only view: child shadow lines pin positions inside the
+        // description but are not description text (mirrors the GUI reminder
+        // modal).
+        let desc_prose = crate::model::extractor::description_prose(&task.description);
+        if !desc_prose.is_empty() {
             lines.push(Line::from(Span::styled(
-                task.description.clone(),
+                desc_prose,
                 Style::default().fg(Color::Gray),
             )));
             lines.push(Line::from(""));
