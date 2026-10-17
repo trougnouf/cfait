@@ -795,6 +795,11 @@ struct SerializeContext<'a> {
     store: &'a crate::store::TaskStore,
     calendars: &'a [crate::model::CalendarListEntry],
     plain: bool,
+    /// Tree view (`true`): sub-page bodies expand in place and unplaced
+    /// sub-pages append below — the buffer is the whole tree, so a save
+    /// treats it as such. Document view (`false`): a sub-page serializes
+    /// as its single reference line and unplaced sub-pages are omitted.
+    expand_pages: bool,
 }
 
 /// Emit `task`'s description, rendering child shadows inline where their
@@ -818,7 +823,15 @@ fn emit_description<'a>(
         if let Some((marker, uid)) = shadow_marker(line) {
             if let Some(child) = children.and_then(|cs| cs.iter().find(|c| c.uid == uid)) {
                 rendered.insert(uid);
-                serialize_node(ctx, child, child_indent, out, marker, &task.calendar_href);
+                serialize_node(
+                    ctx,
+                    child,
+                    child_indent,
+                    out,
+                    marker,
+                    &task.calendar_href,
+                    false,
+                );
                 continue;
             }
             // The tagged task exists but is no longer a child here
@@ -837,6 +850,16 @@ fn emit_description<'a>(
     rendered
 }
 
+/// Serialize one node: its line, then — unless it is a sub-page in document
+/// view — its description and children indented below. A sub-page (a
+/// `VJOURNAL` child) is a separate page: in document view it serializes as
+/// its single reference line (a followable link), and its body is edited in
+/// its own editor, never expanded into the parent's document; in tree view
+/// its body expands in place so the buffer is the whole tree. `is_root`
+/// marks the tree's root, whose body is the document being edited and is
+/// therefore always emitted. A sub-page the document does not pin (no shadow
+/// line) is not serialized in document view: the journal's Pages section owns
+/// the hierarchy of unplaced sub-pages; tree view appends it below.
 fn serialize_node(
     ctx: &SerializeContext,
     task: &crate::model::Task,
@@ -844,6 +867,7 @@ fn serialize_node(
     out: &mut String,
     prefix: &str,
     parent_href: &str,
+    is_root: bool,
 ) {
     let status_str = if task.is_note || task.is_journal {
         String::new()
@@ -959,17 +983,34 @@ fn serialize_node(
         ));
     }
 
+    if task.is_journal && !is_root && !ctx.expand_pages {
+        return;
+    }
+
     let rendered_inline = emit_description(ctx, task, &child_indent, out, &desc_prefix);
 
     if let Some(children) = ctx.children_map.get(&task.uid) {
+        // Document view does not append unplaced sub-pages: a sub-page
+        // appears in its parent's document only where the document pins it
+        // (a shadow line rendered above). The journal's Pages section owns
+        // the hierarchy of unplaced sub-pages. Tree view appends them.
         let remaining: Vec<&crate::model::Task> = children
             .iter()
             .copied()
+            .filter(|c| ctx.expand_pages || !c.is_journal)
             .filter(|c| !rendered_inline.contains(c.uid.as_str()))
             .collect();
         let prefixes = child_prefixes(&remaining);
         for (child, prefix) in remaining.iter().zip(prefixes.iter()) {
-            serialize_node(ctx, child, &child_indent, out, prefix, &task.calendar_href);
+            serialize_node(
+                ctx,
+                child,
+                &child_indent,
+                out,
+                prefix,
+                &task.calendar_href,
+                false,
+            );
         }
     }
 }
@@ -1091,13 +1132,19 @@ fn collect_children_map<'a>(
     children_map
 }
 
+/// The tree view: the whole subtree, sub-page bodies expanded in place where
+/// the document pins them and unplaced sub-pages appended below. This is the
+/// buffer of the tree editor and of tree exports (`cfait print`, the Android
+/// tree markdown): copying it yields the entire tree, journals included, and
+/// a save through `sync_tree_from_markdown(.., tree_view = true)` treats it
+/// as the full tree.
 pub fn serialize_task_tree(
     store: &crate::store::TaskStore,
     root_uid: &str,
     calendars: &[crate::model::CalendarListEntry],
     is_journal: bool,
 ) -> String {
-    serialize_task_tree_inner(store, root_uid, calendars, is_journal, false)
+    serialize_task_tree_inner(store, root_uid, calendars, is_journal, false, true)
 }
 
 /// Same as `serialize_task_tree`, but omits the `<!-- uid -->` comments and
@@ -1108,13 +1155,30 @@ pub fn serialize_task_tree_plain(
     calendars: &[crate::model::CalendarListEntry],
     is_journal: bool,
 ) -> String {
-    serialize_task_tree_inner(store, root_uid, calendars, is_journal, true)
+    serialize_task_tree_inner(store, root_uid, calendars, is_journal, true, true)
+}
+
+/// The document view of a journal page: the raw document with child shadows
+/// rendered inline where they sit. A placed sub-page appears as its single
+/// reference line (a followable link) and unplaced sub-pages are omitted —
+/// the Pages section owns their hierarchy. This is the buffer of the
+/// journal/description editors; a save through
+/// `sync_tree_from_markdown(.., tree_view = false)` preserves collapsed
+/// sub-page bodies and never deletes sub-pages absent from the document.
+pub fn serialize_journal_document(
+    store: &crate::store::TaskStore,
+    root_uid: &str,
+    calendars: &[crate::model::CalendarListEntry],
+) -> String {
+    serialize_task_tree_inner(store, root_uid, calendars, true, false, false)
 }
 
 /// A task's full subtree minus its own line: the description-editor view.
 /// Child shadows render inline where they sit and unreferenced children
 /// append below, so a save through `sync_tree_from_markdown` re-binds
-/// exactly what the user saw — including deletions.
+/// exactly what the user saw — including deletions. Sub-pages (`VJOURNAL`
+/// children) are the exception: they render as their single reference line
+/// (a followable link), since their body is edited in their own editor.
 pub fn serialize_merged_description(
     store: &crate::store::TaskStore,
     uid: &str,
@@ -1125,7 +1189,7 @@ pub fn serialize_merged_description(
     };
     // A journal page serializes its description raw at depth 0 already.
     if task.is_journal {
-        return serialize_task_tree_inner(store, uid, calendars, true, false);
+        return serialize_journal_document(store, uid, calendars);
     }
     let children_map = collect_children_map(store, &task.calendar_href);
     let ctx = SerializeContext {
@@ -1133,18 +1197,29 @@ pub fn serialize_merged_description(
         store,
         calendars,
         plain: false,
+        expand_pages: false,
     };
     let mut out = String::new();
     let rendered_inline = emit_description(&ctx, task, "", &mut out, "");
     if let Some(children) = children_map.get(&task.uid) {
+        // Unplaced sub-pages are not appended (see serialize_node).
         let remaining: Vec<&crate::model::Task> = children
             .iter()
             .copied()
+            .filter(|c| ctx.expand_pages || !c.is_journal)
             .filter(|c| !rendered_inline.contains(c.uid.as_str()))
             .collect();
         let prefixes = child_prefixes(&remaining);
         for (child, prefix) in remaining.iter().zip(prefixes.iter()) {
-            serialize_node(&ctx, child, "", &mut out, prefix, &task.calendar_href);
+            serialize_node(
+                &ctx,
+                child,
+                "",
+                &mut out,
+                prefix,
+                &task.calendar_href,
+                false,
+            );
         }
     }
     out.trim_end().to_string()
@@ -1156,6 +1231,7 @@ fn serialize_task_tree_inner(
     calendars: &[crate::model::CalendarListEntry],
     is_journal: bool,
     plain: bool,
+    expand_pages: bool,
 ) -> String {
     let mut out = String::new();
     let root = if let Some(r) = store.get_task_ref(root_uid) {
@@ -1171,23 +1247,35 @@ fn serialize_task_tree_inner(
         store,
         calendars,
         plain,
+        expand_pages,
     };
 
     if is_journal {
         let rendered_inline = emit_description(&ctx, root, "", &mut out, "");
         if let Some(children) = children_map.get(&root.uid) {
+            // Document view does not append unplaced sub-pages (see
+            // serialize_node); tree view appends them.
             let remaining: Vec<&crate::model::Task> = children
                 .iter()
                 .copied()
+                .filter(|c| ctx.expand_pages || !c.is_journal)
                 .filter(|c| !rendered_inline.contains(c.uid.as_str()))
                 .collect();
             let prefixes = child_prefixes(&remaining);
             for (child, prefix) in remaining.iter().zip(prefixes.iter()) {
-                serialize_node(&ctx, child, "", &mut out, prefix, &root.calendar_href);
+                serialize_node(
+                    &ctx,
+                    child,
+                    "",
+                    &mut out,
+                    prefix,
+                    &root.calendar_href,
+                    false,
+                );
             }
         }
     } else {
-        serialize_node(&ctx, root, "", &mut out, "-", &root.calendar_href);
+        serialize_node(&ctx, root, "", &mut out, "-", &root.calendar_href, true);
     }
 
     out.trim_end().to_string()

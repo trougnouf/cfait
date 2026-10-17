@@ -3376,7 +3376,7 @@ impl CfaitMobile {
         // shadow-bound children update in place instead of duplicating,
         // and deleted lines soft-delete.
         let (actions, _warnings, _mints) = store
-            .sync_tree_from_markdown(&uid, &description, &sync_options, is_journal)
+            .sync_tree_from_markdown(&uid, &description, &sync_options, is_journal, false)
             .map_err(MobileError::from)?;
 
         drop(store);
@@ -3472,7 +3472,7 @@ impl CfaitMobile {
             calendars: &cals,
         };
 
-        match store.sync_tree_from_markdown(&uid, &markdown, &sync_options, is_journal) {
+        match store.sync_tree_from_markdown(&uid, &markdown, &sync_options, is_journal, true) {
             Ok((actions, warnings, _mints)) => {
                 drop(store);
                 if !warnings.is_empty() {

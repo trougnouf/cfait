@@ -2113,12 +2113,22 @@ impl TaskStore {
     /// therefore assigned a uid by this sync (fresh, or matched to an
     /// existing sibling by summary). Persistent editors use it to re-tag the
     /// buffer so the next save matches by uid instead of minting again.
+    ///
+    /// `tree_view` selects what the buffer is. A tree-view buffer (the tree
+    /// editor, tree exports) is the whole tree — sub-page bodies expanded,
+    /// unplaced sub-pages appended — so a line absent from it is an explicit
+    /// deletion, exactly as before sub-pages collapsed. A document-view
+    /// buffer (a journal page or task description editor) collapses sub-pages
+    /// to single reference lines: a body-less sub-page line preserves the
+    /// page's body, and sub-pages absent from the document are protected from
+    /// the deletion pass.
     pub fn sync_tree_from_markdown(
         &mut self,
         root_uid: &str,
         markdown: &str,
         options: &SyncTreeOptions,
         is_journal: bool,
+        tree_view: bool,
     ) -> Result<SyncTreeResult, String> {
         let mut actions = Vec::new();
         let mut mints = Vec::new();
@@ -2131,6 +2141,29 @@ impl TaskStore {
         };
 
         let mut root_clone = self.get_task_ref(root_uid).unwrap().clone();
+        // Uids pinned by a shadow line anywhere in the old tree. Removing a
+        // pinned sub-page's reference line from the buffer is an explicit
+        // deletion; a sub-page without a shadow was never part of this
+        // document and must survive the save (see the deletion pass below).
+        // Only a document-view buffer collapses sub-pages; a tree-view
+        // buffer is the full tree, where absent always means deleted.
+        let mut old_shadow_uids: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        if !tree_view {
+            let mut shadow_sources = vec![root_clone.description.clone()];
+            for d_uid in &old_descendants {
+                if let Some(d) = self.get_task_ref(d_uid) {
+                    shadow_sources.push(d.description.clone());
+                }
+            }
+            for desc in shadow_sources {
+                for line in desc.lines() {
+                    if let Some((_, uid)) = crate::model::extractor::shadow_marker(line) {
+                        old_shadow_uids.insert(uid.to_string());
+                    }
+                }
+            }
+        }
         let mut tree_media = std::collections::HashMap::new();
         tree_media.extend(root_clone.inline_media.clone());
         for d_uid in &old_descendants {
@@ -2168,6 +2201,13 @@ impl TaskStore {
         }
 
         let mut active_uids = std::collections::HashSet::new();
+        // Subtrees a document-view buffer intentionally omits: the collapsed
+        // subtree of a sub-page present as a single reference line, and
+        // unplaced sub-pages (parented outside this document). Neither may be
+        // soft-deleted. A tree-view buffer is the full tree, so this stays
+        // empty and absent always means deleted.
+        let mut protected_uids: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
         let mut tasks_to_update = Vec::new();
         let mut tasks_to_create = Vec::new();
         // Minted uid -> dedup-bound uid: the shadow lines written during
@@ -2336,14 +2376,29 @@ impl TaskStore {
                     clone.target_collection = dummy.target_collection;
                 }
 
-                // A plain task stores prose only; a flat document (journal
-                // page or `is:flat`/`is:doc` task) keeps its shadow lines
-                // (its description is the document).
-                clone.description = crate::model::extractor::stored_description(
-                    &ext.description,
-                    clone.is_flat_doc(),
-                );
-                clone.inline_media = ext.inline_media.clone();
+                if !tree_view && existing.is_journal && ext.description.trim().is_empty() {
+                    // In a document-view buffer a sub-page serializes as a
+                    // single reference line; its body is edited in its own
+                    // editor. A body-less sub-page line must not wipe the
+                    // page's document (or its inline media) — only a line
+                    // carrying an indented block rewrites it — and its
+                    // subtree is intentionally absent from the buffer, so
+                    // exempt it from the deletion pass below. A tree-view
+                    // buffer expands the body, so an empty one is a real
+                    // edit, and deleting the child lines deletes the subtree.
+                    clone.description = existing.description.clone();
+                    clone.inline_media = existing.inline_media.clone();
+                    protected_uids.extend(self.get_descendant_uids(&task_uid));
+                } else {
+                    // A plain task stores prose only; a flat document (journal
+                    // page or `is:flat`/`is:doc` task) keeps its shadow lines
+                    // (its description is the document).
+                    clone.description = crate::model::extractor::stored_description(
+                        &ext.description,
+                        clone.is_flat_doc(),
+                    );
+                    clone.inline_media = ext.inline_media.clone();
+                }
                 if existing.is_journal {
                     // Journal components are never serialized with a checkbox,
                     // so `ext.is_note` is noise for them. The explicit `is:note`
@@ -2488,6 +2543,40 @@ impl TaskStore {
             }
         }
 
+        // A sub-page absent from a document-view buffer is an explicit
+        // deletion only when the old tree pinned it with a shadow line (the
+        // user removed the link) or its parent is being deleted with it.
+        // Unplaced sub-pages — parented through the Pages section, yank, or
+        // `parent:` — were never part of this document: protect them and
+        // their subtrees. A tree-view buffer is the full tree, so an absent
+        // sub-page is an explicit deletion and nothing is protected here.
+        // `old_descendants` is parent-before-child, so a parent's fate is
+        // settled before its children are examined.
+        if !tree_view {
+            let old_descendants_set: std::collections::HashSet<&str> =
+                old_descendants.iter().map(String::as_str).collect();
+            for old_uid in &old_descendants {
+                if active_uids.contains(old_uid) || protected_uids.contains(old_uid) {
+                    continue;
+                }
+                let Some(old_task) = self.get_task_ref(old_uid) else {
+                    continue;
+                };
+                if !old_task.is_journal {
+                    continue;
+                }
+                let parent_deleted = old_task.parent_uid.as_ref().is_some_and(|p| {
+                    old_descendants_set.contains(p.as_str())
+                        && !active_uids.contains(p)
+                        && !protected_uids.contains(p)
+                });
+                if !parent_deleted && !old_shadow_uids.contains(old_uid) {
+                    protected_uids.insert(old_uid.clone());
+                    protected_uids.extend(self.get_descendant_uids(old_uid));
+                }
+            }
+        }
+
         // --- Validate dependencies atomically before mutating the store ---
         // The dedup rebind above may have re-pointed a pasted sub-page line
         // at an existing child; fix the shadow tags minted during
@@ -2530,13 +2619,16 @@ impl TaskStore {
             self.add_task(t);
         }
 
-        // Soft-delete missing descendants: the buffer is the full tree, so a
-        // line absent from it is an explicit deletion (sub-pages included).
-        // System-calendar components (trash / recovery) are exempt: they are
-        // not serialized into the tree but keep their parent link, and
-        // re-deleting them here would hard-delete them and bypass retention.
+        // Soft-delete missing descendants: a line absent from the buffer is
+        // an explicit deletion (sub-pages included). Protected subtrees are
+        // exempt in document view: a collapsed sub-page's body is edited in
+        // its own editor, and unplaced sub-pages were never part of this
+        // document. System-calendar components (trash / recovery) are also
+        // exempt: they are not serialized into the tree but keep their parent
+        // link, and re-deleting them here would hard-delete them and bypass
+        // retention.
         for old_uid in old_descendants {
-            if !active_uids.contains(&old_uid) {
+            if !active_uids.contains(&old_uid) && !protected_uids.contains(&old_uid) {
                 if let Some(old_task) = self.get_task_ref(&old_uid)
                     && crate::storage::is_system_calendar(&old_task.calendar_href)
                 {

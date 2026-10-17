@@ -930,11 +930,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 " {} (Esc) ",
                 t.map(|t| t.summary.as_str()).unwrap_or(&untitled)
             );
-            let md = crate::model::extractor::serialize_task_tree(
+            let md = crate::model::extractor::serialize_journal_document(
                 &state.store,
                 uid,
                 &state.calendars,
-                true,
             );
             (title, md)
         } else {
@@ -942,11 +941,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 .store
                 .get_journal_entry(&target_href, state.journal_date);
             let desc = if let Some(e) = entry {
-                crate::model::extractor::serialize_task_tree(
+                crate::model::extractor::serialize_journal_document(
                     &state.store,
                     &e.uid,
                     &state.calendars,
-                    true,
                 )
             } else {
                 rust_i18n::t!("journal_no_notes", name = target_name).to_string()

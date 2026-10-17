@@ -1413,7 +1413,7 @@ fn test_tree_sync_preserves_paused_percent() {
     };
 
     let (actions, warnings, _mints) = store
-        .sync_tree_from_markdown("root-1", &markdown, &options, false)
+        .sync_tree_from_markdown("root-1", &markdown, &options, false, true)
         .expect("tree sync should succeed");
     assert!(warnings.is_empty());
 
@@ -1444,7 +1444,7 @@ fn test_tree_sync_preserves_paused_percent() {
     // The round-trip is action-free.
     let markdown2 = cfait::model::extractor::serialize_task_tree(&store, "root-1", &[], false);
     let (actions2, warnings2, _mints2) = store
-        .sync_tree_from_markdown("root-1", &markdown2, &options, false)
+        .sync_tree_from_markdown("root-1", &markdown2, &options, false, true)
         .expect("tree sync should succeed");
     assert!(warnings2.is_empty());
     assert!(
@@ -1488,7 +1488,7 @@ fn test_tree_sync_uncheck_reopens_completed_task() {
     };
 
     let (_actions, warnings, _mints) = store
-        .sync_tree_from_markdown("root-1", &unchecked, &options, false)
+        .sync_tree_from_markdown("root-1", &unchecked, &options, false, true)
         .expect("tree sync should succeed");
     assert!(warnings.is_empty());
 

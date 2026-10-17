@@ -533,6 +533,7 @@ async fn execute_task_action(
                             &new_desc,
                             &sync_options,
                             is_journal,
+                            true, // tree_view: the buffer is the whole tree
                         ) {
                             Ok((actions, warnings, _mints)) => {
                                 if !warnings.is_empty() {
@@ -829,7 +830,7 @@ fn sync_journal_tree(
     state.edit_generation = state.edit_generation.wrapping_add(1);
     match state
         .store
-        .sync_tree_from_markdown(uid, markdown, &sync_options, true)
+        .sync_tree_from_markdown(uid, markdown, &sync_options, true, false)
     {
         Ok((actions, warnings, _mints)) => {
             if !warnings.is_empty() {
@@ -937,6 +938,7 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
             &state.input_buffer,
             &sync_options,
             is_journal,
+            true, // tree_view: the buffer is the whole tree
         ) {
             Ok((actions, warnings, _mints)) => {
                 if !warnings.is_empty() {
@@ -1180,10 +1182,13 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
             // (child shadows render inline): reconcile it as a tree so
             // shadow-bound children update in place instead of duplicating,
             // and deleted lines soft-delete.
-            match state
-                .store
-                .sync_tree_from_markdown(&uid, &desc_text, &sync_options, is_journal)
-            {
+            match state.store.sync_tree_from_markdown(
+                &uid,
+                &desc_text,
+                &sync_options,
+                is_journal,
+                false, // tree_view: the description editor is a document view
+            ) {
                 Ok((actions, warnings, _mints)) => {
                     for w in warnings {
                         log::warn!("Dependency resolution: {}", w);
@@ -1233,7 +1238,7 @@ fn edit_journal_in_external_editor(state: &mut AppState, action_tx: &Sender<Acti
 
     let desc = match &page_uid {
         Some(uid) => {
-            crate::model::extractor::serialize_task_tree(&state.store, uid, &state.calendars, true)
+            crate::model::extractor::serialize_journal_document(&state.store, uid, &state.calendars)
         }
         None => {
             let entry = state
@@ -1241,11 +1246,10 @@ fn edit_journal_in_external_editor(state: &mut AppState, action_tx: &Sender<Acti
                 .get_journal_entry(&target_href, state.journal_date);
             entry
                 .map(|e| {
-                    crate::model::extractor::serialize_task_tree(
+                    crate::model::extractor::serialize_journal_document(
                         &state.store,
                         &e.uid,
                         &state.calendars,
-                        true,
                     )
                 })
                 .unwrap_or_default()
@@ -2772,6 +2776,7 @@ pub async fn handle_key_event(
                                     &new_desc,
                                     &sync_options,
                                     is_journal,
+                                    true, // tree_view: the buffer is the whole tree
                                 ) {
                                     Ok((actions, warnings, _mints)) => {
                                         if !warnings.is_empty() {
@@ -3906,11 +3911,10 @@ pub async fn handle_key_event(
                         && page.is_task
                     {
                         let uid = page.key.clone();
-                        let desc = crate::model::extractor::serialize_task_tree(
+                        let desc = crate::model::extractor::serialize_journal_document(
                             &state.store,
                             &uid,
                             &state.calendars,
-                            true,
                         );
                         match run_external_editor(&desc, state.ctx.as_ref()) {
                             Ok(Some(new_desc)) => {
@@ -3935,6 +3939,7 @@ pub async fn handle_key_event(
                                             &new_desc,
                                             &sync_options,
                                             true,
+                                            false, // tree_view: the page editor is a document view
                                         )
                                     {
                                         state.refresh_filtered_view();

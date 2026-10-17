@@ -1851,6 +1851,7 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
             &desc_text,
             &sync_options,
             is_journal,
+            true, // tree_view: the buffer is the whole tree
         ) {
             Ok(res) => res,
             Err(e) => {
@@ -1943,6 +1944,7 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
                 &desc_text,
                 &sync_options,
                 is_journal,
+                false, // tree_view: the description editor is a document view
             ) {
                 Ok((tree_actions, warnings, mints)) => {
                     handle_dependency_warnings(app, warnings);

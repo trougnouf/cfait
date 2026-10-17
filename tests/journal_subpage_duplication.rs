@@ -49,7 +49,7 @@ fn is_page_line_becomes_subpage_and_resave_is_idempotent() {
 
     // First save: the `is:page` line should become a single sub-page.
     let (_actions, warnings, _mints) = store
-        .sync_tree_from_markdown("root-daily", GARDENING_DOC, &opts, true)
+        .sync_tree_from_markdown("root-daily", GARDENING_DOC, &opts, true, false)
         .unwrap();
     assert!(warnings.is_empty());
 
@@ -89,7 +89,7 @@ fn is_page_line_becomes_subpage_and_resave_is_idempotent() {
     // Second save of the identical raw text (no uid comments). This must not
     // mint a second sub-page.
     let (_actions2, _warnings2, _mints2) = store
-        .sync_tree_from_markdown("root-daily", GARDENING_DOC, &opts, true)
+        .sync_tree_from_markdown("root-daily", GARDENING_DOC, &opts, true, false)
         .unwrap();
 
     let children2: Vec<_> = store

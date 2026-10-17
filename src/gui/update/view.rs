@@ -66,7 +66,8 @@ fn flush_journal_save(app: &mut GuiApp) {
             &uid,
             &new_text,
             &sync_options,
-            true, // is_journal is always true here
+            true,  // is_journal is always true here
+            false, // tree_view: the journal editor is a document view
         ) {
             // Re-tag the lines this sync just minted so the next debounced
             // save matches them by uid instead of minting a fresh component
@@ -98,11 +99,10 @@ fn flush_journal_save(app: &mut GuiApp) {
 fn load_daily_note_into(app: &mut GuiApp, href: &str, date: chrono::NaiveDate) {
     app.journal_history.clear();
     if let Some(entry) = app.store.get_journal_entry(href, date) {
-        let md = crate::model::extractor::serialize_task_tree(
+        let md = crate::model::extractor::serialize_journal_document(
             &app.store,
             &entry.uid,
             &app.calendars,
-            true,
         );
         app.journal_editor_content = iced::widget::text_editor::Content::with_text(&md);
         app.journal_editing_uid = Some(entry.uid.clone());
@@ -1092,11 +1092,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.journal_editing_uid = Some(uid.clone());
                 app.active_cal_href = Some(task.calendar_href.clone());
                 app.journal_title_input = task.summary.clone();
-                let md = crate::model::extractor::serialize_task_tree(
+                let md = crate::model::extractor::serialize_journal_document(
                     &app.store,
                     &uid,
                     &app.calendars,
-                    true,
                 );
                 app.journal_editor_content = iced::widget::text_editor::Content::with_text(&md);
                 app.journal_history.clear();

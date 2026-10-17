@@ -155,7 +155,8 @@ async fn apply_markdown_update(
             trash_retention_days: config.trash_retention_days,
             calendars: &cals,
         };
-        match store.sync_tree_from_markdown(full_uid, new_content, &sync_options, is_journal) {
+        match store.sync_tree_from_markdown(full_uid, new_content, &sync_options, is_journal, true)
+        {
             Ok((acts, warns, _mints)) => {
                 actions.extend(acts);
                 warnings.extend(warns);
@@ -194,7 +195,8 @@ async fn apply_markdown_update(
             trash_retention_days: config.trash_retention_days,
             calendars: &cals,
         };
-        match store.sync_tree_from_markdown(full_uid, description, &sync_options, is_journal) {
+        match store.sync_tree_from_markdown(full_uid, description, &sync_options, is_journal, false)
+        {
             Ok((tree_actions, tree_warnings, _mints)) => {
                 actions.extend(tree_actions);
                 warnings.extend(tree_warnings);

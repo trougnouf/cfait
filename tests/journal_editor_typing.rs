@@ -86,7 +86,7 @@ fn typing_a_checkbox_line_across_debounced_saves() {
     // paused past the debounce.
     let buf1 = "Woke up early.\n- [ ] Buy";
     let (_actions, warnings, mints1) = store
-        .sync_tree_from_markdown("root-1", buf1, &opts(&aliases, &cals), true)
+        .sync_tree_from_markdown("root-1", buf1, &opts(&aliases, &cals), true, false)
         .unwrap();
     assert!(warnings.is_empty());
     assert_eq!(
@@ -106,7 +106,7 @@ fn typing_a_checkbox_line_across_debounced_saves() {
     // Keystroke batch 2: the user finished the line and paused again.
     let buf2 = retagged.replace("- [ ] Buy", "- [ ] Buy milk");
     let (_actions2, warnings2, mints2) = store
-        .sync_tree_from_markdown("root-1", &buf2, &opts(&aliases, &cals), true)
+        .sync_tree_from_markdown("root-1", &buf2, &opts(&aliases, &cals), true, false)
         .unwrap();
     assert!(warnings2.is_empty());
     assert!(
@@ -158,7 +158,7 @@ fn typing_a_page_line_across_debounced_saves() {
     // Keystroke batch 1: "Notes.\n- My Pag is:page", paused mid-word.
     let buf1 = "Notes.\n- My Pag is:page";
     let (_actions, warnings, mints1) = store
-        .sync_tree_from_markdown("root-1", buf1, &opts(&aliases, &cals), true)
+        .sync_tree_from_markdown("root-1", buf1, &opts(&aliases, &cals), true, false)
         .unwrap();
     assert!(warnings.is_empty());
     assert_eq!(
@@ -176,7 +176,7 @@ fn typing_a_page_line_across_debounced_saves() {
     // Keystroke batch 2: the user completed the word.
     let buf2 = retagged.replace("My Pag", "My Page");
     let (_actions2, warnings2, mints2) = store
-        .sync_tree_from_markdown("root-1", &buf2, &opts(&aliases, &cals), true)
+        .sync_tree_from_markdown("root-1", &buf2, &opts(&aliases, &cals), true, false)
         .unwrap();
     assert!(warnings2.is_empty());
     assert!(

@@ -74,14 +74,14 @@ fn interleaved_tasks_keep_their_position_across_reopen() {
     let cals = calendars();
     let aliases: HashMap<String, Vec<String>> = HashMap::new();
     let (actions, warnings, _mints) = store
-        .sync_tree_from_markdown(PAGE_UID, typed, &opts(&aliases, &cals), true)
+        .sync_tree_from_markdown(PAGE_UID, typed, &opts(&aliases, &cals), true, false)
         .unwrap();
     assert!(warnings.is_empty());
     assert_eq!(children_of(&store, PAGE_UID).len(), 2);
     assert_eq!(actions.len(), 3, "root + two children: {actions:?}");
 
     // Reopening the page shows the tasks exactly where they were typed.
-    let reopened = cfait::model::extractor::serialize_task_tree(&store, PAGE_UID, &cals, true);
+    let reopened = cfait::model::extractor::serialize_journal_document(&store, PAGE_UID, &cals);
     let lines: Vec<&str> = reopened.lines().collect();
     assert_eq!(
         lines[0],
@@ -106,6 +106,7 @@ fn shadow_renders_fresh_child_state() {
             "- [ ] book the train tickets",
             &opts(&aliases, &cals),
             true,
+            false,
         )
         .unwrap();
     let child = children_of(&store, PAGE_UID).pop().unwrap();
@@ -117,7 +118,7 @@ fn shadow_renders_fresh_child_state() {
     store.update_or_add_task(completed);
 
     // Reopening the page shows the current state at the shadow's position.
-    let reopened = cfait::model::extractor::serialize_task_tree(&store, PAGE_UID, &cals, true);
+    let reopened = cfait::model::extractor::serialize_journal_document(&store, PAGE_UID, &cals);
     assert!(
         reopened.starts_with("- [x] book the train tickets"),
         "the shadow must render the child's fresh state: {reopened}"
@@ -137,6 +138,7 @@ fn stale_shadow_of_moved_child_is_dropped() {
             "Intro prose.\n- [ ] book the train tickets",
             &opts(&aliases, &cals),
             true,
+            false,
         )
         .unwrap();
     let child = children_of(&store, PAGE_UID).pop().unwrap();
@@ -147,14 +149,14 @@ fn stale_shadow_of_moved_child_is_dropped() {
     store.update_or_add_task(moved);
 
     // The stale shadow must not resurrect the task as a duplicate.
-    let reopened = cfait::model::extractor::serialize_task_tree(&store, PAGE_UID, &cals, true);
+    let reopened = cfait::model::extractor::serialize_journal_document(&store, PAGE_UID, &cals);
     assert_eq!(
         reopened, "Intro prose.",
         "the stale shadow must be dropped: {reopened}"
     );
     // And a save of that view must not mint a copy either.
     let (actions, _warnings, _mints) = store
-        .sync_tree_from_markdown(PAGE_UID, &reopened, &opts(&aliases, &cals), true)
+        .sync_tree_from_markdown(PAGE_UID, &reopened, &opts(&aliases, &cals), true, false)
         .unwrap();
     assert!(
         children_of(&store, PAGE_UID).is_empty(),
@@ -183,6 +185,7 @@ fn unreferenced_child_appends_at_the_bottom() {
             "Intro prose.\n- [ ] book the train tickets",
             &opts(&aliases, &cals),
             true,
+            false,
         )
         .unwrap();
 
@@ -193,7 +196,7 @@ fn unreferenced_child_appends_at_the_bottom() {
     added.parent_uid = Some(PAGE_UID.to_string());
     store.add_task(added);
 
-    let reopened = cfait::model::extractor::serialize_task_tree(&store, PAGE_UID, &cals, true);
+    let reopened = cfait::model::extractor::serialize_journal_document(&store, PAGE_UID, &cals);
     let lines: Vec<&str> = reopened.lines().collect();
     assert_eq!(lines[0], "Intro prose.");
     assert!(lines[1].starts_with("- [ ] book the train tickets <!-- uid:"));
@@ -213,13 +216,20 @@ fn deleting_a_line_deletes_the_task() {
             "Intro prose.\n- [ ] book the train tickets",
             &opts(&aliases, &cals),
             true,
+            false,
         )
         .unwrap();
     let child = children_of(&store, PAGE_UID).pop().unwrap();
 
     // The user deletes the line and saves.
     store
-        .sync_tree_from_markdown(PAGE_UID, "Intro prose.", &opts(&aliases, &cals), true)
+        .sync_tree_from_markdown(
+            PAGE_UID,
+            "Intro prose.",
+            &opts(&aliases, &cals),
+            true,
+            false,
+        )
         .unwrap();
     assert!(
         store
@@ -227,7 +237,7 @@ fn deleting_a_line_deletes_the_task() {
             .is_some_and(|t| t.calendar_href == "local://trash"),
         "deleting the line must soft-delete the task to the trash"
     );
-    let reopened = cfait::model::extractor::serialize_task_tree(&store, PAGE_UID, &cals, true);
+    let reopened = cfait::model::extractor::serialize_journal_document(&store, PAGE_UID, &cals);
     assert_eq!(reopened, "Intro prose.");
 }
 
@@ -247,7 +257,13 @@ fn desc_editor_merged_view_round_trips_through_tree_sync() {
     // Typing in the description editor extracts the subtask and records its
     // shadow (the description-editor flows route through the tree sync).
     let (actions, warnings, _mints) = store
-        .sync_tree_from_markdown("root-1", &root.description, &opts(&aliases, &cals), false)
+        .sync_tree_from_markdown(
+            "root-1",
+            &root.description,
+            &opts(&aliases, &cals),
+            false,
+            false,
+        )
         .unwrap();
     assert!(warnings.is_empty());
     assert!(!actions.is_empty());
@@ -262,7 +278,7 @@ fn desc_editor_merged_view_round_trips_through_tree_sync() {
     assert!(lines[1].starts_with("- [ ] divide the rhubarb <!-- uid:"));
 
     let (actions2, warnings2, _mints2) = store
-        .sync_tree_from_markdown("root-1", &view, &opts(&aliases, &cals), false)
+        .sync_tree_from_markdown("root-1", &view, &opts(&aliases, &cals), false, false)
         .unwrap();
     assert!(warnings2.is_empty());
     assert!(
@@ -296,7 +312,7 @@ fn plain_tasks_store_prose_only_descriptions() {
     // Prose plus a subtask that itself carries prose and a nested subtask.
     let typed = "Beds to rotate this year.\n- [ ] divide the rhubarb\n  water deeply\n  - [ ] order the seeds";
     let (actions, warnings, _mints) = store
-        .sync_tree_from_markdown("root-1", typed, &opts(&aliases, &cals), false)
+        .sync_tree_from_markdown("root-1", typed, &opts(&aliases, &cals), false, false)
         .unwrap();
     assert!(warnings.is_empty());
     assert!(!actions.is_empty());
@@ -327,7 +343,7 @@ fn plain_tasks_store_prose_only_descriptions() {
     // Re-saving that view is a no-op and keeps the stored prose-only
     // descriptions.
     let (actions2, warnings2, _mints2) = store
-        .sync_tree_from_markdown("root-1", &view, &opts(&aliases, &cals), false)
+        .sync_tree_from_markdown("root-1", &view, &opts(&aliases, &cals), false, false)
         .unwrap();
     assert!(warnings2.is_empty());
     assert!(
@@ -361,6 +377,7 @@ fn plain_task_merged_view_deletion_still_soft_deletes_children() {
             "Beds to rotate.\n- [ ] divide the rhubarb",
             &opts(&aliases, &cals),
             false,
+            false,
         )
         .unwrap();
     let child = children_of(&store, "root-1").pop().unwrap();
@@ -373,7 +390,13 @@ fn plain_task_merged_view_deletion_still_soft_deletes_children() {
         "the merged view must carry the child's line: {view}"
     );
     let (actions, _warnings, _mints) = store
-        .sync_tree_from_markdown("root-1", "Beds to rotate.", &opts(&aliases, &cals), false)
+        .sync_tree_from_markdown(
+            "root-1",
+            "Beds to rotate.",
+            &opts(&aliases, &cals),
+            false,
+            false,
+        )
         .unwrap();
 
     assert!(

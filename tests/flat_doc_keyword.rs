@@ -204,7 +204,7 @@ fn sync_tree_from_markdown_parses_flat_root_as_document() {
     );
 
     let (actions, warnings, _mints) = store
-        .sync_tree_from_markdown("flat-1", &md, &opts, false)
+        .sync_tree_from_markdown("flat-1", &md, &opts, false, true)
         .unwrap();
     assert!(warnings.is_empty());
     assert!(
@@ -230,7 +230,7 @@ fn sync_tree_from_markdown_parses_flat_root_as_document() {
     // stays in the document.
     let md_with_child = format!("{md}\n  - [ ] Buy seeds <!-- uid:child-1 -->\n");
     let (actions, warnings, _mints) = store
-        .sync_tree_from_markdown("flat-1", &md_with_child, &opts, false)
+        .sync_tree_from_markdown("flat-1", &md_with_child, &opts, false, true)
         .unwrap();
     assert!(warnings.is_empty());
     assert!(
@@ -257,7 +257,7 @@ fn sync_tree_from_markdown_parses_flat_root_as_document() {
     // Round-trip: the re-serialized tree re-syncs to no actions.
     let md2 = cfait::model::extractor::serialize_task_tree(&store, "flat-1", &cals, false);
     let (actions2, warnings2, _mints2) = store
-        .sync_tree_from_markdown("flat-1", &md2, &opts, false)
+        .sync_tree_from_markdown("flat-1", &md2, &opts, false, true)
         .unwrap();
     assert!(warnings2.is_empty());
     assert!(
