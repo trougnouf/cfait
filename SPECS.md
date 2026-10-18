@@ -303,7 +303,7 @@ Tasks tagged with `is:permanent` act as endless trackers. When checked off (Comp
 
 ### 5.2. Terminal Interface (TUI)
 *Powered by `ratatui`. Keyboard-first, with mouse support.*
-*   **Layout:** 2-Pane (Sidebar 20%, Main List 80%). Details view shares vertical space with Main List. Press `Shift+Up/Down` to scroll the active details pane without losing focus on the list.
+*   **Layout:** 2-Pane (Sidebar 20%, Main List 80%). Details view shares vertical space with Main List. Press `Shift+Up/Down` to scroll the active details pane without losing focus on the list. In Journal mode the sidebar is sized to fit the month calendar (7 day columns, or the localized month title when wider) so the full grid is always visible; the content pane absorbs the difference.
 *   **Mouse:** Left-clicking a pane moves focus to it (the mouse equivalent of `Tab`); clicking a row in the sidebar or the task list also selects that row. With inline descriptions enabled, task rows can span multiple lines, so a click in the task list only focuses the pane. Scrolling the wheel steps the focused list forward/backward.
 *   **Modals/Popups:** Instead of context menus, pressing `Enter` on a task opens a centered **Action Menu** popup with fuzzy filtering. 
 *   **Details Viewer (`L`):** Unified popup containing the full markdown description, History/Heatmaps, WorkSessions, and relationships (Parents, Children, Blockers, Successors, Siblings) for quick jump navigation.

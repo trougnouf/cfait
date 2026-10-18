@@ -292,6 +292,25 @@ fn goal_progress_entry(
     ])
 }
 
+/// Title line of the journal month calendar ("  < October 2026 >  ").
+fn journal_cal_title(date: chrono::NaiveDate) -> String {
+    use chrono::Datelike;
+    let month_str = format!(
+        "{} {}",
+        crate::model::display::local_month_name(date.month()),
+        date.year()
+    );
+    format!("  < {} >  ", month_str)
+}
+
+/// Width of the journal sidebar: the month calendar grid is 7 day columns of
+/// 3 cells each, but the localized month title can be wider — take whichever
+/// needs more room and add the block borders.
+fn journal_sidebar_width(state: &AppState) -> u16 {
+    const GRID: usize = 21; // 7 columns * 3 cells
+    (GRID.max(journal_cal_title(state.journal_date).width()) + 2) as u16
+}
+
 pub fn draw(f: &mut Frame, state: &mut AppState) {
     let is_dark_theme = state.theme.is_dark();
     let footer_height = if state.mode == InputMode::EditingDescription
@@ -307,9 +326,20 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         .constraints([Constraint::Min(0), footer_height])
         .split(f.area());
 
+    // In journal mode the sidebar hosts the month calendar, so it is sized to
+    // fit the 7-day grid (and the month title) instead of the fixed 20% —
+    // the content pane absorbs the difference.
+    let h_constraints = if state.sidebar_mode == SidebarMode::Journal {
+        [
+            Constraint::Length(journal_sidebar_width(state)),
+            Constraint::Min(0),
+        ]
+    } else {
+        [Constraint::Percentage(20), Constraint::Percentage(80)]
+    };
     let h_chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(20), Constraint::Percentage(80)])
+        .constraints(h_constraints)
         .split(v_chunks[0]);
 
     // Record the pane geometry so mouse clicks can be mapped back to the
@@ -543,14 +573,9 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             use chrono::Datelike;
 
             let is_monday_first = state.first_day_of_week == crate::config::FirstDayOfWeek::Monday;
-            let month_str = format!(
-                "{} {}",
-                crate::model::display::local_month_name(date.month()),
-                date.year()
-            );
 
             cal_lines.push(Line::from(vec![Span::styled(
-                format!("  < {} >  ", month_str),
+                journal_cal_title(date),
                 Style::default().add_modifier(Modifier::BOLD),
             )]));
 
@@ -2934,5 +2959,26 @@ mod tests {
             text.lines.iter().all(|line| line.width() <= 40),
             "every rendered line must fit the pane width"
         );
+    }
+
+    #[test]
+    fn journal_sidebar_width_fits_the_full_month_grid() {
+        // The 7th day column must never clip: the sidebar has to fit the
+        // 21-column grid and the localized month title, borders included
+        // (https://github.com/trougnouf/cfait/issues/109).
+        let mut state = AppState::default();
+        for date in [
+            chrono::NaiveDate::from_ymd_opt(2026, 9, 10).unwrap(), // "September" is the widest month name
+            chrono::NaiveDate::from_ymd_opt(2026, 10, 17).unwrap(),
+        ] {
+            state.journal_date = date;
+            let width = journal_sidebar_width(&state);
+            assert!(width.saturating_sub(2) >= 21, "grid must fit with borders");
+            assert!(
+                width.saturating_sub(2) >= journal_cal_title(date).width() as u16,
+                "month title must fit: {}",
+                journal_cal_title(date)
+            );
+        }
     }
 }
