@@ -93,7 +93,7 @@ unicode-segmentation = { version = "1", optional = true }
 
 
 # --- GUI ONLY (Future) ---
-iced = { version = "0.14", features = ["tokio", "svg", "advanced", "image"], optional = true }
+iced = { version = "0.14", features = ["tokio", "svg", "advanced", "image", "canvas"], optional = true }
 iced_aw = { version = "0.14", features = ["color_picker"], optional = true }
 rfd = { version = "0.17", optional = true, default-features = false, features = ["xdg-portal"] }
 fastrand = "2.5"
@@ -212,3 +212,26 @@ apple-native-keyring-store = { version = "1.0", features = ["keychain"] }
 [target.'cfg(target_os = "linux")'.dependencies]
 oo7 = "0.6"
 linux-keyutils-keyring-store = "1.0"
+
+# The iced workspace crates are patched from a fork of iced to carry a
+# local fix: `iced_graphics::Editor::highlight()` re-shapes lines with new
+# (e.g. bold) attributes without clearing the cached selection, so the
+# caret is drawn at the pre-highlight position after pasting stylized text.
+# Every crate of the iced workspace is patched so the whole stack resolves
+# from a single source — the fork's manifests link workspace members by
+# path, and mixing git and registry copies of e.g. iced_core breaks the
+# build with duplicate-crate type errors.
+# See https://github.com/trougnouf/cfait/issues/24
+[patch.crates-io]
+iced = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-0.14" }
+iced_core = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-0.14" }
+iced_debug = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-0.14" }
+iced_futures = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-0.14" }
+iced_graphics = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-0.14" }
+iced_program = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-0.14" }
+iced_renderer = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-0.14" }
+iced_runtime = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-0.14" }
+iced_tiny_skia = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-0.14" }
+iced_wgpu = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-0.14" }
+iced_widget = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-0.14" }
+iced_winit = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-0.14" }
