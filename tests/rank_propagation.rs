@@ -47,6 +47,7 @@ fn parent_inherits_child_priority_and_sorts_before_sibling() {
     let opts = FilterOptions {
         active_cal_href: None,
         hidden_calendars: &hidden_calendars,
+        calendars: &[],
         selected_categories: &selected_categories,
         selected_locations: &selected_locations,
         match_all_categories: false,
@@ -144,6 +145,7 @@ fn compare_two_parents_inherited_priorities_determine_order() {
     let opts = FilterOptions {
         active_cal_href: None,
         hidden_calendars: &hidden_calendars,
+        calendars: &[],
         selected_categories: &selected_categories,
         selected_locations: &selected_locations,
         match_all_categories: false,
@@ -236,6 +238,7 @@ fn parent_inherits_started_child_over_unset_sibling() {
     let opts = FilterOptions {
         active_cal_href: None,
         hidden_calendars: &hidden_calendars,
+        calendars: &[],
         selected_categories: &selected_categories,
         selected_locations: &selected_locations,
         match_all_categories: false,

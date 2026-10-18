@@ -39,6 +39,7 @@ fn test_start_grace_period_keeps_tasks_in_active_section() {
     let options = FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
+        calendars: &[],
         selected_categories: &HashSet::new(),
         selected_locations: &HashSet::new(),
         match_all_categories: false,
@@ -131,6 +132,7 @@ fn test_grace_period_zero_pushes_all_future_starts() {
     let options = FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
+        calendars: &[],
         selected_categories: &HashSet::new(),
         selected_locations: &HashSet::new(),
         match_all_categories: false,
@@ -225,6 +227,7 @@ fn test_acknowledged_alarm_keeps_task_in_active_section() {
     let options = FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
+        calendars: &[],
         selected_categories: &HashSet::new(),
         selected_locations: &HashSet::new(),
         match_all_categories: false,
@@ -328,6 +331,7 @@ fn test_any_acknowledged_alarm_keeps_task_active() {
     let options = FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
+        calendars: &[],
         selected_categories: &HashSet::new(),
         selected_locations: &HashSet::new(),
         match_all_categories: false,
@@ -421,6 +425,7 @@ fn test_recurring_task_with_fresh_dates_goes_to_future() {
     let options = FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
+        calendars: &[],
         selected_categories: &HashSet::new(),
         selected_locations: &HashSet::new(),
         match_all_categories: false,

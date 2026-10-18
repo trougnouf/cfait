@@ -129,7 +129,9 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
     app.session.search_term = app.search_value.text();
 
     // Delegate entirely to session state
-    let filter_res = app.session.get_filtered_view(&app.store, config);
+    let filter_res = app
+        .session
+        .get_filtered_view(&app.store, config, &app.calendars);
 
     app.tasks = filter_res.items;
     app.cached_categories = filter_res.categories;

@@ -39,6 +39,9 @@ struct CompiledTerm {
     due: Option<(Op, Option<NaiveDate>, bool)>,
     /// Tag filter (`#tag`).
     tag_query: Option<String>,
+    /// Collection filter (`col:name`); matched against the task's collection
+    /// name or href.
+    col_query: Option<String>,
     /// Status filter (`is:done`, ...).
     status: Option<StatusFilter>,
 }
@@ -87,6 +90,8 @@ enum SearchExpr {
 
 pub struct Query {
     expr: SearchExpr,
+    /// Lowercased collection name per href, used by the `col:` filter.
+    col_names: std::collections::HashMap<String, String>,
 }
 
 pub fn extract_highlight_terms(query: &str) -> Vec<String> {
@@ -138,26 +143,44 @@ pub fn extract_highlight_terms(query: &str) -> Vec<String> {
 }
 
 impl Query {
-    pub fn new(query: &str, lex: &crate::model::parser::ParserLexicon) -> Self {
+    pub fn new(
+        query: &str,
+        lex: &crate::model::parser::ParserLexicon,
+        calendars: &[crate::model::CalendarListEntry],
+    ) -> Self {
         let tokens = tokenize_query(query);
         let mut parser = Parser::new(tokens);
+        let col_names = calendars
+            .iter()
+            .map(|c| (c.href.clone(), c.name.to_lowercase()))
+            .collect();
         Self {
             expr: compile_expr(parser.parse(), lex),
+            col_names,
         }
     }
 
     pub fn matches(&self, task: &Task, store: &crate::store::TaskStore) -> bool {
-        self.expr.matches(task, store)
+        self.expr.matches(task, store, &self.col_names)
     }
 }
 
 impl SearchExpr {
-    fn matches(&self, task: &Task, store: &crate::store::TaskStore) -> bool {
+    fn matches(
+        &self,
+        task: &Task,
+        store: &crate::store::TaskStore,
+        col_names: &std::collections::HashMap<String, String>,
+    ) -> bool {
         match self {
-            SearchExpr::Term(t) => t.match_task(task, store),
-            SearchExpr::And(a, b) => a.matches(task, store) && b.matches(task, store),
-            SearchExpr::Or(a, b) => a.matches(task, store) || b.matches(task, store),
-            SearchExpr::Not(a) => !a.matches(task, store),
+            SearchExpr::Term(t) => t.match_task(task, store, col_names),
+            SearchExpr::And(a, b) => {
+                a.matches(task, store, col_names) && b.matches(task, store, col_names)
+            }
+            SearchExpr::Or(a, b) => {
+                a.matches(task, store, col_names) || b.matches(task, store, col_names)
+            }
+            SearchExpr::Not(a) => !a.matches(task, store, col_names),
         }
     }
 }
@@ -473,6 +496,13 @@ fn compile_term(part: &str, lex: &crate::model::parser::ParserLexicon) -> Compil
     // --- Tag Filter ---
     let tag_query = lower.strip_prefix('#').map(str::to_string);
 
+    // --- Collection Filter (col:name) ---
+    let col_query = if pref == Some(crate::model::parser::PrefixToken::Collection) {
+        Some(rem.to_string())
+    } else {
+        None
+    };
+
     // --- Status Filters ---
     let status = if lower == "is:done" || lex.search_is_done.contains(&lower) {
         Some(StatusFilter::Done)
@@ -519,6 +549,7 @@ fn compile_term(part: &str, lex: &crate::model::parser::ParserLexicon) -> Compil
         start,
         due,
         tag_query,
+        col_query,
         status,
     }
 }
@@ -540,7 +571,12 @@ fn compile_expr(raw: RawExpr, lex: &crate::model::parser::ParserLexicon) -> Sear
 
 impl CompiledTerm {
     /// Evaluate the compiled term against a single task.
-    fn match_task(&self, task: &Task, store: &crate::store::TaskStore) -> bool {
+    fn match_task(
+        &self,
+        task: &Task,
+        store: &crate::store::TaskStore,
+        col_names: &std::collections::HashMap<String, String>,
+    ) -> bool {
         if self.lower.is_empty() {
             return true;
         }
@@ -633,6 +669,15 @@ impl CompiledTerm {
             return task.any_ancestor_matches(store, is_match);
         }
 
+        // --- Collection Filter (col:name) ---
+        if let Some(col_query) = &self.col_query {
+            let href = task.calendar_href.to_lowercase();
+            let name_match = col_names
+                .get(&task.calendar_href)
+                .is_some_and(|name| contains_ignore_case(name, col_query));
+            return contains_ignore_case(&href, col_query) || name_match;
+        }
+
         // --- Status Filters ---
         if let Some(status) = self.status {
             return match status {
@@ -683,7 +728,9 @@ impl Task {
         }
 
         let lex_guard = crate::model::parser::LEXICON.read().unwrap();
-        let q = Query::new(query, &lex_guard);
+        // No calendar list here, so `col:` matches hrefs only; the store's
+        // filter pipeline passes the real list for name matching.
+        let q = Query::new(query, &lex_guard, &[]);
         q.matches(self, store)
     }
 
@@ -718,6 +765,7 @@ impl Task {
 
 #[cfg(test)]
 mod tests {
+    use super::Query;
     use crate::model::item::Task;
     use std::collections::HashMap;
 
@@ -784,6 +832,63 @@ mod tests {
         // Location filters: 'loc:' and '@@' prefixes should both work
         assert!(t.matches_search_term("loc:Kitchen", &store));
         assert!(t.matches_search_term("@@Kitchen", &store));
+    }
+
+    #[test]
+    fn test_collection_filter() {
+        let store =
+            crate::store::TaskStore::new(std::sync::Arc::new(crate::context::TestContext::new()));
+        let aliases: HashMap<String, Vec<String>> = HashMap::new();
+        let calendars = vec![
+            crate::model::CalendarListEntry {
+                name: "Herbary".to_string(),
+                href: "local://herbary".to_string(),
+                color: None,
+                supports_vjournal: None,
+            },
+            crate::model::CalendarListEntry {
+                name: "Kitchen".to_string(),
+                href: "local://kitchen".to_string(),
+                color: None,
+                supports_vjournal: None,
+            },
+        ];
+
+        let mut t = Task::new("Test", &aliases, None);
+        t.summary = "Water the tomatoes".to_string();
+        t.calendar_href = "local://herbary".to_string();
+
+        let lex_guard = crate::model::parser::LEXICON.read().unwrap();
+
+        // Name match (case-insensitive substring)
+        let q = Query::new("col:herb", &lex_guard, &calendars);
+        assert!(q.matches(&t, &store));
+        let q = Query::new("col:HERBARY", &lex_guard, &calendars);
+        assert!(q.matches(&t, &store));
+
+        // Href match
+        let q = Query::new("col:local://herbary", &lex_guard, &calendars);
+        assert!(q.matches(&t, &store));
+
+        // Non-matching collection
+        let q = Query::new("col:kitchen", &lex_guard, &calendars);
+        assert!(!q.matches(&t, &store));
+
+        // NOT
+        let q = Query::new("-col:kitchen", &lex_guard, &calendars);
+        assert!(q.matches(&t, &store));
+
+        // Combined with text
+        let q = Query::new("tomatoes col:herbary", &lex_guard, &calendars);
+        assert!(q.matches(&t, &store));
+        let q = Query::new("tomatoes col:kitchen", &lex_guard, &calendars);
+        assert!(!q.matches(&t, &store));
+
+        // OR across collections
+        let q = Query::new("col:herbary|col:kitchen", &lex_guard, &calendars);
+        assert!(q.matches(&t, &store));
+        let q = Query::new("col:kitchen|col:balcony", &lex_guard, &calendars);
+        assert!(!q.matches(&t, &store));
     }
 
     #[test]

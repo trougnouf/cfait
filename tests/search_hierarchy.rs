@@ -29,6 +29,7 @@ fn test_search_includes_non_matching_children() {
     let filter_res = store.filter(FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
+        calendars: &[],
         selected_categories: &HashSet::new(),
         selected_locations: &HashSet::new(),
         match_all_categories: false,
@@ -105,6 +106,7 @@ fn test_search_includes_deep_hierarchy() {
     let filter_res = store.filter(FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
+        calendars: &[],
         selected_categories: &HashSet::new(),
         selected_locations: &HashSet::new(),
         match_all_categories: false,
@@ -161,6 +163,7 @@ fn test_child_match_does_not_force_parent_if_parent_does_not_match() {
     let filter_res = store.filter(FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
+        calendars: &[],
         selected_categories: &HashSet::new(),
         selected_locations: &HashSet::new(),
         match_all_categories: false,
@@ -263,6 +266,7 @@ fn test_multiple_parents_with_children() {
     let filter_res = store.filter(FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
+        calendars: &[],
         selected_categories: &HashSet::new(),
         selected_locations: &HashSet::new(),
         match_all_categories: false,
@@ -339,6 +343,7 @@ fn test_sibling_match_only_includes_matching_sibling() {
     let filter_res = store.filter(FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
+        calendars: &[],
         selected_categories: &HashSet::new(),
         selected_locations: &HashSet::new(),
         match_all_categories: false,
@@ -440,6 +445,7 @@ fn test_empty_search_shows_all_tasks() {
     let filter_res = store.filter(FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
+        calendars: &[],
         selected_categories: &HashSet::new(),
         selected_locations: &HashSet::new(),
         match_all_categories: false,
@@ -497,6 +503,7 @@ fn test_hierarchy_expansion_with_completed_tasks() {
     let filter_res = store.filter(FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
+        calendars: &[],
         selected_categories: &HashSet::new(),
         selected_locations: &HashSet::new(),
         match_all_categories: false,
@@ -534,6 +541,7 @@ fn test_hierarchy_expansion_with_completed_tasks() {
     let filter_res_hidden = store.filter(FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
+        calendars: &[],
         selected_categories: &HashSet::new(),
         selected_locations: &HashSet::new(),
         match_all_categories: false,

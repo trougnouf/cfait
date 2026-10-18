@@ -35,6 +35,7 @@ fn test_filter_by_tag() {
     let filter_res = store.filter(FilterOptions {
         active_cal_href: None,
         hidden_calendars: &empty_set,
+        calendars: &[],
         selected_categories: &cats,
         selected_locations: &empty_set,
         match_all_categories: false,
@@ -91,6 +92,7 @@ fn test_filter_hierarchical_tags() {
     let filter_res = store.filter(FilterOptions {
         active_cal_href: None,
         hidden_calendars: &empty_set,
+        calendars: &[],
         selected_categories: &cats,
         selected_locations: &empty_set,
         match_all_categories: false,
@@ -153,6 +155,7 @@ fn test_hide_hidden_calendars() {
     let filter_res = store.filter(FilterOptions {
         active_cal_href: None,
         hidden_calendars: &hidden,
+        calendars: &[],
         selected_categories: &empty_set,
         selected_locations: &empty_set,
         match_all_categories: false,
@@ -1238,6 +1241,7 @@ fn test_sidebar_has_children_with_interleaved_sibling() {
     let filter_res = store.filter(FilterOptions {
         active_cal_href: None,
         hidden_calendars: &empty_set,
+        calendars: &[],
         selected_categories: &empty_set,
         selected_locations: &empty_set,
         match_all_categories: false,

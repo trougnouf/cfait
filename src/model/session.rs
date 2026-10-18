@@ -64,7 +64,12 @@ pub struct SessionState {
 
 impl SessionState {
     /// The single source of truth for building the UI view based on current session state.
-    pub fn get_filtered_view(&self, store: &TaskStore, config: &Config) -> FilterResult {
+    pub fn get_filtered_view(
+        &self,
+        store: &TaskStore,
+        config: &Config,
+        calendars: &[crate::model::CalendarListEntry],
+    ) -> FilterResult {
         let mut hidden = config
             .hidden_calendars
             .iter()
@@ -89,6 +94,7 @@ impl SessionState {
         store.filter(FilterOptions {
             active_cal_href: None, // Logic handled by hidden_calendars
             hidden_calendars: &hidden,
+            calendars,
             selected_categories: &selected_categories,
             selected_locations: &selected_locations,
             match_all_categories: self.match_all_categories,

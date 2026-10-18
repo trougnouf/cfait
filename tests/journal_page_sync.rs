@@ -450,6 +450,7 @@ fn wiki_page_created_in_journal_context_is_a_standard_page() {
     let opts = cfait::store::FilterOptions {
         active_cal_href: None,
         hidden_calendars: &empty,
+        calendars: &[],
         selected_categories: &empty,
         selected_locations: &empty,
         match_all_categories: false,

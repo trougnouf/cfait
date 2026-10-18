@@ -445,6 +445,7 @@ impl AppState {
         let filter_res = self.store.filter(FilterOptions {
             active_cal_href: None, // Logic handled by hidden_calendars
             hidden_calendars: &effective_hidden,
+            calendars: &self.calendars,
             selected_categories: &self.selected_categories,
             selected_locations: &self.selected_locations,
             match_all_categories: self.match_all_categories,

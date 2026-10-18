@@ -674,6 +674,8 @@ pub struct TaskStore {
 pub struct FilterOptions<'a> {
     pub active_cal_href: Option<&'a str>,
     pub hidden_calendars: &'a HashSet<String>,
+    /// Known collections, so search can match `col:` filters by name.
+    pub calendars: &'a [crate::model::CalendarListEntry],
     pub selected_categories: &'a HashSet<String>,
     pub selected_locations: &'a HashSet<String>,
     pub match_all_categories: bool,
@@ -4092,7 +4094,7 @@ impl TaskStore {
         }
 
         // Parse the search query once; run_pipeline is invoked up to 3 times below.
-        let query = crate::model::matcher::Query::new(options.search_term, lex);
+        let query = crate::model::matcher::Query::new(options.search_term, lex, options.calendars);
 
         // The text-search result for a task is independent of the category/location
         // ignore flags, so compute it once per task and let every pipeline pass reuse
@@ -6354,6 +6356,7 @@ mod tests {
         let res = store.filter(FilterOptions {
             active_cal_href: None,
             hidden_calendars: &hidden,
+            calendars: &[],
             selected_categories: &categories,
             selected_locations: &locations,
             match_all_categories: false,
@@ -6478,6 +6481,7 @@ mod tests {
         let res = store.filter(FilterOptions {
             active_cal_href: None,
             hidden_calendars: &hidden,
+            calendars: &[],
             selected_categories: &categories,
             selected_locations: &locations,
             match_all_categories: false,
@@ -6603,6 +6607,7 @@ mod tests {
         let res = store.filter(FilterOptions {
             active_cal_href: None,
             hidden_calendars: &hidden,
+            calendars: &[],
             selected_categories: &categories,
             selected_locations: &locations,
             match_all_categories: false,

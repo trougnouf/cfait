@@ -129,6 +129,7 @@ fn default_options<'a>(
     FilterOptions {
         active_cal_href: None,
         hidden_calendars: empty_h,
+        calendars: &[],
         selected_categories: empty_h,
         selected_locations: empty_h,
         match_all_categories: false,

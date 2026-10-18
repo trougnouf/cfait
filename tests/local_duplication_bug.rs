@@ -54,6 +54,7 @@ fn test_reproduce_android_local_revert_bug() {
     let filter_res = store.filter(FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
+        calendars: &[],
         selected_categories: &HashSet::new(),
         selected_locations: &HashSet::new(),
         match_all_categories: false,

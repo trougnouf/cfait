@@ -1660,9 +1660,19 @@ async fn main() -> Result<()> {
             let expanded_locations: HashSet<String> = HashSet::new();
             let search_collapsed_tasks: HashSet<String> = HashSet::new();
 
+            // Collection registry so `col:` search filters can match by name.
+            let mut all_calendars: Vec<cfait::model::CalendarListEntry> = Vec::new();
+            if let Ok(locals) = cfait::storage::LocalCalendarRegistry::load(ctx.as_ref()) {
+                all_calendars.extend(locals);
+            }
+            if let Ok(remotes) = cfait::cache::Cache::load_calendars(ctx.as_ref()) {
+                all_calendars.extend(remotes);
+            }
+
             let res = store.filter(FilterOptions {
                 active_cal_href: target_href.as_deref(),
                 hidden_calendars: &hidden,
+                calendars: &all_calendars,
                 selected_categories: &selected_categories,
                 selected_locations: &selected_locations,
                 match_all_categories: false,

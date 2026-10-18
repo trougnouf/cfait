@@ -37,6 +37,7 @@ fn test_blocked_tasks_skip_urgent_rank() {
     let options = FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
+        calendars: &[],
         selected_categories: &HashSet::new(),
         selected_locations: &HashSet::new(),
         match_all_categories: false,
@@ -126,6 +127,7 @@ fn test_blocked_tasks_skip_due_soon_rank() {
     let options = FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
+        calendars: &[],
         selected_categories: &HashSet::new(),
         selected_locations: &HashSet::new(),
         match_all_categories: false,
@@ -213,6 +215,7 @@ fn test_blocked_tasks_skip_started_rank() {
     let options = FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
+        calendars: &[],
         selected_categories: &HashSet::new(),
         selected_locations: &HashSet::new(),
         match_all_categories: false,
@@ -301,6 +304,7 @@ fn test_dependency_blocked_tasks_also_skip_ranks() {
     let options = FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
+        calendars: &[],
         selected_categories: &HashSet::new(),
         selected_locations: &HashSet::new(),
         match_all_categories: false,
@@ -394,6 +398,7 @@ fn test_is_ready_filters_manually_blocked_tasks() {
     let options = FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
+        calendars: &[],
         selected_categories: &HashSet::new(),
         selected_locations: &HashSet::new(),
         match_all_categories: false,
@@ -473,6 +478,7 @@ fn test_is_blocked_filter_shows_only_blocked() {
     let options = FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
+        calendars: &[],
         selected_categories: &HashSet::new(),
         selected_locations: &HashSet::new(),
         match_all_categories: false,

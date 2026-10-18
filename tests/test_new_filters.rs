@@ -164,6 +164,7 @@ fn test_is_ready_filters_future_start_dates() {
     let options = FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
+        calendars: &[],
         selected_categories: &HashSet::new(),
         selected_locations: &HashSet::new(),
         match_all_categories: false,
@@ -252,6 +253,7 @@ fn test_is_ready_filters_blocked_tasks() {
     let options = FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
+        calendars: &[],
         selected_categories: &HashSet::new(),
         selected_locations: &HashSet::new(),
         match_all_categories: false,
@@ -346,6 +348,7 @@ fn test_is_ready_combines_with_other_filters() {
     let options = FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
+        calendars: &[],
         selected_categories: &HashSet::new(),
         selected_locations: &HashSet::new(),
         match_all_categories: false,
@@ -428,6 +431,7 @@ fn test_is_ready_filters_implicitly_future_tasks() {
     let options = FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
+        calendars: &[],
         selected_categories: &HashSet::new(),
         selected_locations: &HashSet::new(),
         match_all_categories: false,
@@ -492,6 +496,7 @@ fn test_is_ready_filters_implicitly_future_tasks() {
     let options_all = FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
+        calendars: &[],
         selected_categories: &HashSet::new(),
         selected_locations: &HashSet::new(),
         match_all_categories: false,

@@ -2501,9 +2501,10 @@ impl CfaitMobile {
         // Calendar colors for the journal month view. Read the registry and
         // calendar cache directly instead of going through get_calendars(),
         // which would block on the store lock again from this async context.
-        let cal_colors: HashMap<String, String> = load_all_calendar_entries(self.ctx.as_ref())
-            .into_iter()
-            .filter_map(|c| c.color.map(|col| (c.href, col)))
+        let all_calendars = load_all_calendar_entries(self.ctx.as_ref());
+        let cal_colors: HashMap<String, String> = all_calendars
+            .iter()
+            .filter_map(|c| c.color.clone().map(|col| (c.href.clone(), col)))
             .collect();
 
         // Then acquire store lock
@@ -2537,6 +2538,7 @@ impl CfaitMobile {
         let filtered = store.filter(FilterOptions {
             active_cal_href: None,
             hidden_calendars: &hidden,
+            calendars: &all_calendars,
             selected_categories: &options.filter_tags.into_iter().collect(),
             selected_locations: &options.filter_locations.into_iter().collect(),
             match_all_categories: options.match_all_categories,
@@ -3022,9 +3024,11 @@ impl CfaitMobile {
         let cutoff_date = config
             .sort_cutoff_days
             .map(|d| Utc::now() + chrono::Duration::days(d as i64));
+        let all_calendars = load_all_calendar_entries(self.ctx.as_ref());
         let filter_res = store.filter(FilterOptions {
             active_cal_href: None,
             hidden_calendars: &hidden,
+            calendars: &all_calendars,
             selected_categories: &filter_tags.into_iter().collect(),
             selected_locations: &filter_locations.into_iter().collect(),
             match_all_categories: false,
