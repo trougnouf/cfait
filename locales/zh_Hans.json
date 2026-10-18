@@ -356,7 +356,6 @@
     "help_metadata_jump_related": "跳转到相关任务菜单",
     "help_metadata_log_time": "记录时间",
     "help_metadata_manage_sessions": "管理已跟踪的时间会话",
-    "help_metadata_note": "标记为结构化笔记/标题 (无复选框)",
     "help_metadata_pin_task": "将任务固定在列表顶部",
     "help_metadata_relation": "关联另一个任务 (同级)",
     "help_metadata_wiki_link": "用于跳转/创建的维基链接 (路径：“:”，子任务：“+”)",

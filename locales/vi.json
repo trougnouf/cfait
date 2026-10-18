@@ -401,7 +401,6 @@
     "help_metadata_jump_related": "Nhảy đến bảng việc làm có liên quan",
     "help_metadata_log_time": "Thời gian ghi chép",
     "help_metadata_manage_sessions": "Quản lý các phiên theo dõi thời gian",
-    "help_metadata_note": "Đánh dấu là một lưu ý/tiêu đề có cấp bậc (không có hộp đánh dấu chọn)",
     "help_metadata_pin_task": "Ghim việc làm trên đầu danh sách",
     "help_metadata_relation": "Làm liên quan đến việc làm khác (cùng cấp bậc)",
     "help_org_add_category": "Thêm danh mục/thẻ (dùng \":\" cho cấp bậc)",
