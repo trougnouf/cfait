@@ -80,7 +80,9 @@ jobs:
         run: cargo clippy --all-features --all-targets --locked -- -D warnings
 
       - name: Run unit tests
-        run: cargo test --all-features --all-targets --locked --verbose
+        # no --all-targets: it would run the criterion bench as a test (~35s of
+        # store building); benches are covered by the dedicated `cargo bench` job
+        run: cargo test --all-features --locked --verbose
 
   # --- JOB 2: ROLLING ANDROID (Only on PUSH) ---
   rolling-android:
