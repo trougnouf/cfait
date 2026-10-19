@@ -72,7 +72,7 @@ Before submitting, please ensure your changes meet the following criteria:
     ```bash
     cargo fmt --all -- --check
     cargo clippy --all-features --all-targets
-    cargo test --all-features --all-targets
+    cargo test --all-features # benches are tested separately via `cargo bench`
     ```
     *Tip: Use `cargo fmt --all` and `cargo clippy --all-features --all-targets --fix --allow-dirty` to automatically fix formatting and linting issues.*
 
