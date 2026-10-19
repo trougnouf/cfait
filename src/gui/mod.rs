@@ -36,14 +36,24 @@ pub fn run_with_ics_file(
     let window_icon =
         window_icon::from_file_data(include_bytes!("../../assets/autogen/cfait.png"), None).ok();
 
-    // Load config synchronously to get initial window size
+    // Load config synchronously to get initial window size and state
     let init_ctx = Arc::new(StandardContext::new(override_root.clone()));
     let init_config = Config::load(init_ctx.as_ref()).unwrap_or_default();
     let width = init_config.window_width.max(400.0);
     let height = init_config.window_height.max(300.0);
+    let maximized = init_config.window_maximized;
 
     iced::application(
-        move || GuiApp::new_with_ics(ics_file_path.clone(), override_root.clone(), force_ssd),
+        move || {
+            GuiApp::new_with_ics(
+                ics_file_path.clone(),
+                override_root.clone(),
+                force_ssd,
+                width,
+                height,
+                maximized,
+            )
+        },
         GuiApp::update,
         GuiApp::view,
     )
@@ -68,6 +78,9 @@ pub fn run_with_ics_file(
     })
     .window(window::Settings {
         size: iced::Size::new(width, height),
+        // Restore the maximized state so a window that was closed maximized
+        // doesn't re-open as an oversized normal window.
+        maximized,
         min_size: Some(iced::Size::new(400.0, 300.0)),
         icon: window_icon,
         decorations: force_ssd,
@@ -115,6 +128,9 @@ impl GuiApp {
         ics_file_path: Option<String>,
         override_root: Option<PathBuf>,
         force_ssd: bool,
+        initial_width: f32,
+        initial_height: f32,
+        initial_maximized: bool,
     ) -> (Self, Task<Message>) {
         let ctx: Arc<dyn AppContext> = Arc::new(StandardContext::new(override_root));
         // Initialize locale based on saved config or system preference immediately after context creation
@@ -160,9 +176,13 @@ impl GuiApp {
             ));
         }
 
+        let initial_size = iced::Size::new(initial_width, initial_height);
         let app = Self {
             force_ssd,
             ctx,
+            current_window_size: initial_size,
+            last_normal_size: initial_size,
+            is_maximized: initial_maximized,
             ..Self::default()
         };
         (app, Task::batch(tasks))

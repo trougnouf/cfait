@@ -22,6 +22,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
             | Message::Tick
             | Message::ConfettiTick
             | Message::WindowResized(_)
+            | Message::WindowMaximized(_)
             | Message::WindowFocused(_)
             | Message::ApplyWindowResize(_)
             // Keyboard navigation of the open menu itself
@@ -231,6 +232,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::CloseWindow
         | Message::ResizeStart(_)
         | Message::WindowResized(_)
+        | Message::WindowMaximized(_)
         | Message::WindowFocused(_)
         | Message::ApplyWindowResize(_)
         | Message::JumpToTag(_)

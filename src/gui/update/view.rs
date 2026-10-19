@@ -1560,28 +1560,60 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             let was_narrow = app.current_window_size.width < 750.0;
             let is_narrow = size.width < 750.0;
             app.current_window_size = size;
-            app.core_config.window_width = size.width;
-            app.core_config.window_height = size.height;
+            // A maximized window reports the full monitor size, which is not a
+            // meaningful size to restore, so only persist while in the normal
+            // (non-maximized) state.
+            if !app.is_maximized {
+                app.core_config.window_width = size.width;
+                app.core_config.window_height = size.height;
+            }
+
+            // iced has no maximize-state event, so re-query it after every
+            // resize and reconcile via Message::WindowMaximized.
+            let maximized_task =
+                on_latest_window(|id| window::is_maximized(id).map(Message::WindowMaximized));
 
             if !was_narrow && is_narrow {
                 app.sidebar_is_hidden = true;
                 save_config(app);
-                Task::none()
+                maximized_task
             } else if was_narrow && !is_narrow {
                 app.sidebar_is_hidden = false;
                 save_config(app);
-                Task::none()
+                maximized_task
             } else {
                 app.resize_debounce_version = app.resize_debounce_version.wrapping_add(1);
                 let version = app.resize_debounce_version;
-                Task::perform(
-                    async move {
-                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                        version
-                    },
-                    Message::ApplyWindowResize,
-                )
+                Task::batch(vec![
+                    Task::perform(
+                        async move {
+                            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                            version
+                        },
+                        Message::ApplyWindowResize,
+                    ),
+                    maximized_task,
+                ])
             }
+        }
+        Message::WindowMaximized(maximized) => {
+            if app.is_maximized != maximized {
+                app.is_maximized = maximized;
+                if maximized {
+                    // Entering maximized: the reported size is the full monitor,
+                    // so keep the last normal size as the persisted size.
+                    app.core_config.window_width = app.last_normal_size.width;
+                    app.core_config.window_height = app.last_normal_size.height;
+                } else {
+                    // Entering normal: persist the restored size.
+                    app.core_config.window_width = app.current_window_size.width;
+                    app.core_config.window_height = app.current_window_size.height;
+                    app.last_normal_size = app.current_window_size;
+                }
+                app.core_config.window_maximized = maximized;
+                save_config(app);
+            }
+            Task::none()
         }
         Message::ApplyWindowResize(version) => {
             if version == app.resize_debounce_version {

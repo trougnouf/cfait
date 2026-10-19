@@ -269,6 +269,12 @@ pub struct GuiApp {
     // Window Resizing State
     pub resize_direction: Option<ResizeDirection>,
     pub current_window_size: iced::Size,
+    /// Whether the window is currently maximized. A maximized window reports
+    /// the full monitor size, which must not be persisted as the window size.
+    pub is_maximized: bool,
+    /// Last known normal (non-maximized) window size, kept so the persisted
+    /// size survives maximize/unmaximize transitions.
+    pub last_normal_size: iced::Size,
     pub resize_debounce_version: usize,
 
     /// Active confetti burst, spawned when the user completes a task with the
@@ -817,6 +823,8 @@ impl Default for GuiApp {
 
             resize_direction: None,
             current_window_size: iced::Size::new(1024.0, 768.0),
+            is_maximized: false,
+            last_normal_size: iced::Size::new(1024.0, 768.0),
             resize_debounce_version: 0,
             confetti: None,
             confetti_bursts: 0,

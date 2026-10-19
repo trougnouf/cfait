@@ -305,6 +305,7 @@ pub enum Message {
     MinimizeWindow,
     CloseWindow,
     WindowResized(iced::Size),
+    WindowMaximized(bool),
     WindowFocused(bool),
     ApplyWindowResize(usize),
     ResizeStart(ResizeDirection),

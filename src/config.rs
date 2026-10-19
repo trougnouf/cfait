@@ -932,6 +932,10 @@ pub struct Config {
     pub settings_updated_at: i64,
     pub window_width: f32,
     pub window_height: f32,
+    /// Whether the GUI window was maximized when the app last exited. Restored
+    /// on launch so a maximized window doesn't re-open as an oversized normal
+    /// window (https://github.com/trougnouf/cfait/issues/19).
+    pub window_maximized: bool,
     pub sort_collections_by_size: bool,
 }
 
@@ -1113,6 +1117,7 @@ impl Default for Config {
             goals: HashMap::new(),
             window_width: 1024.0,
             window_height: 768.0,
+            window_maximized: false,
             sort_collections_by_size: true,
         }
     }
@@ -2032,6 +2037,12 @@ impl Config {
                 None,
                 None,
                 Some(" # Float: Last window height (GUI)."),
+            ),
+            (
+                "window_maximized =",
+                None,
+                None,
+                Some(" # Boolean: Whether the GUI window was maximized when the app last exited."),
             ),
             (
                 "config_version =",
