@@ -946,6 +946,7 @@
     "trash_is_empty": "La corbeille est déjà vide.",
     "trash_retention_days_label": "Conservation corbeille (jours)",
     "trash_retention_explain": "Conserver les éléments supprimés dans la corbeille locale pendant ces jours. 0 pour désactiver.",
+    "tui_alarm_help": "d/Échap:Ignorer 1/2:Reporter s:Perso c:Fait x:Annuler q:Quitter",
     "tui_caldav_setup_title": "Configuration de la connexion CalDAV",
     "tui_caldav_url_prompt": "URL du serveur (ex. https://cloud.example.com/remote.php/dav/) : ",
     "tui_choice_prompt": "Choix [1] : ",

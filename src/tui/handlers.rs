@@ -1597,7 +1597,13 @@ pub async fn handle_key_event(
             // Fall through to normal input handling below
         } else {
             match key.code {
-                KeyCode::Delete | KeyCode::Char('D') | KeyCode::Char('d') => {
+                // Dismiss: close the popup without touching the task. Esc and
+                // Enter are the natural "just close it" keys.
+                KeyCode::Delete
+                | KeyCode::Char('D')
+                | KeyCode::Char('d')
+                | KeyCode::Esc
+                | KeyCode::Enter => {
                     handle_alarm_action(
                         state,
                         &task.uid,
@@ -1634,6 +1640,11 @@ pub async fn handle_key_event(
                     );
                     return None;
                 }
+                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    // Ctrl+C quits (as it does conventionally) instead of
+                    // completing the task.
+                    return Some(Action::Quit);
+                }
                 KeyCode::Char('c') => {
                     /* Complete */
                     if let Some((t, _)) = state.store.get_task_mut(&task.uid) {
@@ -1663,6 +1674,7 @@ pub async fn handle_key_event(
                     state.reset_input();
                     return None;
                 }
+                KeyCode::Char('q') => return Some(Action::Quit),
                 _ => return None, // Block other input while alarm is ringing
             }
         }
@@ -4583,5 +4595,124 @@ mod tests {
         assert!(try_dispatch_command(&mut state, &tx, ":undo"));
         assert!(matches!(state.mode, InputMode::Normal));
         assert!(state.input_buffer.is_empty());
+    }
+
+    /// AppState with a task whose implicit due alarm is ringing.
+    fn ringing_state() -> (AppState, tokio::sync::mpsc::Sender<Action>, String) {
+        let ctx = std::sync::Arc::new(crate::context::TestContext::new());
+        let mut state = AppState::new_with_ctx(ctx);
+        let task = Task::new("water the ferns", &HashMap::new(), None);
+        let uid = task.uid.clone();
+        let alarm_uid = format!("implicit_due:|2026-10-18T07:00:00+00:00|{uid}");
+        state.store.add_task(task.clone());
+        state.active_alarm = Some((task, alarm_uid));
+        let (tx, _rx) = tokio::sync::mpsc::channel::<Action>(16);
+        (state, tx, uid)
+    }
+
+    fn key(code: KeyCode, modifiers: KeyModifiers) -> KeyEvent {
+        KeyEvent::new(code, modifiers)
+    }
+
+    #[tokio::test]
+    async fn alarm_dismiss_keys_close_popup_without_touching_task() {
+        for code in [
+            KeyCode::Char('d'),
+            KeyCode::Char('D'),
+            KeyCode::Delete,
+            KeyCode::Esc,
+            KeyCode::Enter,
+        ] {
+            let (mut state, tx, uid) = ringing_state();
+            let result = handle_key_event(key(code, KeyModifiers::NONE), &mut state, &tx).await;
+            assert!(result.is_none(), "{code:?} should be consumed");
+            assert!(
+                state.active_alarm.is_none(),
+                "{code:?} should close the popup"
+            );
+            let task = state.store.get_task_ref(&uid).unwrap();
+            assert_eq!(
+                task.status,
+                TaskStatus::NeedsAction,
+                "{code:?} must not change the task"
+            );
+            assert_eq!(task.alarms.len(), 1, "{code:?} records the dismissal");
+            assert!(task.alarms[0].acknowledged.is_some());
+        }
+    }
+
+    #[tokio::test]
+    async fn alarm_ctrl_c_quits_instead_of_completing_task() {
+        let (mut state, tx, uid) = ringing_state();
+        let result = handle_key_event(
+            key(KeyCode::Char('c'), KeyModifiers::CONTROL),
+            &mut state,
+            &tx,
+        )
+        .await;
+        assert!(matches!(result, Some(Action::Quit)));
+        assert!(
+            state.active_alarm.is_some(),
+            "quitting leaves the alarm pending"
+        );
+        let task = state.store.get_task_ref(&uid).unwrap();
+        assert_eq!(task.status, TaskStatus::NeedsAction);
+        assert!(task.alarms.is_empty());
+    }
+
+    #[tokio::test]
+    async fn alarm_q_quits() {
+        let (mut state, tx, _uid) = ringing_state();
+        let result =
+            handle_key_event(key(KeyCode::Char('q'), KeyModifiers::NONE), &mut state, &tx).await;
+        assert!(matches!(result, Some(Action::Quit)));
+        assert!(state.active_alarm.is_some());
+    }
+
+    #[tokio::test]
+    async fn alarm_c_completes_task() {
+        let (mut state, tx, uid) = ringing_state();
+        let result =
+            handle_key_event(key(KeyCode::Char('c'), KeyModifiers::NONE), &mut state, &tx).await;
+        assert!(result.is_none());
+        assert!(state.active_alarm.is_none());
+        let task = state.store.get_task_ref(&uid).unwrap();
+        assert_eq!(task.status, TaskStatus::Completed);
+    }
+
+    #[tokio::test]
+    async fn alarm_x_cancels_task() {
+        let (mut state, tx, uid) = ringing_state();
+        let result =
+            handle_key_event(key(KeyCode::Char('x'), KeyModifiers::NONE), &mut state, &tx).await;
+        assert!(result.is_none());
+        assert!(state.active_alarm.is_none());
+        let task = state.store.get_task_ref(&uid).unwrap();
+        assert_eq!(task.status, TaskStatus::Cancelled);
+    }
+
+    #[tokio::test]
+    async fn alarm_preset_snooze_schedules_new_alarm() {
+        let (mut state, tx, uid) = ringing_state();
+        let result =
+            handle_key_event(key(KeyCode::Char('1'), KeyModifiers::NONE), &mut state, &tx).await;
+        assert!(result.is_none());
+        assert!(state.active_alarm.is_none());
+        let task = state.store.get_task_ref(&uid).unwrap();
+        assert_eq!(task.status, TaskStatus::NeedsAction);
+        assert_eq!(task.alarms.len(), 2);
+        assert!(task.alarms.iter().any(|a| a.is_snooze()));
+    }
+
+    #[tokio::test]
+    async fn alarm_unbound_keys_are_blocked() {
+        let (mut state, tx, uid) = ringing_state();
+        let result =
+            handle_key_event(key(KeyCode::Char('a'), KeyModifiers::NONE), &mut state, &tx).await;
+        assert!(result.is_none());
+        assert!(state.active_alarm.is_some(), "popup stays up");
+        let task = state.store.get_task_ref(&uid).unwrap();
+        assert_eq!(task.status, TaskStatus::NeedsAction);
+        assert!(task.alarms.is_empty());
     }
 }

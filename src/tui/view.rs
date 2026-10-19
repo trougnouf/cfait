@@ -2578,6 +2578,11 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             )));
             lines.push(Line::from(""));
         }
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            rust_i18n::t!("tui_alarm_help"),
+            Style::default().fg(Color::DarkGray),
+        )));
         let p = Paragraph::new(lines)
             .block(block)
             .alignment(Alignment::Center)

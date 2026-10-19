@@ -885,6 +885,7 @@
     "trash_is_empty": "Trash is already empty.",
     "trash_retention_days_label": "Trash retention (days)",
     "trash_retention_explain": "Keep deleted items in local trash for this many days. Set to 0 to delete immediately.",
+    "tui_alarm_help": "d/Esc:Dismiss 1/2:Snooze s:Custom c:Done x:Cancel q:Quit",
     "tui_caldav_setup_title": "CalDAV Connection Setup",
     "tui_caldav_url_prompt": "Server URL (e.g. https://cloud.example.com/remote.php/dav/): ",
     "tui_choice_prompt": "Choice [1]: ",
