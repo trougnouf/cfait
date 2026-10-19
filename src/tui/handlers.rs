@@ -1449,6 +1449,7 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
                 SidebarMode::Journal
             };
         }
+        state.normalize_focus();
         if state.sidebar_mode != old_mode {
             state.needs_redraw = true;
         }
@@ -2487,6 +2488,7 @@ pub async fn handle_key_event(
                         &state.tag_aliases,
                     );
                     state.sidebar_mode = SidebarMode::Categories;
+                    state.normalize_focus();
                     state.selected_categories.clear();
                     for t in tags {
                         state.selected_categories.insert(t);
@@ -2510,6 +2512,7 @@ pub async fn handle_key_event(
                     );
 
                     state.sidebar_mode = SidebarMode::Locations;
+                    state.normalize_focus();
                     state.selected_locations.clear();
                     for l in locs {
                         state.selected_locations.insert(l);
@@ -2690,6 +2693,7 @@ pub async fn handle_key_event(
                 if let Ok(d) = chrono::NaiveDate::parse_from_str(input, "%Y-%m-%d") {
                     state.journal_date = d;
                     state.journal_editing_uid = None;
+                    state.active_focus = Focus::Calendar;
                     state.update_journal_editing_uid();
                     state.mode = InputMode::Normal;
                     state.input_buffer.clear();
@@ -2921,6 +2925,7 @@ pub async fn handle_key_event(
                 if state.sidebar_mode == SidebarMode::Journal {
                     state.journal_date = chrono::Local::now().date_naive();
                     state.journal_editing_uid = None;
+                    state.active_focus = Focus::Calendar;
                     state.update_journal_editing_uid();
                     state.refresh_filtered_view();
                 } else if let Some(summary) = state.get_selected_task().map(|t| t.summary.clone()) {
@@ -3226,7 +3231,9 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Char('g') => {
-                if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
+                if state.sidebar_mode == SidebarMode::Journal
+                    && state.active_focus == Focus::Calendar
+                {
                     state.mode = InputMode::JumpingToDate;
                     state.input_buffer.clear();
                     state.cursor_position = 0;
@@ -3275,7 +3282,9 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Char('l') => {
-                if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
+                if state.sidebar_mode == SidebarMode::Journal
+                    && state.active_focus == Focus::Calendar
+                {
                     state.journal_date += chrono::Duration::days(1);
                     state.journal_editing_uid = None;
                     state.refresh_filtered_view();
@@ -3384,7 +3393,9 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
+                if state.sidebar_mode == SidebarMode::Journal
+                    && state.active_focus == Focus::Calendar
+                {
                     state.journal_date += chrono::Duration::days(7);
                     state.journal_editing_uid = None;
                     state.refresh_filtered_view();
@@ -3393,7 +3404,9 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Up | KeyCode::Char('k') => {
-                if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
+                if state.sidebar_mode == SidebarMode::Journal
+                    && state.active_focus == Focus::Calendar
+                {
                     state.journal_date -= chrono::Duration::days(7);
                     state.journal_editing_uid = None;
                     state.refresh_filtered_view();
@@ -3403,16 +3416,18 @@ pub async fn handle_key_event(
             }
             KeyCode::PageDown => state.jump_forward(10),
             KeyCode::PageUp => state.jump_backward(10),
-            KeyCode::Tab => state.toggle_focus(),
+            KeyCode::Tab => state.cycle_focus(true),
             KeyCode::Char('1') => {
                 if state.show_calendars_tab {
                     state.sidebar_mode = SidebarMode::Calendars;
+                    state.normalize_focus();
                     state.refresh_filtered_view();
                 }
             }
             KeyCode::Char('2') => {
                 if state.show_tags_tab {
                     state.sidebar_mode = SidebarMode::Categories;
+                    state.normalize_focus();
                     state.refresh_filtered_view();
                 }
             }
@@ -3511,18 +3526,22 @@ pub async fn handle_key_event(
             KeyCode::Char('3') => {
                 if state.show_locations_tab {
                     state.sidebar_mode = SidebarMode::Locations;
+                    state.normalize_focus();
                     state.refresh_filtered_view();
                 }
             }
             KeyCode::Char('4') => {
                 if state.show_goals_tab {
                     state.sidebar_mode = SidebarMode::Goals;
+                    state.normalize_focus();
                     state.refresh_filtered_view();
                 }
             }
             KeyCode::Char('5') => {
                 if state.show_journal_tab {
                     state.sidebar_mode = SidebarMode::Journal;
+                    // Land on the page list; Tab reaches the calendar.
+                    state.active_focus = Focus::Sidebar;
                     state.refresh_filtered_view();
                 }
             }
@@ -3615,14 +3634,18 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Left | KeyCode::Char('h') => {
-                if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
+                if state.sidebar_mode == SidebarMode::Journal
+                    && state.active_focus == Focus::Calendar
+                {
                     state.journal_date -= chrono::Duration::days(1);
                     state.journal_editing_uid = None;
                     state.refresh_filtered_view();
                 }
             }
             KeyCode::Right => {
-                if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
+                if state.sidebar_mode == SidebarMode::Journal
+                    && state.active_focus == Focus::Calendar
+                {
                     state.journal_date += chrono::Duration::days(1);
                     state.journal_editing_uid = None;
                     state.refresh_filtered_view();
@@ -3760,7 +3783,9 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Enter => {
-                if state.sidebar_mode == SidebarMode::Journal && state.active_focus == Focus::Main {
+                if state.sidebar_mode == SidebarMode::Journal
+                    && matches!(state.active_focus, Focus::Main | Focus::Calendar)
+                {
                     edit_journal_in_external_editor(state, action_tx);
                     return None;
                 }

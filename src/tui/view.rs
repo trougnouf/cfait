@@ -311,6 +311,36 @@ fn journal_sidebar_width(state: &AppState) -> u16 {
     (GRID.max(journal_cal_title(state.journal_date).width()) + 2) as u16
 }
 
+/// Builds a bordered sidebar pane. The title carries the tab strip and the
+/// active tab's label; when the combined strip + label is too wide for the
+/// pane, the digit strip drops to the bottom-right of the frame so both
+/// remain visible.
+fn sidebar_pane_block(
+    title: String,
+    digit_spans: Vec<Span<'static>>,
+    border_style: Style,
+    width: u16,
+) -> Block<'static> {
+    let digit_line = Line::from(digit_spans.clone());
+    let combined_width = digit_line.width() + 1 + title.width();
+    let avail = width.saturating_sub(2) as usize;
+    if combined_width <= avail {
+        let mut title_spans = digit_spans;
+        title_spans.push(Span::raw(" "));
+        title_spans.push(Span::raw(title));
+        Block::default()
+            .borders(Borders::ALL)
+            .title(Line::from(title_spans))
+            .border_style(border_style)
+    } else {
+        Block::default()
+            .borders(Borders::ALL)
+            .title(Line::from(Span::raw(title)))
+            .title_bottom(digit_line.alignment(Alignment::Right))
+            .border_style(border_style)
+    }
+}
+
 pub fn draw(f: &mut Frame, state: &mut AppState) {
     let is_dark_theme = state.theme.is_dark();
     let footer_height = if state.mode == InputMode::EditingDescription
@@ -849,31 +879,28 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         };
         digit_spans.push(Span::styled(format!(" {}", num), style));
     }
-    let digit_line = Line::from(digit_spans.clone());
-    let combined_width = digit_line.width() + 1 + sidebar_title.width();
-    let avail = h_chunks[0].width.saturating_sub(2) as usize;
-
-    let sidebar_block = if combined_width <= avail {
-        let mut title_spans = digit_spans;
-        title_spans.push(Span::raw(" "));
-        title_spans.push(Span::raw(sidebar_title));
-        Block::default()
-            .borders(Borders::ALL)
-            .title(Line::from(title_spans))
-            .border_style(sidebar_border_style)
+    // In the journal tab the sidebar column is split into two panes (the date
+    // grid and the page list), so the tab strip block highlights on calendar
+    // focus while the page list highlights on sidebar focus.
+    let sidebar_border_style = if state.sidebar_mode == SidebarMode::Journal {
+        if state.active_focus == Focus::Calendar {
+            Style::default().fg(accent)
+        } else {
+            Style::default()
+        }
     } else {
-        Block::default()
-            .borders(Borders::ALL)
-            .title(Line::from(Span::raw(sidebar_title)))
-            .title_bottom(digit_line.alignment(Alignment::Right))
-            .border_style(sidebar_border_style)
+        sidebar_border_style
     };
+    let sidebar_block = sidebar_pane_block(
+        sidebar_title,
+        digit_spans,
+        sidebar_border_style,
+        h_chunks[0].width,
+    );
 
     let sidebar_area = h_chunks[0];
 
     if let Some(cal_p) = calendar_paragraph {
-        f.render_widget(sidebar_block.clone(), sidebar_area);
-
         let date = state.journal_date;
         use chrono::Datelike;
         let first_day = chrono::NaiveDate::from_ymd_opt(date.year(), date.month(), 1).unwrap();
@@ -893,33 +920,39 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         let rows = (days_in_month as usize + start_offset).div_ceil(7) as u16;
         let cal_height = 2 + rows;
 
-        let inner_area = sidebar_block.inner(sidebar_area);
+        // Two separate panes: the date grid (sized to the month) and the page
+        // list (takes the rest), so the focus highlight follows the active
+        // pane.
         let split = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(cal_height),
-                Constraint::Length(1), // Empty
-                Constraint::Length(1), // Header
-                Constraint::Min(0),
-            ])
-            .split(inner_area);
+            .constraints([Constraint::Length(cal_height + 2), Constraint::Min(0)])
+            .split(sidebar_area);
 
-        state.sidebar_list_rect = split[3];
+        state.calendar_pane_rect = split[0];
+        let cal_inner = sidebar_block.inner(split[0]);
+        f.render_widget(sidebar_block, split[0]);
+        f.render_widget(cal_p, cal_inner);
 
-        f.render_widget(cal_p, split[0]);
+        let wiki_block = Block::default()
+            .borders(Borders::ALL)
+            .title(Line::from(Span::styled(
+                rust_i18n::t!("wiki_index"),
+                Style::default().add_modifier(Modifier::BOLD),
+            )))
+            .border_style(if state.active_focus == Focus::Sidebar {
+                Style::default().fg(accent)
+            } else {
+                Style::default()
+            });
 
-        let wiki_header = Paragraph::new(Line::from(Span::styled(
-            rust_i18n::t!("wiki_index"),
-            Style::default().add_modifier(Modifier::BOLD),
-        )));
-        f.render_widget(wiki_header, split[2]);
-
-        let sidebar_list = List::new(sidebar_items).highlight_style(
+        state.sidebar_pane_rect = split[1];
+        state.sidebar_list_rect = wiki_block.inner(split[1]);
+        let sidebar_list = List::new(sidebar_items).block(wiki_block).highlight_style(
             Style::default()
                 .add_modifier(Modifier::BOLD)
                 .bg(Color::Blue),
         );
-        f.render_stateful_widget(sidebar_list, split[3], &mut state.cal_state);
+        f.render_stateful_widget(sidebar_list, split[1], &mut state.cal_state);
     } else {
         state.sidebar_list_rect = sidebar_block.inner(sidebar_area);
 
@@ -1122,11 +1155,11 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 Block::default()
                     .borders(Borders::ALL)
                     .title(title)
-                    .border_style(Style::default().fg(if is_dark_theme {
-                        Color::Yellow
+                    .border_style(if state.active_focus == Focus::Main {
+                        Style::default().fg(accent)
                     } else {
-                        Color::Rgb(200, 100, 0)
-                    })),
+                        Style::default()
+                    }),
             )
             .wrap(Wrap { trim: true })
             .scroll((state.details_scroll, 0));
@@ -2328,6 +2361,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         .title(format!(" {} ", rust_i18n::t!("status"))),
                 );
             let help_text = match state.active_focus {
+                Focus::Calendar => rust_i18n::t!("tui_journal_calendar_help").to_string(),
                 Focus::Sidebar => {
                     if state.sidebar_mode == SidebarMode::Journal {
                         rust_i18n::t!("tui_journal_sidebar_help").to_string()

@@ -48,10 +48,12 @@ const JOURNAL_ICONS: &[char] = &[
     '\u{f0776}',
 ];
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Focus {
     Sidebar,
     Main,
+    /// The journal date grid (only valid while the journal tab is active).
+    Calendar,
 }
 
 #[derive(PartialEq, Clone)]
@@ -212,6 +214,7 @@ pub struct AppState {
     pub main_pane_rect: Rect,
     pub sidebar_list_rect: Rect,
     pub main_list_rect: Rect,
+    pub calendar_pane_rect: Rect,
 
     pub undo_history: crate::journal::UndoHistory,
 
@@ -358,6 +361,7 @@ impl AppState {
             main_pane_rect: Rect::default(),
             sidebar_list_rect: Rect::default(),
             main_list_rect: Rect::default(),
+            calendar_pane_rect: Rect::default(),
             undo_history: crate::journal::UndoHistory::new(),
             text_history: crate::model::session::TextHistory::default(),
             search_highlight_regex: None,
@@ -1053,6 +1057,12 @@ impl AppState {
     // --- NAVIGATION ---
     pub fn next(&mut self) {
         match self.active_focus {
+            Focus::Calendar => {
+                // Only reachable in journal mode: step forward a week.
+                self.journal_date += chrono::Duration::days(7);
+                self.journal_editing_uid = None;
+                self.refresh_filtered_view();
+            }
             Focus::Main => {
                 if self.sidebar_mode == SidebarMode::Journal {
                     self.details_scroll = self.details_scroll.saturating_add(1);
@@ -1105,6 +1115,12 @@ impl AppState {
     }
     pub fn previous(&mut self) {
         match self.active_focus {
+            Focus::Calendar => {
+                // Only reachable in journal mode: step back a week.
+                self.journal_date -= chrono::Duration::days(7);
+                self.journal_editing_uid = None;
+                self.refresh_filtered_view();
+            }
             Focus::Main => {
                 if self.sidebar_mode == SidebarMode::Journal {
                     self.details_scroll = self.details_scroll.saturating_sub(1);
@@ -1157,6 +1173,12 @@ impl AppState {
     }
     pub fn jump_forward(&mut self, step: usize) {
         match self.active_focus {
+            Focus::Calendar => {
+                // Only reachable in journal mode: step forward several weeks.
+                self.journal_date += chrono::Duration::days((7 * step) as i64);
+                self.journal_editing_uid = None;
+                self.refresh_filtered_view();
+            }
             Focus::Main => {
                 if !self.tasks.is_empty() {
                     let current = self.list_state.selected().unwrap_or(0);
@@ -1188,6 +1210,12 @@ impl AppState {
     }
     pub fn jump_backward(&mut self, step: usize) {
         match self.active_focus {
+            Focus::Calendar => {
+                // Only reachable in journal mode: step back several weeks.
+                self.journal_date -= chrono::Duration::days((7 * step) as i64);
+                self.journal_editing_uid = None;
+                self.refresh_filtered_view();
+            }
             Focus::Main => {
                 if !self.tasks.is_empty() {
                     let current = self.list_state.selected().unwrap_or(0);
@@ -1216,10 +1244,28 @@ impl AppState {
             }
         }
     }
-    pub fn toggle_focus(&mut self) {
-        self.active_focus = match self.active_focus {
-            Focus::Main => Focus::Sidebar,
-            Focus::Sidebar => Focus::Main,
+    /// Cycles focus between panes. In journal mode the sidebar column is split
+    /// into two panes (calendar and page list), so Tab walks
+    /// Calendar -> Sidebar -> Main -> Calendar (or the reverse). In the other
+    /// tabs it simply toggles Main <-> Sidebar.
+    pub fn cycle_focus(&mut self, forward: bool) {
+        let journal = self.sidebar_mode == SidebarMode::Journal;
+        self.active_focus = match (self.active_focus, forward) {
+            (Focus::Main, true) if journal => Focus::Calendar,
+            (Focus::Main, _) => Focus::Sidebar,
+            (Focus::Sidebar, true) => Focus::Main,
+            (Focus::Sidebar, false) if journal => Focus::Calendar,
+            (Focus::Sidebar, false) => Focus::Main,
+            (Focus::Calendar, true) => Focus::Sidebar,
+            (Focus::Calendar, false) => Focus::Main,
+        }
+    }
+
+    /// Resets `Focus::Calendar` to `Focus::Sidebar` when the journal tab is no
+    /// longer active, since the calendar pane only exists there.
+    pub fn normalize_focus(&mut self) {
+        if self.active_focus == Focus::Calendar && self.sidebar_mode != SidebarMode::Journal {
+            self.active_focus = Focus::Sidebar;
         }
     }
 
@@ -1231,7 +1277,9 @@ impl AppState {
     pub fn handle_mouse_click(&mut self, x: u16, y: u16) {
         let point = Position { x, y };
 
-        if self.sidebar_pane_rect.contains(point) {
+        if self.sidebar_mode == SidebarMode::Journal && self.calendar_pane_rect.contains(point) {
+            self.active_focus = Focus::Calendar;
+        } else if self.sidebar_pane_rect.contains(point) {
             self.active_focus = Focus::Sidebar;
             if self.sidebar_list_rect.contains(point) {
                 self.select_sidebar_row_at(y);
@@ -1764,5 +1812,100 @@ mod tests {
 
         assert!(state.suggestions.is_none());
         assert_eq!(state.suggestion_selection, 0);
+    }
+
+    #[test]
+    fn test_cycle_focus_walks_three_panes_in_journal() {
+        let mut state = AppState::new();
+        state.sidebar_mode = SidebarMode::Journal;
+        state.active_focus = Focus::Main;
+
+        // Forward: Main -> Calendar -> Sidebar -> Main.
+        state.cycle_focus(true);
+        assert_eq!(state.active_focus, Focus::Calendar);
+        state.cycle_focus(true);
+        assert_eq!(state.active_focus, Focus::Sidebar);
+        state.cycle_focus(true);
+        assert_eq!(state.active_focus, Focus::Main);
+
+        // Backward: Main -> Sidebar -> Calendar -> Main.
+        state.cycle_focus(false);
+        assert_eq!(state.active_focus, Focus::Sidebar);
+        state.cycle_focus(false);
+        assert_eq!(state.active_focus, Focus::Calendar);
+        state.cycle_focus(false);
+        assert_eq!(state.active_focus, Focus::Main);
+    }
+
+    #[test]
+    fn test_cycle_focus_toggles_two_panes_outside_journal() {
+        let mut state = AppState::new();
+        state.sidebar_mode = SidebarMode::Calendars;
+        state.active_focus = Focus::Main;
+
+        state.cycle_focus(true);
+        assert_eq!(state.active_focus, Focus::Sidebar);
+        state.cycle_focus(true);
+        assert_eq!(state.active_focus, Focus::Main);
+    }
+
+    #[test]
+    fn test_normalize_focus_drops_calendar_outside_journal() {
+        let mut state = AppState::new();
+        state.sidebar_mode = SidebarMode::Journal;
+        state.active_focus = Focus::Calendar;
+
+        state.normalize_focus(); // Still in journal: unchanged.
+        assert_eq!(state.active_focus, Focus::Calendar);
+
+        state.sidebar_mode = SidebarMode::Calendars;
+        state.normalize_focus();
+        assert_eq!(state.active_focus, Focus::Sidebar);
+    }
+
+    #[test]
+    fn test_calendar_focus_steps_the_month() {
+        let mut state = AppState::new();
+        state.sidebar_mode = SidebarMode::Journal;
+        state.active_focus = Focus::Calendar;
+        state.journal_date = chrono::NaiveDate::from_ymd_opt(2026, 10, 18).unwrap();
+
+        state.next(); // +1 week
+        assert_eq!(
+            state.journal_date,
+            chrono::NaiveDate::from_ymd_opt(2026, 10, 25).unwrap()
+        );
+        state.previous(); // -1 week
+        assert_eq!(
+            state.journal_date,
+            chrono::NaiveDate::from_ymd_opt(2026, 10, 18).unwrap()
+        );
+        state.jump_forward(3); // +3 weeks
+        assert_eq!(
+            state.journal_date,
+            chrono::NaiveDate::from_ymd_opt(2026, 11, 8).unwrap()
+        );
+        state.jump_backward(3); // -3 weeks
+        assert_eq!(
+            state.journal_date,
+            chrono::NaiveDate::from_ymd_opt(2026, 10, 18).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_journal_main_focus_scrolls_instead_of_dating() {
+        let mut state = AppState::new();
+        state.sidebar_mode = SidebarMode::Journal;
+        state.active_focus = Focus::Main;
+        state.journal_date = chrono::NaiveDate::from_ymd_opt(2026, 10, 18).unwrap();
+
+        state.next();
+        state.next();
+        assert_eq!(state.details_scroll, 2);
+        assert_eq!(
+            state.journal_date,
+            chrono::NaiveDate::from_ymd_opt(2026, 10, 18).unwrap(),
+            "main focus must not move the date"
+        );
     }
 }
