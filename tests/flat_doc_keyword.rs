@@ -333,3 +333,83 @@ fn flat_task_extracts_transient_description_metadata() {
         "a prose-only flat document has no extractable subtasks"
     );
 }
+
+#[test]
+fn page_converted_to_flat_becomes_a_togglable_task() {
+    // Regression: swapping `is:page` for `is:flat` on a page line must turn
+    // the VJOURNAL into a flat VTODO (a togglable task). The `is:page` token
+    // must not come back on the next serialization.
+    let mut store = make_store();
+    let aliases = HashMap::new();
+
+    let mut root = Task::new("House project", &aliases, None);
+    root.uid = "root-1".to_string();
+    root.calendar_href = "local://default".to_string();
+    store.add_task(root);
+
+    let mut page = Task::new("(indoor) finitions is:page", &aliases, None);
+    page.uid = "page-1".to_string();
+    page.calendar_href = "local://default".to_string();
+    page.parent_uid = Some("root-1".to_string());
+    page.description = "Plaster, paint, and the skirting boards.".to_string();
+    store.add_task(page);
+
+    let cals = calendars();
+    let opts = SyncTreeOptions {
+        aliases: &aliases,
+        default_reminder_time: None,
+        trash_retention_days: 30,
+        calendars: &cals,
+    };
+
+    // The tree editor shows the page as a bullet carrying its is:page token.
+    let md = cfait::model::extractor::serialize_task_tree(&store, "root-1", &cals, false);
+    assert!(
+        md.contains("(indoor) finitions is:page"),
+        "the page serializes with its is:page token:\n{md}"
+    );
+
+    // The user swaps is:page for is:flat to make it a togglable task.
+    let edited = md.replace("is:page", "is:flat");
+    let (actions, warnings, _mints) = store
+        .sync_tree_from_markdown("root-1", &edited, &opts, false, true)
+        .unwrap();
+    assert!(warnings.is_empty());
+    assert!(
+        actions
+            .iter()
+            .any(|a| matches!(a, cfait::journal::Action::Update(t) if t.uid == "page-1")),
+        "the swap must record an update for the page: {actions:?}"
+    );
+
+    let after = store.get_task_ref("page-1").unwrap();
+    assert!(
+        !after.is_journal,
+        "swapping is:page for is:flat must clear the page state (is_journal={})",
+        after.is_journal
+    );
+    assert!(after.flat, "the task must become a flat document");
+    assert!(
+        after.status == cfait::model::TaskStatus::NeedsAction,
+        "a flat task is an actionable, togglable VTODO"
+    );
+
+    // The smart string must round-trip as a flat task, never a page.
+    let smart = after.to_smart_string();
+    assert!(
+        !smart.contains("is:page"),
+        "no is:page token may remain: {smart}"
+    );
+    assert!(
+        smart.contains("is:flat"),
+        "the is:flat token must remain: {smart}"
+    );
+
+    // And it must serialize as a VTODO, not a VJOURNAL.
+    let ics = after.to_ics();
+    assert!(
+        ics.contains("BEGIN:VTODO"),
+        "a converted page stays a VTODO:\n{ics}"
+    );
+    assert!(!ics.contains("BEGIN:VJOURNAL"));
+}

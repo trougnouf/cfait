@@ -2903,6 +2903,7 @@ pub fn apply_smart_input(
     task.create_event = None;
     task.goal = None;
     task.is_note = false;
+    task.is_journal = false; // Reset page state so deleting the token unpages
     task.pinned = false; // Reset pinned state so deleting the token unpins
     task.permanent = false;
     task.flat = false; // Reset flat state so deleting the token unflattens
