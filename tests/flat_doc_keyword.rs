@@ -2,10 +2,12 @@
 //! `is:flat` / `is:doc` keyword: a VTODO whose description is parsed like a
 //! VJOURNAL — Markdown headers and plain list items stay as document text
 //! instead of being extracted into subtasks (checkbox items still are).
+use cfait::config::{PausedSortBehavior, SortPreset};
 use cfait::context::TestContext;
 use cfait::model::{CalendarListEntry, Task};
-use cfait::store::{SyncTreeOptions, TaskStore};
-use std::collections::HashMap;
+use cfait::store::{FilterOptions, SyncTreeOptions, TaskListItem, TaskStore};
+use chrono::NaiveTime;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 fn make_store() -> TaskStore {
@@ -412,4 +414,129 @@ fn page_converted_to_flat_becomes_a_togglable_task() {
         "a converted page stays a VTODO:\n{ics}"
     );
     assert!(!ics.contains("BEGIN:VJOURNAL"));
+}
+
+/// The rows the task list would render for `search`: `(summary, depth)` for
+/// every task row, in display order. Group headers are skipped.
+fn task_list_rows(
+    store: &TaskStore,
+    cals: &[CalendarListEntry],
+    search: &str,
+) -> Vec<(String, usize)> {
+    let empty = HashSet::new();
+    let no_aliases = HashMap::new();
+    let res = store.filter(FilterOptions {
+        active_cal_href: None,
+        hidden_calendars: &empty,
+        calendars: cals,
+        selected_categories: &empty,
+        selected_locations: &empty,
+        match_all_categories: false,
+        search_term: search,
+        hide_completed_global: false,
+        hide_fully_completed_tags: false,
+        hide_aliases_in_sidebar: false,
+        cutoff_date: None,
+        min_duration: None,
+        max_duration: None,
+        include_unset_duration: true,
+        urgent_days: 1,
+        urgent_prio: 1,
+        default_priority: 5,
+        start_grace_period_days: 1,
+        sort_standard_by_priority: false,
+        sort_preset: SortPreset::default(),
+        expanded_done_groups: &empty,
+        expanded_tags: &empty,
+        expanded_locations: &empty,
+        max_done_roots: usize::MAX,
+        max_done_subtasks: usize::MAX,
+        tag_aliases: &no_aliases,
+        search_collapsed_tasks: &empty,
+        focused_task_uid: None,
+        paused_sort_behavior: PausedSortBehavior::default(),
+        sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
+    });
+    res.items
+        .iter()
+        .filter_map(|item| {
+            if let TaskListItem::Task(t) = item {
+                Some((t.summary.clone(), t.depth))
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// A flat document (journal page or is:flat/is:doc task) keeps its headers and
+/// plain list items as prose in the description. Searching it in the task list
+/// must not surface those lines as sub-items: the only rows are the document
+/// itself and the checkbox tasks it genuinely contains. This is the contract
+/// the inline-description preview relies on (it is suppressed for flat docs,
+/// see `is_flat_doc`), so a regression that shreds the document into real
+/// children would show up here.
+#[test]
+fn flat_doc_headers_and_lists_are_not_task_list_subitems() {
+    let aliases = HashMap::new();
+    let cals = calendars();
+
+    // A document body with a header, plain list items, prose and one real
+    // checkbox task.
+    let body = "Intro prose.\n## Section One\n- item one\n- item two\n## Section Two\n- [ ] a real task";
+
+    for (title, search) in [
+        ("Garden page is:page", "Garden page"),
+        ("Garden notes is:flat", "Garden notes"),
+    ] {
+        // A fresh store per document keeps the task-list assertions isolated.
+        let mut store = make_store();
+        let mut doc = Task::new(title, &aliases, None);
+        doc.calendar_href = "local://default".to_string();
+        let doc_uid = doc.uid.clone();
+        let doc_summary = doc.summary.clone();
+
+        let mut media = HashMap::new();
+        let (clean_desc, extracted) =
+            cfait::model::extractor::extract_markdown_tasks(body, doc.is_flat_doc(), &mut media);
+        doc.description =
+            cfait::model::extractor::stored_description(&clean_desc, doc.is_flat_doc());
+        doc.inline_media = media;
+        store.add_task(doc.clone());
+        for ext in &extracted {
+            let mut sub = Task::new(&ext.raw_text, &aliases, None);
+            sub.uid = ext.uid.clone();
+            sub.parent_uid = Some(ext.parent_uid.clone().unwrap_or_else(|| doc_uid.clone()));
+            sub.calendar_href = "local://default".to_string();
+            store.add_task(sub);
+        }
+
+        // The document is a flat doc: the preview suppression keys off this.
+        assert!(doc.is_flat_doc(), "{title} must be a flat document");
+
+        // Only the checkbox item is a real child; the header and the plain
+        // list items stay prose and are never shredded into children.
+        let kids = children_of(&store, &doc_uid);
+        assert_eq!(
+            kids.len(),
+            1,
+            "{title}: only the checkbox task is a child: {kids:?}"
+        );
+        assert_eq!(kids[0].summary, "a real task");
+
+        // Searching the task list shows the document and its one real child,
+        // nothing else: no header or plain list item row.
+        let rows = task_list_rows(&store, &cals, search);
+        assert!(
+            rows.iter().any(|(s, d)| s == &doc_summary && *d == 0),
+            "{title}: the document itself must appear as a top-level row: {rows:?}"
+        );
+        let sub_rows: Vec<_> = rows.iter().filter(|(_, d)| *d > 0).cloned().collect();
+        assert_eq!(
+            sub_rows,
+            vec![("a real task".to_string(), 1)],
+            "{title}: only the checkbox child may appear as a sub-item: {rows:?}"
+        );
+    }
 }

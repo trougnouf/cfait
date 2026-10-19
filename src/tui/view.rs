@@ -1625,7 +1625,16 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
                         let t_desc_prose =
                             crate::model::extractor::description_prose(&t.description);
-                        if state.show_inline_descriptions && !t_desc_prose.is_empty() {
+                        // A flat document (journal page, is:flat/is:doc task) keeps
+                        // its description as the document itself. Rendering its
+                        // headers and plain list items indented under the row would
+                        // make the document look like a pile of sub-items, which is
+                        // exactly what is:page/is:flat exist to avoid. Show the
+                        // title only; the full text is one open away.
+                        if state.show_inline_descriptions
+                            && !t_desc_prose.is_empty()
+                            && !t.is_flat_doc()
+                        {
                             let mut line_count = 0;
                             for desc_line in t_desc_prose.lines() {
                                 if desc_line.trim().is_empty() {

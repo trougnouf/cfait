@@ -1141,10 +1141,22 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
 fn task_to_summary(t: &Task, subtree_time: &HashMap<String, u64>) -> MobileTaskSummary {
     // Prose-only view for previews: child shadow lines stay in the
     // description to pin positions but read as uid-tagged noise in rows.
-    let prose_desc = if t.description.is_empty() {
+    let desc_prose = if t.description.is_empty() {
         String::new()
     } else {
         crate::model::extractor::description_prose(&t.description)
+    };
+    // A flat document (journal page, is:flat/is:doc task) keeps its
+    // description as the document itself. Rendering its headers and plain
+    // list items under the row would make the document look like a pile of
+    // sub-items, which is exactly what is:page/is:flat exist to avoid.
+    // Suppress only the inline preview (mirrors TUI and GUI); the
+    // has_description flag still marks the row as openable.
+    let has_desc = !desc_prose.is_empty();
+    let prose_desc = if t.is_flat_doc() {
+        String::new()
+    } else {
+        desc_prose
     };
 
     let status_str = format!("{:?}", t.status);
@@ -1221,7 +1233,7 @@ fn task_to_summary(t: &Task, subtree_time: &HashMap<String, u64>) -> MobileTaskS
         is_recurring: t.rrule.is_some(),
         is_relative_recurrence: t.is_relative_recurrence(),
         parent_uid: t.parent_uid.clone(),
-        has_description: !prose_desc.is_empty(),
+        has_description: has_desc,
         description_inline: prose_desc
             .lines()
             .filter(|l| !l.trim().is_empty())
@@ -4165,7 +4177,9 @@ impl CfaitMobile {
 
 #[cfg(test)]
 mod tests {
-    use super::{CfaitMobile, LOCAL_CALENDAR_HREF, Uuid, apply_mobile_credentials_update};
+    use super::{
+        CfaitMobile, LOCAL_CALENDAR_HREF, Uuid, apply_mobile_credentials_update, task_to_summary,
+    };
     use crate::config::Config;
 
     #[test]
@@ -4324,5 +4338,46 @@ mod tests {
         drop(store);
 
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn flat_documents_do_not_preview_their_body_in_task_rows() {
+        // A journal page stores its whole document in the description. Its
+        // headers and plain list items must not render as indented sub-items
+        // in task list rows (mirrors the TUI and GUI guards); the row stays
+        // marked as openable so the content is one tap away.
+        let mut page = crate::model::Task::new("field notes", &std::collections::HashMap::new(), None);
+        page.is_journal = true;
+        page.description = "# Overview\n- [ ] a real task\n- plain list line".to_string();
+
+        let summary = task_to_summary(&page, &std::collections::HashMap::new());
+        assert!(
+            summary.description_inline.is_empty(),
+            "a journal page's headers and list items must not render as row sub-items"
+        );
+        assert!(
+            summary.has_description,
+            "a page with content still shows the openable indicator"
+        );
+
+        let mut flat = crate::model::Task::new("flat doc", &std::collections::HashMap::new(), None);
+        flat.flat = true;
+        flat.description = "## Heading\n- [ ] a real task\n- plain list line".to_string();
+
+        let flat_summary = task_to_summary(&flat, &std::collections::HashMap::new());
+        assert!(
+            flat_summary.description_inline.is_empty(),
+            "an is:flat document must not preview its body in the row"
+        );
+        assert!(flat_summary.has_description);
+
+        // A regular task with prose still previews normally.
+        let mut plain =
+            crate::model::Task::new("water the plants", &std::collections::HashMap::new(), None);
+        plain.description = "do it in the morning\nbefore the heat".to_string();
+
+        let plain_summary = task_to_summary(&plain, &std::collections::HashMap::new());
+        assert!(!plain_summary.description_inline.is_empty());
+        assert!(plain_summary.has_description);
     }
 }
