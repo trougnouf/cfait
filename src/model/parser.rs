@@ -113,6 +113,24 @@ pub struct ParserLexicon {
     pub parser_collection: Vec<String>,
 }
 
+/// Strip common accents from a lowercased token (é→e, ü→u, ...). The lexicon
+/// automatically matches this unaccented spelling for every accented token, so
+/// translations never need to list it separately.
+fn remove_accents_lowercase(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            'á' | 'à' | 'â' | 'ä' | 'ã' | 'å' => 'a',
+            'é' | 'è' | 'ê' | 'ë' => 'e',
+            'í' | 'ì' | 'î' | 'ï' => 'i',
+            'ó' | 'ò' | 'ô' | 'ö' | 'õ' => 'o',
+            'ú' | 'ù' | 'û' | 'ü' => 'u',
+            'ç' => 'c',
+            'ñ' => 'n',
+            _ => c,
+        })
+        .collect()
+}
+
 impl ParserLexicon {
     pub fn extract_prefix<'a>(
         &self,
@@ -156,24 +174,12 @@ impl ParserLexicon {
         let mut prefixes_en = Vec::new();
         let mut prefixes_loc = Vec::new();
 
-        let remove_accents_lowercase = |s: &str| -> String {
-            s.chars()
-                .map(|c| match c {
-                    'á' | 'à' | 'â' | 'ä' | 'ã' | 'å' => 'a',
-                    'é' | 'è' | 'ê' | 'ë' => 'e',
-                    'í' | 'ì' | 'î' | 'ï' => 'i',
-                    'ó' | 'ò' | 'ô' | 'ö' | 'õ' => 'o',
-                    'ú' | 'ù' | 'û' | 'ü' => 'u',
-                    'ç' => 'c',
-                    'ñ' => 'n',
-                    _ => c,
-                })
-                .collect()
-        };
-
         let mut add_exact = |loc_key: &str, default_en: &str, token: ExactToken| {
             for k in default_en.split(',') {
                 let clean = k.trim().to_lowercase();
+                if clean.is_empty() {
+                    continue;
+                }
                 exact_en.insert(clean.clone(), token);
                 let unaccented = remove_accents_lowercase(&clean);
                 if unaccented != clean {
@@ -184,6 +190,9 @@ impl ParserLexicon {
             if localized != loc_key && !localized.is_empty() {
                 for k in localized.split(',') {
                     let clean = k.trim().to_lowercase();
+                    if clean.is_empty() {
+                        continue;
+                    }
                     exact_loc.insert(clean.clone(), token);
                     let unaccented = remove_accents_lowercase(&clean);
                     if unaccented != clean {
@@ -4086,13 +4095,52 @@ mod i18n_tests {
                         );
                     }
 
-                    for part in parts {
+                    for part in &parts {
                         assert!(
                             !part.contains(' '),
                             "Syntax tokens should not contain spaces! The parser relies on spaces to separate arguments. Locale '{}', key '{}', found: '{}'",
                             lang,
                             key,
                             part
+                        );
+                        assert!(
+                            !part.trim().is_empty(),
+                            "Empty token (trailing or double comma) in locale '{}' for key '{}'. Values: {}",
+                            lang,
+                            key,
+                            loc_val
+                        );
+                    }
+
+                    // Accented tokens automatically match their unaccented
+                    // spelling (e.g. "sáb" also matches "sab"), so listing
+                    // both is redundant.
+                    let lowered: Vec<String> = parts
+                        .iter()
+                        .map(|p| p.trim().to_lowercase())
+                        .filter(|p| !p.is_empty())
+                        .collect();
+                    let mut seen = HashSet::new();
+                    for token in &lowered {
+                        assert!(
+                            seen.insert(token),
+                            "Duplicate token '{}' in locale '{}' for key '{}'. Values: {}",
+                            token,
+                            lang,
+                            key,
+                            loc_val
+                        );
+                    }
+                    for token in &lowered {
+                        let unaccented = super::remove_accents_lowercase(token);
+                        assert!(
+                            unaccented == *token || !lowered.contains(&unaccented),
+                            "Redundant token in locale '{}' for key '{}': '{}' is already matched automatically because '{}' is listed. Accents are handled automatically, never list the unaccented spelling. Values: {}",
+                            lang,
+                            key,
+                            unaccented,
+                            token,
+                            loc_val
                         );
                     }
                 }
