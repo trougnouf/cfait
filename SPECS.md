@@ -401,7 +401,7 @@ Used for headless automation, scripting, and piping. Operates directly on the `T
 *   `cfait move` (alias: `mv`) `<uid> <collection> [--tree]`: Moves a task to a different collection.
 *   `cfait delete` (alias: `rm`) `<uid>`: Moves task to trash.
 *   `cfait export [--collection <id>]`: Dumps collection (local or remote) as standard ICS to stdout, including VTODO and VJOURNAL components. The collection `id` can be a local collection name, a full HREF, or a remote collection name.
-*   `cfait import <file.ics> [--collection <id>]`: Parses and imports ICS to store. Supports both local and remote collections; for remote collections, tasks are journaled and synced. Handles both VTODO and VJOURNAL components.
+*   `cfait import <file.ics> [--collection <id>]`: Parses and imports ICS to store. Supports both local and remote collections; for remote collections, tasks are journaled and synced. Handles both VTODO and VJOURNAL components. Without `--collection`, the target resolves like `add` (via `resolve_default_target`): the `default_calendar`, else the first visible, non-disabled, non-system collection, else `local://default`.
 *   `cfait sync`: Foreground network sync.
 *   `cfait daemon`: Runs a continuous background sync loop based on `auto_refresh_interval_mins`. Acquires a cross-process lock to prevent overlapping syncs with UIs.
 *   `cfait collection list [--json]`: Lists CalDAV collections.

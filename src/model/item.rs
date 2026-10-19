@@ -79,6 +79,52 @@ pub fn resolve_journal_target(
     crate::storage::LOCAL_CALENDAR_HREF.to_string()
 }
 
+/// The collection a new item should be written to when no explicit
+/// collection was given (CLI `add`, `import`, ...).
+///
+/// The configured `default_calendar` wins when set; otherwise the first
+/// visible, non-disabled, non-system collection in the user's collection
+/// ordering (optionally by size) is used; otherwise the local default
+/// calendar. Returns the raw target (a name or HREF) — callers still
+/// resolve it against the live cache and validate the result.
+pub fn resolve_default_target(
+    calendars: &[CalendarListEntry],
+    default_calendar: Option<&str>,
+    hidden: &[String],
+    disabled: &[String],
+    collection_order: &[String],
+    sort_by_size: bool,
+    sizes: &HashMap<String, usize>,
+) -> String {
+    if let Some(default) = default_calendar {
+        return default.to_string();
+    }
+    let mut cals = calendars.to_vec();
+    cals.sort_by(|a, b| {
+        if sort_by_size {
+            crate::model::compare_calendars_with_size(
+                &a.href,
+                &a.name,
+                sizes.get(&a.href).copied().unwrap_or(0),
+                &b.href,
+                &b.name,
+                sizes.get(&b.href).copied().unwrap_or(0),
+                collection_order,
+            )
+        } else {
+            crate::model::compare_calendars(&a.href, &a.name, &b.href, &b.name, collection_order)
+        }
+    });
+    cals.into_iter()
+        .find(|c| {
+            !hidden.contains(&c.href)
+                && !disabled.contains(&c.href)
+                && !crate::storage::is_system_calendar(&c.href)
+        })
+        .map(|c| c.href)
+        .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string())
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub enum TaskStatus {
     NeedsAction,
@@ -1791,6 +1837,141 @@ mod tests {
         assert_eq!(
             resolve_journal_target("local://recovery", &cals(), None, &[], &[]),
             "/cal/journal/"
+        );
+    }
+
+    fn garden_cals() -> Vec<CalendarListEntry> {
+        vec![
+            cal("/cal/tomatoes/", None),
+            cal("/cal/herbs/", None),
+            cal("/cal/recipes/", None),
+        ]
+    }
+
+    #[test]
+    fn default_target_uses_the_configured_default_calendar() {
+        assert_eq!(
+            resolve_default_target(
+                &garden_cals(),
+                Some("/cal/herbs/"),
+                &[],
+                &[],
+                &[],
+                false,
+                &HashMap::new()
+            ),
+            "/cal/herbs/"
+        );
+        // The default wins even when a visible collection would sort first.
+        let order = vec!["/cal/tomatoes/".to_string()];
+        assert_eq!(
+            resolve_default_target(
+                &garden_cals(),
+                Some("/cal/recipes/"),
+                &[],
+                &[],
+                &order,
+                false,
+                &HashMap::new()
+            ),
+            "/cal/recipes/"
+        );
+    }
+
+    #[test]
+    fn default_target_falls_back_to_the_first_visible_collection() {
+        // No default: the first collection in sort order wins (alphabetical
+        // by name without a custom order).
+        assert_eq!(
+            resolve_default_target(&garden_cals(), None, &[], &[], &[], false, &HashMap::new()),
+            "/cal/herbs/"
+        );
+        // Hidden and disabled collections are skipped.
+        let hidden = vec!["/cal/herbs/".to_string()];
+        assert_eq!(
+            resolve_default_target(
+                &garden_cals(),
+                None,
+                &hidden,
+                &[],
+                &[],
+                false,
+                &HashMap::new()
+            ),
+            "/cal/recipes/"
+        );
+        let disabled = vec!["/cal/herbs/".to_string(), "/cal/recipes/".to_string()];
+        assert_eq!(
+            resolve_default_target(
+                &garden_cals(),
+                None,
+                &[],
+                &disabled,
+                &[],
+                false,
+                &HashMap::new()
+            ),
+            "/cal/tomatoes/"
+        );
+        // Nothing visible left: the local default calendar.
+        let disabled = vec![
+            "/cal/herbs/".to_string(),
+            "/cal/recipes/".to_string(),
+            "/cal/tomatoes/".to_string(),
+        ];
+        assert_eq!(
+            resolve_default_target(
+                &garden_cals(),
+                None,
+                &[],
+                &disabled,
+                &[],
+                false,
+                &HashMap::new()
+            ),
+            "local://default"
+        );
+    }
+
+    #[test]
+    fn default_target_never_picks_a_system_calendar() {
+        let mut cals = garden_cals();
+        cals.push(cal("local://recovery", None));
+        assert_eq!(
+            resolve_default_target(&cals, None, &[], &[], &[], false, &HashMap::new()),
+            "/cal/herbs/"
+        );
+        // Only system calendars around: fall back to the local default.
+        let cals = vec![cal("local://recovery", None), cal("local://trash", None)];
+        assert_eq!(
+            resolve_default_target(&cals, None, &[], &[], &[], false, &HashMap::new()),
+            "local://default"
+        );
+    }
+
+    #[test]
+    fn default_target_honours_collection_order_and_size() {
+        // A custom order beats list order.
+        let order = vec!["/cal/recipes/".to_string()];
+        assert_eq!(
+            resolve_default_target(
+                &garden_cals(),
+                None,
+                &[],
+                &[],
+                &order,
+                false,
+                &HashMap::new()
+            ),
+            "/cal/recipes/"
+        );
+        // With size sorting, the largest collection wins.
+        let mut sizes = HashMap::new();
+        sizes.insert("/cal/recipes/".to_string(), 3);
+        sizes.insert("/cal/tomatoes/".to_string(), 1);
+        assert_eq!(
+            resolve_default_target(&garden_cals(), None, &[], &[], &[], true, &sizes),
+            "/cal/recipes/"
         );
     }
 }

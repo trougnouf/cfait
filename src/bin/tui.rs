@@ -111,6 +111,39 @@ async fn resolve_collection_href(ctx: &Arc<dyn AppContext>, target: &str) -> Str
     }
 }
 
+/// Resolve the target collection when no explicit collection was given.
+///
+/// Delegates to the core `resolve_default_target` (the CLI `add` default):
+/// the configured `default_calendar`, else the first visible, non-disabled,
+/// non-system collection (sorted per the user's collection ordering), else
+/// the local default calendar. Returns the raw target (a name or HREF) —
+/// the caller still resolves it via `resolve_collection_href` and validates
+/// the result.
+fn resolve_default_target_href(
+    ctx: &Arc<dyn AppContext>,
+    config: &cfait::config::Config,
+    store: &TaskStore,
+) -> String {
+    let mut cals = Cache::load_calendars(ctx.as_ref()).unwrap_or_default();
+    if let Ok(locals) = LocalCalendarRegistry::load(ctx.as_ref()) {
+        cals.extend(locals);
+    }
+    let sizes = store
+        .calendars
+        .iter()
+        .map(|(href, tasks)| (href.clone(), tasks.len()))
+        .collect();
+    cfait::model::resolve_default_target(
+        &cals,
+        config.default_calendar.as_deref(),
+        &config.hidden_calendars,
+        &config.disabled_calendars,
+        &config.collection_order,
+        config.sort_collections_by_size,
+        &sizes,
+    )
+}
+
 // Helper to resolve short partial UIDs, summaries, or wiki-links back to a full UID
 fn resolve_uid(store: &TaskStore, partial: &str) -> Option<String> {
     match store.resolve_dependency_ref(partial, None) {
@@ -456,7 +489,22 @@ async fn main() -> Result<()> {
                     resolve_collection_href(&ctx, &col_id).await
                 }
             } else {
-                "local://default".to_string()
+                // No collection specified: use the default calendar (like `add`).
+                let store = build_store_cli(&ctx).await;
+                let default_input = resolve_default_target_href(&ctx, &config, &store);
+                let resolved = resolve_collection_href(&ctx, &default_input).await;
+                if !resolved.starts_with("local://")
+                    && !resolved.starts_with('/')
+                    && !resolved.starts_with("http")
+                {
+                    eprintln!(
+                        "{}",
+                        rust_i18n::t!("warning_calendar_not_found", calendar = resolved)
+                    );
+                    cfait::storage::LOCAL_RECOVERY_HREF.to_string()
+                } else {
+                    resolved
+                }
             };
 
             // Prevent importing to trash or recovery calendars
@@ -868,48 +916,8 @@ async fn main() -> Result<()> {
                 task.parent_uid = Some(p);
             }
 
-            let target_href_input = col_href.unwrap_or_else(|| {
-                config.default_calendar.clone().unwrap_or_else(|| {
-                    let mut cals = Cache::load_calendars(ctx.as_ref()).unwrap_or_default();
-                    if let Ok(locals) = LocalCalendarRegistry::load(ctx.as_ref()) {
-                        cals.extend(locals);
-                    }
-
-                    let order = config.collection_order.clone();
-                    let sort_by_size = config.sort_collections_by_size;
-
-                    cals.sort_by(|a, b| {
-                        if sort_by_size {
-                            let count_a = temp_store
-                                .calendars
-                                .get(&a.href)
-                                .map(|m| m.len())
-                                .unwrap_or(0);
-                            let count_b = temp_store
-                                .calendars
-                                .get(&b.href)
-                                .map(|m| m.len())
-                                .unwrap_or(0);
-                            cfait::model::compare_calendars_with_size(
-                                &a.href, &a.name, count_a, &b.href, &b.name, count_b, &order,
-                            )
-                        } else {
-                            cfait::model::compare_calendars(
-                                &a.href, &a.name, &b.href, &b.name, &order,
-                            )
-                        }
-                    });
-
-                    cals.into_iter()
-                        .find(|c| {
-                            !config.hidden_calendars.contains(&c.href)
-                                && !config.disabled_calendars.contains(&c.href)
-                                && !cfait::storage::is_system_calendar(&c.href)
-                        })
-                        .map(|c| c.href)
-                        .unwrap_or_else(|| cfait::storage::LOCAL_CALENDAR_HREF.to_string())
-                })
-            });
+            let target_href_input =
+                col_href.unwrap_or_else(|| resolve_default_target_href(&ctx, &config, &temp_store));
 
             let mut target_href = resolve_collection_href(&ctx, &target_href_input).await;
 
