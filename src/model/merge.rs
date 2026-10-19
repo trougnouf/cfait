@@ -198,6 +198,29 @@ pub fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task>
         all_alarm_uids.insert(&a.uid);
     }
 
+    // Two alarms that differ only in `acknowledged` express the same intent:
+    // an acknowledged alarm is inert, so a delete-vs-acknowledge disagreement
+    // (e.g. one client snoozed an alarm away while another merely dismissed
+    // it) is not a conflict.
+    let differs_only_in_acknowledged = |a: &crate::model::Alarm, b: &crate::model::Alarm| {
+        let mut a = a.clone();
+        let mut b = b.clone();
+        a.acknowledged = None;
+        b.acknowledged = None;
+        a == b
+    };
+
+    // A server-only snooze whose chain root has a newer active snooze locally
+    // was snoozed away on this side; keeping it would resurrect a reminder the
+    // user already pushed past, and the alarm would fire twice.
+    let superseded_by_local_snooze = |sv: &crate::model::Alarm| {
+        sv.is_snooze()
+            && sv.related_to_uid.is_some()
+            && local.alarms.iter().any(|a| {
+                a.is_snooze() && a.acknowledged.is_none() && a.related_to_uid == sv.related_to_uid
+            })
+    };
+
     for uid in all_alarm_uids {
         let b = base.alarms.iter().find(|a| &a.uid == uid);
         let l = local.alarms.iter().find(|a| &a.uid == uid);
@@ -227,28 +250,31 @@ pub fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task>
                     }
 
                     // Check if any other core fields differ
-                    let mut test_lv = lv.clone();
-                    let mut test_sv = sv.clone();
-                    test_lv.acknowledged = None;
-                    test_sv.acknowledged = None;
-                    if test_lv != test_sv {
+                    if differs_only_in_acknowledged(lv, sv) {
+                        Some(merged_alarm)
+                    } else {
                         return None; // Hard conflict on trigger/description/etc.
                     }
-                    Some(merged_alarm)
                 }
             }
             (Some(lv), None, None) => Some(lv.clone()),
-            (None, None, Some(sv)) => Some(sv.clone()),
+            (None, None, Some(sv)) => {
+                if superseded_by_local_snooze(sv) {
+                    None
+                } else {
+                    Some(sv.clone())
+                }
+            }
             (None, Some(_), None) => None, // Deleted on both
             (None, Some(bv), Some(sv)) => {
-                if sv == bv {
+                if sv == bv || differs_only_in_acknowledged(sv, bv) {
                     None
                 } else {
                     return None; /* Deleted locally, modified server */
                 }
             }
             (Some(lv), Some(bv), None) => {
-                if lv == bv {
+                if lv == bv || differs_only_in_acknowledged(lv, bv) {
                     None
                 } else {
                     return None; /* Modified locally, deleted server */
@@ -530,5 +556,126 @@ mod tests {
         let merged =
             three_way_merge(&base, &local, &server).expect("Unopposed local move must merge");
         assert_eq!(merged.parent_uid.as_deref(), Some("balcony-garden"));
+    }
+
+    fn alarm(uid: &str, trigger: chrono::DateTime<chrono::Utc>) -> crate::model::Alarm {
+        let mut a = crate::model::Alarm::new_absolute(trigger);
+        a.uid = uid.to_string();
+        a
+    }
+
+    fn snooze_alarm(
+        uid: &str,
+        root: &str,
+        trigger: chrono::DateTime<chrono::Utc>,
+    ) -> crate::model::Alarm {
+        let mut a = alarm(uid, trigger);
+        a.related_to_uid = Some(root.to_string());
+        a.relation_type = Some("SNOOZE".to_string());
+        a.description = Some("Snoozed".to_string());
+        a
+    }
+
+    fn acknowledged(mut a: crate::model::Alarm) -> crate::model::Alarm {
+        a.acknowledged = Some(chrono::Utc::now());
+        a
+    }
+
+    #[test]
+    fn test_merge_snooze_race_delete_local_vs_acknowledge_server_is_not_a_conflict() {
+        // Base: the original alarm was acknowledged and snoozed once (S1).
+        let t0 = chrono::Utc::now() - chrono::Duration::minutes(60);
+        let t1 = t0 + chrono::Duration::minutes(5);
+        let t2 = t0 + chrono::Duration::minutes(10);
+        let mut base = Task::new("Donate blood", &HashMap::new(), None);
+        base.alarms = vec![acknowledged(alarm("a0", t0)), snooze_alarm("s1", "a0", t1)];
+
+        // Local snoozed S1 away: S1 is gone, a newer snooze S2 is active.
+        let mut local = base.clone();
+        local.alarms = vec![acknowledged(alarm("a0", t0)), snooze_alarm("s2", "a0", t2)];
+
+        // Server (another client) merely acknowledged S1 — the same snooze.
+        let mut server = base.clone();
+        server.alarms[1].acknowledged = Some(chrono::Utc::now());
+
+        let merged = three_way_merge(&base, &local, &server).expect(
+            "Local snooze-away + server acknowledge of the same alarm must merge, \
+             not hard-conflict into a Conflict Copy",
+        );
+        assert!(
+            !merged.alarms.iter().any(|a| a.uid == "s1"),
+            "The snoozed-away alarm must stay gone: {:?}",
+            merged.alarms
+        );
+        assert!(
+            merged
+                .alarms
+                .iter()
+                .any(|a| a.uid == "s2" && a.acknowledged.is_none()),
+            "The newer local snooze must survive: {:?}",
+            merged.alarms
+        );
+    }
+
+    #[test]
+    fn test_merge_does_not_resurrect_snoozed_away_alarm_from_server() {
+        // Base: original alarm only.
+        let t0 = chrono::Utc::now() - chrono::Duration::minutes(60);
+        let t1 = t0 + chrono::Duration::minutes(5);
+        let t2 = t0 + chrono::Duration::minutes(10);
+        let mut base = Task::new("Donate blood", &HashMap::new(), None);
+        base.alarms = vec![alarm("a0", t0)];
+
+        // Local snoozed twice: A0 acknowledged, S1 snoozed away, S2 active.
+        let mut local = base.clone();
+        local.alarms = vec![acknowledged(alarm("a0", t0)), snooze_alarm("s2", "a0", t2)];
+
+        // Server still holds the intermediate state with S1 active.
+        let mut server = base.clone();
+        server.alarms = vec![acknowledged(alarm("a0", t0)), snooze_alarm("s1", "a0", t1)];
+
+        let merged = three_way_merge(&base, &local, &server)
+            .expect("A superseded snooze must merge, not resurrect");
+        assert!(
+            !merged.alarms.iter().any(|a| a.uid == "s1"),
+            "The snoozed-away alarm must not be resurrected: {:?}",
+            merged.alarms
+        );
+        assert!(
+            merged
+                .alarms
+                .iter()
+                .any(|a| a.uid == "s2" && a.acknowledged.is_none()),
+            "The newer local snooze must survive: {:?}",
+            merged.alarms
+        );
+    }
+
+    #[test]
+    fn test_merge_keeps_server_snooze_when_local_has_no_newer_snooze() {
+        // Base: original alarm only.
+        let t0 = chrono::Utc::now() - chrono::Duration::minutes(60);
+        let t1 = t0 + chrono::Duration::minutes(5);
+        let mut base = Task::new("Donate blood", &HashMap::new(), None);
+        base.alarms = vec![alarm("a0", t0)];
+
+        // Local only acknowledged the original alarm (dismissed, no snooze).
+        let mut local = base.clone();
+        local.alarms = vec![acknowledged(alarm("a0", t0))];
+
+        // Server (another client) snoozed it.
+        let mut server = base.clone();
+        server.alarms = vec![acknowledged(alarm("a0", t0)), snooze_alarm("s1", "a0", t1)];
+
+        let merged =
+            three_way_merge(&base, &local, &server).expect("An unopposed server snooze must merge");
+        assert!(
+            merged
+                .alarms
+                .iter()
+                .any(|a| a.uid == "s1" && a.acknowledged.is_none()),
+            "The other client's snooze must be kept: {:?}",
+            merged.alarms
+        );
     }
 }

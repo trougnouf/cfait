@@ -1275,6 +1275,7 @@ impl Task {
     pub fn snooze_alarm(&mut self, alarm_uid: &str, minutes: u32) -> bool {
         let now = Utc::now();
         let mut new_alarm_opt = None;
+        let mut root_uid_opt = None;
 
         if let Some(parent_alarm) = self.alarms.iter_mut().find(|a| a.uid == alarm_uid) {
             parent_alarm.acknowledged = Some(now);
@@ -1291,20 +1292,32 @@ impl Task {
                 parent_alarm.uid.clone()
             };
 
-            snooze.related_to_uid = Some(root_uid);
+            snooze.related_to_uid = Some(root_uid.clone());
             snooze.relation_type = Some("SNOOZE".to_string());
             snooze.description = Some(format!("Snoozed for {}m", minutes));
             snooze.action = parent_alarm.action.clone();
 
+            root_uid_opt = Some(root_uid);
             new_alarm_opt = Some(snooze);
         }
 
-        self.alarms.retain(|a| {
-            if a.uid == alarm_uid && a.is_snooze() {
-                return false;
-            }
-            true
-        });
+        if let Some(root_uid) = root_uid_opt {
+            self.alarms.retain(|a| {
+                if a.uid == alarm_uid && a.is_snooze() {
+                    return false;
+                }
+                // A snooze supersedes any other still-active snooze of the same
+                // alarm chain, so the reminder cannot fire twice (e.g. when the
+                // same alarm is snoozed twice in quick succession).
+                if a.is_snooze()
+                    && a.acknowledged.is_none()
+                    && a.related_to_uid.as_ref() == Some(&root_uid)
+                {
+                    return false;
+                }
+                true
+            });
+        }
 
         if let Some(new_alarm) = new_alarm_opt {
             self.alarms.push(new_alarm);
@@ -1408,6 +1421,29 @@ impl Task {
         description: String,
         snooze_mins: u32,
     ) {
+        // Re-snoozing the same implicit alarm must not stack a second chain:
+        // if this occurrence was already snoozed, snooze the existing snooze.
+        if let Some(parent) = self
+            .alarms
+            .iter()
+            .find(|a| matches!(a.trigger, AlarmTrigger::Absolute(t) if t == trigger_dt))
+        {
+            let parent_uid = parent.uid.clone();
+            if let Some(active_snooze_uid) = self
+                .alarms
+                .iter()
+                .find(|a| {
+                    a.is_snooze()
+                        && a.acknowledged.is_none()
+                        && a.related_to_uid.as_deref() == Some(&parent_uid)
+                })
+                .map(|a| a.uid.clone())
+            {
+                self.snooze_alarm(&active_snooze_uid, snooze_mins);
+                return;
+            }
+        }
+
         let mut parent = Alarm::new_absolute(trigger_dt);
         parent.description = Some(description);
         parent.acknowledged = Some(Utc::now());
@@ -1972,6 +2008,81 @@ mod tests {
         assert_eq!(
             resolve_default_target(&garden_cals(), None, &[], &[], &[], true, &sizes),
             "/cal/recipes/"
+        );
+    }
+
+    fn active_alarm_uids(task: &Task) -> Vec<String> {
+        task.alarms
+            .iter()
+            .filter(|a| a.acknowledged.is_none())
+            .map(|a| a.uid.clone())
+            .collect()
+    }
+
+    #[test]
+    fn snoozing_twice_does_not_stack_active_snoozes() {
+        // Snoozing the same alarm twice (e.g. a double-click on the snooze
+        // button) must leave exactly one active snooze, not two — otherwise
+        // the reminder fires twice.
+        let mut task = Task::new("Donate blood", &HashMap::new(), None);
+        let original = Alarm::new_absolute(Utc::now() - chrono::Duration::minutes(5));
+        let original_uid = original.uid.clone();
+        task.alarms.push(original);
+
+        assert!(task.snooze_alarm(&original_uid, 5));
+        assert!(task.snooze_alarm(&original_uid, 5));
+
+        let active = active_alarm_uids(&task);
+        assert_eq!(
+            active.len(),
+            1,
+            "Re-snoozing must replace the active snooze, not stack: {:?}",
+            task.alarms
+        );
+        assert!(
+            task.alarms
+                .iter()
+                .all(|a| a.is_snooze() == (a.acknowledged.is_none())),
+            "The original alarm must stay acknowledged: {:?}",
+            task.alarms
+        );
+    }
+
+    #[test]
+    fn snoozing_a_snooze_replaces_the_previous_snooze() {
+        let mut task = Task::new("Donate blood", &HashMap::new(), None);
+        let original = Alarm::new_absolute(Utc::now() - chrono::Duration::minutes(5));
+        let original_uid = original.uid.clone();
+        task.alarms.push(original);
+
+        assert!(task.snooze_alarm(&original_uid, 5));
+        let first_snooze_uid = active_alarm_uids(&task)[0].clone();
+        assert!(task.snooze_alarm(&first_snooze_uid, 10));
+
+        let active = active_alarm_uids(&task);
+        assert_eq!(
+            active.len(),
+            1,
+            "Snoozing a snooze must leave exactly one active alarm: {:?}",
+            task.alarms
+        );
+        assert_ne!(active[0], first_snooze_uid);
+    }
+
+    #[test]
+    fn snoozing_implicit_alarm_twice_does_not_stack_chains() {
+        let mut task = Task::new("Donate blood", &HashMap::new(), None);
+        let trigger = Utc::now() - chrono::Duration::minutes(5);
+
+        task.snooze_implicit_alarm(trigger, "Due now".to_string(), 5);
+        task.snooze_implicit_alarm(trigger, "Due now".to_string(), 10);
+
+        let active = active_alarm_uids(&task);
+        assert_eq!(
+            active.len(),
+            1,
+            "Re-snoozing an implicit alarm must not stack a second chain: {:?}",
+            task.alarms
         );
     }
 }

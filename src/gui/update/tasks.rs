@@ -374,6 +374,13 @@ fn commit_alarm_update(
 ) -> Task<Message> {
     let updated = app.store.get_task_mut(t_uid).and_then(|(task, _)| {
         if update(task) {
+            // Snoozing/dismissing edits the task like any other change: the
+            // sequence bump keeps fetches from overwriting the local alarm
+            // state, stops the journal from confusing a newer queued snooze
+            // with the action a sync is pushing, and lets 412 conflict
+            // resolution recognize our own edit chain (TUI and mobile do the
+            // same).
+            task.sequence += 1;
             Some(task.clone())
         } else {
             None
