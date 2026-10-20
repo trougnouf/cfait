@@ -303,12 +303,24 @@ fn journal_cal_title(date: chrono::NaiveDate) -> String {
     format!("  < {} >  ", month_str)
 }
 
-/// Width of the journal sidebar: the month calendar grid is 7 day columns of
-/// 3 cells each, but the localized month title can be wider — take whichever
-/// needs more room and add the block borders.
-fn journal_sidebar_width(state: &AppState) -> u16 {
+/// Minimum width of the journal sidebar: the month calendar grid is 7 day
+/// columns of 3 cells each, the localized month title can be wider, and the
+/// Timeline date rows ("  " + depth-3 indent + "▶ (z)" + " YYYY-MM-DD") set
+/// a floor — take whichever needs the most room and add the block borders.
+fn journal_sidebar_min_width(state: &AppState) -> u16 {
     const GRID: usize = 21; // 7 columns * 3 cells
-    (GRID.max(journal_cal_title(state.journal_date).width()) + 2) as u16
+    const TIMELINE_DATE: usize = 24; // "  " + "      " + "▶ (z)" + " " + "YYYY-MM-DD"
+    (GRID
+        .max(journal_cal_title(state.journal_date).width())
+        .max(TIMELINE_DATE)
+        + 2) as u16
+}
+
+/// Width of the journal sidebar: at least the minimum (so the calendar and
+/// the Timeline dates never clip), but it keeps growing with the window at
+/// the usual 20% share instead of staying fixed.
+fn journal_sidebar_width(state: &AppState, pane_width: u16) -> u16 {
+    journal_sidebar_min_width(state).max((pane_width * 20) / 100)
 }
 
 /// Builds a bordered sidebar pane. The title carries the tab strip and the
@@ -356,12 +368,13 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         .constraints([Constraint::Min(0), footer_height])
         .split(f.area());
 
-    // In journal mode the sidebar hosts the month calendar, so it is sized to
-    // fit the 7-day grid (and the month title) instead of the fixed 20% —
-    // the content pane absorbs the difference.
+    // In journal mode the sidebar hosts the month calendar, so it must stay
+    // at least wide enough for the 7-day grid, the month title and the
+    // Timeline date rows; on wider windows it keeps its usual 20% share so
+    // the page list has room to grow — the content pane absorbs the rest.
     let h_constraints = if state.sidebar_mode == SidebarMode::Journal {
         [
-            Constraint::Length(journal_sidebar_width(state)),
+            Constraint::Length(journal_sidebar_width(state, v_chunks[0].width)),
             Constraint::Min(0),
         ]
     } else {
@@ -3012,21 +3025,37 @@ mod tests {
     #[test]
     fn journal_sidebar_width_fits_the_full_month_grid() {
         // The 7th day column must never clip: the sidebar has to fit the
-        // 21-column grid and the localized month title, borders included
-        // (https://github.com/trougnouf/cfait/issues/109).
+        // 21-column grid, the localized month title and the Timeline date
+        // rows, borders included (https://github.com/trougnouf/cfait/issues/109).
         let mut state = AppState::default();
         for date in [
             chrono::NaiveDate::from_ymd_opt(2026, 9, 10).unwrap(), // "September" is the widest month name
             chrono::NaiveDate::from_ymd_opt(2026, 10, 17).unwrap(),
         ] {
             state.journal_date = date;
-            let width = journal_sidebar_width(&state);
+            let width = journal_sidebar_width(&state, 96);
             assert!(width.saturating_sub(2) >= 21, "grid must fit with borders");
             assert!(
                 width.saturating_sub(2) >= journal_cal_title(date).width() as u16,
                 "month title must fit: {}",
                 journal_cal_title(date)
             );
+            assert!(
+                width.saturating_sub(2) >= 24,
+                "Timeline date rows must fit (e.g. '2026-10-20' at depth 3)"
+            );
         }
+    }
+
+    #[test]
+    fn journal_sidebar_grows_with_the_window_but_never_below_the_floor() {
+        let state = AppState {
+            journal_date: chrono::NaiveDate::from_ymd_opt(2026, 10, 17).unwrap(),
+            ..Default::default()
+        };
+        // narrow window: the floor wins, so the calendar and dates always fit
+        assert_eq!(journal_sidebar_width(&state, 96), 26);
+        // wide window: the usual 20% share wins again
+        assert_eq!(journal_sidebar_width(&state, 200), 40);
     }
 }
