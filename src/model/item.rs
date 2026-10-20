@@ -477,6 +477,11 @@ pub struct Task {
     /// document text instead of being extracted into subtasks.
     #[serde(default)]
     pub flat: bool,
+    /// When `true`, a wiki page is listed in the journal tab's Archive
+    /// section instead of the Pages section. Pages whose parent task is
+    /// completed are archived automatically; this flag is the manual override.
+    #[serde(default)]
+    pub archived: bool,
     /// When `true`, this item is serialized as a VEVENT (hidden settings
     /// object fallback). Only used for the settings object.
     #[serde(default)]
@@ -934,6 +939,7 @@ impl Task {
             permanent: false,
             is_journal: false,
             flat: false,
+            archived: false,
             is_event: false,
             time_spent_seconds: 0,
             last_started_at: None,

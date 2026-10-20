@@ -391,6 +391,9 @@ impl IcsAdapter {
             if task.is_note {
                 append_folded("X-CFAIT-KIND:NOTE");
             }
+            if task.archived {
+                append_folded("X-CFAIT-ARCHIVED:TRUE");
+            }
 
             buffer.push_str("END:VJOURNAL\r\n");
             buffer.push_str("END:VCALENDAR\r\n");
@@ -629,6 +632,9 @@ impl IcsAdapter {
         }
         if task.flat {
             todo.add_property("X-CFAIT-FLAT", "TRUE");
+        }
+        if task.archived {
+            todo.add_property("X-CFAIT-ARCHIVED", "TRUE");
         }
 
         if let Some(goal) = &task.goal {
@@ -1015,6 +1021,9 @@ impl IcsAdapter {
             let is_note = extract_prop(&unfolded, "X-CFAIT-KIND")
                 .map(|v| v.trim().to_uppercase() == "NOTE")
                 .unwrap_or(false);
+            let archived = extract_prop(&unfolded, "X-CFAIT-ARCHIVED")
+                .map(|v| v.trim().to_uppercase() == "TRUE")
+                .unwrap_or(false);
 
             return Ok(Task {
                 uid,
@@ -1048,6 +1057,7 @@ impl IcsAdapter {
                 permanent: false,
                 is_journal: true,
                 flat: false,
+                archived,
                 is_event: false,
                 time_spent_seconds: 0,
                 last_started_at: None,
@@ -1162,6 +1172,7 @@ impl IcsAdapter {
                 permanent: false,
                 is_journal: false,
                 flat: false,
+                archived: false,
                 is_event: true,
                 time_spent_seconds: 0,
                 last_started_at: None,
@@ -1302,6 +1313,10 @@ impl IcsAdapter {
             .unwrap_or(false);
 
         let flat = get_prop("X-CFAIT-FLAT")
+            .map(|v| v.trim().to_uppercase() == "TRUE")
+            .unwrap_or(false);
+
+        let archived = get_prop("X-CFAIT-ARCHIVED")
             .map(|v| v.trim().to_uppercase() == "TRUE")
             .unwrap_or(false);
 
@@ -1801,6 +1816,7 @@ impl IcsAdapter {
             permanent,
             is_journal: false,
             flat,
+            archived,
             is_event: false,
             time_spent_seconds,
             last_started_at,

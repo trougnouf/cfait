@@ -68,6 +68,7 @@ enum StatusFilter {
     Canceled,
     Pinned,
     Recurrent,
+    Archived,
 }
 
 /// Raw (uncompiled) syntax tree produced by the parser.
@@ -114,6 +115,7 @@ pub fn extract_highlight_terms(query: &str) -> Vec<String> {
                 || lex_guard.search_is_permanent.contains(&lower)
                 || lex_guard.search_is_canceled.contains(&lower)
                 || lex_guard.search_is_recurrent.contains(&lower)
+                || lex_guard.search_is_archived.contains(&lower)
             {
                 continue;
             }
@@ -537,6 +539,8 @@ fn compile_term(part: &str, lex: &crate::model::parser::ParserLexicon) -> Compil
         Some(StatusFilter::Recurrent)
     } else if lex.exact.get(&lower) == Some(&crate::model::parser::ExactToken::IsPinned) {
         Some(StatusFilter::Pinned)
+    } else if lower == "is:archived" || lex.search_is_archived.contains(&lower) {
+        Some(StatusFilter::Archived)
     } else {
         None
     };
@@ -694,6 +698,7 @@ impl CompiledTerm {
                 StatusFilter::Canceled => task.status == TaskStatus::Cancelled,
                 StatusFilter::Pinned => task.pinned,
                 StatusFilter::Recurrent => task.rrule.is_some(),
+                StatusFilter::Archived => task.archived,
             };
         }
 

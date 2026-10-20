@@ -93,6 +93,25 @@ pub struct JournalPageItem {
     pub calendar_href: String,
 }
 
+/// Merged ancestor trie of the pages parented to regular tasks: task refs,
+/// edges (ancestor uid -> descendant uid), topmost roots, and the pages
+/// attached to each node (their direct parent).
+struct JournalContextTree<'a> {
+    refs: HashMap<&'a str, &'a Task>,
+    edges: HashMap<&'a str, Vec<&'a str>>,
+    roots: HashMap<&'a str, &'a Task>,
+    pages: HashMap<&'a str, Vec<&'a Task>>,
+}
+
+/// One partition of the journal page tree (the active Pages section or the
+/// Archive section): plain root pages, the parent -> children map between
+/// pages, and the merged ancestor trie of task-parented pages.
+struct JournalPageTree<'a> {
+    roots: Vec<&'a Task>,
+    children: HashMap<&'a str, Vec<&'a Task>>,
+    context: JournalContextTree<'a>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum DependencyWarning {
     NotFound {
@@ -3864,6 +3883,152 @@ impl TaskStore {
         hit
     }
 
+    /// Whether a wiki page belongs to the journal's Archive section: it is
+    /// flagged `is:archived`, its direct parent is a completed task, or its
+    /// parent page is itself archived (the whole sub-tree moves with it).
+    /// `pages_by_uid` holds the visible undated pages, so a parent page that
+    /// is filtered out of the journal list never archives its children.
+    fn page_is_archived(
+        &self,
+        page: &Task,
+        pages_by_uid: &HashMap<&str, &Task>,
+        memo: &mut HashMap<String, bool>,
+    ) -> bool {
+        if let Some(&cached) = memo.get(&page.uid) {
+            return cached;
+        }
+        // Cycle guard: a parent loop must not recurse forever; a page still
+        // being visited counts as not archived.
+        memo.insert(page.uid.clone(), false);
+        let archived = page.archived
+            || match &page.parent_uid {
+                Some(parent) => match self.get_task_ref(parent) {
+                    // A parent page archives its sub-pages with it; a dated
+                    // parent anchors the page to the Timeline instead.
+                    Some(pt) if pt.is_journal => {
+                        pt.dtstart.is_none()
+                            && pages_by_uid
+                                .get(parent.as_str())
+                                .is_some_and(|pp| self.page_is_archived(pp, pages_by_uid, memo))
+                    }
+                    // A sub-page of a completed task is archived automatically.
+                    Some(pt) => {
+                        !crate::storage::is_system_calendar(&pt.calendar_href)
+                            && pt.status.is_done()
+                    }
+                    None => false,
+                },
+                None => false,
+            };
+        memo.insert(page.uid.clone(), archived);
+        archived
+    }
+
+    /// Partition `pages` into plain roots, page-nested children, and the
+    /// merged ancestor trie of task-parented pages (dimmed context rows,
+    /// mirroring how search injects ancestor context from outside the
+    /// scoped set). `nestable_uids` lists the journal uids a page may nest
+    /// under: its own partition's pages and — for the active partition —
+    /// dated entries, so their child pages keep rendering in the Timeline.
+    fn build_journal_page_tree<'a>(
+        &'a self,
+        pages: &[&'a Task],
+        nestable_uids: &HashSet<&'a str>,
+    ) -> JournalPageTree<'a> {
+        let mut children: HashMap<&'a str, Vec<&'a Task>> = HashMap::new();
+        let mut roots = Vec::new();
+        let mut context = JournalContextTree {
+            refs: HashMap::new(),
+            edges: HashMap::new(),
+            roots: HashMap::new(),
+            pages: HashMap::new(),
+        };
+
+        for p in pages {
+            if let Some(parent) = &p.parent_uid {
+                if nestable_uids.contains(parent.as_str()) {
+                    children.entry(parent.as_str()).or_default().push(p);
+                    continue;
+                }
+                if self
+                    .get_task_ref(parent)
+                    .filter(|pt| !pt.is_journal)
+                    .filter(|pt| !crate::storage::is_system_calendar(&pt.calendar_href))
+                    .is_some()
+                {
+                    // Walk the page's chain of regular-task ancestors
+                    // (immediate parent first); the chain stops at journal
+                    // components, system calendars and dangling parents.
+                    let mut chain: Vec<&str> = Vec::new();
+                    let mut seen = HashSet::new();
+                    let mut cursor = parent.as_str();
+                    while seen.insert(cursor) {
+                        let Some(t) = self.get_task_ref(cursor) else {
+                            break;
+                        };
+                        if t.is_journal || crate::storage::is_system_calendar(&t.calendar_href) {
+                            break;
+                        }
+                        context.refs.insert(cursor, t);
+                        chain.push(cursor);
+                        match &t.parent_uid {
+                            Some(pp) => cursor = pp.as_str(),
+                            None => break,
+                        }
+                    }
+
+                    // Insert the chain into the trie (topmost ancestor as
+                    // root, direct parent as the leaf the page attaches to).
+                    let mut prev: Option<&str> = None;
+                    for uid in chain.iter().rev() {
+                        if let Some(prev) = prev {
+                            context.edges.entry(prev).or_default().push(uid);
+                        } else {
+                            context.roots.insert(uid, context.refs[uid]);
+                        }
+                        prev = Some(uid);
+                    }
+                    if let Some(prev) = prev {
+                        context.pages.entry(prev).or_default().push(p);
+                    }
+                    continue;
+                }
+            }
+            roots.push(*p);
+        }
+
+        roots.sort_by(|a, b| a.summary.cmp(&b.summary));
+        for list in children.values_mut() {
+            list.sort_by(|a, b| a.summary.cmp(&b.summary));
+        }
+        for list in context.pages.values_mut() {
+            list.sort_by(|a, b| a.summary.cmp(&b.summary));
+        }
+        for child_uids in context.edges.values_mut() {
+            child_uids.sort_by(|a, b| {
+                context
+                    .refs
+                    .get(a)
+                    .map(|t| t.summary.as_str())
+                    .unwrap_or("")
+                    .cmp(
+                        context
+                            .refs
+                            .get(b)
+                            .map(|t| t.summary.as_str())
+                            .unwrap_or(""),
+                    )
+            });
+            child_uids.dedup();
+        }
+
+        JournalPageTree {
+            roots,
+            children,
+            context,
+        }
+    }
+
     /// Main filter pipeline that performs multi-stage filtering and returns
     /// prepared results (cloned tasks and aggregated category/location lists).
     pub fn filter(&self, options: FilterOptions) -> FilterResult {
@@ -4575,10 +4740,8 @@ impl TaskStore {
 
         let mut date_journals = Vec::new();
         let mut pages = Vec::new();
-        let mut all_journal_uids = HashSet::new();
 
         for t in journal_tasks {
-            all_journal_uids.insert(t.uid.as_str());
             if t.dtstart.is_some() {
                 date_journals.push(t);
             } else {
@@ -4586,107 +4749,30 @@ impl TaskStore {
             }
         }
 
-        let mut journal_children: HashMap<&str, Vec<&Task>> = HashMap::new();
-        let mut root_pages = Vec::new();
-        // Pages whose parent is a regular task (not a journal component) are
-        // grouped under dimmed context rows naming that task, mirroring how
-        // search injects ancestor context from outside the scoped set. The
-        // ancestor chains of all such pages merge into a single tree, so
-        // pages sharing any ancestor nest under it instead of forming
-        // separate top-level groups.
-        // Merged ancestor trie of the task-parented pages: task refs, edges
-        // (ancestor uid -> descendant uid), topmost roots, and the pages
-        // attached to each node (their direct parent).
-        struct ContextTree<'a> {
-            refs: HashMap<&'a str, &'a Task>,
-            edges: HashMap<&'a str, Vec<&'a str>>,
-            roots: HashMap<&'a str, &'a Task>,
-            pages: HashMap<&'a str, Vec<&'a Task>>,
-        }
-        let mut context = ContextTree {
-            refs: HashMap::new(),
-            edges: HashMap::new(),
-            roots: HashMap::new(),
-            pages: HashMap::new(),
-        };
+        // Split the pages into the active tree (the Pages section) and the
+        // archive (the Archive section below Pages and Timeline): a page is
+        // archived when it is flagged `is:archived`, when its direct parent
+        // is a completed task, or when its parent page is itself archived
+        // (the whole sub-tree moves with it).
+        let pages_by_uid: HashMap<&str, &Task> =
+            pages.iter().map(|p| (p.uid.as_str(), *p)).collect();
+        let mut archive_memo: HashMap<String, bool> = HashMap::new();
+        let (active_pages, archived_pages): (Vec<&Task>, Vec<&Task>) = pages
+            .into_iter()
+            .partition(|p| !self.page_is_archived(p, &pages_by_uid, &mut archive_memo));
 
-        for p in &pages {
-            if let Some(parent) = &p.parent_uid {
-                if all_journal_uids.contains(parent.as_str()) {
-                    journal_children.entry(parent.as_str()).or_default().push(p);
-                    continue;
-                }
-                if self
-                    .get_task_ref(parent)
-                    .filter(|pt| !pt.is_journal)
-                    .filter(|pt| !crate::storage::is_system_calendar(&pt.calendar_href))
-                    .is_some()
-                {
-                    // Walk the page's chain of regular-task ancestors
-                    // (immediate parent first); the chain stops at journal
-                    // components, system calendars and dangling parents.
-                    let mut chain: Vec<&str> = Vec::new();
-                    let mut seen = HashSet::new();
-                    let mut cursor = parent.as_str();
-                    while seen.insert(cursor) {
-                        let Some(t) = self.get_task_ref(cursor) else {
-                            break;
-                        };
-                        if t.is_journal || crate::storage::is_system_calendar(&t.calendar_href) {
-                            break;
-                        }
-                        context.refs.insert(cursor, t);
-                        chain.push(cursor);
-                        match &t.parent_uid {
-                            Some(pp) => cursor = pp.as_str(),
-                            None => break,
-                        }
-                    }
+        // Dated entries always stay in the Timeline; their child pages nest
+        // there, so the active tree may nest under them.
+        let mut active_nestable: HashSet<&str> =
+            active_pages.iter().map(|p| p.uid.as_str()).collect();
+        for t in &date_journals {
+            active_nestable.insert(t.uid.as_str());
+        }
+        let archived_nestable: HashSet<&str> =
+            archived_pages.iter().map(|p| p.uid.as_str()).collect();
 
-                    // Insert the chain into the trie (topmost ancestor as
-                    // root, direct parent as the leaf the page attaches to).
-                    let mut prev: Option<&str> = None;
-                    for uid in chain.iter().rev() {
-                        if let Some(prev) = prev {
-                            context.edges.entry(prev).or_default().push(uid);
-                        } else {
-                            context.roots.insert(uid, context.refs[uid]);
-                        }
-                        prev = Some(uid);
-                    }
-                    if let Some(prev) = prev {
-                        context.pages.entry(prev).or_default().push(p);
-                    }
-                    continue;
-                }
-            }
-            root_pages.push(*p);
-        }
-
-        root_pages.sort_by(|a, b| a.summary.cmp(&b.summary));
-        for list in journal_children.values_mut() {
-            list.sort_by(|a, b| a.summary.cmp(&b.summary));
-        }
-        for list in context.pages.values_mut() {
-            list.sort_by(|a, b| a.summary.cmp(&b.summary));
-        }
-        for children in context.edges.values_mut() {
-            children.sort_by(|a, b| {
-                context
-                    .refs
-                    .get(a)
-                    .map(|t| t.summary.as_str())
-                    .unwrap_or("")
-                    .cmp(
-                        context
-                            .refs
-                            .get(b)
-                            .map(|t| t.summary.as_str())
-                            .unwrap_or(""),
-                    )
-            });
-            children.dedup();
-        }
+        let active_tree = self.build_journal_page_tree(&active_pages, &active_nestable);
+        let archived_tree = self.build_journal_page_tree(&archived_pages, &archived_nestable);
 
         let mut timeline: std::collections::BTreeMap<
             i32,
@@ -4755,7 +4841,7 @@ impl TaskStore {
         fn emit_context_node<'a>(
             uid: &'a str,
             depth: usize,
-            context: &ContextTree<'a>,
+            context: &JournalContextTree<'a>,
             journal_children: &HashMap<&'a str, Vec<&'a Task>>,
             emitted: &mut HashSet<&'a str>,
             out: &mut Vec<JournalPageItem>,
@@ -4808,43 +4894,60 @@ impl TaskStore {
             }
         }
 
-        if !root_pages.is_empty() {
-            let pages_key = "j:pages";
-            let pages_expanded = options.expanded_tags.contains(pages_key);
-            journal_pages_out.push(JournalPageItem {
-                key: pages_key.to_string(),
-                title: rust_i18n::t!("pages", default = "Pages").to_string(),
+        /// Emit a collapsible journal section: a header row, then when
+        /// expanded the tree's plain root pages followed by the dimmed
+        /// context rows of its task-parented pages.
+        fn emit_page_section<'a>(
+            tree: &JournalPageTree<'a>,
+            key: &str,
+            title: String,
+            expanded: bool,
+            out: &mut Vec<JournalPageItem>,
+        ) {
+            out.push(JournalPageItem {
+                key: key.to_string(),
+                title,
                 depth: 0,
                 has_children: true,
-                is_expanded: pages_expanded,
+                is_expanded: expanded,
                 is_task: false,
                 is_context: false,
                 calendar_href: String::new(),
             });
 
-            if pages_expanded {
-                for p in &root_pages {
-                    flatten_journal(p, &journal_children, 1, &mut journal_pages_out);
-                }
-
-                // Dimmed context rows for pages parented to regular tasks,
-                // after the plain root pages: the merged ancestor trie,
-                // roots at depth 1, pages at their chain depth + 1. The
-                // emitted set guards against parent cycles in the data.
-                let mut emitted: HashSet<&str> = HashSet::new();
-                let mut roots: Vec<&str> = context.roots.keys().copied().collect();
-                roots.sort_by(|a, b| context.roots[a].summary.cmp(&context.roots[b].summary));
-                for uid in roots {
-                    emit_context_node(
-                        uid,
-                        1,
-                        &context,
-                        &journal_children,
-                        &mut emitted,
-                        &mut journal_pages_out,
-                    );
-                }
+            if !expanded {
+                return;
             }
+
+            for p in &tree.roots {
+                flatten_journal(p, &tree.children, 1, out);
+            }
+
+            // Dimmed context rows for pages parented to regular tasks,
+            // after the plain root pages: the merged ancestor trie,
+            // roots at depth 1, pages at their chain depth + 1. The
+            // emitted set guards against parent cycles in the data.
+            let mut emitted: HashSet<&str> = HashSet::new();
+            let mut roots: Vec<&str> = tree.context.roots.keys().copied().collect();
+            roots.sort_by(|a, b| {
+                tree.context.roots[a]
+                    .summary
+                    .cmp(&tree.context.roots[b].summary)
+            });
+            for uid in roots {
+                emit_context_node(uid, 1, &tree.context, &tree.children, &mut emitted, out);
+            }
+        }
+
+        if !active_tree.roots.is_empty() {
+            let pages_key = "j:pages";
+            emit_page_section(
+                &active_tree,
+                pages_key,
+                rust_i18n::t!("pages", default = "Pages").to_string(),
+                options.expanded_tags.contains(pages_key),
+                &mut journal_pages_out,
+            );
         }
 
         if !timeline.is_empty() {
@@ -4897,7 +5000,7 @@ impl TaskStore {
                                 for t in tasks.iter().rev() {
                                     flatten_journal(
                                         t,
-                                        &journal_children,
+                                        &active_tree.children,
                                         3,
                                         &mut journal_pages_out,
                                     );
@@ -4907,6 +5010,20 @@ impl TaskStore {
                     }
                 }
             }
+        }
+
+        // The Archive section collects the pages moved out of the Pages
+        // section: pages flagged `is:archived` and sub-pages of completed
+        // tasks. It sits below Wiki and Timeline.
+        if !archived_tree.roots.is_empty() || !archived_tree.context.roots.is_empty() {
+            let archive_key = "j:archive";
+            emit_page_section(
+                &archived_tree,
+                archive_key,
+                rust_i18n::t!("archive", default = "Archive").to_string(),
+                options.expanded_tags.contains(archive_key),
+                &mut journal_pages_out,
+            );
         }
 
         // Convert category maps into sorted vectors for UI
@@ -5446,6 +5563,7 @@ impl TaskStore {
             | AppIntent::StopTask { uid }
             | AppIntent::ChangePriority { uid, .. }
             | AppIntent::TogglePin { uid }
+            | AppIntent::ToggleArchive { uid }
             | AppIntent::ToggleTreeCollapse { uid }
             | AppIntent::SetTreeCollapse { uid, .. } => {
                 primary_uid = Some(uid.clone());
@@ -5786,6 +5904,14 @@ impl TaskStore {
                     actions.push(JournalAction::Update(updated));
                 }
             }
+            AppIntent::ToggleArchive { uid } => {
+                if let Some((task, _)) = self.get_task_mut(uid) {
+                    task.archived = !task.archived;
+                    task.sequence += 1;
+                    let updated = task.clone();
+                    actions.push(JournalAction::Update(updated));
+                }
+            }
             AppIntent::ToggleTreeCollapse { uid } => {
                 let is_parent = self.children_index.contains_key(uid);
 
@@ -5910,6 +6036,17 @@ impl TaskStore {
                     rust_i18n::t!("intent_desc_toggled_pin").to_string()
                 }
             }
+            AppIntent::ToggleArchive { uid } => {
+                if let Some(old) = old_states.get(uid) {
+                    if old.archived {
+                        rust_i18n::t!("intent_desc_unarchived").to_string()
+                    } else {
+                        rust_i18n::t!("intent_desc_archived").to_string()
+                    }
+                } else {
+                    rust_i18n::t!("intent_desc_toggled_archive").to_string()
+                }
+            }
             AppIntent::ToggleTreeCollapse { uid } | AppIntent::SetTreeCollapse { uid, .. } => {
                 if let Some(old) = old_states.get(uid) {
                     if old.collapsed {
@@ -5983,6 +6120,7 @@ mod tests {
             permanent: false,
             is_journal: false,
             flat: false,
+            archived: false,
             is_event: false,
             time_spent_seconds: 0,
             last_started_at: None,
@@ -6541,6 +6679,140 @@ mod tests {
             ("gutter", true, false, 3),
             ("solo_parent", false, true, 1),
             ("solo", true, false, 2),
+        ];
+        assert_eq!(entries, expected);
+    }
+
+    #[test]
+    fn journal_pages_archive_section() {
+        let ctx = std::sync::Arc::new(crate::context::StandardContext::new(Some(
+            std::env::temp_dir().join(format!("cfait-store-test-{}", uuid::Uuid::new_v4())),
+        )));
+        let mut store = TaskStore::new(ctx);
+
+        let journal = |uid: &str, parent: Option<&str>| {
+            let mut t = make_task(uid, parent, TaskStatus::NeedsAction, false);
+            t.is_journal = true;
+            t
+        };
+
+        // A completed task auto-archives its sub-page (and the page's own
+        // sub-pages move with it); an active task keeps its page in Pages.
+        let done_task = make_task("done_task", None, TaskStatus::Completed, false);
+        let done_page = journal("done_page", Some("done_task"));
+        let done_child = journal("done_child", Some("done_page"));
+        let active_task = make_task("active_task", None, TaskStatus::NeedsAction, false);
+        let active_page = journal("active_page", Some("active_task"));
+        // A page flagged `is:archived` moves to the Archive, its sub-page
+        // with it — including one flagged while parented to a dated entry.
+        let mut flagged = journal("flagged", None);
+        flagged.archived = true;
+        let flagged_child = journal("flagged_child", Some("flagged"));
+        let mut flagged_dated_child = journal("flagged_dated_child", Some("2026-10-20"));
+        flagged_dated_child.archived = true;
+        // A plain root page stays in Pages.
+        let root_page = journal("root_page", None);
+        // A dated entry stays in the Timeline, with its unflagged child page.
+        let mut dated = journal("2026-10-20", None);
+        dated.dtstart = Some(crate::model::DateType::AllDay(
+            chrono::NaiveDate::from_ymd_opt(2026, 10, 20).unwrap(),
+        ));
+        let dated_child = journal("dated_child", Some("2026-10-20"));
+
+        for t in [
+            done_task,
+            done_page,
+            done_child,
+            active_task,
+            active_page,
+            flagged,
+            flagged_child,
+            flagged_dated_child,
+            root_page,
+            dated,
+            dated_child,
+        ] {
+            store.add_task(t);
+        }
+
+        let mut expanded: HashSet<String> = HashSet::new();
+        for key in [
+            "j:pages",
+            "j:timeline",
+            "j:y:2026",
+            "j:m:2026:10",
+            "j:archive",
+        ] {
+            expanded.insert(key.to_string());
+        }
+        let hidden = HashSet::new();
+        let categories = HashSet::new();
+        let locations = HashSet::new();
+        let aliases = HashMap::new();
+        let collapsed = HashSet::new();
+        let done_groups = HashSet::new();
+        let locs_expanded = HashSet::new();
+        let res = store.filter(FilterOptions {
+            active_cal_href: None,
+            hidden_calendars: &hidden,
+            calendars: &[],
+            selected_categories: &categories,
+            selected_locations: &locations,
+            match_all_categories: false,
+            search_term: "",
+            hide_completed_global: false,
+            hide_fully_completed_tags: false,
+            hide_aliases_in_sidebar: false,
+            cutoff_date: None,
+            min_duration: None,
+            max_duration: None,
+            include_unset_duration: true,
+            urgent_days: 7,
+            urgent_prio: 9,
+            default_priority: 5,
+            start_grace_period_days: 0,
+            sort_standard_by_priority: false,
+            sort_preset: crate::config::SortPreset::UrgentStartedDue,
+            expanded_done_groups: &done_groups,
+            expanded_tags: &expanded,
+            expanded_locations: &locs_expanded,
+            max_done_roots: 10,
+            max_done_subtasks: 10,
+            tag_aliases: &aliases,
+            search_collapsed_tasks: &collapsed,
+            focused_task_uid: None,
+            paused_sort_behavior: crate::config::PausedSortBehavior::default(),
+            sort_tiebreak_recent: false,
+            default_reminder_time: chrono::NaiveTime::from_hms_opt(9, 0, 0).unwrap(),
+        });
+
+        let entries: Vec<(&str, bool, bool, usize)> = res
+            .journal_pages
+            .iter()
+            .map(|p| (p.key.as_str(), p.is_task, p.is_context, p.depth))
+            .collect();
+
+        // Pages keeps the plain root and the page under the active task;
+        // Timeline keeps the dated entry with its child page; Archive
+        // collects the flagged page (with its sub-page) and the sub-page of
+        // the completed task (with its own sub-page) below Wiki & Timeline.
+        let expected = vec![
+            ("j:pages", false, false, 0),
+            ("root_page", true, false, 1),
+            ("active_task", false, true, 1),
+            ("active_page", true, false, 2),
+            ("j:timeline", false, false, 0),
+            ("j:y:2026", false, false, 1),
+            ("j:m:2026:10", false, false, 2),
+            ("2026-10-20", true, false, 3),
+            ("dated_child", true, false, 4),
+            ("j:archive", false, false, 0),
+            ("flagged", true, false, 1),
+            ("flagged_child", true, false, 2),
+            ("flagged_dated_child", true, false, 1),
+            ("done_task", false, true, 1),
+            ("done_page", true, false, 2),
+            ("done_child", true, false, 3),
         ];
         assert_eq!(entries, expected);
     }

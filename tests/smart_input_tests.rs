@@ -305,3 +305,42 @@ fn test_reminder_syntax_highlighting_time_only() {
     let t = reminder_token.unwrap();
     assert_eq!(&input[t.start..t.end], "rem:14:30");
 }
+
+#[test]
+fn test_is_archived_token() {
+    let aliases = HashMap::new();
+    let task = Task::new("Old garden notes is:page is:archived", &aliases, None);
+    assert_eq!(task.summary, "Old garden notes");
+    assert!(task.is_journal);
+    assert!(task.archived);
+
+    // The token round-trips through the smart string.
+    let smart = task.to_smart_string();
+    assert!(smart.contains("is:archived"), "got: {smart}");
+    let reparsed = Task::new(&smart, &aliases, None);
+    assert!(reparsed.is_journal);
+    assert!(reparsed.archived);
+
+    // Removing the token un-archives on re-edit.
+    let mut edited = task.clone();
+    edited.apply_smart_input("Old garden notes is:page", &aliases, None);
+    assert!(!edited.archived);
+    assert_eq!(edited.summary, "Old garden notes");
+}
+
+#[test]
+fn test_is_archived_search_filter() {
+    let mut store =
+        cfait::store::TaskStore::new(std::sync::Arc::new(cfait::context::TestContext::new()));
+    let mut archived_page = Task::new("Old notes is:page is:archived", &HashMap::new(), None);
+    archived_page.uid = "archived-page".to_string();
+    let mut plain_page = Task::new("Fresh notes is:page", &HashMap::new(), None);
+    plain_page.uid = "plain-page".to_string();
+    store.add_task(archived_page);
+    store.add_task(plain_page);
+
+    let archived = store.get_task_ref("archived-page").unwrap();
+    let plain = store.get_task_ref("plain-page").unwrap();
+    assert!(archived.matches_search_term("is:archived", &store));
+    assert!(!plain.matches_search_term("is:archived", &store));
+}

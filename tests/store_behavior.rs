@@ -1574,3 +1574,44 @@ fn test_serialize_tree_plain_omits_uids_and_relations() {
         "plain lines must not carry trailing spaces"
     );
 }
+
+#[test]
+fn test_toggle_archive_intent() {
+    let mut store = make_store();
+    let config = Config::default();
+
+    let mut page = Task::new("Old notes is:page", &HashMap::new(), None);
+    page.uid = "page-1".to_string();
+    store.add_task(page);
+    let seq_before = store.get_task_ref("page-1").unwrap().sequence;
+
+    // Toggle on: the flag flips, the sequence bumps, and the reverse action
+    // restores the previous state (undo support).
+    let (forward, reverse, desc, _) = store.apply_task_intent(
+        &AppIntent::ToggleArchive {
+            uid: "page-1".to_string(),
+        },
+        &config,
+    );
+    assert_eq!(forward.len(), 1);
+    assert!(!desc.is_empty());
+    let t = store.get_task_ref("page-1").unwrap();
+    assert!(t.archived);
+    assert_eq!(t.sequence, seq_before + 1);
+
+    store.apply_actions(&reverse);
+    let t = store.get_task_ref("page-1").unwrap();
+    assert!(!t.archived, "reverse action must unarchive");
+    assert_eq!(t.sequence, seq_before);
+
+    // Toggle again: archived with a bumped sequence.
+    store.apply_task_intent(
+        &AppIntent::ToggleArchive {
+            uid: "page-1".to_string(),
+        },
+        &config,
+    );
+    let t = store.get_task_ref("page-1").unwrap();
+    assert!(t.archived);
+    assert_eq!(t.sequence, seq_before + 1);
+}

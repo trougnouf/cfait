@@ -485,6 +485,7 @@ mod tests {
             permanent: false,
             is_journal: false,
             flat: false,
+            archived: false,
             is_event: false,
             time_spent_seconds: 0,
             last_started_at: None,

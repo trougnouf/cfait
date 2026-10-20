@@ -299,6 +299,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::JournalDateInputChanged(_)
         | Message::JournalDateInputSubmit
         | Message::JournalTitleInputChanged(_)
+        | Message::ToggleArchivePage(_)
         | Message::SaveJournal(_)
         | Message::SpinnerTick
         | Message::ConfettiTick => view::handle(app, message),

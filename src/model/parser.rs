@@ -61,6 +61,7 @@ pub enum ExactToken {
     IsBlocked,
     IsPermanent,
     IsFlat,
+    IsArchived,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -110,6 +111,7 @@ pub struct ParserLexicon {
     pub search_is_permanent: Vec<String>,
     pub search_is_canceled: Vec<String>,
     pub search_is_recurrent: Vec<String>,
+    pub search_is_archived: Vec<String>,
     pub parser_collection: Vec<String>,
 }
 
@@ -345,6 +347,7 @@ impl ParserLexicon {
             ExactToken::IsPermanent,
         );
         add_exact("parser_is_flat", "is:flat,is:doc", ExactToken::IsFlat);
+        add_exact("parser_is_archived", "is:archived", ExactToken::IsArchived);
 
         // Map the existing search translation to the exact token so they match perfectly
         add_exact("search_is_blocked", "is:blocked", ExactToken::IsBlocked);
@@ -442,6 +445,7 @@ impl ParserLexicon {
             search_is_permanent: get_all("parser_is_permanent", "is:permanent"),
             search_is_canceled: get_all("search_is_canceled", "is:canceled,is:cancelled"),
             search_is_recurrent: get_all("search_is_recurrent", "is:recurrent"),
+            search_is_archived: get_all("search_is_archived", "is:archived"),
             parser_collection: get_all("parser_collection", "col:"),
         }
     }
@@ -1413,7 +1417,9 @@ pub fn tokenize_smart_input(input: &str, is_search_query: bool) -> Vec<SyntaxTok
             } else if exact == Some(&ExactToken::IsBlocked) {
                 // Color it like a dependency (orange) since it's a blocker state
                 matched_kind = Some(SyntaxType::Dependency);
-            } else if exact == Some(&ExactToken::IsPermanent) {
+            } else if exact == Some(&ExactToken::IsPermanent)
+                || exact == Some(&ExactToken::IsArchived)
+            {
                 matched_kind = Some(SyntaxType::Filter);
             } else if pref == Some(PrefixToken::Geo) {
                 let mut temp_consumed = 1;
@@ -2832,6 +2838,7 @@ pub fn is_special_token_with_lex(word: &str, lex: &ParserLexicon) -> bool {
             | Some(ExactToken::IsBlocked)
             | Some(ExactToken::IsPermanent)
             | Some(ExactToken::IsFlat)
+            | Some(ExactToken::IsArchived)
     ) {
         return true;
     }
@@ -2916,6 +2923,7 @@ pub fn apply_smart_input(
     task.pinned = false; // Reset pinned state so deleting the token unpins
     task.permanent = false;
     task.flat = false; // Reset flat state so deleting the token unflattens
+    task.archived = false; // Reset archive state so deleting the token unarchives
     task.categories.clear();
     task.alarms.clear();
     task.exdates.clear();
@@ -3384,6 +3392,10 @@ pub fn apply_smart_input(
             // `is:flat` keeps the task a VTODO but parses its description
             // like a journal page (headers and plain list items stay prose).
             task.flat = true;
+        } else if exact == Some(&ExactToken::IsArchived) {
+            // `is:archived` moves a wiki page to the journal tab's Archive
+            // section; it has no display effect on regular tasks.
+            task.archived = true;
         } else if pref == Some(PrefixToken::Geo) {
             let mut raw_val = rem_original.to_string();
             let mut temp_consumed = 1;

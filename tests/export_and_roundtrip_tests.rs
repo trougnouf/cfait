@@ -487,3 +487,68 @@ fn test_export_then_merge_import() {
     let tasks_b = LocalStorage::load_for_href(&ctx, calendar_b).unwrap();
     assert_eq!(tasks_b.len(), 3);
 }
+
+// ==================== Archived Flag ICS Roundtrip Tests ====================
+
+#[test]
+#[serial]
+fn test_roundtrip_archived_vjournal_ics() {
+    let ctx = TestContext::new();
+    let href = "local://archived-vjournal-src";
+    let import_href = "local://archived-vjournal-dst";
+
+    let original = Task::new("Old notes is:page is:archived", &HashMap::new(), None);
+    assert!(original.is_journal);
+    assert!(original.archived);
+
+    LocalStorage::save_for_href(&ctx, href, std::slice::from_ref(&original)).unwrap();
+    let tasks = LocalStorage::load_for_href(&ctx, href).unwrap();
+    let ics = LocalStorage::to_ics_string(&tasks);
+    assert!(ics.contains("BEGIN:VJOURNAL"));
+    assert!(ics.contains("X-CFAIT-ARCHIVED:TRUE"));
+
+    let result = LocalStorage::import_from_ics(&ctx, import_href, &ics);
+    assert!(result.is_ok());
+
+    let imported = &LocalStorage::load_for_href(&ctx, import_href).unwrap()[0];
+    assert!(imported.is_journal);
+    assert!(!imported.dtstart.is_some());
+    assert!(imported.archived);
+    assert_eq!(imported.summary, original.summary);
+}
+
+#[test]
+#[serial]
+fn test_roundtrip_archived_vtodo_ics() {
+    let ctx = TestContext::new();
+    let href = "local://archived-vtodo-src";
+    let import_href = "local://archived-vtodo-dst";
+
+    // The flag is page-focused, but a regular task carrying it must not lose
+    // it on a round trip.
+    let original = Task::new("Old task is:archived", &HashMap::new(), None);
+    assert!(!original.is_journal);
+    assert!(original.archived);
+
+    LocalStorage::save_for_href(&ctx, href, std::slice::from_ref(&original)).unwrap();
+    let tasks = LocalStorage::load_for_href(&ctx, href).unwrap();
+    let ics = LocalStorage::to_ics_string(&tasks);
+    assert!(ics.contains("BEGIN:VTODO"));
+    assert!(ics.contains("X-CFAIT-ARCHIVED:TRUE"));
+
+    let result = LocalStorage::import_from_ics(&ctx, import_href, &ics);
+    assert!(result.is_ok());
+
+    let imported = &LocalStorage::load_for_href(&ctx, import_href).unwrap()[0];
+    assert!(!imported.is_journal);
+    assert!(imported.archived);
+}
+
+#[test]
+#[serial]
+fn test_unarchived_page_omits_ics_property() {
+    let mut page = Task::new("Fresh notes is:page", &HashMap::new(), None);
+    page.archived = false;
+    let ics = LocalStorage::to_ics_string(&[page]);
+    assert!(!ics.contains("X-CFAIT-ARCHIVED"));
+}

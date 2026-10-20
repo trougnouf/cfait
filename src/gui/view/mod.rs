@@ -2909,6 +2909,29 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
         )
         .style(crate::gui::view::tooltip_style);
 
+        // Archive toggle: moves the page to the journal's Archive section (and
+        // back). Highlighted while the page is archived. Pages only — a dated
+        // entry stays anchored to its date.
+        let archived_here = app.store.get_task_ref(&uid).is_some_and(|t| t.archived);
+        let archive_btn = tooltip(
+            iced::widget::button(icon::icon(icon::ARCHIVE).size(14))
+                .style(if archived_here {
+                    iced::widget::button::primary
+                } else {
+                    iced::widget::button::secondary
+                })
+                .padding(8)
+                .on_press(Message::ToggleArchivePage(uid.clone())),
+            text(if archived_here {
+                rust_i18n::t!("unarchive_page").to_string()
+            } else {
+                rust_i18n::t!("archive_page").to_string()
+            })
+            .size(12),
+            tooltip::Position::Bottom,
+        )
+        .style(crate::gui::view::tooltip_style);
+
         if editing_page {
             row![
                 iced::widget::text_input(
@@ -2929,6 +2952,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
                 yank_page_btn,
                 child_of_yanked_btn,
                 create_subpage_btn,
+                archive_btn,
                 move_btn,
                 delete_btn,
                 Space::new().width(15),

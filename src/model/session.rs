@@ -233,6 +233,9 @@ pub enum AppIntent {
     TogglePin {
         uid: String,
     },
+    ToggleArchive {
+        uid: String,
+    },
     CancelTask {
         uid: String,
     },

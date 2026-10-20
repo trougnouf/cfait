@@ -439,6 +439,22 @@ impl TaskDisplay for Task {
             s.push_str(" is:page");
         }
 
+        if self.archived {
+            let archived_str = rust_i18n::t!("parser_is_archived");
+            if archived_str == "parser_is_archived" || archived_str.is_empty() {
+                s.push_str(" is:archived");
+            } else {
+                s.push_str(&format!(
+                    " {}",
+                    archived_str
+                        .split(',')
+                        .next()
+                        .unwrap_or("is:archived")
+                        .trim()
+                ));
+            }
+        }
+
         if self.flat {
             let flat_str = rust_i18n::t!("parser_is_flat");
             if flat_str == "parser_is_flat" || flat_str.is_empty() {

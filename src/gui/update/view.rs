@@ -1130,6 +1130,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+        Message::ToggleArchivePage(uid) => {
+            crate::gui::update::common::dispatch_intent(
+                app,
+                crate::model::AppIntent::ToggleArchive { uid },
+            );
+            Task::none()
+        }
         Message::JournalDateInputSubmit => {
             match chrono::NaiveDate::parse_from_str(app.journal_date_input.trim(), "%Y-%m-%d") {
                 Ok(parsed) => {

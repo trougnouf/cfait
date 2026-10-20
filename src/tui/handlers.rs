@@ -3941,6 +3941,29 @@ pub async fn handle_key_event(
                 state.creating_with_desc = false;
                 state.message = rust_i18n::t!("new_task_prompt").to_string();
             }
+            // Toggle the Archive flag on the selected/opened journal page.
+            // Dated entries stay anchored to their date and are excluded.
+            KeyCode::Char('A') => {
+                if state.sidebar_mode == SidebarMode::Journal {
+                    let uid = if state.active_focus == Focus::Sidebar {
+                        state
+                            .cal_state
+                            .selected()
+                            .and_then(|idx| state.cached_journal_pages.get(idx))
+                            .filter(|page| page.is_task)
+                            .map(|page| page.key.clone())
+                    } else {
+                        state.journal_editing_uid.clone()
+                    };
+                    if let Some(uid) = uid
+                        && let Some(t) = state.store.get_task_ref(&uid)
+                        && t.is_journal
+                        && t.dtstart.is_none()
+                    {
+                        dispatch_intent_tui(state, AppIntent::ToggleArchive { uid }, action_tx);
+                    }
+                }
+            }
             KeyCode::Char('e') => {
                 if state.sidebar_mode == SidebarMode::Journal
                     && state.active_focus == Focus::Sidebar

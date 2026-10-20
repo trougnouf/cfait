@@ -115,6 +115,7 @@ pub const CONTENT_SAVE_EDIT: char = '\u{f0cfb}'; // nf-md-content_save_edit
 pub const EYE: char = '\u{ea70}'; // nf-cod-eye
 pub const EYE_CLOSED: char = '\u{eae7}'; // nf-cod-eye_closed
 pub const THUMB_TACK: char = '\u{f08d}'; // nf-fa-thumb_tack
+pub const ARCHIVE: char = '\u{f187}'; // nf-fa-box_archive
 
 // --- SUPPORT / DONATION ICONS ---
 pub const CREDIT_CARD: char = '\u{f09d}'; // nf-fa-credit_card
