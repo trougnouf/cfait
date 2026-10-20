@@ -292,6 +292,9 @@ fun JournalMainView(
     var undoStack by remember { mutableStateOf(listOf<FieldSnapshot>()) }
     var redoStack by remember { mutableStateOf(listOf<FieldSnapshot>()) }
     var showMoveDialog by remember { mutableStateOf(false) }
+    val pageParentUid = remember(viewData, journalWikiUid) {
+        viewData?.journalPages?.find { it.uid == journalWikiUid }?.parentUid
+    }
 
     val scope = rememberCoroutineScope()
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
@@ -508,6 +511,20 @@ fun JournalMainView(
                             }
                         }, modifier = Modifier.size(40.dp)) {
                             NfIcon(NfIcons.CHILD, 20.sp)
+                        }
+                        if (pageParentUid != null) {
+                            IconButton(onClick = {
+                                scope.launch {
+                                    flushSave()
+                                    withContext(Dispatchers.IO) {
+                                        try { api.setParent(journalWikiUid, null) } catch (e: Exception) {}
+                                    }
+                                    onDataChanged()
+                                    triggerBackgroundSync(context, api)
+                                }
+                            }, modifier = Modifier.size(40.dp)) {
+                                NfIcon(NfIcons.ELEVATOR_UP, 20.sp)
+                            }
                         }
                         if (enabledCalendarCount > 1) {
                             IconButton(onClick = { showMoveDialog = true }, modifier = Modifier.size(40.dp)) {

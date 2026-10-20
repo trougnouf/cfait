@@ -457,6 +457,9 @@ pub struct MobileJournalPage {
     pub is_expanded: bool,
     pub is_task: bool,
     pub calendar_href: String,
+    /// The page's parent, if any — a sub-page carries the page (or task) it
+    /// is nested under, which is what the promote action removes.
+    pub parent_uid: Option<String>,
 }
 
 #[derive(uniffi::Record)]
@@ -2803,14 +2806,20 @@ impl CfaitMobile {
             .journal_pages
             .clone()
             .into_iter()
-            .map(|p| MobileJournalPage {
-                uid: p.key,
-                title: p.title,
-                depth: p.depth as u32,
-                has_children: p.has_children,
-                is_expanded: p.is_expanded,
-                is_task: p.is_task,
-                calendar_href: p.calendar_href,
+            .map(|p| {
+                let parent_uid = store
+                    .get_task_ref(&p.key)
+                    .and_then(|t| t.parent_uid.clone());
+                MobileJournalPage {
+                    uid: p.key,
+                    title: p.title,
+                    depth: p.depth as u32,
+                    has_children: p.has_children,
+                    is_expanded: p.is_expanded,
+                    is_task: p.is_task,
+                    calendar_href: p.calendar_href,
+                    parent_uid,
+                }
             })
             .collect();
 
