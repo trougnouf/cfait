@@ -3350,6 +3350,25 @@ pub async fn handle_key_event(
                 {
                     let uid = view_task.uid.clone();
                     dispatch_intent_tui(state, AppIntent::RemoveParent { uid }, action_tx);
+                } else if state.sidebar_mode == SidebarMode::Journal {
+                    // Promote a page: the one open in the day pane, or the one
+                    // selected in the Pages list.
+                    let uid = if state.active_focus == Focus::Sidebar {
+                        state
+                            .cal_state
+                            .selected()
+                            .and_then(|idx| state.cached_journal_pages.get(idx))
+                            .filter(|page| page.is_task)
+                            .map(|page| page.key.clone())
+                    } else {
+                        state.journal_editing_uid.clone()
+                    };
+                    if let Some(uid) = uid
+                        && let Some(task) = state.store.get_task_ref(&uid)
+                        && task.parent_uid.is_some()
+                    {
+                        dispatch_intent_tui(state, AppIntent::RemoveParent { uid }, action_tx);
+                    }
                 }
             }
             KeyCode::Char('X') => {

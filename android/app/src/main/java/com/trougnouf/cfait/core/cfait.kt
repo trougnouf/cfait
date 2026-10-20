@@ -5402,6 +5402,11 @@ data class MobileJournalPage(
     var `isExpanded`: kotlin.Boolean,
     var `isTask`: kotlin.Boolean,
     var `calendarHref`: kotlin.String,
+    /**
+     * The page's parent, if any — a sub-page carries the page (or task) it
+     * is nested under, which is what the promote action removes.
+     */
+    var `parentUid`: kotlin.String?,
 ) {
     companion object
 }
@@ -5419,6 +5424,7 @@ public object FfiConverterTypeMobileJournalPage : FfiConverterRustBuffer<MobileJ
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
         )
 
     override fun allocationSize(value: MobileJournalPage) =
@@ -5429,7 +5435,8 @@ public object FfiConverterTypeMobileJournalPage : FfiConverterRustBuffer<MobileJ
                 FfiConverterBoolean.allocationSize(value.`hasChildren`) +
                 FfiConverterBoolean.allocationSize(value.`isExpanded`) +
                 FfiConverterBoolean.allocationSize(value.`isTask`) +
-                FfiConverterString.allocationSize(value.`calendarHref`)
+                FfiConverterString.allocationSize(value.`calendarHref`) +
+                FfiConverterOptionalString.allocationSize(value.`parentUid`)
         )
 
     override fun write(
@@ -5443,6 +5450,7 @@ public object FfiConverterTypeMobileJournalPage : FfiConverterRustBuffer<MobileJ
         FfiConverterBoolean.write(value.`isExpanded`, buf)
         FfiConverterBoolean.write(value.`isTask`, buf)
         FfiConverterString.write(value.`calendarHref`, buf)
+        FfiConverterOptionalString.write(value.`parentUid`, buf)
     }
 }
 

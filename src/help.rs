@@ -833,6 +833,11 @@ pub fn get_shortcuts_help(is_gui: bool) -> Vec<HelpSection> {
                         example: "".to_string(),
                     });
                     items.push(HelpItem {
+                        keys: "< / ,".to_string(),
+                        desc: rust_i18n::t!("help_journal_promote").to_string(),
+                        example: "".to_string(),
+                    });
+                    items.push(HelpItem {
                         keys: "e".to_string(),
                         desc: rust_i18n::t!("help_journal_edit_external").to_string(),
                         example: "".to_string(),

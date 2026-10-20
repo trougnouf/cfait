@@ -2899,6 +2899,28 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
                 None => Space::new().width(Length::Fixed(0.0)).into(),
             };
 
+        // Promote: move the page one level up (remove its parent). Shown only
+        // for pages that have a parent, mirroring the task rows' promote button.
+        let promote_page_btn: Element<'_, Message> = if editing_page
+            && app
+                .store
+                .get_task_ref(&uid)
+                .is_some_and(|t| t.parent_uid.is_some())
+        {
+            tooltip(
+                iced::widget::button(icon::icon(icon::ELEVATOR_UP).size(14))
+                    .style(iced::widget::button::secondary)
+                    .padding(8)
+                    .on_press(Message::RemoveParent(uid.clone())),
+                text(rust_i18n::t!("promote_page")).size(12),
+                tooltip::Position::Bottom,
+            )
+            .style(crate::gui::view::tooltip_style)
+            .into()
+        } else {
+            Space::new().width(Length::Fixed(0.0)).into()
+        };
+
         let create_subpage_btn = tooltip(
             iced::widget::button(icon::icon(icon::CREATE_CHILD).size(14))
                 .style(iced::widget::button::secondary)
@@ -2951,6 +2973,7 @@ fn view_journal_main_pane<'a>(app: &'a GuiApp) -> Element<'a, Message> {
                 Space::new().width(Length::FillPortion(1)),
                 yank_page_btn,
                 child_of_yanked_btn,
+                promote_page_btn,
                 create_subpage_btn,
                 archive_btn,
                 move_btn,
