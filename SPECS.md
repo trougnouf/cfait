@@ -277,6 +277,7 @@ Tasks tagged with `is:permanent` act as endless trackers. When checked off (Comp
 *   **Fire History:** `alarm_history.json` persists which alarms already fired (keyed by alarm, 24h window). Alarms do not re-fire after an app restart; entries are pruned once they age out of the fire window.
 *   **Notifications:** Every fired alarm (explicit or implicit) notifies both the OS and the in-app UI (popup / ringing row).
 *   **Snoozing:** Snoozing acknowledges the original alarm and creates a new absolute alarm linked via `RELATED-TO;RELTYPE=SNOOZE`.
+*   **Custom Snooze Target:** The custom snooze input is parsed identically in all clients (TUI `s`, the GUI alarm modal, the Android notification reply): a clock time (`16:20`, `4:20pm` — the next time the clock shows that, today if still ahead, otherwise tomorrow), a compact duration (`15m`, `1h`, `16h20m` — from now), a bare minute count (`15`), or a date (`tomorrow`, `monday`, `2026-01-05` — that day at the default reminder time). TUI and GUI report invalid input and keep the alarm ringing; Android falls back to a 10-minute snooze.
 *   **Just-In-Time (JIT) Sync:** To prevent phantom alarms across devices, clients must attempt a synchronous network fetch immediately prior to firing an alarm (or within a 15-second pre-fire window). If the task was completed, canceled, or the alarm's trigger time was advanced (via recurrence) on another device, the local alarm is pruned before notifying the user.
 *   *Android Implementation:* Uses `AlarmManager.setExactAndAllowWhileIdle`. When an alarm fires, an `AlarmWorker` executes a foreground `api.sync()` before posting a Notification. Notification Actions (Snooze, Done, Pause) are handled via `NotificationActionReceiver` which delegates back to a unique `WorkManager` request to prevent background ANRs.
 
@@ -308,7 +309,7 @@ Tasks tagged with `is:permanent` act as endless trackers. When checked off (Comp
 *   **Layout:** 2-Pane (Sidebar 20%, Main List 80%). Details view shares vertical space with Main List. Press `Shift+Up/Down` to scroll the active details pane without losing focus on the list. In Journal mode the sidebar is sized to fit the month calendar (7 day columns, or the localized month title when wider) so the full grid is always visible; the content pane absorbs the difference.
 *   **Mouse:** Left-clicking a pane moves focus to it (the mouse equivalent of `Tab`); clicking a row in the sidebar or the task list also selects that row. With inline descriptions enabled, task rows can span multiple lines, so a click in the task list only focuses the pane. Scrolling the wheel steps the focused list forward/backward.
 *   **Modals/Popups:** Instead of context menus, pressing `Enter` on a task opens a centered **Action Menu** popup with fuzzy filtering. 
-*   **Alarm Popup:** When an alarm (explicit, or the implicit due/start auto-reminder) fires, a centered popup shows the task and its key hints. `d`/`Esc`/`Enter` dismiss it without touching the task, `1`/`2` snooze by the preset durations and `s` opens a custom-duration input, `c` marks the task done, `x` cancels the task, and `q`/`Ctrl+C` quit the app.
+*   **Alarm Popup:** When an alarm (explicit, or the implicit due/start auto-reminder) fires, a centered popup shows the task and its key hints. `d`/`Esc`/`Enter` dismiss it without touching the task, `1`/`2` snooze by the preset durations and `s` opens a custom snooze input (see 4.7), `c` marks the task done, `x` cancels the task, and `q`/`Ctrl+C` quit the app.
 *   **Details Viewer (`L`):** Unified popup containing the full markdown description, History/Heatmaps, WorkSessions, and relationships (Parents, Children, Blockers, Successors, Siblings) for quick jump navigation.
 *   **Session Manager (`T`):** Popup to view/delete `WorkSession` records.
 *   **External Editor:** Pressing `E` launches `$VISUAL`/`$EDITOR` (suspending the TUI), falling back to the built-in modal if empty.
@@ -327,7 +328,7 @@ Tasks tagged with `is:permanent` act as endless trackers. When checked off (Comp
 *   **Location Integration (`geo:here`):** If a user types `geo:here`, the UI requests permissions and invokes `LocationManager.getCurrentLocation`. If it fails within 5s, falls back to the last known location.
 *   **Notifications:** 
     *   *Ongoing Tasks:* Generate a persistent, swipable notification with a live Chronometer and "Pause"/"Done" actions.
-    *   *Alarms:* High-priority. Includes inline "Snooze Custom" via `RemoteInput` text reply.
+    *   *Alarms:* High-priority. Includes inline "Snooze Custom" via `RemoteInput` text reply, parsed per 4.7.
 *   **Intents:** Intercepts `ACTION_VIEW` for `.ics` files to launch the Import Screen.
 *   **Debug Export:** UI includes an advanced option to generate a zip of `cache/`, `data/`, `config/`, and `android_crash.txt`, sharing it via `ACTION_SEND`. If a custom `data_dir` is configured, the export also bundles the internal default data directory (`data_internal/`) and the custom one (`data_custom/`) as backups.
 *   **AMOLED Black Theme:** A pure-black color variant for OLED screens, selectable from the theme picker.
