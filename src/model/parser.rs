@@ -3,7 +3,7 @@
 // Logic for parsing smart input strings into task properties.
 
 use crate::model::{Alarm, DateType, Task};
-use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, NaiveTime, Utc};
+use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime, Utc};
 use std::collections::{HashMap, HashSet};
 use std::sync::RwLock;
 
@@ -2284,6 +2284,109 @@ pub fn parse_duration_range_with_lex(val: &str, lex: &ParserLexicon) -> Option<(
     }
     let single = parse_duration_with_lex(val, lex)?;
     Some((single, None))
+}
+
+/// Parse a clock time like `16:20`, `4:20pm`, or `12:05am`. The input must
+/// already be lowercased and stripped of spaces.
+fn parse_clock_time(val: &str) -> Option<NaiveTime> {
+    let (clock, meridiem) = if let Some(c) = val.strip_suffix("pm") {
+        (c, Some(true))
+    } else if let Some(c) = val.strip_suffix("am") {
+        (c, Some(false))
+    } else {
+        (val, None)
+    };
+    let (hour_str, minute_str) = clock.split_once(':')?;
+    let hour: u32 = hour_str.parse().ok()?;
+    let minute: u32 = minute_str.parse().ok()?;
+    let time = match meridiem {
+        Some(true) => {
+            if !(1..=12).contains(&hour) {
+                return None;
+            }
+            NaiveTime::from_hms_opt(if hour == 12 { 12 } else { hour + 12 }, minute, 0)?
+        }
+        Some(false) => {
+            if !(1..=12).contains(&hour) {
+                return None;
+            }
+            NaiveTime::from_hms_opt(if hour == 12 { 0 } else { hour }, minute, 0)?
+        }
+        None => {
+            if hour > 23 {
+                return None;
+            }
+            NaiveTime::from_hms_opt(hour, minute, 0)?
+        }
+    };
+    Some(time)
+}
+
+/// Minutes until the next local occurrence of `time` (today if it is still
+/// ahead, otherwise tomorrow), clamped to at least 1 so a target seconds
+/// away does not re-ring immediately.
+fn minutes_until_next_occurrence(now: DateTime<Local>, time: NaiveTime) -> Option<u32> {
+    let today = now.date_naive();
+    for day in 0..=1 {
+        let ndt = NaiveDateTime::new(today + Duration::days(day), time);
+        if let Some(dt) = ndt.and_local_timezone(Local).earliest()
+            && dt > now
+        {
+            return Some(dt.signed_duration_since(now).num_minutes().max(1) as u32);
+        }
+    }
+    None
+}
+
+/// Parse a custom snooze target into minutes from now. Accepts, in order:
+/// a clock time (`16:20`, `4:20pm` -> the next time the clock shows that),
+/// a compact duration (`15m`, `1h`, `16h20m`, `1d`), a bare minute count
+/// (`15`), or a date (`tomorrow`, `monday`, `2026-01-05` -> that day at
+/// `default_time`).
+pub fn parse_snooze_target_with_lex(
+    val: &str,
+    lex: &ParserLexicon,
+    now: DateTime<Local>,
+    default_time: NaiveTime,
+) -> Option<u32> {
+    let lower = val.trim().to_lowercase();
+    let compact = lower.replace(' ', "");
+
+    if let Some(time) = parse_clock_time(&compact) {
+        return minutes_until_next_occurrence(now, time);
+    }
+    if let Some(mins) = parse_duration_with_lex(&compact, lex) {
+        return Some(mins);
+    }
+    if let Ok(mins) = lower.parse::<u32>() {
+        return Some(mins);
+    }
+    if let Some(d) = parse_smart_date_with_lex(&compact, lex)
+        .or_else(|| parse_next_date_with_lex(&compact, lex).map(DateType::AllDay))
+    {
+        let dt = match d {
+            DateType::AllDay(nd) => crate::model::item::safe_local_to_utc(nd, default_time),
+            DateType::Specific(dt) => dt,
+            DateType::Month(y, m) => crate::model::item::safe_local_to_utc(
+                NaiveDate::from_ymd_opt(y, m, 1)?,
+                default_time,
+            ),
+            DateType::Year(y) => crate::model::item::safe_local_to_utc(
+                NaiveDate::from_ymd_opt(y, 1, 1)?,
+                default_time,
+            ),
+        };
+        let diff = dt.signed_duration_since(now);
+        if diff > Duration::zero() {
+            return Some(diff.num_minutes().max(1) as u32);
+        }
+    }
+    None
+}
+
+pub fn parse_snooze_target(val: &str, default_time: NaiveTime) -> Option<u32> {
+    let lex_guard = LEXICON.read().unwrap();
+    parse_snooze_target_with_lex(val, &lex_guard, Local::now(), default_time)
 }
 
 pub fn format_goal_duration(current_mins: u32, target_mins: u32) -> (String, String) {

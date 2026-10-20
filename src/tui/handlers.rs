@@ -2448,8 +2448,13 @@ pub async fn handle_key_event(
         },
         InputMode::Snoozing => match key.code {
             KeyCode::Enter if !state.input_buffer.is_empty() => {
-                // Parse custom snooze duration
-                if let Some(mins) = crate::model::parser::parse_duration(&state.input_buffer) {
+                // Parse custom snooze target (duration, clock time, or date)
+                let default_time = Config::load(state.ctx.as_ref())
+                    .map(|c| c.parsed_default_reminder_time())
+                    .unwrap_or_else(|_| NaiveTime::from_hms_opt(8, 0, 0).unwrap());
+                if let Some(mins) =
+                    crate::model::parser::parse_snooze_target(&state.input_buffer, default_time)
+                {
                     if let Some((task, alarm_uid)) = state.active_alarm.clone() {
                         handle_alarm_action(
                             state,

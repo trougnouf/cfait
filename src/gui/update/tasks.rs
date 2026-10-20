@@ -1476,11 +1476,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             // Parse before dismissing the alarm: on a typo the alarm keeps
             // ringing instead of silently snoozing for a fallback 10 minutes.
             let input = app.snooze_custom_input.trim();
-            let mins = if let Ok(n) = input.parse::<u32>() {
-                Some(n)
-            } else {
-                crate::model::parser::parse_duration(input)
-            };
+            let default_time = app.core_config.parsed_default_reminder_time();
+            let mins = crate::model::parser::parse_snooze_target(input, default_time);
             match mins {
                 Some(mins) => {
                     app.ringing_tasks

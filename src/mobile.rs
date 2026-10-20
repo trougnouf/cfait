@@ -2451,47 +2451,8 @@ impl CfaitMobile {
     }
 
     pub fn parse_snooze_target(&self, val: String) -> Option<u32> {
-        let lex_guard = crate::model::parser::LEXICON.read().unwrap();
-        let lex = &*lex_guard;
-        let val = val.trim().to_lowercase();
-
-        let dur_val = val.replace(' ', "");
-        if let Some(mins) = crate::model::parser::parse_duration_with_lex(&dur_val, lex) {
-            return Some(mins);
-        }
-
-        if let Some(d) = crate::model::parser::parse_smart_date_with_lex(&val, lex).or_else(|| {
-            crate::model::parser::parse_next_date_with_lex(&val, lex)
-                .map(crate::model::DateType::AllDay)
-        }) {
-            let now = chrono::Utc::now();
-
-            let config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
-            let def_time =
-                chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M")
-                    .unwrap_or_else(|_| chrono::NaiveTime::from_hms_opt(9, 0, 0).unwrap());
-
-            let dt = match d {
-                crate::model::DateType::AllDay(nd) => {
-                    crate::model::item::safe_local_to_utc(nd, def_time)
-                }
-                crate::model::DateType::Specific(dt) => dt,
-                crate::model::DateType::Month(y, m) => crate::model::item::safe_local_to_utc(
-                    chrono::NaiveDate::from_ymd_opt(y, m, 1).unwrap(),
-                    def_time,
-                ),
-                crate::model::DateType::Year(y) => crate::model::item::safe_local_to_utc(
-                    chrono::NaiveDate::from_ymd_opt(y, 1, 1).unwrap(),
-                    def_time,
-                ),
-            };
-
-            let diff = dt.timestamp() - now.timestamp();
-            if diff > 0 {
-                return Some((diff / 60) as u32);
-            }
-        }
-        None
+        let config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
+        crate::model::parser::parse_snooze_target(&val, config.parsed_default_reminder_time())
     }
 
     pub async fn get_view_tasks(&self, options: MobileFilterOptions) -> MobileViewData {
