@@ -471,8 +471,8 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
             let event = event::read()?;
             match event {
                 Event::Mouse(mouse) => match mouse.kind {
-                    MouseEventKind::ScrollDown => app_state.next(),
-                    MouseEventKind::ScrollUp => app_state.previous(),
+                    MouseEventKind::ScrollDown => app_state.handle_mouse_scroll(true),
+                    MouseEventKind::ScrollUp => app_state.handle_mouse_scroll(false),
                     MouseEventKind::Down(MouseButton::Left) => {
                         app_state.handle_mouse_click(mouse.column, mouse.row)
                     }

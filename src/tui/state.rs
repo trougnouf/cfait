@@ -1294,6 +1294,43 @@ impl AppState {
         }
     }
 
+    /// Handles a mouse scroll-wheel event.
+    ///
+    /// Modal popups (help, details, description editor) scroll their own
+    /// content while open; otherwise the wheel moves the list selection.
+    pub fn handle_mouse_scroll(&mut self, down: bool) {
+        match self.mode {
+            InputMode::Help(_) => {
+                self.help_scroll_offset = if down {
+                    self.help_scroll_offset.saturating_add(1)
+                } else {
+                    self.help_scroll_offset.saturating_sub(1)
+                };
+            }
+            InputMode::ViewingDetails => {
+                self.details_scroll = if down {
+                    self.details_scroll.saturating_add(1)
+                } else {
+                    self.details_scroll.saturating_sub(1)
+                };
+            }
+            InputMode::EditingDescription | InputMode::EditingTree(_) => {
+                self.edit_scroll_offset = if down {
+                    self.edit_scroll_offset.saturating_add(1)
+                } else {
+                    self.edit_scroll_offset.saturating_sub(1)
+                };
+            }
+            _ => {
+                if down {
+                    self.next();
+                } else {
+                    self.previous();
+                }
+            }
+        }
+    }
+
     /// Selects the sidebar row rendered on the line `y` (within
     /// `sidebar_list_rect`), mirroring the side effects of keyboard navigation.
     fn select_sidebar_row_at(&mut self, y: u16) {
