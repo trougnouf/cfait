@@ -4346,7 +4346,8 @@ mod tests {
         // headers and plain list items must not render as indented sub-items
         // in task list rows (mirrors the TUI and GUI guards); the row stays
         // marked as openable so the content is one tap away.
-        let mut page = crate::model::Task::new("field notes", &std::collections::HashMap::new(), None);
+        let mut page =
+            crate::model::Task::new("field notes", &std::collections::HashMap::new(), None);
         page.is_journal = true;
         page.description = "# Overview\n- [ ] a real task\n- plain list line".to_string();
 

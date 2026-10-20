@@ -484,7 +484,8 @@ fn flat_doc_headers_and_lists_are_not_task_list_subitems() {
 
     // A document body with a header, plain list items, prose and one real
     // checkbox task.
-    let body = "Intro prose.\n## Section One\n- item one\n- item two\n## Section Two\n- [ ] a real task";
+    let body =
+        "Intro prose.\n## Section One\n- item one\n- item two\n## Section Two\n- [ ] a real task";
 
     for (title, search) in [
         ("Garden page is:page", "Garden page"),
