@@ -2361,9 +2361,11 @@ pub fn parse_snooze_target_with_lex(
     if let Ok(mins) = lower.parse::<u32>() {
         return Some(mins);
     }
-    if let Some(d) = parse_smart_date_with_lex(&compact, lex)
-        .or_else(|| parse_next_date_with_lex(&compact, lex).map(DateType::AllDay))
-    {
+    // Resolve relative dates against the injected `now`, not the wall clock,
+    // so the result is independent of the real current date.
+    if let Some(d) = parse_smart_date_at_with_lex(&compact, lex, now.date_naive()).or_else(|| {
+        parse_next_date_at_with_lex(&compact, lex, now.date_naive()).map(DateType::AllDay)
+    }) {
         let dt = match d {
             DateType::AllDay(nd) => crate::model::item::safe_local_to_utc(nd, default_time),
             DateType::Specific(dt) => dt,
@@ -2499,6 +2501,18 @@ pub fn parse_smart_date(val: &str) -> Option<DateType> {
 }
 
 pub fn parse_smart_date_with_lex(val: &str, lex: &ParserLexicon) -> Option<DateType> {
+    parse_smart_date_at_with_lex(val, lex, Local::now().date_naive())
+}
+
+/// Like `parse_smart_date_with_lex`, but resolves relative dates (`today`,
+/// `tomorrow`, `yesterday`, `N days/weeks/...`) against `today` rather than
+/// the wall clock. Callers that resolve a date relative to a known instant
+/// (e.g. the snooze bar, given an injected `now`) use this to stay consistent.
+pub fn parse_smart_date_at_with_lex(
+    val: &str,
+    lex: &ParserLexicon,
+    today: NaiveDate,
+) -> Option<DateType> {
     if let Ok(date) = NaiveDate::parse_from_str(val, "%Y-%m-%d") {
         return Some(DateType::AllDay(date));
     }
@@ -2535,14 +2549,13 @@ pub fn parse_smart_date_with_lex(val: &str, lex: &ParserLexicon) -> Option<DateT
         return Some(DateType::Year(y));
     }
 
-    let now = Local::now().date_naive();
     let lower = val.to_lowercase();
 
     match lex.exact.get(&lower) {
         Some(ExactToken::Now) => return Some(DateType::Specific(Utc::now())),
-        Some(ExactToken::Today) => return Some(DateType::AllDay(now)),
-        Some(ExactToken::Tomorrow) => return Some(DateType::AllDay(now + Duration::days(1))),
-        Some(ExactToken::Yesterday) => return Some(DateType::AllDay(now - Duration::days(1))),
+        Some(ExactToken::Today) => return Some(DateType::AllDay(today)),
+        Some(ExactToken::Tomorrow) => return Some(DateType::AllDay(today + Duration::days(1))),
+        Some(ExactToken::Yesterday) => return Some(DateType::AllDay(today - Duration::days(1))),
         _ => {}
     }
 
@@ -2553,16 +2566,16 @@ pub fn parse_smart_date_with_lex(val: &str, lex: &ParserLexicon) -> Option<DateT
     if let Ok(n) = amt_str.parse::<i64>() {
         match lex.exact.get(unit_str) {
             Some(ExactToken::Unit(LexiconUnit::Days)) => {
-                return Some(DateType::AllDay(now + Duration::days(n)));
+                return Some(DateType::AllDay(today + Duration::days(n)));
             }
             Some(ExactToken::Unit(LexiconUnit::Weeks)) => {
-                return Some(DateType::AllDay(now + Duration::days(n * 7)));
+                return Some(DateType::AllDay(today + Duration::days(n * 7)));
             }
             Some(ExactToken::Unit(LexiconUnit::Months)) => {
-                return Some(DateType::AllDay(now + Duration::days(n * 30)));
+                return Some(DateType::AllDay(today + Duration::days(n * 30)));
             }
             Some(ExactToken::Unit(LexiconUnit::Years)) => {
-                return Some(DateType::AllDay(now + Duration::days(n * 365)));
+                return Some(DateType::AllDay(today + Duration::days(n * 365)));
             }
             _ => {}
         }
@@ -2611,15 +2624,24 @@ pub fn parse_next_date(unit: &str) -> Option<NaiveDate> {
 }
 
 pub fn parse_next_date_with_lex(unit: &str, lex: &ParserLexicon) -> Option<NaiveDate> {
-    let now = Local::now().date_naive();
+    parse_next_date_at_with_lex(unit, lex, Local::now().date_naive())
+}
+
+/// Like `parse_next_date_with_lex`, but resolves the next occurrence against
+/// `today` rather than the wall clock (see `parse_smart_date_at_with_lex`).
+pub fn parse_next_date_at_with_lex(
+    unit: &str,
+    lex: &ParserLexicon,
+    today: NaiveDate,
+) -> Option<NaiveDate> {
     let lower = unit.to_lowercase();
 
     if let Some(ExactToken::Unit(u)) = lex.exact.get(&lower) {
         match u {
-            LexiconUnit::Days => return Some(now + Duration::days(1)),
-            LexiconUnit::Weeks => return Some(now + Duration::days(7)),
-            LexiconUnit::Months => return Some(now + Duration::days(30)),
-            LexiconUnit::Years => return Some(now + Duration::days(365)),
+            LexiconUnit::Days => return Some(today + Duration::days(1)),
+            LexiconUnit::Weeks => return Some(today + Duration::days(7)),
+            LexiconUnit::Months => return Some(today + Duration::days(30)),
+            LexiconUnit::Years => return Some(today + Duration::days(365)),
             _ => {}
         }
     }
@@ -2635,7 +2657,7 @@ pub fn parse_next_date_with_lex(unit: &str, lex: &ParserLexicon) -> Option<Naive
             "SU" => chrono::Weekday::Sun,
             _ => return None,
         };
-        return next_weekday(now, target);
+        return next_weekday(today, target);
     }
     None
 }
