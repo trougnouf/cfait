@@ -41,13 +41,33 @@ fn parse_checkbox(s: &str) -> Option<(crate::model::TaskStatus, Option<u8>, &str
     }
 }
 
-fn extract_uid_tag(line: &str) -> (String, Option<String>) {
-    if let Some(idx) = line.rfind("<!-- uid:")
-        && let Some(end_idx) = line[idx..].find("-->")
+const UID_TAG_PREFIX: &str = "<!-- uid:";
+
+/// The uid of a genuine end-of-line `<!-- uid:... -->` tag on `s`, if any.
+/// Only a well-formed tag at the very end of the line (trailing whitespace
+/// aside) identifies a line as an already-minted child; a mid-line mention
+/// of the tag in prose (e.g. a spec example) is not a tag.
+fn trailing_uid_tag(s: &str) -> Option<&str> {
+    let trimmed = s.trim_end();
+    let idx = trimmed.rfind(UID_TAG_PREFIX)?;
+    let uid = trimmed[idx + UID_TAG_PREFIX.len()..]
+        .strip_suffix("-->")?
+        .trim();
+    if uid.is_empty()
+        || !uid
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':')
     {
-        let uid = line[idx + 9..idx + end_idx].trim().to_string();
-        let clean_line = line[..idx].trim().to_string();
-        return (clean_line, Some(uid));
+        return None;
+    }
+    Some(uid)
+}
+
+fn extract_uid_tag(line: &str) -> (String, Option<String>) {
+    if let Some(uid) = trailing_uid_tag(line) {
+        let trimmed = line.trim_end();
+        let idx = trimmed.rfind(UID_TAG_PREFIX).unwrap();
+        return (trimmed[..idx].trim().to_string(), Some(uid.to_string()));
     }
     (line.trim_end().to_string(), None)
 }
@@ -101,16 +121,30 @@ fn leading_digit_bytes(s: &str) -> usize {
         .count()
 }
 
+/// Flat-document tokens: `is:note` forces a note subtask, and the rest mark
+/// a journal page or flat document whose sub-tree is parsed with flat rules.
+const FLAT_DOC_TOKENS: &[&str] = &["is:note", "is:page", "is:journal", "is:flat", "is:doc"];
+const FLAT_SCOPE_TOKENS: &[&str] = &["is:page", "is:journal", "is:flat", "is:doc"];
+
+/// Whether `s` carries one of `tokens` as a whole word, matching the
+/// parser's exact-token semantics: a backticked or embedded mention in
+/// prose (e.g. `` `is:page` `` in a spec document) is not a token.
+fn has_flat_token(s: &str, tokens: &[&str]) -> bool {
+    s.split_whitespace()
+        .any(|w| tokens.iter().any(|t| w.eq_ignore_ascii_case(t)))
+}
+
 /// Whether `after_marker` (a list item's text) carries a marker that makes
-/// the line an explicit task even in flat-document context, and scopes its
-/// sub-tree to flat-document parsing: `is:note`, `is:page`/`is:journal`,
-/// or `is:flat`/`is:doc`.
+/// the line an explicit task even in flat-document context: `is:note`,
+/// `is:page`/`is:journal`, or `is:flat`/`is:doc`.
 fn flat_doc_marker(after_marker: &str) -> bool {
-    after_marker.contains("is:note")
-        || after_marker.contains("is:page")
-        || after_marker.contains("is:journal")
-        || after_marker.contains("is:flat")
-        || after_marker.contains("is:doc")
+    has_flat_token(after_marker, FLAT_DOC_TOKENS)
+}
+
+/// Whether `after_marker` carries a token that scopes the sub-tree to
+/// flat-document parsing (`is:page`/`is:journal`/`is:flat`/`is:doc`).
+fn scopes_flat_doc(after_marker: &str) -> bool {
+    has_flat_token(after_marker, FLAT_SCOPE_TOKENS)
 }
 
 fn compute_task_lines(input: &str, global_flat_doc: bool) -> Vec<bool> {
@@ -174,7 +208,7 @@ fn compute_task_lines(input: &str, global_flat_doc: bool) -> Vec<bool> {
 
             if list_marker {
                 let has_checkbox = parse_checkbox(after_marker).is_some();
-                let has_uid = after_marker.contains("<!-- uid:");
+                let has_uid = trailing_uid_tag(after_marker).is_some();
                 let has_is_note = flat_doc_marker(after_marker);
 
                 if has_checkbox || has_uid || has_is_note || (!current_flat_doc && !has_checkbox) {
@@ -185,10 +219,7 @@ fn compute_task_lines(input: &str, global_flat_doc: bool) -> Vec<bool> {
 
                     // A journal page or flat doc scopes its sub-tree to
                     // flat-document parsing (no shredding of plain text).
-                    let looks_like_journal = after_marker.contains("is:page")
-                        || after_marker.contains("is:journal")
-                        || after_marker.contains("is:flat")
-                        || after_marker.contains("is:doc");
+                    let looks_like_journal = scopes_flat_doc(after_marker);
 
                     context_stack.push((indent, looks_like_journal));
                 }
@@ -286,8 +317,6 @@ pub fn has_extractable_subtasks(input: &str, flat_doc: bool) -> bool {
     is_task.into_iter().any(|b| b)
 }
 
-const UID_TAG_PREFIX: &str = "<!-- uid:";
-
 /// Whether `s` (already indent-stripped) starts with a markdown list or
 /// heading marker: the shape every task line has.
 fn starts_with_task_marker(s: &str) -> bool {
@@ -311,13 +340,7 @@ pub fn shadow_marker(line: &str) -> Option<(&str, &str)> {
     if !starts_with_task_marker(trimmed) {
         return None;
     }
-    let idx = trimmed.find(UID_TAG_PREFIX)?;
-    let after = &trimmed[idx + UID_TAG_PREFIX.len()..];
-    let end = after.find("-->")?;
-    let uid = after[..end].trim();
-    if uid.is_empty() {
-        return None;
-    }
+    let uid = trailing_uid_tag(trimmed)?;
     let marker_len = if trimmed.starts_with('#') {
         trimmed.find(' ').unwrap_or(0)
     } else if trimmed.starts_with("- ") || trimmed.starts_with("* ") || trimmed.starts_with("+ ") {

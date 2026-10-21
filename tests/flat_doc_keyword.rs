@@ -541,3 +541,108 @@ fn flat_doc_headers_and_lists_are_not_task_list_subitems() {
         );
     }
 }
+
+/// Regression: a journal page (or is:flat task) whose body *mentions* the
+/// flat-document tokens in prose — backticked `is:note` / `is:page` /
+/// `is:flat` in a syntax write-up, or a mid-line `<!-- uid:abc-123 -->`
+/// example — must not be shredded into note subtasks. Only real checkboxes,
+/// genuine end-of-line uid tags, and whole-word tokens mark a line as a
+/// subtask; a search then shows the page and its real children only.
+#[test]
+fn flat_doc_prose_menting_tokens_is_not_shredded() {
+    let mut store = make_store();
+    let aliases = HashMap::new();
+
+    let mut page = Task::new("Garden syntax notes is:page", &aliases, None);
+    page.calendar_href = "local://default".to_string();
+    let page_uid = page.uid.clone();
+    let page_summary = page.summary.clone();
+    store.add_task(page);
+
+    // A syntax write-up pasted into the page: it mentions every token in
+    // backticks and shows a mid-line uid tag example, the way a spec does.
+    let body = [
+        "Writing tasks down:",
+        "- **Primitives:** `is:done`, `is:note`, `is:page`, `is:journal`, `is:flat` and `is:doc` are the state tokens.",
+        "- **Round-trip UIDs:** each line may carry a `<!-- uid:abc-123 -->` comment, e.g. `- [ ] Buy seeds <!-- uid:abc-123 -->`.",
+        "- **Context:** a line tagged `is:page` always becomes a sub-page, whether typed in the task or the journal tab.",
+        "- [ ] Water the tomatoes",
+        "- Compost notes is:page",
+    ]
+    .join("\n");
+
+    let cals = calendars();
+    let opts = SyncTreeOptions {
+        aliases: &aliases,
+        default_reminder_time: None,
+        trash_retention_days: 30,
+        calendars: &cals,
+    };
+
+    // The journal editor save: the buffer is the document body, synced with
+    // the page's own is_journal flag (document view).
+    let (actions, warnings, _mints) = store
+        .sync_tree_from_markdown(&page_uid, &body, &opts, true, false)
+        .unwrap();
+    assert!(warnings.is_empty());
+
+    // Only the checkbox line and the whole-word is:page line become
+    // children; the prose lines that merely mention tokens stay in the
+    // document.
+    let kids = children_of(&store, &page_uid);
+    let mut summaries: Vec<_> = kids.iter().map(|t| t.summary.clone()).collect();
+    summaries.sort();
+    assert_eq!(
+        summaries,
+        vec![
+            "Compost notes".to_string(),
+            "Water the tomatoes".to_string()
+        ],
+        "only the checkbox task and the sub-page are children: {actions:?}"
+    );
+    assert!(
+        kids.iter().all(|t| !t.is_note),
+        "no prose line becomes a note child: {summaries:?}"
+    );
+
+    // The document keeps the prose verbatim, shadows included.
+    let page_after = store.get_task_ref(&page_uid).unwrap();
+    assert!(
+        page_after.description.contains("`is:note`"),
+        "the backticked token mention stays prose: {:?}",
+        page_after.description
+    );
+    assert!(
+        page_after
+            .description
+            .contains("e.g. `- [ ] Buy seeds <!-- uid:abc-123 -->`"),
+        "the mid-line uid example stays prose: {:?}",
+        page_after.description
+    );
+
+    // Searching the task list shows the page and its two real children
+    // only: no note row for a prose line.
+    let rows = task_list_rows(&store, &cals, &page_summary);
+    let mut sub_rows: Vec<_> = rows.iter().filter(|(_, d)| *d > 0).cloned().collect();
+    sub_rows.sort();
+    assert_eq!(
+        sub_rows,
+        vec![
+            ("Compost notes".to_string(), 1),
+            ("Water the tomatoes".to_string(), 1),
+        ],
+        "only the real children may appear as sub-items: {rows:?}"
+    );
+
+    // Re-syncing the unchanged document is a no-op (idempotent round-trip):
+    // the journal editor reloads the document view and saves it back.
+    let md = cfait::model::extractor::serialize_journal_document(&store, &page_uid, &cals);
+    let (actions2, warnings2, _mints2) = store
+        .sync_tree_from_markdown(&page_uid, &md, &opts, true, false)
+        .unwrap();
+    assert!(warnings2.is_empty());
+    assert!(
+        actions2.is_empty(),
+        "re-syncing an unchanged page is a no-op: {actions2:?}"
+    );
+}
