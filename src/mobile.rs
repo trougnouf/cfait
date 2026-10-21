@@ -1851,6 +1851,7 @@ impl CfaitMobile {
         c.update_sync_timestamp_if_changed(&old_c);
 
         c.save_with_credentials(self.ctx.as_ref())
+            .map(|_| ())
             .map_err(MobileError::from)
     }
 

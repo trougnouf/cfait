@@ -196,13 +196,24 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
                 }
             }
 
-            if let Err(e) = new_config.save_with_credentials(ctx.as_ref()) {
-                eprintln!(
-                    "{}",
-                    rust_i18n::t!("tui_warning_save_config", error = e.to_string())
-                );
-            } else if let Ok(path) = config::Config::get_path_string(ctx.as_ref()) {
-                println!("{}", rust_i18n::t!("tui_config_saved", path = path));
+            match new_config.save_with_credentials(ctx.as_ref()) {
+                Err(e) => {
+                    eprintln!(
+                        "{}",
+                        rust_i18n::t!("tui_warning_save_config", error = e.to_string())
+                    );
+                }
+                Ok(persisted) => {
+                    if let Ok(path) = config::Config::get_path_string(ctx.as_ref()) {
+                        println!("{}", rust_i18n::t!("tui_config_saved", path = path));
+                        if !persisted && new_config.password_kept_in_file() {
+                            println!(
+                                "{}",
+                                rust_i18n::t!("password_kept_in_file_note", path = path)
+                            );
+                        }
+                    }
+                }
             }
 
             println!("{}", rust_i18n::t!("tui_starting"));

@@ -55,7 +55,7 @@ Tasks map strictly to iCalendar `VTODO` components, while daily notes map to `VJ
 *   **System Entities:** Local trash uses `local://trash`. Items here are soft-deleted and pruned based on `trash_retention_days`. A soft-deleted task keeps its `parent_uid` (the sub-tree structure survives in the trash) and records its deletion date (`X-TRASHED-DATE`) and origin collection (`X-TRASHED-FROM`). A *Restore* action (GUI/TUI context menus, Android long-press menu, `cfait restore <uid>`) moves a trashed task and its trash-resident sub-tree back to the recorded origin collection — falling back to the parent's collection, the default calendar, then `local://` — stripping the trash bookkeeping properties. `parent_uid` links are left untouched, so the tree lands where it was; dependencies that were cleaned from other tasks on delete are not resurrected.
 
 ### 1.3. System Integrations
-*   **Keyring:** Passwords are never stored in plaintext `config.toml`. They are vaulted via OS keyrings: Windows Credential Manager, macOS Keychain, Linux Secret Portal (oo7) or Keyutils, Android Keystore.
+*   **Keyring:** Passwords are never stored in plaintext `config.toml`. They are vaulted via OS keyrings: Windows Credential Manager, macOS Keychain, Linux Secret Portal (oo7) or Keyutils, Android Keystore. When the keyring is unreachable (e.g. a headless SSH box) and the password exists only as a `password =` line in `config.toml`, Cfait keeps that line on every save and tells the user; once a keyring is reachable, the password is vaulted there and the line is stripped. An optional `password_command` (e.g. `pass show cfait`) can own the credential instead: its stdout (trailing newlines stripped) is used as the password, takes precedence over the keyring and the file, and is never written to disk. The command runs through the system shell with a 10-second timeout and a failed run falls back to keyring/file.
 *   **Logging:** Outputs to `cache/cfait.log` (rotating `cfait.old.log`). Terminal stderr logging is enabled for CLI/GUI, but disabled for TUI to prevent screen tearing. Android uses dual logging (File + Logcat).
 *   **Crash Reporting (Android):** An `UncaughtExceptionHandler` should write panics to `cache/android_crash.txt` (but it doesn't work in practice).
 
@@ -412,7 +412,7 @@ Used for headless automation, scripting, and piping. Operates directly on the `T
 *   `cfait collection create <name> [--color #hex]`: Creates a new collection.
 *   `cfait collection edit <href> --name <name> [--color #hex]`: Edits a collection's display name or color.
 *   `cfait collection default [name-or-href]`: Sets the default collection used when creating tasks without `-c`/`--collection`; accepts a collection name or full HREF and unhides the collection if it was hidden. With no argument, shows the current default.
-*   `cfait login <url> <username>`: Configures the CalDAV server and securely prompts for the password to store in the OS keyring.
+*   `cfait login <url> <username>`: Configures the CalDAV server and securely prompts for the password to store in the OS keyring. When the keyring is unreachable, the password is kept in `config.toml` instead and the user is told so; when a `password_command` is set, the typed password is not stored at all (the command owns the credential).
 
 ---
 
@@ -423,7 +423,8 @@ All persistent state and settings live here. Unrecognized TOML keys must not be 
 *   `data_dir`: String (Optional). Absolute or `~/`-relative path overriding where cfait stores its data files (e.g. `local.json`, `journal.json`, `alarm_index.json`) instead of the XDG default (`~/.local/share/cfait`). Read before any other setting so the data directory can be relocated (e.g. into a syncthing-managed folder) without moving config or cache. Only the data directory is affected; config and cache stay at their XDG defaults.
 
 **Connection & Sync:**
-*   `url`, `username`: CalDAV credentials. *(Password vaulted in OS Keyring).*
+*   `url`, `username`: CalDAV credentials. *(Password vaulted in OS Keyring; kept in this file — with a notice — only while no keyring is reachable.)*
+*   `password_command`: String (Optional). Shell command whose stdout (trailing newlines stripped) is used as the CalDAV password (e.g. `pass show cfait`). Takes precedence over the keyring and any `password` line; its output is never stored. Runs through the system shell with a 10-second timeout; on failure Cfait falls back to keyring/file.
 *   `tls_client_cert_path`, `tls_client_key_path`: Strings (Optional). Paths to PEM-encoded certificate and private key for mTLS.
 *   `allow_insecure_certs`: Boolean.
 *   `sync_settings`: Boolean. Enables cross-device settings sync (custom collection properties when the server supports them, otherwise the hidden 1970 CANCELLED VEVENT carrier).

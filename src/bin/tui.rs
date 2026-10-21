@@ -627,6 +627,13 @@ async fn main() -> Result<()> {
                 println!("{}", rust_i18n::t!("offline_mode_configured"));
                 return Ok(());
             }
+            if config.password_kept_in_file() {
+                let path = cfait::config::Config::get_path_string(ctx.as_ref()).unwrap_or_default();
+                eprintln!(
+                    "{}",
+                    rust_i18n::t!("password_kept_in_file_note", path = path)
+                );
+            }
             println!("{}", rust_i18n::t!("syncing"));
             match cfait::client::RustyClient::connect_with_fallback(
                 ctx.clone(),
@@ -679,6 +686,7 @@ async fn main() -> Result<()> {
             let _presence_lock = cfait::storage::PresenceLock::acquire_shared(ctx.as_ref())
                 .map_err(|e| eprintln!("Warning: Could not acquire presence lock: {}", e))
                 .ok();
+            let mut warned_password_in_file = false;
             loop {
                 let config =
                     cfait::config::Config::load_with_credentials(ctx.as_ref()).unwrap_or_default();
@@ -690,6 +698,15 @@ async fn main() -> Result<()> {
                 if config.url.is_empty() {
                     println!("{}", rust_i18n::t!("daemon_offline_sleeping"));
                 } else {
+                    if !warned_password_in_file && config.password_kept_in_file() {
+                        let path = cfait::config::Config::get_path_string(ctx.as_ref())
+                            .unwrap_or_default();
+                        eprintln!(
+                            "{}",
+                            rust_i18n::t!("password_kept_in_file_note", path = path)
+                        );
+                        warned_password_in_file = true;
+                    }
                     #[cfg(not(target_os = "android"))]
                     match cfait::storage::DaemonLock::try_acquire_exclusive(ctx.as_ref()) {
                         Ok(Some(_lock)) => {
@@ -2057,9 +2074,19 @@ async fn main() -> Result<()> {
             config.password = pass;
 
             config.update_sync_timestamp_if_changed(&old_config);
-            config.save_with_credentials(ctx.as_ref())?;
+            let persisted = config.save_with_credentials(ctx.as_ref())?;
 
-            println!("Credentials successfully saved to OS keyring.");
+            if config.password_command.is_some() {
+                println!("{}", rust_i18n::t!("login_password_command"));
+            } else if persisted {
+                println!("{}", rust_i18n::t!("login_saved_keyring"));
+            } else {
+                let path = cfait::config::Config::get_path_string(ctx.as_ref()).unwrap_or_default();
+                println!(
+                    "{}",
+                    rust_i18n::t!("password_kept_in_file_note", path = path)
+                );
+            }
             return Ok(());
         }
         "collection" => {

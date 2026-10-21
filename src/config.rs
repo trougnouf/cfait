@@ -845,6 +845,17 @@ pub struct Config {
     #[serde(skip_serializing)]
     pub password: String,
 
+    /// Shell command that prints the CalDAV password (e.g. `pass show cfait`).
+    /// Takes precedence over the OS keyring; its output is never stored.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub password_command: Option<String>,
+
+    /// Runtime-only flag: the in-memory password is confirmed to live outside
+    /// the config file (fetched from or written to the keyring, or owned by
+    /// `password_command`). `save()` strips the plaintext line only when true.
+    #[serde(skip)]
+    pub password_persisted_elsewhere: bool,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tls_client_cert_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1052,6 +1063,8 @@ impl Default for Config {
             local_url: String::new(),
             username: String::new(),
             password: String::new(),
+            password_command: None,
+            password_persisted_elsewhere: false,
             tls_client_cert_path: None,
             tls_client_key_path: None,
             default_calendar: None,
@@ -1366,10 +1379,147 @@ impl Config {
         }
     }
 
-    /// Load the configuration from disk and fetch the password from the OS keyring.
+    /// True when the in-memory password is only present in the config file —
+    /// it could not be vaulted in the OS keyring and no `password_command`
+    /// owns it. Callers use this to tell the user their credential is kept in
+    /// plaintext for now; `save()` re-injects the line so it survives rewrites.
+    pub fn password_kept_in_file(&self) -> bool {
+        !self.password.is_empty()
+            && !self.password_persisted_elsewhere
+            && self.password_command.is_none()
+    }
+
+    /// Timeout for `password_command` execution.
+    const PASSWORD_COMMAND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+    /// Run a `password_command` and return its stdout as the password.
+    ///
+    /// The command is executed through the system shell (`sh -c` or `cmd /C`)
+    /// and is given up to 10 seconds to finish. Fails when it cannot be
+    /// started, exits non-zero, times out, or prints nothing.
+    pub fn run_password_command(command: &str) -> Result<String> {
+        Self::run_password_command_with_timeout(command, Self::PASSWORD_COMMAND_TIMEOUT)
+    }
+
+    fn run_password_command_with_timeout(
+        command: &str,
+        timeout: std::time::Duration,
+    ) -> Result<String> {
+        use std::io::Read;
+        use std::process::{Command, Stdio};
+        use std::time::Instant;
+
+        let mut child = if cfg!(target_os = "windows") {
+            Command::new("cmd")
+                .arg("/C")
+                .arg(command)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null())
+                .spawn()
+        } else {
+            Command::new("sh")
+                .arg("-c")
+                .arg(command)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null())
+                .spawn()
+        }
+        .map_err(|e| anyhow::anyhow!("failed to start password_command '{}': {}", command, e))?;
+
+        let mut stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("password_command '{}': no stdout pipe", command))?;
+        // Read on a dedicated thread so a chatty command cannot deadlock the
+        // wait loop on a full pipe buffer.
+        let command_owned = command.to_string();
+        let reader = std::thread::spawn(move || {
+            let mut buf = String::new();
+            stdout
+                .read_to_string(&mut buf)
+                .map(|_| buf)
+                .map_err(|e| anyhow::anyhow!("password_command '{}': {}", command_owned, e))
+        });
+
+        let deadline = Instant::now() + timeout;
+        let status = loop {
+            match child.try_wait() {
+                Ok(Some(status)) => break status,
+                Ok(None) => {
+                    if Instant::now() >= deadline {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        let _ = reader.join();
+                        return Err(anyhow::anyhow!(
+                            "password_command '{}' timed out after {}s",
+                            command,
+                            timeout.as_secs()
+                        ));
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                }
+                Err(e) => {
+                    return Err(anyhow::anyhow!(
+                        "failed to wait for password_command '{}': {}",
+                        command,
+                        e
+                    ));
+                }
+            }
+        };
+        let output = reader.join().map_err(|_| {
+            anyhow::anyhow!("password_command '{}': reader thread panicked", command)
+        })??;
+
+        if !status.success() {
+            return Err(anyhow::anyhow!(
+                "password_command '{}' exited with status {}",
+                command,
+                status
+            ));
+        }
+        // Strip trailing newlines only: a password is data, not prose.
+        let password = output.trim_end_matches(['\n', '\r']).to_string();
+        if password.is_empty() {
+            return Err(anyhow::anyhow!(
+                "password_command '{}' produced no output",
+                command
+            ));
+        }
+        Ok(password)
+    }
+
+    /// Load the configuration from disk and resolve the password.
     /// Use this ONLY during app startup, explicit syncing, or opening the settings panel.
+    ///
+    /// Precedence: `password_command` (when set and successful), then the OS
+    /// keyring, then a plaintext `password` line in the file. When the
+    /// keyring is unreachable and the file holds the only copy of the
+    /// password, `password_persisted_elsewhere` stays false so `save()`
+    /// keeps the line in the file instead of destroying it.
     pub fn load_with_credentials(ctx: &dyn AppContext) -> Result<Self> {
         let mut config = Self::load(ctx)?;
+
+        if let Some(command) = config
+            .password_command
+            .as_deref()
+            .filter(|c| !c.trim().is_empty())
+        {
+            match Self::run_password_command(command) {
+                Ok(password) => {
+                    config.password = password;
+                    config.password_persisted_elsewhere = true;
+                    return Ok(config);
+                }
+                Err(err) => {
+                    log::warn!(
+                        "password_command '{}' failed: {}; falling back to keyring/config",
+                        command,
+                        err
+                    );
+                }
+            }
+        }
 
         let new_key = config.keyring_key();
         let legacy_key = if config.username.is_empty() {
@@ -1378,36 +1528,45 @@ impl Config {
             config.username.clone()
         };
 
+        // True once the password is confirmed to live in the keyring (fetched
+        // from it, or successfully written to it).
+        let mut vaulted = false;
         match keyring_core::Entry::new("cfait", &new_key) {
             Ok(entry) => {
                 if !config.password.is_empty() {
                     // Migration: plaintext password found in config.toml!
-                    // Move it securely into the OS keyring.
-                    if let Err(err) = entry.set_password(&config.password) {
+                    // Move it securely into the OS keyring. If the keyring is
+                    // unreachable, keep the flag false so the next save()
+                    // re-injects the line rather than destroying the only
+                    // copy; a later run re-attempts the migration.
+                    if entry.set_password(&config.password).is_ok() {
+                        vaulted = true;
+                        if new_key != legacy_key {
+                            Self::delete_legacy_entry(&legacy_key);
+                        }
+                    } else {
                         log::warn!(
-                            "Failed to migrate password into keyring for '{}': {}",
-                            new_key,
-                            err
+                            "Failed to vault config file password into keyring for '{}'; keeping it in the config file for now",
+                            new_key
                         );
-                    } else if new_key != legacy_key {
-                        Self::delete_legacy_entry(&legacy_key);
                     }
                 } else {
                     match entry.get_password() {
                         Ok(pw) => {
                             // Normal run: fetch the password from the OS keyring.
                             config.password = pw;
+                            vaulted = true;
                         }
                         Err(keyring_core::Error::NoEntry) if new_key != legacy_key => {
                             // First run under the host-namespaced key: carry the
                             // legacy username-only credential over, if any.
                             if let Ok(legacy) = keyring_core::Entry::new("cfait", &legacy_key)
                                 && let Ok(pw) = legacy.get_password()
+                                && entry.set_password(&pw).is_ok()
                             {
-                                if entry.set_password(&pw).is_ok() {
-                                    Self::delete_legacy_entry(&legacy_key);
-                                }
+                                Self::delete_legacy_entry(&legacy_key);
                                 config.password = pw;
+                                vaulted = true;
                             }
                         }
                         Err(keyring_core::Error::NoEntry) => {}
@@ -1429,7 +1588,11 @@ impl Config {
                 );
             }
         }
+        config.password_persisted_elsewhere = vaulted;
 
+        // Keep the cache consistent with the resolved credential state.
+        let path = ctx.get_config_file_path()?;
+        *CONFIG_CACHE.write().unwrap() = Some((path, config.clone()));
         Ok(config)
     }
 
@@ -1477,23 +1640,54 @@ impl Config {
     /// Save configuration using an explicit context.
     /// This method post-processes the TOML string to inject documentation comments.
     pub fn save(&self, ctx: &dyn AppContext) -> Result<()> {
+        self.save_with_persistence(ctx, self.password_persisted_elsewhere)?;
+        Ok(())
+    }
+
+    /// Save the configuration, treating the password as persisted outside the
+    /// file when `persisted_elsewhere` is true. When false (and a password is
+    /// set and not owned by `password_command`), re-injects the plaintext
+    /// `password` line right after `username` so a rewrite never destroys the
+    /// only copy of the credential.
+    ///
+    /// Returns whether the password is safe outside the file after the write.
+    fn save_with_persistence(
+        &self,
+        ctx: &dyn AppContext,
+        persisted_elsewhere: bool,
+    ) -> Result<bool> {
         let path = ctx.get_config_file_path()?;
 
         LocalStorage::with_lock(&path, || {
             let toml_str = toml::to_string_pretty(self)?;
-            let documented_toml = Self::inject_documentation(&toml_str);
+            let documented_toml = self.inject_documentation(&toml_str, persisted_elsewhere);
             LocalStorage::atomic_write(&path, documented_toml)?;
             Ok(())
         })?;
 
+        // The cache must mirror the file: the plaintext password only stays
+        // in memory when it also stays on disk.
         let mut cached = self.clone();
-        cached.password.clear();
+        if persisted_elsewhere {
+            cached.password.clear();
+        }
         *CONFIG_CACHE.write().unwrap() = Some((path, cached));
-        Ok(())
+        Ok(persisted_elsewhere)
     }
 
     /// Save configuration and update the OS keyring credential.
-    pub fn save_with_credentials(&self, ctx: &dyn AppContext) -> Result<()> {
+    ///
+    /// Returns whether the password is now persisted outside the config file
+    /// (in the keyring, or owned by `password_command`), i.e. whether the
+    /// plaintext line can be safely stripped from the file.
+    pub fn save_with_credentials(&self, ctx: &dyn AppContext) -> Result<bool> {
+        // `password_command` owns the credential: never write the password to
+        // the keyring or the file. This also keeps a pre-filled GUI password
+        // field from leaking the command's output into the keyring.
+        if self.password_command.is_some() {
+            return self.save(ctx).map(|_| true);
+        }
+
         let new_key = self.keyring_key();
         let legacy_key = if self.username.is_empty() {
             "default".to_string()
@@ -1501,20 +1695,26 @@ impl Config {
             self.username.clone()
         };
 
+        // True while the in-memory password is confirmed to live in the
+        // keyring after the write; flipped false when the keyring is
+        // unreachable or the write fails, so save() keeps the file line.
+        let mut persisted = true;
         match keyring_core::Entry::new("cfait", &new_key) {
             Ok(entry) => {
                 if !self.password.is_empty() {
-                    if let Err(err) = entry.set_password(&self.password) {
+                    if entry.set_password(&self.password).is_ok() {
+                        if new_key != legacy_key {
+                            // The legacy username-only entry can no longer hold
+                            // this profile's password; drop it so another
+                            // profile with the same username doesn't inherit it.
+                            Self::delete_legacy_entry(&legacy_key);
+                        }
+                    } else {
+                        persisted = false;
                         log::warn!(
-                            "Failed to save password to keyring for '{}': {}",
-                            new_key,
-                            err
+                            "Failed to save password to keyring for '{}'; keeping it in the config file for now",
+                            new_key
                         );
-                    } else if new_key != legacy_key {
-                        // The legacy username-only entry can no longer hold
-                        // this profile's password; drop it so another profile
-                        // with the same username doesn't inherit it.
-                        Self::delete_legacy_entry(&legacy_key);
                     }
                 } else {
                     // The in-memory password is empty. Only remove the stored
@@ -1551,6 +1751,9 @@ impl Config {
                 }
             }
             Err(err) => {
+                if !self.password.is_empty() {
+                    persisted = false;
+                }
                 log::warn!(
                     "Failed to initialize keyring entry for '{}': {}",
                     new_key,
@@ -1559,7 +1762,7 @@ impl Config {
             }
         }
 
-        self.save(ctx)
+        self.save_with_persistence(ctx, persisted)
     }
 
     /// Get the path string using an explicit context.
@@ -1569,7 +1772,31 @@ impl Config {
     }
 
     /// Post-process raw TOML string to add comments and headers.
-    fn inject_documentation(raw_toml: &str) -> String {
+    ///
+    /// When `persisted_elsewhere` is false and the in-memory password is not
+    /// owned by `password_command`, the plaintext `password` line is
+    /// re-injected right after `username` so a rewrite never destroys the
+    /// only copy of the credential.
+    fn inject_documentation(&self, raw_toml: &str, persisted_elsewhere: bool) -> String {
+        // Re-injected only when the file is the password's only home.
+        let password_line =
+            if !self.password.is_empty() && !persisted_elsewhere && self.password_command.is_none()
+            {
+                let mut table: toml::map::Map<String, toml::Value> = toml::map::Map::new();
+                table.insert(
+                    "password".to_string(),
+                    toml::Value::String(self.password.clone()),
+                );
+                Some(
+                    toml::to_string(&table)
+                        .expect("string serializes")
+                        .trim()
+                        .to_string(),
+                )
+            } else {
+                None
+            };
+
         // Documentation for each documented key, in file order: the
         // section header emitted before the key (if any), a block comment
         // emitted before the key (if any), and an inline comment emitted
@@ -1591,10 +1818,12 @@ impl Config {
                     "# To connect to a CalDAV server (Nextcloud, Fastmail, Radicale, etc.),\n",
                     "# fill in your `url` and `username`.\n",
                     "#\n",
-                    "# Because passwords are not stored in plaintext, you have two options to set it:\n",
+                    "# Because passwords are not stored in plaintext, you have three options to set it:\n",
                     "# 1. Run `cfait login <url> <username>` in your terminal.\n",
                     "# 2. Or, temporarily add `password = \"your-password\"` below.\n",
-                    "#    Cfait will vault it into your OS Keyring on the next run and automatically remove it from this file.\n"
+                    "#    Cfait will vault it into your OS Keyring on the next run and automatically remove it from this file.\n",
+                    "#    On a machine without a keyring (e.g. a headless box), the line is kept in this file instead.\n",
+                    "# 3. Or, set `password_command = \"pass show cfait\"` below: the command's output is used as the password and never stored.\n"
                 )),
                 Some(
                     "# URL: The full address to your CalDAV server endpoint (e.g. https://cloud.example.com/remote.php/dav/).\n",
@@ -1665,6 +1894,14 @@ impl Config {
                 None,
             ),
             ("username =", None, None, None),
+            (
+                "password_command =",
+                None,
+                None,
+                Some(
+                    " # String (Optional): Shell command that prints the CalDAV password (e.g. pass show cfait). Takes precedence over the keyring; its output is never stored.",
+                ),
+            ),
             (
                 "tls_client_cert_path =",
                 None,
@@ -2073,6 +2310,14 @@ impl Config {
                 if let Some(post) = post {
                     out.push_str(post);
                 }
+                if let Some(pw) = &password_line
+                    && trimmed.starts_with("username =")
+                {
+                    // Keep the credential alive: the password line is not
+                    // serialized (see `password`), so re-inject it here.
+                    out.push('\n');
+                    out.push_str(pw);
+                }
             } else {
                 // Pass through unhandled lines
                 out.push_str(line);
@@ -2133,5 +2378,254 @@ mod tests {
         let mut anon = c.clone();
         anon.username.clear();
         assert_eq!(anon.keyring_key(), "default@cloud.example.com");
+    }
+
+    #[test]
+    fn password_never_serialized_command_only_when_set() {
+        let c = Config {
+            username: "alice".to_string(),
+            password: "hunter2".to_string(),
+            ..Default::default()
+        };
+        let toml_str = toml::to_string(&c).unwrap();
+        assert!(
+            !toml_str.contains("hunter2"),
+            "password must never be serialized"
+        );
+        assert!(!toml_str.contains("password_command"));
+
+        let mut c = c;
+        c.password_command = Some("pass show cfait".to_string());
+        let toml_str = toml::to_string(&c).unwrap();
+        assert!(toml_str.contains("password_command = \"pass show cfait\""));
+
+        let back: Config = toml::from_str(&toml_str).unwrap();
+        assert_eq!(back.password_command.as_deref(), Some("pass show cfait"));
+        assert_eq!(back.password, "");
+    }
+
+    #[test]
+    fn password_kept_in_file_truth_table() {
+        // No password at all: nothing to keep.
+        assert!(!Config::default().password_kept_in_file());
+
+        // Password present and nowhere else: kept in file.
+        let c = Config {
+            password: "hunter2".to_string(),
+            ..Default::default()
+        };
+        assert!(c.password_kept_in_file());
+
+        // Vaulted in the keyring: not kept in file.
+        let c = Config {
+            password: "hunter2".to_string(),
+            password_persisted_elsewhere: true,
+            ..Default::default()
+        };
+        assert!(!c.password_kept_in_file());
+
+        // Owned by password_command: not kept in file.
+        let c = Config {
+            password: "hunter2".to_string(),
+            password_command: Some("pass show cfait".to_string()),
+            ..Default::default()
+        };
+        assert!(!c.password_kept_in_file());
+    }
+
+    #[test]
+    fn inject_documentation_password_reinjection() {
+        let c = Config {
+            username: "alice".to_string(),
+            password: "s3cret".to_string(),
+            ..Default::default()
+        };
+        let raw = toml::to_string(&c).unwrap();
+        let has_line = |s: &str| s.lines().any(|l| l.starts_with("password = "));
+
+        // The file is the only copy: the line reappears right after username.
+        let out = c.inject_documentation(&raw, false);
+        assert!(has_line(&out));
+        let lines: Vec<&str> = out.lines().collect();
+        let u = lines
+            .iter()
+            .position(|l| l.starts_with("username = "))
+            .unwrap();
+        let p = lines
+            .iter()
+            .position(|l| l.starts_with("password = "))
+            .unwrap();
+        assert!(p > u);
+
+        // Persisted elsewhere: the line stays stripped.
+        assert!(!has_line(&c.inject_documentation(&raw, true)));
+
+        // Owned by password_command: never re-injected, even when not persisted.
+        let c = Config {
+            username: "alice".to_string(),
+            password: "s3cret".to_string(),
+            password_command: Some("pass show cfait".to_string()),
+            ..Default::default()
+        };
+        assert!(!has_line(
+            &c.inject_documentation(&toml::to_string(&c).unwrap(), false)
+        ));
+    }
+
+    #[test]
+    fn save_never_destroys_the_only_file_password() {
+        // Regression for https://github.com/trougnouf/cfait/issues/115: a
+        // plaintext password in config.toml used to be wiped on the next
+        // save() when the keyring was unreachable.
+        let ctx = crate::context::TestContext::new();
+        let path = ctx.get_config_file_path().unwrap();
+
+        // The config as load_with_credentials() would produce it on a
+        // machine without a keyring: password in memory, nothing vaulted.
+        let c = Config {
+            url: "https://cloud.example.com/remote.php/dav/".to_string(),
+            username: "alice".to_string(),
+            password: "filepw".to_string(),
+            ..Default::default()
+        };
+        c.save(&ctx).unwrap();
+
+        let on_disk = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            on_disk.lines().any(|l| l.starts_with("password = ")),
+            "first save must keep the line"
+        );
+
+        // A later load + save (e.g. a settings tweak) must not destroy it.
+        Config::invalidate_cache();
+        let reloaded = Config::load(&ctx).unwrap();
+        assert_eq!(reloaded.password, "filepw");
+        reloaded.save(&ctx).unwrap();
+
+        let on_disk = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            on_disk.lines().any(|l| l.starts_with("password = ")),
+            "second save must keep the line"
+        );
+    }
+
+    #[test]
+    fn save_strips_password_line_once_persisted_elsewhere() {
+        let ctx = crate::context::TestContext::new();
+        let path = ctx.get_config_file_path().unwrap();
+
+        let c = Config {
+            username: "alice".to_string(),
+            password: "filepw".to_string(),
+            password_persisted_elsewhere: true, // e.g. just written to the keyring
+            ..Default::default()
+        };
+        c.save(&ctx).unwrap();
+
+        let on_disk = std::fs::read_to_string(&path).unwrap();
+        assert!(!on_disk.lines().any(|l| l.starts_with("password = ")));
+    }
+
+    #[test]
+    fn save_never_writes_password_line_when_command_owns_it() {
+        let ctx = crate::context::TestContext::new();
+        let path = ctx.get_config_file_path().unwrap();
+
+        let c = Config {
+            username: "alice".to_string(),
+            password: "from-the-command".to_string(),
+            password_command: Some("pass show cfait".to_string()),
+            ..Default::default()
+        };
+        c.save(&ctx).unwrap();
+
+        let on_disk = std::fs::read_to_string(&path).unwrap();
+        assert!(!on_disk.lines().any(|l| l.starts_with("password = ")));
+        assert!(
+            on_disk
+                .lines()
+                .any(|l| l.starts_with("password_command = "))
+        );
+    }
+
+    #[test]
+    fn load_with_credentials_runs_password_command() {
+        let ctx = crate::context::TestContext::new();
+        let path = ctx.get_config_file_path().unwrap();
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            "url = \"https://cloud.example.com/remote.php/dav/\"\n\
+             username = \"alice\"\n\
+             password_command = \"echo secret\"\n",
+        )
+        .unwrap();
+
+        let c = Config::load_with_credentials(&ctx).unwrap();
+        assert_eq!(c.password, "secret");
+        assert!(c.password_persisted_elsewhere);
+        assert!(!c.password_kept_in_file());
+    }
+
+    #[test]
+    fn load_with_credentials_keeps_file_password_when_keyring_unreachable() {
+        let ctx = crate::context::TestContext::new();
+        let path = ctx.get_config_file_path().unwrap();
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            "url = \"https://cloud.example.com/remote.php/dav/\"\n\
+             username = \"alice\"\n\
+             password = \"filepw\"\n",
+        )
+        .unwrap();
+
+        let c = Config::load_with_credentials(&ctx).unwrap();
+        // The file's password is always kept in memory.
+        assert_eq!(c.password, "filepw");
+        // Lib tests have no keyring backend initialized, so nothing vaulted.
+        assert!(!c.password_persisted_elsewhere);
+        assert!(c.password_kept_in_file());
+    }
+
+    #[test]
+    fn run_password_command_strips_trailing_newlines() {
+        assert_eq!(
+            Config::run_password_command("echo \"hunter2\"").unwrap(),
+            "hunter2"
+        );
+    }
+
+    #[test]
+    fn run_password_command_strips_crlf() {
+        assert_eq!(
+            Config::run_password_command("printf 'abc\\r\\n'").unwrap(),
+            "abc"
+        );
+    }
+
+    #[test]
+    fn run_password_command_errors_on_nonzero_exit() {
+        assert!(Config::run_password_command("exit 3").is_err());
+    }
+
+    #[test]
+    fn run_password_command_errors_on_empty_output() {
+        assert!(Config::run_password_command("true").is_err());
+    }
+
+    #[test]
+    fn run_password_command_errors_on_unknown_command() {
+        assert!(Config::run_password_command("definitely_not_a_real_command_xyz").is_err());
+    }
+
+    #[test]
+    fn run_password_command_times_out() {
+        let err = Config::run_password_command_with_timeout(
+            "sleep 5",
+            std::time::Duration::from_millis(300),
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("timed out"));
     }
 }
