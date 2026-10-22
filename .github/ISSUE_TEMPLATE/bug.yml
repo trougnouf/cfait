@@ -57,6 +57,7 @@ body:
         - GUI
         - TUI
         - Android
+        - CLI
       default: 0
     validations:
       required: true
