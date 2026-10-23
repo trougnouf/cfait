@@ -2224,10 +2224,11 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     .collect();
                 let cursor_visual_x = text_up_to_cursor.width();
 
+                // Scroll the left edge away so the cursor stays in view.
+                let mut skipped_chars = 0;
+                let mut skipped_w = 0;
                 if cursor_visual_x >= input_area_width {
                     let target_scroll_w = cursor_visual_x - input_area_width + 1;
-                    let mut skipped_chars = 0;
-                    let mut skipped_w = 0;
                     for c in state.input_buffer.chars() {
                         if skipped_w >= target_scroll_w {
                             break;
@@ -2235,13 +2236,26 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         skipped_w += c.width().unwrap_or(0);
                         skipped_chars += 1;
                     }
-
-                    let slice: String = state.input_buffer.chars().skip(skipped_chars).collect();
-                    let vis_cursor_x = cursor_visual_x.saturating_sub(skipped_w);
-                    (slice, vis_cursor_x as u16)
-                } else {
-                    (state.input_buffer.clone(), cursor_visual_x as u16)
                 }
+
+                // Clip the right edge so prefix + text fits in the footer's
+                // inner width. Without this, a line longer than the pane
+                // wraps onto the bottom border row and the text after the
+                // cursor (e.g. a due date) disappears from the screen.
+                let max_text_width = inner_width.saturating_sub(prefix_width);
+                let mut slice = String::new();
+                let mut slice_w = 0;
+                for c in state.input_buffer.chars().skip(skipped_chars) {
+                    let w = c.width().unwrap_or(0);
+                    if slice_w + w > max_text_width {
+                        break;
+                    }
+                    slice.push(c);
+                    slice_w += w;
+                }
+
+                let vis_cursor_x = cursor_visual_x.saturating_sub(skipped_w);
+                (slice, vis_cursor_x as u16)
             };
 
             let mut input_spans = vec![prefix_span];
