@@ -145,6 +145,10 @@ pub const NEWSPAPER_PLUS: char = '\u{f0f0d}'; // nf-md-newspaper_plus
 
 pub const CREATE_JOURNAL_ICONS: &[char] = &[NEW_FILE, NEWSPAPER_PLUS];
 
+// The journal tab re-rolls one of these per launch and shows it on the
+// collection buttons of calendars that already have an entry for the day,
+// while the others show EDIT. The list must therefore never contain EDIT
+// itself, or the "has content" indicator becomes invisible.
 pub const JOURNAL_ICONS: &[char] = &[
     '\u{f02d}',
     '\u{ede2}',
@@ -155,7 +159,6 @@ pub const JOURNAL_ICONS: &[char] = &[
     '\u{ee34}',
     '\u{f06d3}',
     '\u{e7d8}',
-    '\u{f040}',
     '\u{f064f}',
     '\u{f0776}',
     '\u{f1ea}',
@@ -285,3 +288,25 @@ pub const TREE_FAE: char = '\u{e21c}'; // nf-fae-tree
 pub const TREE_MD: char = '\u{f0531}'; // nf-md-tree
 pub const PALM_TREE: char = '\u{f1055}'; // nf-md-palm_tree
 pub const PINE_TREE: char = '\u{f0405}'; // nf-md-pine_tree
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The journal tab shows the picked journal icon on collections that
+    // already have an entry and EDIT on the rest. If the two pools ever
+    // share a glyph, the "has content" indicator silently disappears, so
+    // the journal icon pools must stay disjoint from EDIT.
+    #[test]
+    fn journal_icons_never_collide_with_edit() {
+        assert!(
+            !JOURNAL_ICONS.contains(&EDIT),
+            "JOURNAL_ICONS must not contain EDIT"
+        );
+        assert!(
+            !CREATE_JOURNAL_ICONS.contains(&EDIT),
+            "CREATE_JOURNAL_ICONS must not contain EDIT"
+        );
+        assert!(!JOURNAL_ICONS.is_empty(), "JOURNAL_ICONS must not be empty");
+    }
+}
