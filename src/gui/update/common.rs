@@ -59,54 +59,109 @@ pub fn active_suggestion_editor(app: &GuiApp) -> SuggestionEditor {
     }
 }
 
-/// Number of characters between the start of the current line and the cursor.
-fn cursor_char_column(content: &iced::widget::text_editor::Content) -> usize {
+/// The (first, last) line indices covered by the editor's current selection,
+/// or just the caret's line when nothing is selected.
+fn selected_line_range(content: &iced::widget::text_editor::Content) -> (usize, usize) {
     let cursor = content.cursor();
-    content
-        .line(cursor.position.line)
-        .map(|line| {
-            line.text[..cursor.position.column.min(line.text.len())]
-                .chars()
-                .count()
-        })
-        .unwrap_or(0)
+    match cursor.selection {
+        Some(anchor) => (
+            cursor.position.line.min(anchor.line),
+            cursor.position.line.max(anchor.line),
+        ),
+        None => (cursor.position.line, cursor.position.line),
+    }
 }
 
-/// Indent the current line of a multi-line editor by two spaces (Tab),
-/// keeping the cursor at the same position relative to the line text.
+/// Collapse any active selection so the edits that follow insert at the caret
+/// instead of replacing the selected text.
+fn collapse_selection(content: &mut iced::widget::text_editor::Content) {
+    use iced::widget::text_editor::{Action, Motion};
+    content.perform(Action::Move(Motion::DocumentStart));
+}
+
+/// Indent the caret's line — or every line of the active selection — by two
+/// spaces (Tab), keeping the caret and selection at the same position
+/// relative to the line text.
 pub fn indent_line(content: &mut iced::widget::text_editor::Content) {
-    use iced::widget::text_editor::{Action, Edit, Motion};
-    let column = cursor_char_column(content);
-    content.perform(Action::Move(Motion::Home));
-    content.perform(Action::Edit(Edit::Insert(' ')));
-    content.perform(Action::Edit(Edit::Insert(' ')));
-    for _ in 0..column {
-        content.perform(Action::Move(Motion::Right));
+    use iced::widget::text_editor::{Action, Cursor, Edit, Position};
+
+    let cursor = content.cursor();
+    let (first_line, last_line) = selected_line_range(content);
+
+    collapse_selection(content);
+    for line in first_line..=last_line {
+        content.move_to(Cursor {
+            position: Position { line, column: 0 },
+            selection: None,
+        });
+        content.perform(Action::Edit(Edit::Insert(' ')));
+        content.perform(Action::Edit(Edit::Insert(' ')));
     }
+
+    let shift = |pos: Position| Position {
+        line: pos.line,
+        column: pos.column + 2,
+    };
+    let position = shift(cursor.position);
+    let selection = cursor
+        .selection
+        .map(shift)
+        .filter(|anchor| *anchor != position);
+    content.move_to(Cursor {
+        position,
+        selection,
+    });
 }
 
-/// Remove up to two leading spaces from the current line of a multi-line
-/// editor (Shift+Tab), keeping the cursor at the same position relative to
-/// the line text.
+/// Remove up to two leading spaces from the caret's line — or every line of
+/// the active selection — (Shift+Tab), keeping the caret and selection at
+/// the same position relative to the line text.
 pub fn outdent_line(content: &mut iced::widget::text_editor::Content) {
-    use iced::widget::text_editor::{Action, Edit, Motion};
+    use iced::widget::text_editor::{Action, Cursor, Edit, Position};
+
     let cursor = content.cursor();
-    let Some(line) = content.line(cursor.position.line) else {
+    let (first_line, last_line) = selected_line_range(content);
+
+    // How many leading spaces each affected line will lose.
+    let removed: Vec<usize> = (first_line..=last_line)
+        .map(|line| {
+            content
+                .line(line)
+                .map(|line| line.text.chars().take_while(|c| *c == ' ').count().min(2))
+                .unwrap_or(0)
+        })
+        .collect();
+    if removed.iter().all(|&count| count == 0) {
         return;
+    }
+
+    collapse_selection(content);
+    for (line, &count) in (first_line..=last_line).zip(&removed) {
+        if count == 0 {
+            continue;
+        }
+        content.move_to(Cursor {
+            position: Position { line, column: 0 },
+            selection: None,
+        });
+        for _ in 0..count {
+            content.perform(Action::Edit(Edit::Delete));
+        }
+    }
+
+    let shift = |pos: Position| Position {
+        line: pos.line,
+        column: pos.column.saturating_sub(removed[pos.line - first_line]),
     };
-    let leading = line.text.chars().take_while(|c| *c == ' ').count();
-    let to_remove = leading.min(2);
-    if to_remove == 0 {
-        return;
-    }
-    let column = cursor_char_column(content);
-    content.perform(Action::Move(Motion::Home));
-    for _ in 0..to_remove {
-        content.perform(Action::Edit(Edit::Delete));
-    }
-    for _ in 0..column.saturating_sub(to_remove) {
-        content.perform(Action::Move(Motion::Right));
-    }
+    let position = shift(cursor.position);
+    let selection = cursor
+        .selection
+        .map(shift)
+        .filter(|anchor| *anchor != position);
+    content.move_to(Cursor {
+        position,
+        selection,
+    });
 }
 
 /// Build the visible task list and update UI caches.
