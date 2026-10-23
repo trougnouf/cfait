@@ -61,6 +61,10 @@ struct StepResult {
 enum ConflictResolution {
     /// A merged/normalized task was produced; retry the sync loop with this action.
     Resolved(Box<Action>, String),
+    /// The 412 is spurious: the server etag still matches ours (after normalization), so
+    /// the server state is unchanged and the If-Match failed only on an etag-format
+    /// mismatch. The caller retries the PUT with `If-Match: *`.
+    Spurious,
     /// A hard conflict that cannot be auto-resolved; create a "Conflict Copy".
     HardConflict,
     /// A transient failure (e.g., could not fetch the server version). The action stays
@@ -421,6 +425,42 @@ impl RustyClient {
                 match self.attempt_conflict_resolution(task).await {
                     ConflictResolution::Resolved(resolution, msg) => {
                         Ok(StepResult::new(StepOutcome::RetryWith(resolution)).with_warning(msg))
+                    }
+                    ConflictResolution::Spurious => {
+                        // The server is unchanged, so retry the PUT with `If-Match: *`,
+                        // which matches any existing representation. We just fetched the
+                        // resource, so it exists and the precondition cannot fail again.
+                        let ics_string = IcsAdapter::to_ics(task);
+                        match client
+                            .request(PutResource::new(&path).update(
+                                ics_string,
+                                "text/calendar; charset=utf-8",
+                                "*",
+                            ))
+                            .await
+                        {
+                            Ok(resp) => {
+                                self.sync_companion_event(
+                                    task,
+                                    events_enabled,
+                                    delete_on_completion,
+                                    false,
+                                    false,
+                                )
+                                .await;
+                                Ok(StepResult::new(StepOutcome::Success {
+                                    etag: resp.etag,
+                                    href: None,
+                                    refresh_path: Some(path),
+                                }))
+                            }
+                            Err(e) => {
+                                // Even the wildcard retry failed (transient network/5xx).
+                                // Leave the action queued so the next sync retries,
+                                // instead of duplicating the task.
+                                Err(format!("spurious-412 wildcard retry failed: {:?}", e))
+                            }
+                        }
                     }
                     ConflictResolution::RetryLater(msg) => {
                         // Transient failure (e.g., could not fetch the server version). Leave the
@@ -1078,13 +1118,14 @@ impl RustyClient {
         let clean_etag = |e: &str| e.trim_start_matches("W/").trim_matches('"').to_string();
 
         // If the server's current etag matches the one we sent (after normalization), the
-        // server state is unchanged since our last fetch. The 412 is therefore spurious,
-        // but we cannot safely retry the PUT: a retry with the same (or reformatted) etag
-        // could 412 again and, since RetryWith reinserts at the queue front, loop forever.
-        // Preserve the local edits as a conflict copy instead. This matches the previous
-        // behavior for this case.
-        if clean_etag(&server_task.etag) == clean_etag(&local_task.etag) {
-            return ConflictResolution::HardConflict;
+        // server state is unchanged since our last fetch: the 412 is spurious, caused only
+        // by an etag-format mismatch (weak/strong marker, quoting) in the If-Match header.
+        // The caller retries the PUT with `If-Match: *`, which matches any existing
+        // representation and therefore cannot fail the precondition again.
+        if !server_task.etag.is_empty()
+            && clean_etag(&server_task.etag) == clean_etag(&local_task.etag)
+        {
+            return ConflictResolution::Spurious;
         }
 
         // Merge base: prefer the recorded server-agreed state for the exact

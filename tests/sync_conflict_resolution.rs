@@ -786,3 +786,117 @@ async fn test_pushed_update_records_and_delete_forgets_base() {
         "a pushed delete must forget the recorded base"
     );
 }
+
+/// A 412 whose server etag still matches ours (after normalization) is spurious:
+/// the server state is unchanged and the If-Match failed only on an etag-format
+/// mismatch (weak/strong marker, quoting). The update must be retried with
+/// `If-Match: *` and succeed, without minting a "Conflict Copy".
+#[tokio::test]
+async fn test_412_spurious_etag_match_retries_with_wildcard_no_copy() {
+    let ctx = Arc::new(TestContext::new());
+
+    let mut server = Server::new_async().await;
+    let url = server.url();
+    let task_uid = "spurious-uid";
+    let task_path = format!("/cal/{}.ics", task_uid);
+
+    // 1. The update PUT 412s: we sent If-Match: "old-etag" but the server
+    //    rejected it (simulating an etag-format mismatch, not a real change).
+    let mock_412 = server
+        .mock("PUT", task_path.as_str())
+        .match_header("If-Match", "\"old-etag\"")
+        .with_status(412)
+        .create_async()
+        .await;
+
+    // 2. Fetching the server version returns the SAME etag we sent: the server is
+    //    unchanged, so the 412 is spurious (no concurrent edit to merge).
+    let server_ics =
+        "BEGIN:VCALENDAR\nBEGIN:VTODO\nUID:spurious-uid\nSUMMARY:Base Title\nDESCRIPTION:Base Description\nEND:VTODO\nEND:VCALENDAR"
+            .to_string();
+    let mock_fetch = server
+        .mock("REPORT", "/cal/")
+        .with_status(207)
+        .with_body(format!(
+            r#"
+            <d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+                <d:response>
+                    <d:href>{}</d:href>
+                    <d:propstat>
+                        <d:prop>
+                            <cal:calendar-data>{}</cal:calendar-data>
+                            <d:getetag>"old-etag"</d:getetag>
+                        </d:prop>
+                        <d:status>HTTP/1.1 200 OK</d:status>
+                    </d:propstat>
+                </d:response>
+            </d:multistatus>
+            "#,
+            task_path, server_ics
+        ))
+        .create_async()
+        .await;
+
+    // 3. The spurious-412 retry uses `If-Match: *` (match any existing
+    //    representation) and succeeds.
+    let mock_retry_ok = server
+        .mock("PUT", task_path.as_str())
+        .match_header("If-Match", "*")
+        .with_status(201)
+        .with_header("ETag", "\"new-etag\"")
+        .create_async()
+        .await;
+
+    // A conflict-copy PUT (if it happened) would carry "Conflict Copy" in the
+    // body. Assert it never happens.
+    let mock_conflict_copy = server
+        .mock(
+            "PUT",
+            mockito::Matcher::Regex(r"^/cal/.*\.ics$".to_string()),
+        )
+        .match_body(mockito::Matcher::Regex(r"Conflict Copy".to_string()))
+        .with_status(201)
+        .expect(0)
+        .create_async()
+        .await;
+
+    let client = RustyClient::new(ctx.clone(), &url, "u", "p", true, None).unwrap();
+
+    let mut base_task = Task::new("Base Title", &HashMap::new(), None);
+    base_task.uid = task_uid.to_string();
+    base_task.href = format!("{}{}", url, task_path);
+    base_task.calendar_href = format!("{}/cal/", url);
+    base_task.etag = "\"old-etag\"".to_string();
+    base_task.description = "Base Description".to_string();
+    Cache::save(
+        ctx.as_ref(),
+        &base_task.calendar_href,
+        &[base_task.clone()],
+        Some("token".to_string()),
+    )
+    .unwrap();
+
+    // Local edit: changed summary only; etag is the (stale) server etag we last
+    // saw, so the If-Match we send is exactly the server's current etag.
+    let mut local_task = base_task.clone();
+    local_task.summary = "Local Title".to_string();
+    local_task.etag = "old-etag".to_string();
+
+    Journal::push(ctx.as_ref(), Action::Update(local_task)).unwrap();
+
+    let res = tokio::time::timeout(std::time::Duration::from_secs(10), client.sync_journal()).await;
+    assert!(res.is_ok(), "Test timed out!");
+    let sync_res = res.unwrap();
+    assert!(sync_res.is_ok(), "Sync failed: {:?}", sync_res.err());
+
+    mock_412.assert();
+    mock_fetch.assert();
+    mock_retry_ok.assert();
+    mock_conflict_copy.assert();
+
+    let journal = Journal::load(ctx.as_ref());
+    assert!(
+        journal.is_empty(),
+        "Journal should be empty after the spurious-412 wildcard retry succeeds"
+    );
+}
