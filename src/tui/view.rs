@@ -2622,7 +2622,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         let p = Paragraph::new(lines)
             .block(block)
             .alignment(Alignment::Center)
-            .wrap(Wrap { trim: true });
+            .wrap(Wrap { trim: true })
+            .scroll((state.alarm_scroll, 0));
         f.render_widget(Clear, area);
         f.render_widget(p, area);
     }

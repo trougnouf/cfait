@@ -392,6 +392,7 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
                     // Find the task in the store to display details
                     if let Some((task, _)) = app_state.store.get_task_mut(&t_uid) {
                         app_state.active_alarm = Some((task.clone(), a_uid));
+                        app_state.alarm_scroll = 0;
                         // Trigger a refresh so if it's done remotely, it will disappear soon.
                         let _ = action_tx.try_send(crate::tui::action::Action::Refresh);
                     }

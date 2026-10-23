@@ -154,6 +154,7 @@ pub struct AppState {
     pub edit_scroll_x: u16,
     pub details_scroll: u16,
     pub help_scroll_offset: u16,
+    pub alarm_scroll: u16,
     pub editing_uid: Option<String>,
     pub editing_tree_uid: Option<String>,
     pub move_selection_state: ListState,
@@ -311,6 +312,7 @@ impl AppState {
             edit_scroll_x: 0,
             details_scroll: 0,
             help_scroll_offset: 0,
+            alarm_scroll: 0,
             editing_uid: None,
             editing_tree_uid: None,
             move_selection_state: ListState::default(),
@@ -1296,9 +1298,19 @@ impl AppState {
 
     /// Handles a mouse scroll-wheel event.
     ///
-    /// Modal popups (help, details, description editor) scroll their own
-    /// content while open; otherwise the wheel moves the list selection.
+    /// Modal popups (help, details, description editor, reminder) scroll
+    /// their own content while open; otherwise the wheel moves the list
+    /// selection. The reminder popup is checked first because it can be up
+    /// in any mode (e.g. Snoozing) and covers the list.
     pub fn handle_mouse_scroll(&mut self, down: bool) {
+        if self.active_alarm.is_some() {
+            self.alarm_scroll = if down {
+                self.alarm_scroll.saturating_add(1)
+            } else {
+                self.alarm_scroll.saturating_sub(1)
+            };
+            return;
+        }
         match self.mode {
             InputMode::Help(_) => {
                 self.help_scroll_offset = if down {
@@ -1586,6 +1598,45 @@ mod tests {
         state.previous();
 
         // Selection should stay None or safe default, but definitely no panic
+    }
+
+    #[test]
+    fn test_mouse_scroll_moves_selection_without_popup() {
+        let mut state = AppState::new();
+        state.tasks = vec![
+            TaskListItem::Task(Box::new(dummy_task())),
+            TaskListItem::Task(Box::new(dummy_task())),
+        ];
+        state.list_state.select(Some(0));
+
+        state.handle_mouse_scroll(true); // 1
+        assert_eq!(state.list_state.selected(), Some(1));
+        state.handle_mouse_scroll(false); // 0
+        assert_eq!(state.list_state.selected(), Some(0));
+    }
+
+    #[test]
+    fn test_mouse_scroll_scrolls_alarm_popup_not_list() {
+        let mut state = AppState::new();
+        state.tasks = vec![
+            TaskListItem::Task(Box::new(dummy_task())),
+            TaskListItem::Task(Box::new(dummy_task())),
+        ];
+        state.list_state.select(Some(0));
+        state.active_alarm = Some((dummy_task(), "alarm-1".to_string()));
+
+        state.handle_mouse_scroll(true);
+        state.handle_mouse_scroll(true);
+        assert_eq!(state.alarm_scroll, 2);
+        // The list selection must not move while the popup is open.
+        assert_eq!(state.list_state.selected(), Some(0));
+
+        state.handle_mouse_scroll(false);
+        assert_eq!(state.alarm_scroll, 1);
+
+        state.active_alarm = None;
+        state.handle_mouse_scroll(false); // Back to list navigation (wraps)
+        assert_eq!(state.list_state.selected(), Some(1));
     }
 
     #[test]
