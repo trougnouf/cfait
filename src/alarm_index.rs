@@ -487,6 +487,8 @@ mod tests {
             flat: false,
             archived: false,
             is_event: false,
+            manual_sort: false,
+            sort_position: String::new(),
             time_spent_seconds: 0,
             last_started_at: None,
             sessions: vec![],

@@ -3428,6 +3428,38 @@ pub async fn handle_key_event(
                     }
                 }
             }
+            KeyCode::Down
+                if key.modifiers.contains(KeyModifiers::ALT)
+                    && state.active_focus == Focus::Main =>
+            {
+                if let Some(task) = state.get_selected_task().cloned() {
+                    let uid = task.uid.clone();
+                    dispatch_intent_tui(
+                        state,
+                        AppIntent::MoveNodeDown { uid: uid.clone() },
+                        action_tx,
+                    );
+                    if let Some(idx) = state.find_task_index_by_uid(&uid) {
+                        state.list_state.select(Some(idx));
+                    }
+                }
+            }
+            KeyCode::Up
+                if key.modifiers.contains(KeyModifiers::ALT)
+                    && state.active_focus == Focus::Main =>
+            {
+                if let Some(task) = state.get_selected_task().cloned() {
+                    let uid = task.uid.clone();
+                    dispatch_intent_tui(
+                        state,
+                        AppIntent::MoveNodeUp { uid: uid.clone() },
+                        action_tx,
+                    );
+                    if let Some(idx) = state.find_task_index_by_uid(&uid) {
+                        state.list_state.select(Some(idx));
+                    }
+                }
+            }
             KeyCode::Down | KeyCode::Char('j') => {
                 if state.sidebar_mode == SidebarMode::Journal
                     && state.active_focus == Focus::Calendar

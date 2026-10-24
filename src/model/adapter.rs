@@ -106,6 +106,9 @@ const HANDLED_KEYS: &[&str] = &[
     "X-CFAIT-BLOCKED",
     "X-CFAIT-PERMANENT",
     "X-CFAIT-FLAT",
+    "X-CFAIT-ARCHIVED",
+    "X-CFAIT-MANUAL-SORT",
+    "X-CFAIT-SORT-POSITION",
 ];
 
 /// Return the description to serialize into ICS, re-injecting original `data:`
@@ -394,6 +397,12 @@ impl IcsAdapter {
             if task.archived {
                 append_folded("X-CFAIT-ARCHIVED:TRUE");
             }
+            if task.manual_sort {
+                append_folded("X-CFAIT-MANUAL-SORT:TRUE");
+            }
+            if !task.sort_position.is_empty() {
+                append_folded(&format!("X-CFAIT-SORT-POSITION:{}", task.sort_position));
+            }
 
             buffer.push_str("END:VJOURNAL\r\n");
             buffer.push_str("END:VCALENDAR\r\n");
@@ -635,6 +644,12 @@ impl IcsAdapter {
         }
         if task.archived {
             todo.add_property("X-CFAIT-ARCHIVED", "TRUE");
+        }
+        if task.manual_sort {
+            todo.add_property("X-CFAIT-MANUAL-SORT", "TRUE");
+        }
+        if !task.sort_position.is_empty() {
+            todo.add_property("X-CFAIT-SORT-POSITION", task.sort_position.as_str());
         }
 
         if let Some(goal) = &task.goal {
@@ -1024,6 +1039,13 @@ impl IcsAdapter {
             let archived = extract_prop(&unfolded, "X-CFAIT-ARCHIVED")
                 .map(|v| v.trim().to_uppercase() == "TRUE")
                 .unwrap_or(false);
+            let manual_sort = extract_prop(&unfolded, "X-CFAIT-MANUAL-SORT")
+                .map(|v| v.trim().to_uppercase() == "TRUE")
+                .unwrap_or(false);
+            let sort_position = extract_prop(&unfolded, "X-CFAIT-SORT-POSITION")
+                .map(|v| v.trim().to_string())
+                .filter(|v| !v.is_empty())
+                .unwrap_or_default();
 
             return Ok(Task {
                 uid,
@@ -1059,6 +1081,8 @@ impl IcsAdapter {
                 flat: false,
                 archived,
                 is_event: false,
+                manual_sort,
+                sort_position,
                 time_spent_seconds: 0,
                 last_started_at: None,
                 sessions: Vec::new(),
@@ -1174,6 +1198,8 @@ impl IcsAdapter {
                 flat: false,
                 archived: false,
                 is_event: true,
+                manual_sort: false,
+                sort_position: String::new(),
                 time_spent_seconds: 0,
                 last_started_at: None,
                 sessions: Vec::new(),
@@ -1319,6 +1345,15 @@ impl IcsAdapter {
         let archived = get_prop("X-CFAIT-ARCHIVED")
             .map(|v| v.trim().to_uppercase() == "TRUE")
             .unwrap_or(false);
+
+        let manual_sort = get_prop("X-CFAIT-MANUAL-SORT")
+            .map(|v| v.trim().to_uppercase() == "TRUE")
+            .unwrap_or(false);
+
+        let sort_position = get_prop("X-CFAIT-SORT-POSITION")
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty())
+            .unwrap_or_default();
 
         let mut goal = None;
         if let Some(prop) = get_prop_ref("X-CFAIT-GOAL")
@@ -1818,6 +1853,8 @@ impl IcsAdapter {
             flat,
             archived,
             is_event: false,
+            manual_sort,
+            sort_position,
             time_spent_seconds,
             last_started_at,
             sessions: manual_sessions, // Use manual parsing result

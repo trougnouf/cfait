@@ -62,6 +62,7 @@ pub enum ExactToken {
     IsPermanent,
     IsFlat,
     IsArchived,
+    IsManual,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -348,6 +349,7 @@ impl ParserLexicon {
         );
         add_exact("parser_is_flat", "is:flat,is:doc", ExactToken::IsFlat);
         add_exact("parser_is_archived", "is:archived", ExactToken::IsArchived);
+        add_exact("parser_is_manual", "is:manual", ExactToken::IsManual);
 
         // Map the existing search translation to the exact token so they match perfectly
         add_exact("search_is_blocked", "is:blocked", ExactToken::IsBlocked);
@@ -1419,6 +1421,7 @@ pub fn tokenize_smart_input(input: &str, is_search_query: bool) -> Vec<SyntaxTok
                 matched_kind = Some(SyntaxType::Dependency);
             } else if exact == Some(&ExactToken::IsPermanent)
                 || exact == Some(&ExactToken::IsArchived)
+                || exact == Some(&ExactToken::IsManual)
             {
                 matched_kind = Some(SyntaxType::Filter);
             } else if pref == Some(PrefixToken::Geo) {
@@ -2978,6 +2981,7 @@ pub fn is_special_token_with_lex(word: &str, lex: &ParserLexicon) -> bool {
             | Some(ExactToken::IsPermanent)
             | Some(ExactToken::IsFlat)
             | Some(ExactToken::IsArchived)
+            | Some(ExactToken::IsManual)
     ) {
         return true;
     }
@@ -3067,6 +3071,7 @@ pub fn apply_smart_input(
     task.permanent = false;
     task.flat = false; // Reset flat state so deleting the token unflattens
     task.archived = false; // Reset archive state so deleting the token unarchives
+    task.manual_sort = false; // Reset manual-sort state so deleting the token restores standard sort
     task.categories.clear();
     task.alarms.clear();
     task.exdates.clear();
@@ -3539,6 +3544,10 @@ pub fn apply_smart_input(
             // `is:archived` moves a wiki page to the journal tab's Archive
             // section; it has no display effect on regular tasks.
             task.archived = true;
+        } else if exact == Some(&ExactToken::IsManual) {
+            // `is:manual` orders this task's children by hand (fractional
+            // positions) instead of the standard sort.
+            task.manual_sort = true;
         } else if pref == Some(PrefixToken::Geo) {
             let mut raw_val = rem_original.to_string();
             let mut temp_consumed = 1;

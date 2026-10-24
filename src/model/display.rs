@@ -491,6 +491,18 @@ impl TaskDisplay for Task {
             }
         }
 
+        if self.manual_sort {
+            let manual_str = rust_i18n::t!("parser_is_manual");
+            if manual_str == "parser_is_manual" || manual_str.is_empty() {
+                s.push_str(" is:manual");
+            } else {
+                s.push_str(&format!(
+                    " {}",
+                    manual_str.split(',').next().unwrap_or("is:manual").trim()
+                ));
+            }
+        }
+
         if let Some(goal) = &self.goal {
             let type_str = if goal.goal_type == crate::config::GoalType::Duration {
                 crate::model::parser::format_duration_compact(goal.target)

@@ -6,6 +6,7 @@ pub mod adapter;
 pub mod autocomplete;
 pub mod display;
 pub mod extractor;
+pub mod fractional;
 pub mod item;
 pub mod matcher;
 pub mod merge;

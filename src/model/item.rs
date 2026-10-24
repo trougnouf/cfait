@@ -486,6 +486,14 @@ pub struct Task {
     /// object fallback). Only used for the settings object.
     #[serde(default)]
     pub is_event: bool,
+    /// When `true`, this task's children are ordered by their `sort_position`
+    /// keys (fractional indexing) instead of the standard sort.
+    #[serde(default)]
+    pub manual_sort: bool,
+    /// Fractional-index key ordering this task among its siblings under a
+    /// manually-sorted parent. Empty when the task is unpositioned.
+    #[serde(default)]
+    pub sort_position: String,
 
     // Time-tracking fields:
     // - `time_spent_seconds` accumulates committed seconds of work for this task.
@@ -941,6 +949,8 @@ impl Task {
             flat: false,
             archived: false,
             is_event: false,
+            manual_sort: false,
+            sort_position: String::new(),
             time_spent_seconds: 0,
             last_started_at: None,
             sessions: Vec::new(),
@@ -1173,6 +1183,28 @@ impl Task {
                 self.summary.cmp(&other.summary)
             }
         })
+    }
+
+    /// Compare two siblings under a manually-sorted parent: positioned tasks
+    /// first in fractional-key order, unpositioned tasks last (summary, then
+    /// uid for stability).
+    pub fn compare_manual_sort(&self, other: &Self) -> Ordering {
+        match (
+            self.sort_position.is_empty(),
+            other.sort_position.is_empty(),
+        ) {
+            (false, false) => self
+                .sort_position
+                .cmp(&other.sort_position)
+                .then_with(|| self.summary.cmp(&other.summary))
+                .then_with(|| self.uid.cmp(&other.uid)),
+            (true, false) => Ordering::Greater,
+            (false, true) => Ordering::Less,
+            (true, true) => self
+                .summary
+                .cmp(&other.summary)
+                .then_with(|| self.uid.cmp(&other.uid)),
+        }
     }
 
     /// Compare taking into account cutoff and other global settings.

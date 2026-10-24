@@ -1040,10 +1040,10 @@ fn serialize_node(
 
 /// Children of every task, grouped by parent uid: trashed/recovered tasks
 /// are skipped unless their parent lives in the same system calendar.
-/// Each sibling list is deterministically pre-sorted (created date, then
-/// summary), then topologically ordered so blocked tasks follow their
-/// dependencies — this preserves sequence numbering (1., 2., 3.) when
-/// re-extracting the markdown.
+/// Each sibling list is deterministically pre-sorted (manual parents by
+/// `sort_position`, others by created date, then summary), then
+/// topologically ordered so blocked tasks follow their dependencies — this
+/// preserves sequence numbering (1., 2., 3.) when re-extracting the markdown.
 fn collect_children_map<'a>(
     store: &'a crate::store::TaskStore,
     root_href: &str,
@@ -1067,11 +1067,17 @@ fn collect_children_map<'a>(
 
     // Topologically sort children so that blocked tasks inherently follow their dependencies.
     // This perfectly preserves sequence ordering (1., 2., 3.) when re-extracting markdown.
-    // We pre-sort deterministically (by created date, then summary) to ensure stable
-    // git diffs and consistent publication output, rather than volatile priority/status sorting.
-    for list in children_map.values_mut() {
-        // Key borrows the task data (stable in the store), so no per-task String clones.
-        list.sort_by_cached_key(|t| (t.created_date(), t.summary.as_str(), t.uid.as_str()));
+    // We pre-sort deterministically to ensure stable git diffs and consistent publication
+    // output, rather than volatile priority/status sorting: manual parents by
+    // `sort_position` (their user-chosen order), everyone else by created date, then summary.
+    for (p_uid, list) in children_map.iter_mut() {
+        let manual_parent = store.get_task_ref(p_uid).is_some_and(|p| p.manual_sort);
+        if manual_parent {
+            list.sort_by(|a, b| a.compare_manual_sort(b));
+        } else {
+            // Key borrows the task data (stable in the store), so no per-task String clones.
+            list.sort_by_cached_key(|t| (t.created_date(), t.summary.as_str(), t.uid.as_str()));
+        }
 
         if list.len() <= 1 {
             continue;

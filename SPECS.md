@@ -44,6 +44,7 @@ Tasks map strictly to iCalendar `VTODO` components, while daily notes map to `VJ
 *   **Status:** `NeedsAction` (Pending), `InProcess` (Timer running), `Completed`, `Cancelled`.
 *   **Manual Block:** Stored via `X-CFAIT-BLOCKED` (boolean) to explicitly mark a task as blocked without dependencies.
 *   **Archive:** The `is:archived` flag (see 2.2) is stored via `X-CFAIT-ARCHIVED:TRUE` on both `VTODO` and `VJOURNAL` components, so it survives CalDAV sync and the journal's Archive section (see 5.4).
+*   **Manual Sort:** The `is:manual` flag (see 2.2) is stored via `X-CFAIT-MANUAL-SORT:TRUE` on the parent `VTODO`, and each child's manual position via `X-CFAIT-SORT-POSITION` (a short base-62 fractional index, see 3.2), so both survive CalDAV sync.
 *   **Dates (`DateType`):** Start (`DTSTART`) and Due (`DUE`). Supported variants:
     *   *Specific:* Exact DateTime (UTC).
     *   *All-Day:* NaiveDate.
@@ -117,6 +118,7 @@ Every item is created from the same smart-syntax line; the type tokens decide wh
 | `+cal` / `-cal` | Force/prevent companion Calendar Event. | `+cal` |
 | `is:pinned` | Pin task to the top of the list. | `is:pinned` |
 | `is:permanent` | Mark task as a permanent/continuous tracker. | `is:permanent` |
+| `is:manual` | Manual sort: this task's children keep the order the user set (see 3.2) instead of the standard rank/date/priority sort. | `is:manual` |
 | `is:page` | Mark the line as a Wiki page (VJOURNAL component, no `DTSTART` — see 2.1). `is:journal` is an alias. Parses identically from the task interface and the journal tab, and does not imply `is:note`. | `is:page`, `is:journal` |
 | `is:flat` | Keep the task a `VTODO` (checkbox stays), but parse its description like a wiki page: Markdown headers and plain list items stay as document text instead of being extracted into subtasks (checkbox items still are). The description also keeps child shadow lines, like a page. | `is:flat`, `is:doc` |
 | `is:archived` | Archive a wiki page: it moves from the journal's Pages section to the Archive section (see 5.4). Deleting the token — or toggling the archive button (GUI) / `A` key (TUI) — unarchives it. Searchable with `is:archived` (see 3.1). | `is:archived` |
@@ -203,6 +205,7 @@ Tasks sort deterministically by rank (0 to 9), then by Overdue -> Priority -> Du
 *Rule:* If `sort_standard_by_priority` is enabled, Ranks 4 and 5 merge and sort by numeric Priority first, then Date.
 *Rule:* Notes (`is:note`) and Journals (`is:journal`) always sort below actionable tasks within the same rank, and automatically drop to Rank 8 if their dates are in the past.
 *Rule:* Note and journal sorting is symmetric — overdue notes are ranked as completed to drop them to the bottom of the list, mirroring the behavior for actionable tasks.
+*Rule:* Manual sort (`is:manual`, see 2.2): a task tagged `is:manual` orders its direct children by explicit position instead of the standard ranks — each child carries a `sort_position` (base-62 fractional index, stored as `X-CFAIT-SORT-POSITION`), and children without a position sort after the positioned ones using the standard comparator. Dependency order still wins: a child with unresolved blockers is surfaced before its blockers regardless of position. Positions are set by moving a sibling — `Alt+Up`/`Alt+Down` in the TUI, or reordering lines in the tree editor (`Ctrl+E` / `cfait edit --tree`) — and the first move on a parent turns on `is:manual` automatically. Removing the token clears the stored positions.
 
 ---
 
@@ -362,6 +365,7 @@ Daily notes and wiki pages are `VJOURNAL` components (see 1.2). They share a uni
     *   `e`: Edit title. `E`: Edit description (Markdown). `Ctrl+E`: Edit tree (Markdown) / Switch editor mode. `Ctrl+N`: Create new task with description. `Ctrl+M`: Maximize/Restore description editor.
     *   `Delete`: Move to trash. `Ctrl+Delete`: Delete entire tree.
     *   `M`: Move task (or task tree) to another collection.
+    *   `Alt+Up` / `Alt+Down`: Move the selected task up/down among its siblings (manual sort, see 3.2).
     *   `t`: Log time session manually.
     *   `Ctrl+Z` / `Ctrl+Y` / `Ctrl+Shift+Z`: Undo / Redo.
 *   **Text Editing (in editors):** `Ctrl+Left` / `Ctrl+Right`: move by word. `Ctrl+Backspace` / `Ctrl+Delete`: delete previous / next word (UAX#29 boundaries). On macOS, use `Option` instead of `Ctrl`. `Enter` continues the current list item (bullets, checkboxes, and numbered lists auto-increment; an empty list item ends the list). `Tab` / `Shift+Tab`: indent / outdent the current line by two spaces.

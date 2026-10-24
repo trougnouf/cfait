@@ -298,6 +298,14 @@ pub fn organize_hierarchy(
         )
     });
 
+    // Parents with manual sorting order their children by sort_position instead of
+    // the canonical comparator.
+    let manual_parents: HashSet<String> = tasks
+        .iter()
+        .filter(|t| t.manual_sort)
+        .map(|t| t.uid.clone())
+        .collect();
+
     for mut task in tasks {
         let is_orphan = match &task.parent_uid {
             Some(p_uid) => !present_uids.contains(p_uid),
@@ -382,7 +390,11 @@ pub fn organize_hierarchy(
     }
 
     topological_sort(&mut roots);
-    for list in children_map.values_mut() {
+    for (p_uid, list) in children_map.iter_mut() {
+        if manual_parents.contains(p_uid) {
+            // Manual order first; Kahn's algorithm then enforces dependencies on top.
+            list.sort_by(|a, b| a.compare_manual_sort(b));
+        }
         topological_sort(list);
     }
 
@@ -2239,6 +2251,9 @@ impl TaskStore {
         }
 
         let mut active_uids = std::collections::HashSet::new();
+        // For manual-sort parents, the buffer's line order is the new manual
+        // order of that parent's children.
+        let mut buffer_children: HashMap<String, Vec<String>> = HashMap::new();
         // Subtrees a document-view buffer intentionally omits: the collapsed
         // subtree of a sub-page present as a single reference line, and
         // unplaced sub-pages (parented outside this document). Neither may be
@@ -2324,6 +2339,12 @@ impl TaskStore {
                 .parent_uid
                 .clone()
                 .unwrap_or_else(|| root_uid.to_string());
+            if task_uid != root_uid {
+                buffer_children
+                    .entry(p_uid_str.clone())
+                    .or_default()
+                    .push(task_uid.clone());
+            }
             let inherited_href = resolved_hrefs
                 .get(&p_uid_str)
                 .cloned()
@@ -2687,6 +2708,21 @@ impl TaskStore {
             all_warnings.extend(self.resolve_dependencies(t));
         }
 
+        // Manual sort is decided by the parent's stored flag after this sync
+        // applies; remember which parents were manual before so that a
+        // removed `is:manual` token clears the stale child positions.
+        let mut manual_uids: Vec<&str> = buffer_children.keys().map(String::as_str).collect();
+        manual_uids.push(root_uid);
+        let pre_apply_manual: HashMap<String, bool> = manual_uids
+            .iter()
+            .map(|uid| {
+                (
+                    uid.to_string(),
+                    self.get_task_ref(uid).is_some_and(|t| t.manual_sort),
+                )
+            })
+            .collect();
+
         // --- All safe, apply to store ---
         if root_changed {
             actions.push(crate::journal::Action::Update(root_clone.clone()));
@@ -2725,6 +2761,91 @@ impl TaskStore {
                         actions.push(crate::journal::Action::Create(trashed));
                     }
                 }
+            }
+        }
+
+        // --- Manual sort: the buffer's line order is the new manual order ---
+        // A parent that lost its manual flag has its children's positions
+        // cleared. A parent that kept it and whose buffer holds every current
+        // non-system child gets ascending positions in line order; a partial
+        // buffer (document view with unplaced sub-pages) is left untouched.
+        for (uid, was_manual) in &pre_apply_manual {
+            if !was_manual {
+                continue;
+            }
+            let still_manual = self.get_task_ref(uid).is_some_and(|t| t.manual_sort);
+            if still_manual {
+                continue; // reassignment handled below
+            }
+            let child_uids: Vec<String> = self.children_index.get(uid).cloned().unwrap_or_default();
+            for child_uid in child_uids {
+                if let Some(t) = self.get_task_ref(&child_uid)
+                    && !crate::storage::is_system_calendar(&t.calendar_href)
+                    && !t.sort_position.is_empty()
+                {
+                    let mut clone = t.clone();
+                    clone.sort_position = String::new();
+                    clone.sequence += 1;
+                    actions.push(crate::journal::Action::Update(clone.clone()));
+                    self.update_or_add_task(clone);
+                }
+            }
+        }
+        for (parent_uid, buffer_uids) in &buffer_children {
+            let Some(parent) = self.get_task_ref(parent_uid) else {
+                continue;
+            };
+            if !parent.manual_sort {
+                continue;
+            }
+            let current: Vec<String> = self
+                .children_index
+                .get(parent_uid)
+                .map(|children| {
+                    children
+                        .iter()
+                        .filter(|uid| {
+                            self.get_task_ref(uid).is_some_and(|t| {
+                                !crate::storage::is_system_calendar(&t.calendar_href)
+                            })
+                        })
+                        .cloned()
+                        .collect()
+                })
+                .unwrap_or_default();
+            let buffer_set: HashSet<&str> = buffer_uids.iter().map(String::as_str).collect();
+            if !current.iter().all(|uid| buffer_set.contains(uid.as_str())) {
+                // The buffer does not hold every child of this parent, so its
+                // line order is not a complete reordering.
+                continue;
+            }
+            let target: Vec<String> = buffer_uids
+                .iter()
+                .filter(|uid| current.iter().any(|c| c == *uid))
+                .cloned()
+                .collect();
+            let mut current_tasks: Vec<Task> = current
+                .iter()
+                .filter_map(|uid| self.get_task_ref(uid).cloned())
+                .collect();
+            current_tasks.sort_by(|a, b| a.compare_manual_sort(b));
+            let current_order: Vec<String> = current_tasks.drain(..).map(|t| t.uid).collect();
+            if target == current_order {
+                continue;
+            }
+            let positions = crate::model::fractional::fractional_positions(target.len());
+            for (uid, pos) in target.iter().zip(&positions) {
+                let Some(t) = self.get_task_ref(uid) else {
+                    continue;
+                };
+                if t.sort_position == *pos {
+                    continue;
+                }
+                let mut clone = t.clone();
+                clone.sort_position = pos.clone();
+                clone.sequence += 1;
+                actions.push(crate::journal::Action::Update(clone.clone()));
+                self.update_or_add_task(clone);
             }
         }
 
@@ -2926,6 +3047,134 @@ impl TaskStore {
                 .into_owned()
                 .into_boxed_str(),
         ))
+    }
+
+    /// Move a task up or down within its sibling group when the parent uses
+    /// manual sorting. Self-heals the parent's manual flag, rewrites the
+    /// moved task's `sort_position` with a fractional midpoint, and falls
+    /// back to reassigning the whole sibling list when the key gap is
+    /// exhausted. Returns the journal actions (usually a single Update).
+    pub fn move_manual_node(&mut self, uid: &str, up: bool) -> Vec<JournalAction> {
+        let mut actions = Vec::new();
+
+        // Roots have no sibling group to move in.
+        let Some(task) = self.get_task_ref(uid) else {
+            return actions;
+        };
+        if crate::storage::is_system_calendar(&task.calendar_href) {
+            return actions;
+        }
+        let Some(parent_uid) = task.parent_uid.clone() else {
+            return actions;
+        };
+        let Some(parent) = self.get_task_ref(&parent_uid).cloned() else {
+            return actions;
+        };
+
+        // An explicit manual move turns the parent's sorting manual.
+        if !parent.manual_sort
+            && let Some((p, _)) = self.get_task_mut(&parent_uid)
+        {
+            p.manual_sort = true;
+            p.sequence += 1;
+            actions.push(JournalAction::Update(p.clone()));
+        }
+
+        // Siblings in manual display order: positioned children first (by
+        // key), unpositioned children last (by summary/uid).
+        let mut siblings: Vec<Task> = self
+            .children_index
+            .get(&parent_uid)
+            .map(|children| {
+                children
+                    .iter()
+                    .filter_map(|c| self.get_task_ref(c).cloned())
+                    .filter(|t| !crate::storage::is_system_calendar(&t.calendar_href))
+                    .collect()
+            })
+            .unwrap_or_default();
+        siblings.sort_by(|a, b| a.compare_manual_sort(b));
+
+        let Some(j) = siblings.iter().position(|t| t.uid == uid) else {
+            return actions;
+        };
+        let n = siblings.len();
+        let new_index = if up {
+            if j == 0 {
+                return actions;
+            }
+            j - 1
+        } else {
+            if j + 1 >= n {
+                return actions;
+            }
+            j + 1
+        };
+
+        // The neighbor must carry a key; otherwise the list is partially
+        // positioned and a full reassignment is needed.
+        if siblings[new_index].sort_position.is_empty() {
+            actions.extend(self.reassign_manual_siblings(&mut siblings, j, new_index));
+            return actions;
+        }
+
+        // Open ends are `None`; an unpositioned sibling beyond the neighbor
+        // also acts as an open end (it sorts after every keyed child).
+        let (prev_pos, next_pos) = if up {
+            (
+                siblings
+                    .get(j - 2)
+                    .filter(|t| !t.sort_position.is_empty())
+                    .map(|t| t.sort_position.as_str()),
+                Some(siblings[new_index].sort_position.as_str()),
+            )
+        } else {
+            (
+                Some(siblings[new_index].sort_position.as_str()),
+                siblings
+                    .get(j + 2)
+                    .filter(|t| !t.sort_position.is_empty())
+                    .map(|t| t.sort_position.as_str()),
+            )
+        };
+        match crate::model::fractional::midpoint(prev_pos, next_pos) {
+            Some(pos) => {
+                if let Some((t, _)) = self.get_task_mut(uid) {
+                    t.sort_position = pos;
+                    t.sequence += 1;
+                    actions.push(JournalAction::Update(t.clone()));
+                }
+            }
+            None => {
+                // Gap exhausted: swap the two in display order and reassign.
+                actions.extend(self.reassign_manual_siblings(&mut siblings, j, new_index));
+            }
+        }
+        actions
+    }
+
+    /// Swap two siblings in display order and reassign ascending keys to the
+    /// whole list, returning one Update per sibling whose key changed.
+    fn reassign_manual_siblings(
+        &mut self,
+        siblings: &mut [Task],
+        j: usize,
+        new_index: usize,
+    ) -> Vec<JournalAction> {
+        let mut actions = Vec::new();
+        siblings.swap(j, new_index);
+        let positions = crate::model::fractional::fractional_positions(siblings.len());
+        for (t, pos) in siblings.iter().zip(&positions) {
+            if t.sort_position == *pos {
+                continue;
+            }
+            if let Some((stored, _)) = self.get_task_mut(&t.uid) {
+                stored.sort_position = pos.clone();
+                stored.sequence += 1;
+                actions.push(JournalAction::Update(stored.clone()));
+            }
+        }
+        actions
     }
 
     /// Add a dependency (task_uid depends on dep_uid). Maintain reverse blocking index.
@@ -5725,6 +5974,20 @@ impl TaskStore {
                 potential_uids.push(uid.clone());
                 potential_uids.push(parent_uid.clone());
             }
+            AppIntent::MoveNodeUp { uid } | AppIntent::MoveNodeDown { uid } => {
+                primary_uid = Some(uid.clone());
+                potential_uids.push(uid.clone());
+                // The parent may be self-healed into manual sorting and the
+                // whole sibling group repositioned, so snapshot the group.
+                if let Some(t) = self.get_task_ref(uid)
+                    && let Some(p) = t.parent_uid.clone()
+                {
+                    potential_uids.push(p.clone());
+                    if let Some(siblings) = self.children_index.get(&p) {
+                        potential_uids.extend(siblings.iter().cloned());
+                    }
+                }
+            }
             AppIntent::AddDependency { uid, blocker_uid }
             | AppIntent::RemoveDependency { uid, blocker_uid } => {
                 primary_uid = Some(uid.clone());
@@ -5974,6 +6237,12 @@ impl TaskStore {
                     actions.push(JournalAction::Update(updated));
                 }
             }
+            AppIntent::MoveNodeUp { uid } => {
+                actions.extend(self.move_manual_node(uid, true));
+            }
+            AppIntent::MoveNodeDown { uid } => {
+                actions.extend(self.move_manual_node(uid, false));
+            }
             AppIntent::AddDependency { uid, blocker_uid } => {
                 if let Some(updated) = self.add_dependency(uid, blocker_uid.clone()) {
                     actions.push(JournalAction::Update(updated));
@@ -6111,6 +6380,8 @@ impl TaskStore {
             AppIntent::StopTask { .. } => rust_i18n::t!("intent_desc_stopped_timer").to_string(),
             AppIntent::MakeChild { .. } => rust_i18n::t!("intent_desc_indented").to_string(),
             AppIntent::RemoveParent { .. } => rust_i18n::t!("intent_desc_outdented").to_string(),
+            AppIntent::MoveNodeUp { .. } => rust_i18n::t!("intent_desc_moved_up").to_string(),
+            AppIntent::MoveNodeDown { .. } => rust_i18n::t!("intent_desc_moved_down").to_string(),
             AppIntent::AddDependency { .. } => {
                 rust_i18n::t!("intent_desc_added_dependency").to_string()
             }
@@ -6220,6 +6491,8 @@ mod tests {
             flat: false,
             archived: false,
             is_event: false,
+            manual_sort: false,
+            sort_position: String::new(),
             time_spent_seconds: 0,
             last_started_at: None,
             sessions: vec![],

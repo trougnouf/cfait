@@ -668,6 +668,11 @@ pub fn get_shortcuts_help(is_gui: bool) -> Vec<HelpSection> {
             example: "".to_string(),
         },
         HelpItem {
+            keys: "Alt + Up / Alt + Down".to_string(),
+            desc: rust_i18n::t!("help_shortcut_manual_move").to_string(),
+            example: "".to_string(),
+        },
+        HelpItem {
             keys: "g".to_string(),
             desc: format!(
                 "{}/ {}",

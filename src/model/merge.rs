@@ -66,6 +66,8 @@ pub fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task>
         flat: _,
         archived: _,
         is_event: _,
+        manual_sort: _,
+        sort_position: _,
         time_spent_seconds: _,
         last_started_at: _,
         sessions: _,
@@ -139,6 +141,7 @@ pub fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task>
     merge_field!(is_journal);
     merge_field!(archived);
     merge_field!(is_event);
+    merge_field!(manual_sort);
     merge_field!(goal);
     merge_field!(last_started_at);
 
@@ -154,6 +157,16 @@ pub fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task>
         && (server.parent_uid == base.parent_uid || local.sequence > server.sequence)
     {
         merged.parent_uid = local.parent_uid.clone();
+    }
+
+    // Manual sort position: two clients reordering the same sibling is not a
+    // data conflict — the newer move wins, and the next tree sync reassigns
+    // positions from the markdown order anyway.
+    if local.sort_position != base.sort_position
+        && local.sort_position != server.sort_position
+        && (server.sort_position == base.sort_position || local.sequence > server.sequence)
+    {
+        merged.sort_position = local.sort_position.clone();
     }
 
     // List properties (Set-based 3-way merge to handle deletions correctly)

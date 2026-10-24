@@ -270,6 +270,12 @@ pub enum AppIntent {
         uid: String,
         parent_uid: String,
     },
+    MoveNodeUp {
+        uid: String,
+    },
+    MoveNodeDown {
+        uid: String,
+    },
     AddDependency {
         uid: String,
         blocker_uid: String,
