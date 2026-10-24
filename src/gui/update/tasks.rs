@@ -303,7 +303,7 @@ fn apply_history_record(
 /// Replace the token at `range` in `current` with `text`, keeping the rest
 /// of the text. When the token is at the end a trailing space is appended so
 /// subsequent input does not stick to the replacement.
-fn apply_text_replacement(current: &str, range: std::ops::Range<usize>, text: &str) -> String {
+fn apply_text_replacement(current: &str, range: &std::ops::Range<usize>, text: &str) -> String {
     let mut new_text = current[..range.start].to_string();
     new_text.push_str(text);
     if range.end < current.len() {
@@ -312,6 +312,51 @@ fn apply_text_replacement(current: &str, range: std::ops::Range<usize>, text: &s
         new_text.push(' ');
     }
     new_text
+}
+
+/// The editor position (line, byte column) of a byte offset in `text`.
+fn byte_offset_to_position(text: &str, offset: usize) -> text_editor::Position {
+    let offset = offset.min(text.len());
+    let mut line = 0;
+    let mut line_start = 0;
+    for (i, ch) in text.char_indices() {
+        if i >= offset {
+            return text_editor::Position {
+                line,
+                column: offset - line_start,
+            };
+        }
+        if ch == '\n' {
+            line += 1;
+            line_start = i + 1;
+        }
+    }
+    text_editor::Position {
+        line,
+        column: offset - line_start,
+    }
+}
+
+/// Apply a suggestion to an editor's content: replace the token at `range`
+/// with `text` and leave the caret right after it (plus the trailing space
+/// appended when the token ended the buffer) instead of jumping to the end
+/// of the document.
+fn apply_suggestion_to_content(
+    content: &mut text_editor::Content,
+    range: std::ops::Range<usize>,
+    text: &str,
+) {
+    let current = content.text();
+    let at_buffer_end = range.end == current.len();
+    let new_text = apply_text_replacement(&current, &range, text);
+    *content = text_editor::Content::with_text(&new_text);
+    content.move_to(text_editor::Cursor {
+        position: byte_offset_to_position(
+            &new_text,
+            range.start + text.len() + usize::from(at_buffer_end),
+        ),
+        selection: None,
+    });
 }
 
 /// Log dependency resolution warnings and surface them as a dismissible
@@ -448,8 +493,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             // A suggestion chip was clicked: resolve the list the banner
             // rendered — the intact cycle's list when Tab already picked from
             // it, otherwise a fresh suggestion run for the word at `range` —
-            // then apply the clicked entry and make it the new cycle position
-            // so repeated Tab presses continue from there.
+            // then apply the clicked entry and drop the cycle: a click is
+            // definitive, so the banner re-runs the engine at the new caret
+            // and closes instead of staying open on the applied entry.
             let editor = common::active_suggestion_editor(app);
             let text = match editor {
                 crate::gui::state::SuggestionEditor::Journal => app.journal_editor_content.text(),
@@ -485,22 +531,14 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 return Task::none();
             };
             let replacement = s.replacement.clone();
-            app.suggestion_cycle = Some(crate::gui::state::SuggestionCycle {
-                range: range.start..range.start + replacement.len(),
-                index,
-                suggestions: suggs,
-                editor,
-            });
+            app.suggestion_cycle = None;
             handle(app, Message::ApplySuggestion(range, replacement))
         }
         Message::ApplySuggestion(range, text) => {
             if app.sidebar_mode == SidebarMode::Journal {
                 let current = app.journal_editor_content.text();
                 app.journal_history.push(current.clone());
-                let new_text = apply_text_replacement(&current, range, &text);
-                app.journal_editor_content = text_editor::Content::with_text(&new_text);
-                app.journal_editor_content
-                    .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
+                apply_suggestion_to_content(&mut app.journal_editor_content, range, &text);
 
                 common::set_active_focus(app, Focus::Journal);
                 return Task::batch(vec![
@@ -517,19 +555,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 let current = app.description_value.text();
                 app.desc_history.push(current.clone());
 
-                let new_text = apply_text_replacement(&current, range, &text);
-                app.description_value = text_editor::Content::with_text(&new_text);
-                app.description_value
-                    .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
+                apply_suggestion_to_content(&mut app.description_value, range, &text);
                 iced::widget::operation::focus(iced::widget::Id::new("description_input"))
             } else {
                 let current = app.input_value.text();
                 app.input_history.push(current.clone());
 
-                let new_text = apply_text_replacement(&current, range, &text);
-                app.input_value = text_editor::Content::with_text(&new_text);
-                app.input_value
-                    .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
+                apply_suggestion_to_content(&mut app.input_value, range, &text);
                 iced::widget::operation::focus(iced::widget::Id::new("main_input"))
             }
         }
