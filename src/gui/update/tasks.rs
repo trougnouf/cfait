@@ -1929,7 +1929,15 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
             app.edit_generation = app.edit_generation.wrapping_add(1);
             let old_href = task_ref.calendar_href.clone();
             let mut task = task_ref.clone();
-            task.apply_smart_input(&clean_input, &app.tag_aliases, config_time);
+            // Mirror the create branch: a freshly typed, unescaped [[wiki
+            // link]] to an existing task becomes a literal link title rather
+            // than a plain duplicate of the target name. The pre-filled
+            // escaped form (\[[X]]) is left untouched.
+            let edit_input = app
+                .store
+                .escape_pure_wiki_link(&clean_input)
+                .unwrap_or_else(|| clean_input.clone());
+            task.apply_smart_input(&edit_input, &app.tag_aliases, config_time);
 
             let warnings = app
                 .store
@@ -2014,7 +2022,14 @@ fn handle_submit(app: &mut GuiApp, keep_editing: bool) -> Task<Message> {
             return Task::none();
         }
     } else if !clean_input.is_empty() {
-        let mut new_task = TodoTask::new(&clean_input, &app.tag_aliases, config_time);
+        // If the input is exactly a [[wiki link]] to an existing task, escape
+        // it so the new task stores the link as a literal title (a clickable
+        // link in the list) instead of a plain duplicate of the target name.
+        let create_input = app
+            .store
+            .escape_pure_wiki_link(&clean_input)
+            .unwrap_or_else(|| clean_input.clone());
+        let mut new_task = TodoTask::new(&create_input, &app.tag_aliases, config_time);
         // Extract the description with the new task's semantics: a flat
         // document (a journal page or an is:flat/is:doc task) only turns
         // explicit items into subtasks, while a plain task also turns list

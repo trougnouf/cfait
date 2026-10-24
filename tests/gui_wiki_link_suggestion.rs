@@ -241,3 +241,90 @@ fn tab_still_cycles_after_a_click() {
         "a new Tab cycle starts from the first suggestion"
     );
 }
+
+fn summaries(store: &cfait::store::TaskStore) -> Vec<String> {
+    store
+        .calendars
+        .values()
+        .flat_map(|m| m.values())
+        .filter(|t| t.calendar_href != "local://trash")
+        .map(|t| t.summary.clone())
+        .collect()
+}
+
+#[test]
+fn submitting_a_pure_wiki_link_to_an_existing_task_creates_a_link_title() {
+    // Quick-adding a line that is exactly a [[link]] to an existing task
+    // stores the link as a literal, clickable title instead of minting a
+    // plain duplicate of the target name.
+    let mut app = app_with_journal(&["Ventilation for portable tools"]);
+    app.input_value =
+        iced::widget::text_editor::Content::with_text("[[Ventilation for portable tools]]");
+
+    let _ = update::update(&mut app, Message::SubmitTask);
+
+    let found = summaries(&app.store);
+    assert!(
+        found.contains(&"[[Ventilation for portable tools]]".to_string()),
+        "the quick-add must create a literal link title: {found:?}"
+    );
+    assert_eq!(
+        found
+            .iter()
+            .filter(|s| *s == "Ventilation for portable tools")
+            .count(),
+        1,
+        "the original task is untouched and no plain duplicate is minted: {found:?}"
+    );
+}
+
+#[test]
+fn submitting_a_pure_wiki_link_to_an_unknown_task_creates_the_target() {
+    // A link naming no existing task keeps the documented jump-to-or-create
+    // behavior: it creates a plain task named after the target.
+    let mut app = app_with_journal(&["Ventilation for portable tools"]);
+    app.input_value =
+        iced::widget::text_editor::Content::with_text("[[Fresh start on the compost heap]]");
+
+    let _ = update::update(&mut app, Message::SubmitTask);
+
+    let found = summaries(&app.store);
+    assert!(
+        found.contains(&"Fresh start on the compost heap".to_string()),
+        "an unknown link target must create a plain task: {found:?}"
+    );
+    assert!(
+        !found.contains(&"[[Fresh start on the compost heap]]".to_string()),
+        "an unknown link must not become a literal title: {found:?}"
+    );
+}
+
+#[test]
+fn editing_a_task_to_a_fresh_unescaped_link_title_creates_a_link_title() {
+    // Re-saving an existing task whose new title is exactly a [[link]] to
+    // another existing task stores the link as a literal, clickable title
+    // instead of stripping it to a plain duplicate of the target name.
+    let mut app = app_with_journal(&[
+        "Ventilation for portable tools",
+        "Fresh start on the compost heap",
+    ]);
+    app.editing_uid = Some("task-0".to_string());
+    app.input_value =
+        iced::widget::text_editor::Content::with_text("[[Fresh start on the compost heap]]");
+
+    let _ = update::update(&mut app, Message::SubmitTask);
+
+    let found = summaries(&app.store);
+    assert!(
+        found.contains(&"[[Fresh start on the compost heap]]".to_string()),
+        "the edit must store a literal link title: {found:?}"
+    );
+    assert_eq!(
+        found
+            .iter()
+            .filter(|s| *s == "Fresh start on the compost heap")
+            .count(),
+        1,
+        "the target task is untouched and no plain duplicate is minted: {found:?}"
+    );
+}

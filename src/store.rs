@@ -2744,6 +2744,18 @@ impl TaskStore {
         })
     }
 
+    /// If `raw` is exactly a `[[wiki link]]` whose target resolves to a single
+    /// existing task, return the input re-escaped as `\[[...]]` so that
+    /// creating a task from it stores the link as a literal, clickable title
+    /// instead of being reduced to its target. Returns `None` when the input
+    /// is not a pure link, or the target is missing or ambiguous — the caller
+    /// then creates the task from the input as-is.
+    pub fn escape_pure_wiki_link(&self, raw: &str) -> Option<String> {
+        let target = wiki_link_target(raw)?;
+        self.find_uid_by_summary(target)?;
+        Some(format!("\\{}", raw))
+    }
+
     /// Find the task whose summary matches `summary` (case-insensitive, exact),
     /// searching every non-system calendar. Returns `None` when nothing or
     /// several tasks match: an ambiguous name must fall through to the create

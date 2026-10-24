@@ -270,6 +270,131 @@ fn wiki_link_line_with_tokens_keeps_create_behavior() {
 }
 
 #[test]
+fn escaped_wiki_link_line_creates_literal_title() {
+    // The escaped form names a new task whose title is the link itself; it
+    // must not bind to the existing task it happens to reference.
+    let (mut store, cals, aliases) = store_with_page_and_task();
+    let opts = sync_opts(&aliases, &cals);
+
+    let typed =
+        "Plan the wiring before the walls go up.\n1. [ ] \\[[Ventilation for portable tools]]";
+    let (actions, warnings, _mints) = store
+        .sync_tree_from_markdown("page-1", typed, &opts, true, false)
+        .unwrap();
+    assert!(warnings.is_empty());
+    assert!(
+        actions
+            .iter()
+            .any(|a| matches!(a, cfait::journal::Action::Create(t) if t.summary == "[[Ventilation for portable tools]]")),
+        "an escaped link must create a literal-titled task: {actions:?}"
+    );
+    assert_eq!(
+        store.get_task_ref("task-1").unwrap().parent_uid,
+        None,
+        "the escaped link must not re-parent the existing task"
+    );
+    assert_eq!(
+        summary_count(&store, "Ventilation for portable tools"),
+        1,
+        "the existing task is untouched"
+    );
+    assert_eq!(
+        summary_count(&store, "[[Ventilation for portable tools]]"),
+        1,
+        "exactly one literal-titled task is created"
+    );
+}
+
+#[test]
+fn escaped_wiki_link_roundtrip_is_idempotent() {
+    // A literal link title serializes in escaped form and re-parses to the
+    // same title: re-saving the page must never reduce it to its target.
+    let (mut store, cals, aliases) = store_with_page_and_task();
+    let opts = sync_opts(&aliases, &cals);
+
+    let typed =
+        "Plan the wiring before the walls go up.\n1. [ ] \\[[Ventilation for portable tools]]";
+    let (_actions, warnings, _mints) = store
+        .sync_tree_from_markdown("page-1", typed, &opts, true, false)
+        .unwrap();
+    assert!(warnings.is_empty());
+
+    let md = cfait::model::extractor::serialize_journal_document(&store, "page-1", &cals);
+    assert!(
+        md.contains("\\[[Ventilation for portable tools]]"),
+        "the literal link title serializes in escaped form: {md}"
+    );
+    let (actions, warnings, _mints) = store
+        .sync_tree_from_markdown("page-1", &md, &opts, true, false)
+        .unwrap();
+    assert!(warnings.is_empty());
+    assert_eq!(
+        summary_count(&store, "[[Ventilation for portable tools]]"),
+        1,
+        "the literal title must survive a re-save"
+    );
+    assert_eq!(
+        summary_count(&store, "Ventilation for portable tools"),
+        1,
+        "re-saving must not mint a plain duplicate of the target"
+    );
+    assert!(
+        actions
+            .iter()
+            .all(|a| matches!(a, cfait::journal::Action::Update(t) if t.summary == "[[Ventilation for portable tools]]" || t.uid == "page-1")),
+        "re-saving touches only the page and the literal-titled task: {actions:?}"
+    );
+}
+
+#[test]
+fn escape_pure_wiki_link_resolves_existing_target() {
+    let (store, _cals, _aliases) = store_with_page_and_task();
+    // A pure link to an existing unique task is re-escaped.
+    assert_eq!(
+        store.escape_pure_wiki_link("[[Ventilation for portable tools]]"),
+        Some("\\[[Ventilation for portable tools]]".to_string())
+    );
+    // The alias is preserved in the escaped form.
+    assert_eq!(
+        store.escape_pure_wiki_link("[[Ventilation for portable tools|vent]]"),
+        Some("\\[[Ventilation for portable tools|vent]]".to_string())
+    );
+    // A link naming no task is left for the create path.
+    assert_eq!(
+        store.escape_pure_wiki_link("[[Fresh start on the compost heap]]"),
+        None
+    );
+    // Anything beyond a pure link is left alone.
+    assert_eq!(
+        store.escape_pure_wiki_link("[[Ventilation for portable tools]] due:2026-11-02"),
+        None
+    );
+    assert_eq!(
+        store.escape_pure_wiki_link("a [[Ventilation for portable tools]]"),
+        None
+    );
+}
+
+#[test]
+fn escape_pure_wiki_link_rejects_ambiguous_target() {
+    let (mut store, _cals, _aliases) = store_with_page_and_task();
+    let mut twin = Task::new(
+        "Ventilation for portable tools #attic",
+        &HashMap::new(),
+        None,
+    );
+    twin.uid = "task-2".to_string();
+    twin.calendar_href = "local://default".to_string();
+    store.add_task(twin);
+
+    // Two tasks share the name: never guess, fall through to create.
+    assert_eq!(
+        store.escape_pure_wiki_link("[[Ventilation for portable tools]]"),
+        None
+    );
+}
+
+#[test]
 fn ambiguous_wiki_link_name_falls_through_to_create() {
     // Two tasks share a summary: the link must never silently bind one of
     // them, so it falls through to the create path.

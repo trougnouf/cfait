@@ -2935,7 +2935,21 @@ pub fn escape_summary(summary: &str) -> String {
             escaped_words.push(word.to_string());
         }
     }
-    escaped_words.join(" ")
+    let joined = escaped_words.join(" ");
+    // A summary that is a whole wiki link is a literal link title: escape the
+    // leading bracket so it survives a re-parse instead of being reduced to
+    // its target (see apply_smart_input's escaped_wiki_link guard).
+    if is_pure_wiki_link(&joined) {
+        return format!("\\{}", joined);
+    }
+    joined
+}
+
+/// Whether `s` is exactly a single `[[wiki link]]` (optionally with a `|alias`),
+/// with no nested brackets. The same shape the reference-strip pass in
+/// apply_smart_input recognises.
+pub fn is_pure_wiki_link(s: &str) -> bool {
+    s.starts_with("[[") && s.ends_with("]]") && s[2..s.len() - 2].find("[[").is_none()
 }
 
 pub fn is_special_token(word: &str) -> bool {
@@ -3024,6 +3038,10 @@ pub fn apply_smart_input(
     default_reminder_time: Option<NaiveTime>,
 ) {
     let mut summary_words = Vec::new();
+    // Set when a summary word arrived as an escaped wiki link (`\[[...]]`):
+    // the whole summary is then a literal link title and must survive the
+    // reference-strip pass below instead of being reduced to its target.
+    let mut escaped_wiki_link = false;
     // Save dependencies/relations before clearing: to_smart_string() does not
     // serialize dep:/rel: tokens, so editing a task title would silently lose
     // them. We restore the originals if the input contains no dep:/rel: tokens.
@@ -3842,6 +3860,9 @@ pub fn apply_smart_input(
                 summary_words.push(unescape(token));
             }
         } else if !is_bg {
+            if token.starts_with("\\[[") {
+                escaped_wiki_link = true;
+            }
             summary_words.push(unescape(token));
         }
         i += consumed;
@@ -3885,7 +3906,11 @@ pub fn apply_smart_input(
     let mut implicit_note = false;
 
     let s = task.summary.trim();
-    if s.starts_with("[[") && s.ends_with("]]") && s[2..s.len() - 2].find("[[").is_none() {
+    if !escaped_wiki_link
+        && s.starts_with("[[")
+        && s.ends_with("]]")
+        && s[2..s.len() - 2].find("[[").is_none()
+    {
         let mut inner = s[2..s.len() - 2].trim();
         if let Some((target, _)) = inner.split_once('|') {
             inner = target.trim();

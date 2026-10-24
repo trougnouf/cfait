@@ -102,6 +102,62 @@ fn test_quote_escaping_in_location_round_trip() {
 }
 
 #[test]
+fn test_escaped_wiki_link_title() {
+    let aliases = HashMap::new();
+    // An escaped wiki link is a literal link title, not a reference to a task.
+    let task = Task::new("\\[[Ventilation for portable tools]]", &aliases, None);
+    assert_eq!(task.summary, "[[Ventilation for portable tools]]");
+}
+
+#[test]
+fn test_plain_wiki_link_still_strips_to_target() {
+    let aliases = HashMap::new();
+    // A bare wiki link keeps its reference semantics: it names a task.
+    let task = Task::new("[[Ventilation for portable tools]]", &aliases, None);
+    assert_eq!(task.summary, "Ventilation for portable tools");
+}
+
+#[test]
+fn test_escaped_wiki_link_round_trip() {
+    let aliases = HashMap::new();
+    let task = Task::new("\\[[Ventilation for portable tools]]", &aliases, None);
+    assert_eq!(task.summary, "[[Ventilation for portable tools]]");
+    // The smart string re-escapes the link so it survives an edit round-trip.
+    assert_eq!(
+        task.to_smart_string(),
+        "\\[[Ventilation for portable tools]]"
+    );
+    // Re-parsing the escaped form yields the same literal title.
+    let reparsed = Task::new(&task.to_smart_string(), &aliases, None);
+    assert_eq!(reparsed.summary, "[[Ventilation for portable tools]]");
+}
+
+#[test]
+fn test_escape_summary_pure_wiki_link() {
+    use cfait::model::parser::escape_summary;
+    // A whole-link summary is escaped; a link buried in prose is not.
+    assert_eq!(
+        escape_summary("[[Water the tomatoes]]"),
+        "\\[[Water the tomatoes]]"
+    );
+    assert_eq!(
+        escape_summary("Water the [[tomatoes]]"),
+        "Water the [[tomatoes]]"
+    );
+}
+
+#[test]
+fn test_is_pure_wiki_link() {
+    use cfait::model::parser::is_pure_wiki_link;
+    assert!(is_pure_wiki_link("[[Water the tomatoes]]"));
+    assert!(is_pure_wiki_link("[[Water the tomatoes|water]]"));
+    assert!(!is_pure_wiki_link("Water the [[tomatoes]]"));
+    assert!(!is_pure_wiki_link("[[Water]] [[the]]"));
+    assert!(!is_pure_wiki_link("[[Water"));
+    assert!(!is_pure_wiki_link("]]Water"));
+}
+
+#[test]
 fn test_strip_quotes_unescape() {
     assert_eq!(strip_quotes(r#""foo \" bar""#), r#"foo " bar"#);
     assert_eq!(strip_quotes(r#"foo \# bar"#), r#"foo # bar"#);
