@@ -785,6 +785,23 @@ struct ClaimedTaskData {
     descendant_intervals: Vec<(i64, i64)>,
 }
 
+/// The target of a line that is exactly a `[[wiki link]]`: the inner text
+/// before a `|` alias, trimmed. `None` for anything else — a line carrying
+/// tokens beyond the link, a nested bracket, an empty target, a hierarchy
+/// path (`[[Project:Phase]]`) or a relative sub-item (`[[+Child]]`). Those
+/// forms name a location to create, not an existing task to bind to.
+fn wiki_link_target(raw_text: &str) -> Option<&str> {
+    let inner = raw_text.trim().strip_prefix("[[")?.strip_suffix("]]")?;
+    if inner.contains("[[") || inner.contains("]]") {
+        return None;
+    }
+    let target = inner.split('|').next()?.trim();
+    if target.is_empty() || target.starts_with('+') || target.contains(':') {
+        return None;
+    }
+    Some(target)
+}
+
 impl TaskStore {
     /// Construct a new TaskStore with an AppContext reference for persistence.
     pub fn new(ctx: Arc<dyn AppContext>) -> Self {
@@ -2279,6 +2296,21 @@ impl TaskStore {
                 }
             }
 
+            // A `[[wiki link]]` line that names an existing task binds to it
+            // instead of minting a duplicate: standard links search globally
+            // ("jump to or create"), so the match is not limited to this
+            // page's children. An unknown or ambiguous name falls through to
+            // the create path below.
+            if ext.parsed_existing_uid.is_none()
+                && let Some(target) = wiki_link_target(&ext.raw_text)
+                && let Some(existing_uid) = self.find_uid_by_summary(target)
+            {
+                task_uid = existing_uid;
+                if task_uid != ext.uid {
+                    rebound_uids.push((ext.uid.clone(), task_uid.clone()));
+                }
+            }
+
             // The line carried no uid tag, so this sync assigned it a uid. Report
             // it so a persistent editor can re-tag the line and keep matching by
             // uid on the next save.
@@ -2358,7 +2390,20 @@ impl TaskStore {
                 let mut clone = existing.clone();
                 let mut actually_changed = false;
 
-                if expected_raw_text.trim() != ext.raw_text.trim() {
+                // A pure `[[wiki link]]` reference line names this task and
+                // carries no other tokens: it places the task in the document
+                // without editing it. Re-parsing the line would reset every
+                // field it does not carry (tags, dates, priority), wipe the
+                // stored description, and bump the sequence on every save.
+                // Keep the stored state untouched — the child owns its state;
+                // the shadow only pins where it renders.
+                let wiki_reference = ext.description.trim().is_empty()
+                    && wiki_link_target(&ext.raw_text)
+                        .is_some_and(|target| existing.summary.eq_ignore_ascii_case(target));
+
+                if wiki_reference {
+                    // stored deps/rels/target_collection untouched
+                } else if expected_raw_text.trim() != ext.raw_text.trim() {
                     let preserved_alarms: Vec<_> = existing
                         .alarms
                         .iter()
@@ -2397,7 +2442,14 @@ impl TaskStore {
                     clone.target_collection = dummy.target_collection;
                 }
 
-                if !tree_view && existing.is_journal && ext.description.trim().is_empty() {
+                if wiki_reference {
+                    // A pure reference line must not rewrite the body (see
+                    // above). Unlike a collapsed sub-page, a plain task's
+                    // subtree expands inline in the document, so no subtree
+                    // protection is needed.
+                    clone.description = existing.description.clone();
+                    clone.inline_media = existing.inline_media.clone();
+                } else if !tree_view && existing.is_journal && ext.description.trim().is_empty() {
                     // In a document-view buffer a sub-page serializes as a
                     // single reference line; its body is edited in its own
                     // editor. A body-less sub-page line must not wipe the
@@ -2420,7 +2472,11 @@ impl TaskStore {
                     );
                     clone.inline_media = ext.inline_media.clone();
                 }
-                if existing.is_journal {
+                if wiki_reference {
+                    // The reference line carries no tokens: the page's stored
+                    // note state is the source of truth, not the line's
+                    // (absent) tokens.
+                } else if existing.is_journal {
                     // Journal components are never serialized with a checkbox,
                     // so `ext.is_note` is noise for them. The explicit `is:note`
                     // token in the line is the single source of truth: present
@@ -2434,11 +2490,17 @@ impl TaskStore {
                 }
                 clone.parent_uid = parent_uid.clone();
 
-                clone.apply_extracted_status(ext.status);
-                // Assign after the status side effects: the checkbox percent
-                // (e.g. `[/]` pause) is the user's explicit state and must not
-                // be clobbered by the NeedsAction cleanup above.
-                clone.percent_complete = ext.percent_complete;
+                if wiki_reference {
+                    // The typed checkbox of a freshly linked line is
+                    // incidental: the child owns its state, so a reference
+                    // must not reopen, pause, or complete the task it links.
+                } else {
+                    clone.apply_extracted_status(ext.status);
+                    // Assign after the status side effects: the checkbox percent
+                    // (e.g. `[/]` pause) is the user's explicit state and must not
+                    // be clobbered by the NeedsAction cleanup above.
+                    clone.percent_complete = ext.percent_complete;
+                }
 
                 let final_href = if let Some(target) = clone.target_collection.take() {
                     crate::model::resolve_collection(&target, options.calendars, &inherited_href)
@@ -2680,6 +2742,30 @@ impl TaskStore {
                 .find(|uid| self.get_task_ref(uid).is_some_and(|t| t.summary == summary))
                 .cloned()
         })
+    }
+
+    /// Find the task whose summary matches `summary` (case-insensitive, exact),
+    /// searching every non-system calendar. Returns `None` when nothing or
+    /// several tasks match: an ambiguous name must fall through to the create
+    /// path, never silently bind (the spec's "ambiguous links are never
+    /// auto-created").
+    fn find_uid_by_summary(&self, summary: &str) -> Option<String> {
+        let mut match_uid = None;
+        for (href, map) in &self.calendars {
+            if crate::storage::is_system_calendar(href) {
+                continue;
+            }
+            for t in map.values() {
+                if !t.summary.eq_ignore_ascii_case(summary) {
+                    continue;
+                }
+                if match_uid.is_some() {
+                    return None;
+                }
+                match_uid = Some(t.uid.clone());
+            }
+        }
+        match_uid
     }
 
     /// Deep-duplicate a task and all its descendants.
