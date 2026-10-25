@@ -1,10 +1,10 @@
 //! Tests for `client/core.rs`, moved from an inline module.
 #![cfg(feature = "test_hooks")]
 use cfait::client::core::RustyClient;
+use cfait::config::{SETTINGS_SUMMARY, SETTINGS_UID, SettingsPayload};
 use cfait::journal::Action;
 use cfait::journal::Journal;
-use cfait::model::CalendarListEntry;
-use cfait::model::Task;
+use cfait::model::{CalendarListEntry, IcsAdapter, Task, TaskStatus};
 use cfait::storage::{LocalCalendarRegistry, LocalStorage};
 use serial_test::serial;
 use std::collections::HashMap;
@@ -119,6 +119,7 @@ async fn test_recovery_calendar_visibility() {
             href: "local://recovery".to_string(),
             color: Some("#DB4437".to_string()),
             supports_vjournal: Some(true),
+            supports_vevent: Some(true),
         });
         LocalCalendarRegistry::save(ctx.as_ref(), &regs).unwrap();
     }
@@ -296,12 +297,14 @@ async fn test_get_all_tasks_falls_back_to_cache_when_server_fails() {
             href: "local://garden".to_string(),
             color: None,
             supports_vjournal: None,
+            supports_vevent: None,
         },
         CalendarListEntry {
             name: "Remote".to_string(),
             href: "https://example.com/cal/".to_string(),
             color: None,
             supports_vjournal: None,
+            supports_vevent: None,
         },
     ];
 
@@ -328,4 +331,271 @@ async fn test_get_all_tasks_falls_back_to_cache_when_server_fails() {
             .is_some_and(|t| t.iter().any(|t| t.uid == "cached-1")),
         "Failed remote calendar should fall back to its cached tasks"
     );
+}
+
+// --- SETTINGS CARRIER CONFLICT TESTS ---
+
+/// Build a settings carrier task with the given payload revision and etag.
+fn carrier_task(url: &str, updated_at: i64, etag: &str) -> Task {
+    let mut task = Task::new(SETTINGS_SUMMARY, &HashMap::new(), None);
+    task.uid = SETTINGS_UID.to_string();
+    task.calendar_href = format!("{}/cal/", url);
+    task.href = format!("{}/cal/{}.ics", url, SETTINGS_UID);
+    task.etag = etag.to_string();
+    task.is_event = true;
+    task.status = TaskStatus::Cancelled;
+    task.description = serde_json::to_string(&SettingsPayload {
+        updated_at,
+        config: Default::default(),
+    })
+    .expect("serialize payload");
+    task
+}
+
+/// A calendar-multiget (REPORT) response serving `ics` at `path` with `etag`.
+fn multiget_body(path: &str, ics: &str, etag: &str) -> String {
+    format!(
+        r#"<d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav"><d:response><d:href>{}</d:href><d:propstat><d:prop><cal:calendar-data>{}</cal:calendar-data><d:getetag>"{}"</d:getetag></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>"#,
+        path, ics, etag
+    )
+}
+
+/// A 412 on the settings carrier whose server copy carries a newer payload
+/// revision must be resolved last-write-wins by adopting the server version:
+/// no re-PUT, no conflict copy, no rescue.
+#[tokio::test]
+#[serial]
+async fn test_carrier_412_newer_server_wins() {
+    let ctx = std::sync::Arc::new(cfait::context::TestContext::new());
+    let mut server = mockito::Server::new_async().await;
+    let url = server.url();
+    let path = format!("/cal/{}.ics", SETTINGS_UID);
+
+    // 1. The update PUT 412s (another device wrote newer settings).
+    let mock_412 = server
+        .mock("PUT", path.as_str())
+        .match_header("If-Match", "\"local-etag\"")
+        .with_status(412)
+        .expect(1)
+        .create_async()
+        .await;
+
+    // 2. The server copy holds the newer payload revision.
+    let server_carrier = carrier_task(&url, 2000, "server-etag");
+    let server_ics = IcsAdapter::to_ics(&server_carrier);
+    let mock_fetch = server
+        .mock("REPORT", "/cal/")
+        .with_status(207)
+        .with_body(multiget_body(&path, &server_ics, "server-etag"))
+        .expect(1)
+        .create_async()
+        .await;
+
+    // 3. The local copy must not be pushed back (no wildcard re-PUT).
+    let mock_reput = server
+        .mock("PUT", path.as_str())
+        .match_header("If-Match", "*")
+        .with_status(201)
+        .expect(0)
+        .create_async()
+        .await;
+
+    let client = RustyClient::new(ctx.clone(), &url, "u", "p", false, None).unwrap();
+
+    Journal::push(
+        ctx.as_ref(),
+        Action::Update(carrier_task(&url, 1000, "local-etag")),
+    )
+    .unwrap();
+
+    let (warnings, synced) = client.sync_journal().await.expect("sync_journal");
+
+    mock_412.assert();
+    mock_fetch.assert();
+    mock_reput.assert();
+
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.contains("adopting the server version")),
+        "a carrier conflict must report the LWW resolution: {:?}",
+        warnings
+    );
+    assert!(
+        Journal::load(ctx.as_ref()).is_empty(),
+        "the action must be popped, not parked or duplicated"
+    );
+
+    let adopted = synced
+        .iter()
+        .find(|t| t.uid == SETTINGS_UID)
+        .expect("carrier reported as synced");
+    assert_eq!(adopted.etag, "\"server-etag\"");
+    let payload: SettingsPayload = serde_json::from_str(&adopted.description).unwrap();
+    assert_eq!(
+        payload.updated_at, 2000,
+        "the newer server payload must win"
+    );
+}
+
+/// A 412 on the settings carrier whose server copy carries an OLDER payload
+/// revision must be resolved by re-PUTting the local payload (wildcard
+/// precondition), with no conflict copy.
+#[tokio::test]
+#[serial]
+async fn test_carrier_412_newer_local_reputs() {
+    let ctx = std::sync::Arc::new(cfait::context::TestContext::new());
+    let mut server = mockito::Server::new_async().await;
+    let url = server.url();
+    let path = format!("/cal/{}.ics", SETTINGS_UID);
+
+    // 1. The update PUT 412s.
+    let mock_412 = server
+        .mock("PUT", path.as_str())
+        .match_header("If-Match", "\"local-etag\"")
+        .with_status(412)
+        .expect(1)
+        .create_async()
+        .await;
+
+    // 2. The server copy holds an older revision.
+    let server_carrier = carrier_task(&url, 500, "server-etag");
+    let server_ics = IcsAdapter::to_ics(&server_carrier);
+    let mock_fetch = server
+        .mock("REPORT", "/cal/")
+        .with_status(207)
+        .with_body(multiget_body(&path, &server_ics, "server-etag"))
+        .expect(1)
+        .create_async()
+        .await;
+
+    // 3. The local payload wins: re-PUT with If-Match: *.
+    let mock_reput = server
+        .mock("PUT", path.as_str())
+        .match_header("If-Match", "*")
+        .match_body(mockito::Matcher::Regex(SETTINGS_UID.to_string()))
+        .with_status(201)
+        .with_header("ETag", "\"new-etag\"")
+        .expect(1)
+        .create_async()
+        .await;
+
+    // 4. The carrier must never spawn a user-visible conflict copy.
+    let mock_conflict_copy = server
+        .mock(
+            "PUT",
+            mockito::Matcher::Regex(r"^/cal/.*\.ics$".to_string()),
+        )
+        .match_body(mockito::Matcher::Regex("Conflict Copy".to_string()))
+        .with_status(201)
+        .expect(0)
+        .create_async()
+        .await;
+
+    let client = RustyClient::new(ctx.clone(), &url, "u", "p", false, None).unwrap();
+
+    Journal::push(
+        ctx.as_ref(),
+        Action::Update(carrier_task(&url, 1000, "local-etag")),
+    )
+    .unwrap();
+
+    let (_, synced) = client.sync_journal().await.expect("sync_journal");
+
+    mock_412.assert();
+    mock_fetch.assert();
+    mock_reput.assert();
+    mock_conflict_copy.assert();
+
+    assert!(
+        Journal::load(ctx.as_ref()).is_empty(),
+        "the action must be popped, not parked or duplicated"
+    );
+    let pushed = synced
+        .iter()
+        .find(|t| t.uid == SETTINGS_UID)
+        .expect("carrier reported as synced");
+    assert_eq!(pushed.etag, "\"new-etag\"");
+    let payload: SettingsPayload = serde_json::from_str(&pushed.description).unwrap();
+    assert_eq!(payload.updated_at, 1000, "the newer local payload must win");
+}
+
+/// A failure on the settings carrier (5xx, transient network error) must not
+/// block the queue: the carrier action is dropped with a warning and the
+/// following user tasks keep syncing (head-of-line blocking fix,
+/// https://github.com/trougnouf/cfait/issues/123).
+#[tokio::test]
+#[serial]
+async fn test_carrier_failure_does_not_block_user_tasks() {
+    let ctx = std::sync::Arc::new(cfait::context::TestContext::new());
+    let mut server = mockito::Server::new_async().await;
+    let url = server.url();
+
+    // The user task's creation succeeds.
+    let mock_user_put = server
+        .mock("PUT", "/cal/user-task-1.ics")
+        .match_header("If-None-Match", "*")
+        .with_status(201)
+        .with_header("ETag", "\"user-etag\"")
+        .expect(1)
+        .create_async()
+        .await;
+
+    let client = RustyClient::new(ctx.clone(), &url, "u", "p", false, None).unwrap();
+
+    let carrier = carrier_task(&url, 1000, "local-etag");
+    let mut user = Task::new("water the ferns", &HashMap::new(), None);
+    user.uid = "user-task-1".to_string();
+    user.calendar_href = format!("{}/cal/", url);
+
+    Journal::push(ctx.as_ref(), Action::Create(carrier)).unwrap();
+    Journal::push(ctx.as_ref(), Action::Create(user)).unwrap();
+
+    // Force a transient failure on the carrier only (no fatal status code in
+    // the message, so sync_journal maps it to a plain Err).
+    let hook = TEST_FORCE_SYNC_ERROR.get_or_init(|| {
+        Mutex::new(None::<Box<dyn Fn(&Action) -> Option<anyhow::Error> + Send + Sync + 'static>>)
+    });
+    {
+        let mut g = hook.lock().unwrap();
+        *g = Some(Box::new(move |action: &Action| match action {
+            Action::Create(t) if t.uid == SETTINGS_UID => {
+                Some(anyhow::anyhow!("carrier upload failed"))
+            }
+            Action::Update(t) if t.uid == SETTINGS_UID => {
+                Some(anyhow::anyhow!("carrier upload failed"))
+            }
+            _ => None,
+        }));
+    }
+
+    let (warnings, synced) = client.sync_journal().await.expect("sync_journal");
+
+    mock_user_put.assert();
+
+    // The failed carrier was dropped from the queue…
+    let journal = Journal::load(ctx.as_ref());
+    assert!(
+        !journal.queue.iter().any(|a| matches!(
+            a,
+            Action::Create(t)
+            | Action::Update(t)
+            | Action::Delete(t)
+            | Action::Move(t, _)
+                if t.uid == SETTINGS_UID
+        )),
+        "the failed carrier must be dropped, not parked at the head"
+    );
+    // …with a warning, and the user task went through.
+    assert!(
+        warnings.iter().any(|w| w.contains("settings carrier")),
+        "a carrier failure must surface a warning: {:?}",
+        warnings
+    );
+    assert!(
+        synced.iter().any(|t| t.uid == "user-task-1"),
+        "the user task must sync despite the carrier failure"
+    );
+
+    *hook.lock().unwrap() = None;
 }

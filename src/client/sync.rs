@@ -229,6 +229,59 @@ fn fix_and_encode_path(
 }
 
 impl RustyClient {
+    /// Resolve a 412 conflict on the settings carrier with last-write-wins on
+    /// the payload's `updated_at`: the newer side wins. The carrier is an
+    /// internal object, not a user task: it never spawns conflict copies and
+    /// is never rescued into the recovery calendar (rescue appends error
+    /// text into its JSON payload and corrupts it).
+    async fn resolve_carrier_conflict(
+        &self,
+        client: &CalDavClient<HttpsClient>,
+        task: &Task,
+        path: &str,
+    ) -> Result<StepResult, String> {
+        let rev = |t: &Task| {
+            crate::controller::parse_settings_payload(&t.description)
+                .map(|p| p.updated_at)
+                .unwrap_or(i64::MIN)
+        };
+        match self.fetch_remote_task(path).await {
+            Ok(Some(server)) => {
+                if rev(&server) > rev(task) {
+                    Ok(
+                        StepResult::new(StepOutcome::ServerWins(Box::new(server))).with_warning(
+                            "Settings conflict resolved by adopting the server version (newer settings)."
+                                .to_string(),
+                        ),
+                    )
+                } else {
+                    // Local is at least as new: re-PUT over the server copy.
+                    // We just fetched it, so the wildcard precondition holds.
+                    let ics_string = IcsAdapter::to_ics(task);
+                    match client
+                        .request(PutResource::new(path).update(
+                            ics_string,
+                            "text/calendar; charset=utf-8",
+                            "*",
+                        ))
+                        .await
+                    {
+                        Ok(resp) => Ok(StepResult::new(StepOutcome::Success {
+                            etag: resp.etag,
+                            href: None,
+                            refresh_path: Some(path.to_string()),
+                        })),
+                        Err(e) => Err(format!("settings carrier re-PUT failed: {:?}", e)),
+                    }
+                }
+            }
+            Ok(None) => Ok(StepResult::new(StepOutcome::RetryWith(Box::new(
+                Action::Create(task.clone()),
+            )))),
+            Err(msg) => Err(msg),
+        }
+    }
+
     async fn handle_create(
         &self,
         client: &CalDavClient<HttpsClient>,
@@ -293,10 +346,16 @@ impl RustyClient {
                                 .to_string(),
                         ))
                     }
-                    None => Ok(StepResult::new(StepOutcome::RecoveryNeeded(format!(
-                        "Server answered 412 to the creation of {} but the object does not exist on the server\nTarget Path: {}",
-                        task.uid, path
-                    )))),
+                    None => {
+                        let msg = format!(
+                            "Server answered 412 to the creation of {} but the object does not exist on the server\nTarget Path: {}",
+                            task.uid, path
+                        );
+                        if task.uid == crate::config::SETTINGS_UID {
+                            return Err(msg);
+                        }
+                        Ok(StepResult::new(StepOutcome::RecoveryNeeded(msg)))
+                    }
                 }
             }
             Err(e) => {
@@ -313,6 +372,13 @@ impl RustyClient {
 
                 if is_fatal {
                     let detailed_msg = format!("{}\nTarget Path: {}", msg, path);
+                    if task.uid == crate::config::SETTINGS_UID {
+                        // Rescuing the carrier would append the error text
+                        // into its JSON payload and corrupt it; fail instead
+                        // so the journal drops it (it self-heals on the next
+                        // settings cycle).
+                        return Err(detailed_msg);
+                    }
                     return Ok(StepResult::new(StepOutcome::RecoveryNeeded(detailed_msg)));
                 }
 
@@ -400,16 +466,8 @@ impl RustyClient {
             }
             Err(WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED))
             | Err(WebDavError::PreconditionFailed(_)) => {
-                if task.uid == crate::config::SETTINGS_UID
-                    && let Ok(Some(server_task)) = self.fetch_remote_task(&path).await
-                {
-                    return Ok(
-                        StepResult::new(StepOutcome::ServerWins(Box::new(server_task)))
-                            .with_warning(
-                            "Settings conflict resolved by adopting server version temporarily."
-                                .to_string(),
-                        ),
-                    );
+                if task.uid == crate::config::SETTINGS_UID {
+                    return self.resolve_carrier_conflict(client, task, &path).await;
                 }
 
                 // Ghost update: the entry never reached the server (no href),
@@ -497,6 +555,9 @@ impl RustyClient {
                 };
 
                 if is_conflict {
+                    if task.uid == crate::config::SETTINGS_UID {
+                        return self.resolve_carrier_conflict(client, task, &path).await;
+                    }
                     let mut conflict_copy = task.clone();
                     conflict_copy.uid = uuid::Uuid::new_v4().to_string();
                     conflict_copy.summary = format!("{} (Conflict Copy)", task.summary);
@@ -526,7 +587,15 @@ impl RustyClient {
 
                     if is_fatal {
                         let detailed_msg = format!("{}\nTarget Path: {}", msg, path);
-                        Ok(StepResult::new(StepOutcome::RecoveryNeeded(detailed_msg)))
+                        if task.uid == crate::config::SETTINGS_UID {
+                            // Rescuing the carrier would append the error text
+                            // into its JSON payload and corrupt it; fail
+                            // instead so the journal drops it (it self-heals
+                            // on the next settings cycle).
+                            Err(detailed_msg)
+                        } else {
+                            Ok(StepResult::new(StepOutcome::RecoveryNeeded(detailed_msg)))
+                        }
                     } else if let WebDavError::BadStatusCode(status) = &e {
                         let code = status.as_u16();
                         if code == 413 {
@@ -895,6 +964,7 @@ impl RustyClient {
                                             href: recovery_href.to_string(),
                                             color: Some("#DB4437".to_string()),
                                             supports_vjournal: Some(true),
+                                            supports_vevent: Some(true),
                                         });
                                         let _ =
                                             LocalCalendarRegistry::save(self.ctx.as_ref(), &locals);
@@ -1060,6 +1130,36 @@ impl RustyClient {
                     }
                 }
                 Err(msg) => {
+                    // The settings carrier is an internal object, not a user
+                    // task: a failure on it must not block the queue. Drop it
+                    // and keep syncing; the next settings cycle re-journals a
+                    // fresh carrier.
+                    let is_carrier = match &next_action {
+                        Action::Create(t) | Action::Update(t) | Action::Move(t, _) => {
+                            t.uid == crate::config::SETTINGS_UID
+                        }
+                        Action::Delete(t) => t.uid == crate::config::SETTINGS_UID,
+                    };
+                    if is_carrier {
+                        log::warn!(
+                            "sync_journal: settings carrier failed, dropping it: {}",
+                            msg
+                        );
+                        Journal::modify(self.ctx.as_ref(), |journal| {
+                            let should_remove = if let Some(head) = journal.queue.first() {
+                                actions_match_identity(head, &next_action)
+                            } else {
+                                false
+                            };
+                            if should_remove {
+                                journal.queue.remove(0);
+                            }
+                        })
+                        .map_err(|e| e.to_string())?;
+                        warnings.push(rust_i18n::t!("sync_settings_carrier_failed").to_string());
+                        continue;
+                    }
+
                     // Stop processing on network error.
                     // The action safely remains at the front of the disk queue.
                     log::error!("sync_journal step failed: {}", msg);

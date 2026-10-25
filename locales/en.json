@@ -847,6 +847,7 @@
     "sync_conflict_creation": "Creation conflict: Task '%{summary}' already exists on server. Mark as synced.",
     "sync_conflict_delete": "Conflict on delete task '%{summary}'. Forcing delete.",
     "sync_error": "Sync error: %{error}",
+    "sync_settings_carrier_failed": "Settings sync: the settings carrier failed to upload and will be retried separately; your other changes are unaffected.",
     "sync_partial_failure": "Sync incomplete: %{count} calendar(s) could not be fetched (%{hrefs}).",
     "sync_failed_retry": "Sync failed. Click to retry.",
     "sync_fatal_error_recovery": "Fatal sync error. Task moved to 'Local (Recovery)'.",
