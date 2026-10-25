@@ -994,7 +994,7 @@
     "parser_is_pinned": "is:pinned",
     "parser_is_permanent": "is:permanent",
     "parser_is_archived": "is:archived",
-    "parser_is_manual": "is:manual",
+    "parser_sort_manual": "sort:manual",
     "search_is_canceled": "is:canceled,is:cancelled",
     "parser_dep": "dep:,depends:",
     "parser_rel": "rel:,related:",

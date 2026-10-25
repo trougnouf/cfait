@@ -492,13 +492,13 @@ impl TaskDisplay for Task {
         }
 
         if self.manual_sort {
-            let manual_str = rust_i18n::t!("parser_is_manual");
-            if manual_str == "parser_is_manual" || manual_str.is_empty() {
-                s.push_str(" is:manual");
+            let manual_str = rust_i18n::t!("parser_sort_manual");
+            if manual_str == "parser_sort_manual" || manual_str.is_empty() {
+                s.push_str(" sort:manual");
             } else {
                 s.push_str(&format!(
                     " {}",
-                    manual_str.split(',').next().unwrap_or("is:manual").trim()
+                    manual_str.split(',').next().unwrap_or("sort:manual").trim()
                 ));
             }
         }

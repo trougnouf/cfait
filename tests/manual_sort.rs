@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Tests for manual task sorting: the `is:manual` token, fractional
+//! Tests for manual task sorting: the `sort:manual` token, fractional
 //! `sort_position` keys, sibling moves, and tree-editor reordering.
 use cfait::config::{Config, PausedSortBehavior, SortPreset};
 use cfait::context::TestContext;
@@ -72,13 +72,13 @@ fn is_manual_token_roundtrips_through_parser() {
     let mut t = Task::new("Plan the garden", &HashMap::new(), None);
     cfait::model::parser::apply_smart_input(
         &mut t,
-        "Plan the garden is:manual",
+        "Plan the garden sort:manual",
         &HashMap::new(),
         None,
     );
-    assert!(t.manual_sort, "is:manual must set the flag");
+    assert!(t.manual_sort, "sort:manual must set the flag");
     assert!(
-        t.to_smart_string().contains("is:manual"),
+        t.to_smart_string().contains("sort:manual"),
         "the flag must serialize back: {}",
         t.to_smart_string()
     );
@@ -88,7 +88,7 @@ fn is_manual_token_roundtrips_through_parser() {
     t2.manual_sort = true;
     cfait::model::parser::apply_smart_input(&mut t2, "Plan the garden", &HashMap::new(), None);
     assert!(!t2.manual_sort, "removing the token must clear the flag");
-    assert!(!t2.to_smart_string().contains("is:manual"));
+    assert!(!t2.to_smart_string().contains("sort:manual"));
 }
 
 #[test]
@@ -293,9 +293,9 @@ fn tree_sync_clears_positions_when_manual_is_removed() {
 
     // Drop the token from the root line.
     let markdown = cfait::model::extractor::serialize_task_tree(&store, "p", &[], false);
-    let unflagged = markdown.replace(" is:manual", "");
+    let unflagged = markdown.replace(" sort:manual", "");
     assert!(
-        !unflagged.contains("is:manual"),
+        !unflagged.contains("sort:manual"),
         "the serialized tree must carry the token"
     );
 

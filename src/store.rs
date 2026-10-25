@@ -2710,7 +2710,7 @@ impl TaskStore {
 
         // Manual sort is decided by the parent's stored flag after this sync
         // applies; remember which parents were manual before so that a
-        // removed `is:manual` token clears the stale child positions.
+        // removed `sort:manual` token clears the stale child positions.
         let mut manual_uids: Vec<&str> = buffer_children.keys().map(String::as_str).collect();
         manual_uids.push(root_uid);
         let pre_apply_manual: HashMap<String, bool> = manual_uids

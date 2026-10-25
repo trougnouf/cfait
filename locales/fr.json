@@ -697,7 +697,7 @@
     "parser_is_flat": "est:plat,est:doc",
     "parser_is_permanent": "est:permanent",
     "parser_is_archived": "est:archivé",
-    "parser_is_manual": "est:manuel",
+    "parser_sort_manual": "tri:manuel",
     "parser_is_pinned": "est:épinglé",
     "parser_loc": "@@,loc:,lieu:",
     "parser_months_apr": "avr,avril",
