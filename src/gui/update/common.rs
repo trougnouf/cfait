@@ -703,6 +703,7 @@ pub fn merge_local_calendars(
             href: LOCAL_CALENDAR_HREF.to_string(),
             color: None,
             supports_vjournal: Some(true),
+            supports_vevent: Some(true),
         });
     }
     cals

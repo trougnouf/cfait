@@ -850,12 +850,14 @@ mod tests {
                 href: "local://herbary".to_string(),
                 color: None,
                 supports_vjournal: None,
+                supports_vevent: None,
             },
             crate::model::CalendarListEntry {
                 name: "Kitchen".to_string(),
                 href: "local://kitchen".to_string(),
                 color: None,
                 supports_vjournal: None,
+                supports_vevent: None,
             },
         ];
 

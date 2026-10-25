@@ -59,12 +59,14 @@ fn filter_by_col(store: &TaskStore, search_term: &str) -> Vec<String> {
             href: "local://herbary".to_string(),
             color: None,
             supports_vjournal: None,
+            supports_vevent: None,
         },
         CalendarListEntry {
             name: "Kitchen".to_string(),
             href: "local://kitchen".to_string(),
             color: None,
             supports_vjournal: None,
+            supports_vevent: None,
         },
     ];
     let filter_res = store.filter(FilterOptions {

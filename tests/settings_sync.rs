@@ -10,8 +10,10 @@
 //!     calendar collection as custom properties in the Cfait namespace. This is
 //!     invisible to standard CalDAV clients.
 //!   * **Object mode (fallback)** — for servers without custom-property support,
-//!     the settings live in a 1970 CANCELLED VEVENT carrier that most clients
-//!     filter out by time range.
+//!     the settings live in a 1970 CANCELLED carrier that most clients filter
+//!     out by time range. The carrier serializes as the most invisible
+//!     component the collection advertises: VJOURNAL, else VEVENT, else VTODO
+//!     (task-only collections such as Vikunja's reject VEVENT uploads).
 //!
 //! The carrier object is only ever *journaled* here; the actual PUT happens
 //! later in `sync_journal`, so no PUT mocks are needed.
@@ -24,7 +26,7 @@ use cfait::config::{
 use cfait::context::{AppContext, TestContext};
 use cfait::controller::TaskController;
 use cfait::journal::{Action, Journal};
-use cfait::model::{Task, TaskStatus};
+use cfait::model::{CalendarListEntry, Task, TaskStatus};
 use cfait::store::TaskStore;
 use mockito::{Matcher, Server};
 use std::sync::{Arc, Mutex};
@@ -230,8 +232,8 @@ async fn property_mode_first_sync_writes_property_not_carrier() {
 }
 
 /// When the probe is rejected (4xx), the server is treated as not supporting
-/// custom properties and the settings fall back to a VEVENT carrier that is
-/// journaled for upload.
+/// custom properties and the settings fall back to a VEVENT carrier (the
+/// collection advertises VEVENT, not VJOURNAL) that is journaled for upload.
 #[tokio::test]
 async fn probe_rejected_falls_back_to_vevent_carrier() {
     let mut server = Server::new_async().await;
@@ -239,6 +241,20 @@ async fn probe_rejected_falls_back_to_vevent_carrier() {
 
     let ctx: Arc<dyn AppContext> = Arc::new(TestContext::new());
     save_config(&ctx, Some(TARGET), 0);
+
+    // The collection advertises VEVENT (not VJOURNAL): the carrier must
+    // serialize as a VEVENT.
+    Cache::save_calendars(
+        ctx.as_ref(),
+        &[CalendarListEntry {
+            name: "Cal 1".to_string(),
+            href: TARGET.to_string(),
+            color: None,
+            supports_vjournal: Some(false),
+            supports_vevent: Some(true),
+        }],
+    )
+    .expect("save calendars");
 
     // The probe PROPPATCH is rejected → custom properties unsupported.
     let m_probe = server
@@ -501,4 +517,133 @@ async fn offline_object_mode_journals_carrier_update() {
     let payload: SettingsPayload =
         serde_json::from_str(&task.description).expect("carrier description is a payload");
     assert_eq!(payload.updated_at, 1000);
+}
+
+/// When the probe is rejected and the collection advertises VJOURNAL support,
+/// the carrier still serializes as a VEVENT: VJOURNAL is never used as a
+/// carrier (no STATUS to cancel, no date to anchor in the past).
+#[tokio::test]
+async fn probe_rejected_journal_capable_collection_still_gets_vevent_carrier() {
+    let mut server = Server::new_async().await;
+    let url = server.url();
+
+    let ctx: Arc<dyn AppContext> = Arc::new(TestContext::new());
+    save_config(&ctx, Some(TARGET), 0);
+
+    Cache::save_calendars(
+        ctx.as_ref(),
+        &[CalendarListEntry {
+            name: "Cal 1".to_string(),
+            href: TARGET.to_string(),
+            color: None,
+            supports_vjournal: Some(true),
+            supports_vevent: Some(true),
+        }],
+    )
+    .expect("save calendars");
+
+    let m_probe = server
+        .mock("PROPPATCH", TARGET)
+        .match_body(Matcher::Regex("<CF:probe>".to_string()))
+        .with_status(403)
+        .with_body("custom properties not supported")
+        .create_async()
+        .await;
+    mock_no_carrier_object(&mut server, TARGET).await;
+
+    let client = build_client(&ctx, &url).await;
+    let h = harness(ctx.clone(), Some(client)).await;
+
+    let changed = h.controller.sync_settings().await.expect("sync_settings");
+    assert!(changed, "fallback sync should report a change");
+
+    let meta = Cache::load_settings_meta(h.ctx.as_ref());
+    assert_eq!(meta.property_href, None);
+    assert_eq!(meta.probed.get(TARGET), Some(&false));
+
+    let task = {
+        let s = h.store.lock().await;
+        s.get_task_ref(SETTINGS_UID)
+            .cloned()
+            .expect("carrier in store")
+    };
+    assert!(task.is_event, "carrier must be a VEVENT");
+    assert!(!task.is_journal);
+    assert_eq!(task.status, TaskStatus::Cancelled);
+    assert!(task.categories.iter().any(|c| c == SETTINGS_CATEGORY));
+    let payload: SettingsPayload =
+        serde_json::from_str(&task.description).expect("carrier description is a payload");
+    assert!(payload.updated_at > 0);
+
+    assert!(
+        Journal::load(h.ctx.as_ref())
+            .queue
+            .iter()
+            .any(|a| matches!(a, Action::Create(t) if t.uid == SETTINGS_UID))
+    );
+
+    m_probe.assert();
+}
+
+/// When the probe is rejected and the collection is task-only (VTODO, as
+/// advertised by Vikunja), the carrier serializes as a VTODO so the upload
+/// is accepted — see
+/// https://github.com/trougnouf/cfait/issues/122.
+#[tokio::test]
+async fn probe_rejected_task_only_collection_gets_vtodo_carrier() {
+    let mut server = Server::new_async().await;
+    let url = server.url();
+
+    let ctx: Arc<dyn AppContext> = Arc::new(TestContext::new());
+    save_config(&ctx, Some(TARGET), 0);
+
+    Cache::save_calendars(
+        ctx.as_ref(),
+        &[CalendarListEntry {
+            name: "Cal 1".to_string(),
+            href: TARGET.to_string(),
+            color: None,
+            supports_vjournal: Some(false),
+            supports_vevent: Some(false),
+        }],
+    )
+    .expect("save calendars");
+
+    let m_probe = server
+        .mock("PROPPATCH", TARGET)
+        .match_body(Matcher::Regex("<CF:probe>".to_string()))
+        .with_status(403)
+        .with_body("custom properties not supported")
+        .create_async()
+        .await;
+    mock_no_carrier_object(&mut server, TARGET).await;
+
+    let client = build_client(&ctx, &url).await;
+    let h = harness(ctx.clone(), Some(client)).await;
+
+    let changed = h.controller.sync_settings().await.expect("sync_settings");
+    assert!(changed, "fallback sync should report a change");
+
+    let task = {
+        let s = h.store.lock().await;
+        s.get_task_ref(SETTINGS_UID)
+            .cloned()
+            .expect("carrier in store")
+    };
+    assert!(!task.is_journal);
+    assert!(!task.is_event, "carrier must be a VTODO, not a VEVENT");
+    assert_eq!(task.status, TaskStatus::Cancelled);
+    assert!(task.categories.iter().any(|c| c == SETTINGS_CATEGORY));
+    let payload: SettingsPayload =
+        serde_json::from_str(&task.description).expect("carrier description is a payload");
+    assert!(payload.updated_at > 0);
+
+    assert!(
+        Journal::load(h.ctx.as_ref())
+            .queue
+            .iter()
+            .any(|a| matches!(a, Action::Create(t) if t.uid == SETTINGS_UID))
+    );
+
+    m_probe.assert();
 }

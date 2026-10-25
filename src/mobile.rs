@@ -1287,6 +1287,7 @@ fn mobile_calendars_to_model(cals: &[MobileCalendar]) -> Vec<crate::model::Calen
             href: c.href.clone(),
             color: c.color.clone(),
             supports_vjournal: None,
+            supports_vevent: None,
         })
         .collect()
 }
@@ -3524,6 +3525,7 @@ impl CfaitMobile {
             href: href.clone(),
             color,
             supports_vjournal: Some(true),
+            supports_vevent: Some(true),
         });
         LocalCalendarRegistry::save(self.ctx.as_ref(), &locals)
             .map_err(|e| MobileError::from(e.to_string()))?;
@@ -3559,6 +3561,7 @@ impl CfaitMobile {
                 href: href.clone(),
                 color,
                 supports_vjournal: Some(true),
+                supports_vevent: Some(true),
             });
             let _ = crate::cache::Cache::save_calendars(self.ctx.as_ref(), &cals);
         }

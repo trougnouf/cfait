@@ -1150,6 +1150,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 href: format!("local://{}", id),
                 color: None,
                 supports_vjournal: Some(true),
+                supports_vevent: Some(true),
             };
             app.local_cals_editing.push(new_cal.clone());
 
@@ -1267,6 +1268,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 href: format!("new_remote_{}", id),
                 color: None,
                 supports_vjournal: Some(true),
+                supports_vevent: Some(true),
             };
             app.remote_cals_editing.push(new_cal);
             Task::none()

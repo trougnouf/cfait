@@ -20,6 +20,7 @@ async fn test_tui_creating_tag_only_input_creates_task_instead_of_filtering() {
         href: cal_href.clone(),
         color: None,
         supports_vjournal: Some(true),
+        supports_vevent: Some(true),
     });
     state.active_cal_href = Some(cal_href);
     state.mode = InputMode::Creating;
@@ -67,6 +68,7 @@ async fn test_tui_creating_task_and_alias_simultaneously() {
         href: cal_href.clone(),
         color: None,
         supports_vjournal: Some(true),
+        supports_vevent: Some(true),
     });
     state.active_cal_href = Some(cal_href);
     state.mode = InputMode::Creating;

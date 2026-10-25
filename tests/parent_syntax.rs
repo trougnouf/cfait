@@ -23,6 +23,7 @@ fn cal_entry(name: &str, href: &str) -> CalendarListEntry {
         href: href.to_string(),
         color: None,
         supports_vjournal: None,
+        supports_vevent: None,
     }
 }
 

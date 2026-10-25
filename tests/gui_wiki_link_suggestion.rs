@@ -19,6 +19,7 @@ fn app_with_journal(tasks: &[&str]) -> GuiApp {
             href: "local://default".to_string(),
             color: None,
             supports_vjournal: Some(true),
+            supports_vevent: Some(true),
         }],
         ..Default::default()
     };

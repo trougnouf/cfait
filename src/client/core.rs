@@ -823,6 +823,7 @@ impl RustyClient {
 
             let supports_vtodo = comps.iter().any(|c| c.eq_ignore_ascii_case("VTODO"));
             let supports_vjournal = comps.iter().any(|c| c.eq_ignore_ascii_case("VJOURNAL"));
+            let supports_vevent = comps.iter().any(|c| c.eq_ignore_ascii_case("VEVENT"));
 
             if is_calendar && can_write && supports_vtodo {
                 calendars.push(CalendarListEntry {
@@ -830,6 +831,7 @@ impl RustyClient {
                     href,
                     color,
                     supports_vjournal: Some(supports_vjournal),
+                    supports_vevent: Some(supports_vevent),
                 });
             }
         }
@@ -1019,9 +1021,13 @@ impl RustyClient {
         is_create_intent: bool,
     ) -> bool {
         // Local calendars don't have server-side events, and Journals don't get events.
-        // is_event marks the settings carrier (a VEVENT), which is managed by
+        // The settings carrier (VEVENT or VTODO) is managed by
         // sync_settings and must never spawn companion events of its own.
-        if task.calendar_href.starts_with("local://") || task.is_journal || task.is_event {
+        if task.calendar_href.starts_with("local://")
+            || task.is_journal
+            || task.is_event
+            || task.uid == crate::config::SETTINGS_UID
+        {
             return false;
         }
 

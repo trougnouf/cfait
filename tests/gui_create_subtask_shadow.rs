@@ -30,6 +30,7 @@ fn app_with_local_calendar() -> GuiApp {
             href: "local://default".to_string(),
             color: None,
             supports_vjournal: Some(true),
+            supports_vevent: Some(true),
         }],
         active_cal_href: Some("local://default".to_string()),
         ..Default::default()

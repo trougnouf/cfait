@@ -132,6 +132,7 @@ impl LocalCalendarRegistry {
             href: LOCAL_CALENDAR_HREF.to_string(),
             color: None,
             supports_vjournal: Some(true),
+            supports_vevent: Some(true),
         };
 
         if let Some(path) = Self::get_path(ctx)
@@ -172,6 +173,7 @@ impl LocalCalendarRegistry {
                 // Use a distinctive color (Gray)
                 color: Some("#808080".to_string()),
                 supports_vjournal: Some(true),
+                supports_vevent: Some(true),
             });
             Self::save(ctx, &locals)?;
             return Ok(true);

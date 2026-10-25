@@ -28,6 +28,7 @@ fn calendars() -> Vec<CalendarListEntry> {
         href: "local://default".to_string(),
         color: None,
         supports_vjournal: Some(true),
+        supports_vevent: Some(true),
     }]
 }
 

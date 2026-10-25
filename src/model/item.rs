@@ -33,6 +33,8 @@ pub struct CalendarListEntry {
     pub color: Option<String>,
     #[serde(default)]
     pub supports_vjournal: Option<bool>,
+    #[serde(default)]
+    pub supports_vevent: Option<bool>,
 }
 
 /// The collection a journal (VJOURNAL) entry should be written to.
@@ -1828,6 +1830,7 @@ mod tests {
             href: href.to_string(),
             color: None,
             supports_vjournal: supports,
+            supports_vevent: None,
         }
     }
 

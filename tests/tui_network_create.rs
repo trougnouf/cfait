@@ -26,6 +26,7 @@ async fn test_tui_create_preserves_existing_calendar_tasks() {
             href: cal_href.clone(),
             color: None,
             supports_vjournal: Some(true),
+            supports_vevent: Some(true),
         }],
     )
     .unwrap();

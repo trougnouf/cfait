@@ -95,8 +95,68 @@ fn newer_payload(
 }
 
 /// Parse a JSON `SettingsPayload`, returning `None` on any error.
-fn parse_settings_payload(json: &str) -> Option<SettingsPayload> {
+pub(crate) fn parse_settings_payload(json: &str) -> Option<SettingsPayload> {
     serde_json::from_str::<SettingsPayload>(json).ok()
+}
+
+/// The ICS component the settings carrier is serialized as.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CarrierComponent {
+    Event,
+    Todo,
+}
+
+/// The component a carrier task currently serializes as.
+fn carrier_component_of(task: &Task) -> CarrierComponent {
+    if task.is_event {
+        CarrierComponent::Event
+    } else {
+        CarrierComponent::Todo
+    }
+}
+
+/// Pick the carrier component for a target calendar: a `CANCELLED` `VEVENT`
+/// anchored at the Unix epoch when the collection advertises VEVENT support
+/// (most calendar clients filter it out by time range), else a `CANCELLED`
+/// `VTODO` — task-only collections (e.g. Vikunja's) reject VEVENT uploads,
+/// and the cancelled state keeps a VTODO out of todo lists. Every cached
+/// remote collection accepts VTODO, so it is also the safe guess when the
+/// component set is unknown (e.g. a stale cache from before the field
+/// existed). VJOURNAL is never used: a note has no STATUS to cancel and no
+/// date to anchor in the past, so it is the most visible option. Local
+/// targets always use VEVENT.
+fn carrier_component_for(target: &str, ctx: &dyn AppContext) -> CarrierComponent {
+    if target.starts_with("local://") {
+        return CarrierComponent::Event;
+    }
+    let Some(cal) = Cache::load_calendars(ctx)
+        .unwrap_or_default()
+        .into_iter()
+        .find(|c| c.href == target)
+    else {
+        return CarrierComponent::Todo;
+    };
+    if cal.supports_vevent == Some(true) {
+        CarrierComponent::Event
+    } else {
+        CarrierComponent::Todo
+    }
+}
+
+/// Apply the component-specific serialization to a carrier task.
+fn apply_carrier_component(task: &mut Task, component: CarrierComponent) {
+    match component {
+        CarrierComponent::Event => {
+            task.status = TaskStatus::Cancelled;
+            task.is_event = true;
+            task.is_journal = false;
+        }
+        CarrierComponent::Todo => {
+            task.status = TaskStatus::Cancelled;
+            task.is_event = false;
+            task.is_journal = false;
+        }
+    }
 }
 
 /// Determine the calendar that should host the settings: the configured
@@ -144,24 +204,21 @@ fn load_settings_task(ctx: &dyn AppContext, store: &TaskStore) -> Option<Task> {
 }
 
 /// Build a fresh settings carrier task for the given calendar.
-fn settings_carrier_task(href: &str, json: &str) -> Task {
+fn settings_carrier_task(href: &str, json: &str, component: CarrierComponent) -> Task {
     let mut task = Task::new(SETTINGS_SUMMARY, &std::collections::HashMap::new(), None);
     task.uid = SETTINGS_UID.to_string();
-    task.status = TaskStatus::Cancelled;
     task.description = json.to_string();
     task.categories = vec![SETTINGS_CATEGORY.to_string()];
     task.calendar_href = href.to_string();
-    task.is_event = true;
+    apply_carrier_component(&mut task, component);
     task
 }
 
 /// Apply the carrier markers that keep the settings object hidden and
-/// recognizable: cancelled status, VEVENT serialization, internal category.
-fn normalize_carrier(task: &mut Task) {
+/// recognizable: component-specific status and flags, internal category.
+fn normalize_carrier(task: &mut Task, component: CarrierComponent) {
     task.uid = SETTINGS_UID.to_string();
-    task.status = TaskStatus::Cancelled;
-    task.is_event = true;
-    task.is_journal = false;
+    apply_carrier_component(task, component);
     if !task.summary.starts_with("⚙ Cfait Settings") {
         task.summary = SETTINGS_SUMMARY.to_string();
     }
@@ -183,6 +240,7 @@ fn build_carrier_task(
     remote_known_absent: bool,
     target: &str,
     json: &str,
+    component: CarrierComponent,
 ) -> (Task, bool) {
     let (mut t, is_new) = match remote_object {
         Some(remote) => (remote.clone(), false),
@@ -197,13 +255,13 @@ fn build_carrier_task(
                     (existing.clone(), false)
                 }
             }
-            _ => (settings_carrier_task(target, json), true),
+            _ => (settings_carrier_task(target, json, component), true),
         },
     };
     t.uid = SETTINGS_UID.to_string();
     t.description = json.to_string();
     t.sequence += 1;
-    normalize_carrier(&mut t);
+    normalize_carrier(&mut t, component);
     (t, is_new)
 }
 
@@ -667,9 +725,10 @@ impl TaskController {
         }
     }
 
-    /// Settings sync via the carrier object (1970 CANCELLED VEVENT) in the
-    /// target calendar. Used when the server does not support custom
-    /// properties.
+    /// Settings sync via the carrier object in the target calendar, using a
+    /// CANCELLED VEVENT when the collection advertises VEVENT support, else
+    /// a CANCELLED VTODO (task-only collections reject VEVENT uploads).
+    /// Used when the server does not support custom properties.
     async fn sync_settings_object(
         &self,
         client: &RustyClient,
@@ -677,6 +736,8 @@ impl TaskController {
         existing_task: Option<Task>,
         target: &str,
     ) -> Result<bool, String> {
+        let component = carrier_component_for(target, self.ctx.as_ref());
+
         // Best-effort: drop a carrier left in a calendar that is no longer the
         // target (collection deleted or default changed).
         let stale_in_other_cal = existing_task
@@ -725,18 +786,28 @@ impl TaskController {
                 let _ = config.save(self.ctx.as_ref());
                 self.apply_aliases_and_persist(&remote_payload.config).await;
 
-                // Re-anchor the carrier when it lacks a revision or still uses
-                // the legacy VTODO format (migrate it to the invisible VEVENT).
+                // Re-anchor the carrier when it lacks a revision or still
+                // serializes as a different component (e.g. migrate a legacy
+                // VTODO or VEVENT carrier to the collection's component).
                 let needs_reanchor = remote_payload.updated_at == 0
-                    || remote_object.as_ref().is_some_and(|t| !t.is_event);
+                    || remote_object
+                        .as_ref()
+                        .is_some_and(|t| carrier_component_of(t) != component);
                 if needs_reanchor {
                     let json = serde_json::to_string(&SettingsPayload {
                         updated_at: config.settings_updated_at,
                         config: remote_payload.config,
                     })
                     .unwrap_or_default();
-                    self.push_carrier(existing_task, remote_object.as_ref(), false, target, &json)
-                        .await?;
+                    self.push_carrier(
+                        existing_task,
+                        remote_object.as_ref(),
+                        false,
+                        target,
+                        &json,
+                        component,
+                    )
+                    .await?;
                 }
                 Ok(true)
             }
@@ -756,6 +827,7 @@ impl TaskController {
                     remote_object.is_none(),
                     target,
                     &json,
+                    component,
                 )
                 .await?;
                 Ok(true)
@@ -771,6 +843,7 @@ impl TaskController {
         remote_known_absent: bool,
         target: &str,
         json: &str,
+        component: CarrierComponent,
     ) -> Result<bool, String> {
         let (task, is_new) = build_carrier_task(
             existing_task.as_ref(),
@@ -778,6 +851,7 @@ impl TaskController {
             remote_known_absent,
             target,
             json,
+            component,
         );
         let mut store = self.store.lock().await;
         store.update_or_add_task(task.clone());
@@ -803,6 +877,7 @@ impl TaskController {
             .and_then(|t| parse_settings_payload(&t.description));
         let local_syncable = config.get_syncable();
         let target = settings_target_calendar(config, self.ctx.as_ref());
+        let component = carrier_component_for(&target, self.ctx.as_ref());
 
         match decide_settings_sync(
             config.settings_updated_at,
@@ -828,7 +903,7 @@ impl TaskController {
                         config: remote_payload.config,
                     })
                     .unwrap_or_default();
-                    self.push_carrier(existing_task, None, false, &target, &json)
+                    self.push_carrier(existing_task, None, false, &target, &json, component)
                         .await?;
                 }
                 Ok(true)
@@ -843,7 +918,7 @@ impl TaskController {
                     config: config.get_syncable(),
                 })
                 .unwrap_or_default();
-                self.push_carrier(existing_task, None, false, &target, &json)
+                self.push_carrier(existing_task, None, false, &target, &json, component)
                     .await?;
                 Ok(true)
             }
@@ -1226,12 +1301,14 @@ mod tests {
                 href: crate::storage::LOCAL_TRASH_HREF.to_string(),
                 color: None,
                 supports_vjournal: None,
+                supports_vevent: None,
             },
             CalendarListEntry {
                 name: "Work".into(),
                 href: "/calendars/u/work".into(),
                 color: None,
                 supports_vjournal: None,
+                supports_vevent: None,
             },
         ];
         Cache::save_calendars(ctx.as_ref(), &cals).unwrap();
@@ -1253,7 +1330,11 @@ mod tests {
 
     #[test]
     fn carrier_task_has_hidden_markers() {
-        let t = settings_carrier_task("/calendars/u/cal", "{\"updated_at\":1}");
+        let t = settings_carrier_task(
+            "/calendars/u/cal",
+            "{\"updated_at\":1}",
+            CarrierComponent::Event,
+        );
         assert_eq!(t.uid, SETTINGS_UID);
         assert_eq!(t.status, TaskStatus::Cancelled);
         assert!(t.is_event);
@@ -1273,7 +1354,7 @@ mod tests {
         t.is_journal = true;
         t.summary = "random event".into();
         t.categories = vec!["work".into()];
-        normalize_carrier(&mut t);
+        normalize_carrier(&mut t, CarrierComponent::Event);
         assert_eq!(t.uid, SETTINGS_UID);
         assert_eq!(t.status, TaskStatus::Cancelled);
         assert!(t.is_event);
@@ -1284,9 +1365,9 @@ mod tests {
 
     #[test]
     fn normalize_carrier_is_idempotent() {
-        let mut t = settings_carrier_task("/calendars/u/cal", "{}");
-        normalize_carrier(&mut t);
-        normalize_carrier(&mut t);
+        let mut t = settings_carrier_task("/calendars/u/cal", "{}", CarrierComponent::Event);
+        normalize_carrier(&mut t, CarrierComponent::Event);
+        normalize_carrier(&mut t, CarrierComponent::Event);
         assert_eq!(
             t.categories
                 .iter()
@@ -1297,7 +1378,7 @@ mod tests {
     }
 
     fn existing_in(target: &str, with_href: bool) -> Task {
-        let mut t = settings_carrier_task(target, "{}");
+        let mut t = settings_carrier_task(target, "{}", CarrierComponent::Event);
         if with_href {
             t.href = format!("{}/cfait-global-settings-v1.ics", target);
             t.etag = "etag-1".into();
@@ -1308,7 +1389,14 @@ mod tests {
     #[test]
     fn build_carrier_prefers_remote_object() {
         let remote = existing_in("/calendars/u/cal", true);
-        let (t, is_new) = build_carrier_task(None, Some(&remote), false, "/calendars/u/cal", "{}");
+        let (t, is_new) = build_carrier_task(
+            None,
+            Some(&remote),
+            false,
+            "/calendars/u/cal",
+            "{}",
+            CarrierComponent::Event,
+        );
         assert!(!is_new);
         assert_eq!(t.uid, SETTINGS_UID);
         assert_eq!(t.href, remote.href);
@@ -1318,7 +1406,14 @@ mod tests {
     #[test]
     fn build_carrier_recreates_when_remote_known_absent() {
         let existing = existing_in("/calendars/u/cal", true);
-        let (t, is_new) = build_carrier_task(Some(&existing), None, true, "/calendars/u/cal", "{}");
+        let (t, is_new) = build_carrier_task(
+            Some(&existing),
+            None,
+            true,
+            "/calendars/u/cal",
+            "{}",
+            CarrierComponent::Event,
+        );
         assert!(is_new);
         assert!(t.href.is_empty());
         assert!(t.etag.is_empty());
@@ -1327,8 +1422,14 @@ mod tests {
     #[test]
     fn build_carrier_updates_when_remote_not_checked() {
         let existing = existing_in("/calendars/u/cal", true);
-        let (t, is_new) =
-            build_carrier_task(Some(&existing), None, false, "/calendars/u/cal", "{}");
+        let (t, is_new) = build_carrier_task(
+            Some(&existing),
+            None,
+            false,
+            "/calendars/u/cal",
+            "{}",
+            CarrierComponent::Event,
+        );
         assert!(!is_new);
         assert_eq!(t.href, existing.href);
     }
@@ -1336,8 +1437,14 @@ mod tests {
     #[test]
     fn build_carrier_fresh_when_existing_in_other_calendar() {
         let existing = existing_in("/calendars/u/old", true);
-        let (t, is_new) =
-            build_carrier_task(Some(&existing), None, false, "/calendars/u/new", "{}");
+        let (t, is_new) = build_carrier_task(
+            Some(&existing),
+            None,
+            false,
+            "/calendars/u/new",
+            "{}",
+            CarrierComponent::Event,
+        );
         assert!(is_new);
         assert_eq!(t.calendar_href, "/calendars/u/new");
         assert!(t.href.is_empty());
@@ -1345,8 +1452,130 @@ mod tests {
 
     #[test]
     fn build_carrier_fresh_when_nothing_known() {
-        let (t, is_new) = build_carrier_task(None, None, false, "/calendars/u/cal", "{}");
+        let (t, is_new) = build_carrier_task(
+            None,
+            None,
+            false,
+            "/calendars/u/cal",
+            "{}",
+            CarrierComponent::Event,
+        );
         assert!(is_new);
         assert_eq!(t.calendar_href, "/calendars/u/cal");
+    }
+
+    #[test]
+    fn carrier_component_of_classifies_flags() {
+        let mut event = Task::new("x", &std::collections::HashMap::new(), None);
+        event.is_event = true;
+        assert_eq!(carrier_component_of(&event), CarrierComponent::Event);
+
+        let todo = Task::new("x", &std::collections::HashMap::new(), None);
+        assert_eq!(carrier_component_of(&todo), CarrierComponent::Todo);
+    }
+
+    #[test]
+    fn carrier_component_local_target_is_vevent() {
+        let ctx = Arc::new(TestContext::new());
+        assert_eq!(
+            carrier_component_for("local://default", ctx.as_ref()),
+            CarrierComponent::Event
+        );
+    }
+
+    #[test]
+    fn carrier_component_ignores_vjournal_support() {
+        // VJOURNAL is never used as a carrier (no STATUS to cancel, no date
+        // to anchor in the past): even a journal-capable collection gets a
+        // VEVENT carrier when it advertises VEVENT support.
+        let ctx = Arc::new(TestContext::new());
+        Cache::save_calendars(
+            ctx.as_ref(),
+            &[CalendarListEntry {
+                name: "Notes".into(),
+                href: "/calendars/u/notes".into(),
+                color: None,
+                supports_vjournal: Some(true),
+                supports_vevent: Some(true),
+            }],
+        )
+        .unwrap();
+        assert_eq!(
+            carrier_component_for("/calendars/u/notes", ctx.as_ref()),
+            CarrierComponent::Event
+        );
+    }
+
+    #[test]
+    fn carrier_component_vevent_collection() {
+        let ctx = Arc::new(TestContext::new());
+        Cache::save_calendars(
+            ctx.as_ref(),
+            &[CalendarListEntry {
+                name: "Planner".into(),
+                href: "/calendars/u/planner".into(),
+                color: None,
+                supports_vjournal: Some(false),
+                supports_vevent: Some(true),
+            }],
+        )
+        .unwrap();
+        assert_eq!(
+            carrier_component_for("/calendars/u/planner", ctx.as_ref()),
+            CarrierComponent::Event
+        );
+    }
+
+    #[test]
+    fn carrier_component_task_only_collection_is_vtodo() {
+        let ctx = Arc::new(TestContext::new());
+        Cache::save_calendars(
+            ctx.as_ref(),
+            &[CalendarListEntry {
+                name: "Tasks".into(),
+                href: "/calendars/u/tasks".into(),
+                color: None,
+                supports_vjournal: Some(false),
+                supports_vevent: Some(false),
+            }],
+        )
+        .unwrap();
+        assert_eq!(
+            carrier_component_for("/calendars/u/tasks", ctx.as_ref()),
+            CarrierComponent::Todo
+        );
+    }
+
+    #[test]
+    fn carrier_component_unknown_collection_is_vtodo() {
+        let ctx = Arc::new(TestContext::new());
+        // No calendar cache: the component set is unknown, so fall back to
+        // the one component every CalDAV collection must accept (VTODO).
+        assert_eq!(
+            carrier_component_for("/calendars/u/unknown", ctx.as_ref()),
+            CarrierComponent::Todo
+        );
+    }
+
+    #[test]
+    fn apply_carrier_component_vtodo_flags() {
+        let mut t = Task::new("x", &std::collections::HashMap::new(), None);
+        t.is_event = true;
+        t.is_journal = true;
+        apply_carrier_component(&mut t, CarrierComponent::Todo);
+        assert!(!t.is_journal);
+        assert!(!t.is_event);
+        assert_eq!(t.status, TaskStatus::Cancelled);
+    }
+
+    #[test]
+    fn normalize_carrier_switches_component() {
+        // A VEVENT carrier re-normalized for a task-only collection becomes
+        // a plain CANCELLED VTODO.
+        let mut t = settings_carrier_task("/calendars/u/cal", "{}", CarrierComponent::Event);
+        normalize_carrier(&mut t, CarrierComponent::Todo);
+        assert!(!t.is_event);
+        assert!(!t.is_journal);
+        assert_eq!(t.status, TaskStatus::Cancelled);
     }
 }

@@ -38,6 +38,7 @@ fn is_page_line_becomes_subpage_and_resave_is_idempotent() {
         href: "local://default".to_string(),
         color: None,
         supports_vjournal: Some(true),
+        supports_vevent: Some(true),
     }];
     let aliases = HashMap::new();
     let opts = SyncTreeOptions {
