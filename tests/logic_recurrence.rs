@@ -33,33 +33,26 @@ fn test_daily_recurrence() {
         _ => panic!(),
     };
 
-    // Since task was due yesterday, and we are "now" (today),
-    // next occurrence after now should be Today (if time allows) or Tomorrow.
-    // logic: find > now.
-    // if original = yesterday. recurrence = daily.
-    // sequence: yesterday, today, tomorrow...
-    // if yesterday < now, check today.
-    // if today > now (e.g. task was due at 23:00 yesterday, now is 10:00 today, recurrence is 23:00),
-    // then today 23:00 > now 10:00. So next is today.
-    // if task was due at 09:00 yesterday, now is 10:00 today.
-    // yesterday 09:00 < now.
-    // today 09:00 < now.
-    // next is tomorrow 09:00.
-
-    // Since we created it with `Utc::now() + days`, the time component matches `now`.
-    // original = now - 24h.
-    // next candidate = now.
-    // is now > now? No (equal).
-    // next candidate = now + 24h.
-    // is now + 24h > now? Yes.
-    // So expected is original + 2 days (i.e. Tomorrow relative to Now).
-
+    // The engine works in local wall-clock time (floating time): the next
+    // occurrence is the first daily slot strictly after now. With a seed of
+    // "yesterday at the current wall-clock time", that is usually tomorrow —
+    // but within 24h after a DST fall-back the "today" slot is still ahead
+    // of now (the seed shifted +1h in wall-clock terms), so it is today.
+    // Accept whichever slot is first after now, compared in local naive time.
     let original_local = original_due.with_timezone(&chrono::Local).naive_local();
     let new_local = new_due.with_timezone(&chrono::Local).naive_local();
-    let expected_local = original_local + Duration::days(2);
+    let today_slot = original_local + Duration::days(1);
+    let expected_local = if today_slot > chrono::Local::now().naive_local() {
+        today_slot
+    } else {
+        original_local + Duration::days(2)
+    };
 
     let diff = new_local - expected_local;
-    assert!(diff.num_seconds().abs() < 5, "Expected around tomorrow");
+    assert!(
+        diff.num_seconds().abs() < 5,
+        "Expected the next daily slot after now"
+    );
 }
 
 #[test]
