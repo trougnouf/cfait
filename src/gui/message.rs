@@ -69,6 +69,7 @@ pub enum BoolField {
     ShowTaskGoalsInSidebar,
     SortCollectionsBySize,
     StrikethroughCompleted,
+    DimFutureTasks,
     CelebrateCompletions,
     ObInsecure,
 }

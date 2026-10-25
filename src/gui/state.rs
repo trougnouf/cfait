@@ -127,6 +127,7 @@ pub struct GuiApp {
     // Preferences
     pub hide_completed: bool,
     pub strikethrough_completed: bool,
+    pub dim_future_tasks: bool,
     pub hide_fully_completed_tags: bool,
     pub hide_aliases_in_sidebar: bool,
     pub show_inline_descriptions: bool,
@@ -848,6 +849,7 @@ impl Default for GuiApp {
             create_events_for_tasks: false,
             delete_events_on_completion: false,
             strikethrough_completed: false,
+            dim_future_tasks: false,
             deleting_events: false,
             ob_snooze_short_input: "1h".to_string(),
             ob_snooze_long_input: "1d".to_string(),

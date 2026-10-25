@@ -106,7 +106,8 @@ fun TaskRow(
     highlightRegex: Regex? = null,
     highlightColor: Color = Color.Unspecified,
     strikethroughCompleted: Boolean = true,
-    showInlineDescriptions: Boolean = true
+    showInlineDescriptions: Boolean = true,
+    dimFutureTasks: Boolean = false
 ) {
     val startPadding = (task.task.depth.toInt() * 12).dp
     var expanded by remember { mutableStateOf(false) }
@@ -134,7 +135,18 @@ fun TaskRow(
         colors = CardDefaults.cardColors(containerColor = containerColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
-        Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp).alpha(if (task.task.isSearchContext) 0.35f else 1.0f), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+                .alpha(
+                    when {
+                        task.task.isSearchContext -> 0.35f
+                        dimFutureTasks && task.task.isFutureStart && !task.task.isDone -> 0.4f
+                        else -> 1.0f
+                    }
+                ),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             TaskCheckbox(
                 isDone = task.task.isDone,
                 status = task.task.statusString,

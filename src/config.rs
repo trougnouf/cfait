@@ -867,6 +867,9 @@ pub struct Config {
     pub enable_local_mode: bool,
     pub hide_completed: bool,
     pub strikethrough_completed: bool,
+    /// Per-device: dim the whole row (title, tags, date) of a task whose start
+    /// is in the future, so it reads as "not yet due" at a glance. Never synced.
+    pub dim_future_tasks: bool,
     /// Per-device: celebrate completing a task (confetti overlay in the GUI,
     /// confetti + haptic on Android, terminal bell in the TUI). Never synced.
     pub celebrate_completions: bool,
@@ -1101,6 +1104,7 @@ impl Default for Config {
             default_duration_goal_mins: 60,
             sessions_count_as_completions: false,
             strikethrough_completed: false,
+            dim_future_tasks: false,
             celebrate_completions: true,
             max_done_roots: 20,
             max_done_subtasks: 5,
@@ -1953,6 +1957,14 @@ impl Config {
                 None,
                 None,
                 Some(" # Boolean: Apply strikethrough styling to completed task titles."),
+            ),
+            (
+                "dim_future_tasks =",
+                None,
+                None,
+                Some(
+                    " # Boolean: Dim the whole row (title, tags, date) of tasks whose start is in the future.",
+                ),
             ),
             (
                 "celebrate_completions =",

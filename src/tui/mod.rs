@@ -283,6 +283,7 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
     let mut app_state = AppState::new_with_ctx(ctx.clone());
     app_state.hide_completed = hide_completed;
     app_state.strikethrough_completed = cfg.strikethrough_completed;
+    app_state.dim_future_tasks = cfg.dim_future_tasks;
     app_state.hide_fully_completed_tags = hide_fully_completed_tags;
     app_state.hide_aliases_in_sidebar = hide_aliases_in_sidebar;
     app_state.sort_cutoff_days = sort_cutoff_days;

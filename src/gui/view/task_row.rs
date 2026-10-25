@@ -351,7 +351,13 @@ pub fn view_task_row<'a>(
             let is_dark_theme = theme.extended_palette().is_dark;
             let default_text_color = theme.extended_palette().background.base.text;
 
-            let dim_factor = if task.is_search_context { 0.35 } else { 1.0 };
+            let dim_factor = if task.is_search_context {
+                0.35
+            } else if app.dim_future_tasks && task.is_future_start && !task.status.is_done() {
+                0.4
+            } else {
+                1.0
+            };
 
             let mut color = if is_blocked {
                 Color::from_rgb(0.5, 0.5, 0.5)

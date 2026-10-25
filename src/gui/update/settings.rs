@@ -170,6 +170,7 @@ pub fn apply_config_to_app(app: &mut GuiApp, config: &crate::config::Config) {
     app.snooze_long_mins = config.snooze_long_mins;
     app.auto_refresh_interval_mins = config.auto_refresh_interval_mins;
     app.strikethrough_completed = config.strikethrough_completed;
+    app.dim_future_tasks = config.dim_future_tasks;
     app.trash_retention_days = config.trash_retention_days;
     app.sessions_count_as_completions = config.sessions_count_as_completions;
     app.session.expanded_tags = config.expanded_tags.clone();
@@ -939,6 +940,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     app.sort_calendars();
                 }
                 BoolField::StrikethroughCompleted => app.strikethrough_completed = val,
+                BoolField::DimFutureTasks => app.dim_future_tasks = val,
                 BoolField::CelebrateCompletions => {
                     app.core_config.celebrate_completions = val;
                 }

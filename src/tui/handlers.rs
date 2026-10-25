@@ -1396,6 +1396,7 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
             state.hide_fully_completed_tags = cfg.hide_fully_completed_tags;
             state.hide_aliases_in_sidebar = cfg.hide_aliases_in_sidebar;
             state.show_inline_descriptions = cfg.show_inline_descriptions;
+            state.dim_future_tasks = cfg.dim_future_tasks;
             state.sort_cutoff_days = cfg.sort_cutoff_days;
             state.sort_standard_by_priority = cfg.sort_standard_by_priority;
             state.paused_sort_behavior = cfg.paused_sort_behavior;

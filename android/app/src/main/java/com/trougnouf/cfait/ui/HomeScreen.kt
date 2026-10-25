@@ -206,6 +206,7 @@ fun HomeScreen(
     onSettings: () -> Unit,
     strikethroughCompleted: Boolean,
     showInlineDescriptions: Boolean,
+    dimFutureTasks: Boolean,
     onTaskClick: (String) -> Unit,
     onDataChanged: () -> Unit,
     onMigrateLocal: (String, String) -> Unit,
@@ -3013,7 +3014,8 @@ fun HomeScreen(
                                                 highlightRegex = highlightRegex,
                                                 highlightColor = highlightColor,
                                                 strikethroughCompleted = strikethroughCompleted,
-                                                showInlineDescriptions = showInlineDescriptions
+                                                showInlineDescriptions = showInlineDescriptions,
+                                                dimFutureTasks = dimFutureTasks
                                             )
                                         } else {
                                             // Extract payload from uid: "virtual-expand-{payload}" or "virtual-collapse-{payload}"

@@ -1282,11 +1282,23 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                             };
                         }
 
+                        // A task whose start is in the future reads as "not yet due";
+                        // dim the whole row when the user opted in (dim_future_tasks).
+                        let is_future_start = t.is_future_start;
+                        let dim_future = state.dim_future_tasks
+                            && is_future_start
+                            && !t.status.is_done()
+                            && t.status != crate::model::TaskStatus::Cancelled;
+
                         let mut base_style = Style::default().fg(base_color);
 
                         if t.is_search_context {
                             base_color = Color::DarkGray;
                             base_style = base_style.fg(base_color).add_modifier(Modifier::DIM);
+                        }
+
+                        if dim_future {
+                            base_style = base_style.add_modifier(Modifier::DIM);
                         }
 
                         let is_trash = t.calendar_href == crate::storage::LOCAL_TRASH_HREF;
@@ -1324,8 +1336,6 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         };
 
                         // Date / duration / recurrence
-                        let is_future_start = t.is_future_start;
-
                         let (date_display_str, date_style) = if t.status.is_done() {
                             // NEW TUI LOGIC for completion date
                             if let Some(done_dt) = t.completion_date() {
@@ -1514,26 +1524,28 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         }
 
                         // Right side (locations + visible tags)
+                        let dimmed = |s: Style| {
+                            if dim_future {
+                                s.add_modifier(Modifier::DIM)
+                            } else {
+                                s
+                            }
+                        };
                         let mut right_spans = Vec::new();
                         for loc in visible_locations {
                             if !right_spans.is_empty() {
                                 right_spans.push(Span::raw(" "));
                             }
-                            right_spans.push(Span::styled(
-                                "@@",
-                                Style::default().fg(if is_dark_theme {
-                                    Color::Yellow
-                                } else {
-                                    Color::Rgb(180, 100, 0)
-                                }),
-                            ));
+                            let loc_color = if is_dark_theme {
+                                Color::Yellow
+                            } else {
+                                Color::Rgb(180, 100, 0)
+                            };
+                            right_spans
+                                .push(Span::styled("@@", dimmed(Style::default().fg(loc_color))));
                             right_spans.push(Span::styled(
                                 loc.clone(),
-                                Style::default().fg(if is_dark_theme {
-                                    Color::Yellow
-                                } else {
-                                    Color::Rgb(180, 100, 0)
-                                }),
+                                dimmed(Style::default().fg(loc_color)),
                             ));
                         }
 
@@ -1556,11 +1568,11 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
                             right_spans.push(Span::styled(
                                 label,
-                                Style::default().fg(Color::Rgb(
+                                dimmed(Style::default().fg(Color::Rgb(
                                     (r * 255.0) as u8,
                                     (g * 255.0) as u8,
                                     (b * 255.0) as u8,
-                                )),
+                                ))),
                             ));
                         }
 

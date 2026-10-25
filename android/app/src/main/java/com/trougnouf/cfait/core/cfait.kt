@@ -4786,6 +4786,7 @@ data class MobileConfig(
     var `hideCompleted`: kotlin.Boolean,
     var `hideAliasesInSidebar`: kotlin.Boolean,
     var `strikethroughCompleted`: kotlin.Boolean,
+    var `dimFutureTasks`: kotlin.Boolean,
     var `tagAliases`: Map<kotlin.String, List<kotlin.String>>,
     var `disabledCalendars`: List<kotlin.String>,
     var `sortCutoffDays`: kotlin.UInt?,
@@ -4851,6 +4852,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
             FfiConverterMapStringSequenceString.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterOptionalUInt.read(buf),
@@ -4910,6 +4912,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
                 FfiConverterBoolean.allocationSize(value.`hideCompleted`) +
                 FfiConverterBoolean.allocationSize(value.`hideAliasesInSidebar`) +
                 FfiConverterBoolean.allocationSize(value.`strikethroughCompleted`) +
+                FfiConverterBoolean.allocationSize(value.`dimFutureTasks`) +
                 FfiConverterMapStringSequenceString.allocationSize(value.`tagAliases`) +
                 FfiConverterSequenceString.allocationSize(value.`disabledCalendars`) +
                 FfiConverterOptionalUInt.allocationSize(value.`sortCutoffDays`) +
@@ -4971,6 +4974,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
         FfiConverterBoolean.write(value.`hideCompleted`, buf)
         FfiConverterBoolean.write(value.`hideAliasesInSidebar`, buf)
         FfiConverterBoolean.write(value.`strikethroughCompleted`, buf)
+        FfiConverterBoolean.write(value.`dimFutureTasks`, buf)
         FfiConverterMapStringSequenceString.write(value.`tagAliases`, buf)
         FfiConverterSequenceString.write(value.`disabledCalendars`, buf)
         FfiConverterOptionalUInt.write(value.`sortCutoffDays`, buf)

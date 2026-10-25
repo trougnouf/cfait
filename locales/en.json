@@ -832,6 +832,7 @@
     "task_restored": "Task %{uid} restored.",
     "stop_reset": "Stop (reset)",
     "strikethrough_completed": "Cross-off (strikethrough) done tasks",
+    "dim_future_tasks": "Dim tasks that haven't started yet",
     "celebrate_completions": "Celebrate completed tasks (confetti)",
     "show_inline_descriptions": "Show inline descriptions (preview up to 3 lines)",
     "support_card_title": "Support development",

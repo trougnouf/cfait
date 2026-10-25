@@ -576,6 +576,12 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                         crate::gui::message::BoolField::StrikethroughCompleted,
                         v
                     )),
+                cb(app.dim_future_tasks)
+                    .label(rust_i18n::t!("dim_future_tasks"))
+                    .on_toggle(|v| Message::ToggleField(
+                        crate::gui::message::BoolField::DimFutureTasks,
+                        v
+                    )),
                 cb(app.core_config.celebrate_completions)
                     .label(rust_i18n::t!("celebrate_completions"))
                     .on_toggle(|v| Message::ToggleField(

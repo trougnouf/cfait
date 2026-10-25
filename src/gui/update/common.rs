@@ -322,6 +322,7 @@ pub fn save_config(app: &mut GuiApp) -> Config {
     cfg.create_events_for_tasks = app.create_events_for_tasks;
     cfg.delete_events_on_completion = app.delete_events_on_completion;
     cfg.strikethrough_completed = app.strikethrough_completed;
+    cfg.dim_future_tasks = app.dim_future_tasks;
     cfg.auto_refresh_interval_mins = app.auto_refresh_interval_mins;
     cfg.trash_retention_days = app.trash_retention_days;
     cfg.pinned_actions = app.pinned_actions.clone();
