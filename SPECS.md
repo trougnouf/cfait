@@ -199,7 +199,7 @@ Tasks sort deterministically by rank (0 to 9), then by Overdue -> Priority -> Du
 *   **Rank 4 (Actionable):** Due date `<=` `sort_cutoff_days`.
 *   **Rank 5 (Deferred):** No due date, or `>` `sort_cutoff_days`.
 *   **Rank 6 (Blocked):** Has unresolved dependencies or parent is blocked.
-*   **Rank 7 (Future):** Start date is > `start_grace_period_days`.
+*   **Rank 7 (Future):** Start date is more than `start_grace_period_days` days away.
 *   **Rank 8 (Completed):** Done or Cancelled.
 *   **Rank 9 (Trash):** In `local://trash`.
 
@@ -336,7 +336,7 @@ Tasks tagged with `is:permanent` act as endless trackers. When checked off (Comp
 *   **Intents:** Intercepts `ACTION_VIEW` for `.ics` files to launch the Import Screen.
 *   **Debug Export:** UI includes an advanced option to generate a zip of `cache/`, `data/`, `config/`, and `android_crash.txt`, sharing it via `ACTION_SEND`. If a custom `data_dir` is configured, the export also bundles the internal default data directory (`data_internal/`) and the custom one (`data_custom/`) as backups.
 *   **AMOLED Black Theme:** A pure-black color variant for OLED screens, selectable from the theme picker.
-*   **Top Bar Position:** Configurable to top or bottom via settings (issue #31).
+*   **Top Bar Position:** Configurable to top or bottom via settings.
 
 ### 5.4. Journal & Wiki Pages (all clients)
 Daily notes and wiki pages are `VJOURNAL` components (see 1.2). They share a unified UI across all three clients:
