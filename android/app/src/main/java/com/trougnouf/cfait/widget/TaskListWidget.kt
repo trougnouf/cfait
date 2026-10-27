@@ -17,7 +17,10 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
+import androidx.glance.ColorFilter
 import androidx.glance.GlanceTheme
+import androidx.glance.Image
+import androidx.glance.ImageProvider
 import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionParametersOf
 import androidx.glance.action.actionStartActivity
@@ -29,12 +32,15 @@ import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.currentState
 import androidx.glance.layout.Alignment
+import androidx.glance.layout.Box
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
+import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
+import androidx.glance.layout.size
 import androidx.glance.layout.width
 import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.text.FontStyle
@@ -344,20 +350,75 @@ private fun TaskRow(task: MobileTaskSummary, textColor: Color, calColor: Color) 
             Spacer(modifier = GlanceModifier.width(14.dp))
         }
 
-        // Checkbox (skip for notes)
+        // Checkbox (skip for notes). Drawn as tinted shapes like the in-app
+        // TaskCheckbox instead of ☑/☐ glyphs, which many devices render as
+        // color emoji that ignore the requested color.
         if (!isNote) {
-            Text(
-                text = if (task.isDone) "☑" else "☐",
-                modifier = GlanceModifier.clickable(
-                    actionRunCallback<ToggleTaskActionCallback>(
-                        actionParametersOf(TaskUidKey to task.uid)
+            val fillColor =
+                when {
+                    task.statusString == "Cancelled" -> Color(0xFF4D3333)
+                    task.statusString == "InProcess" -> Color(0xFF99CC99)
+                    task.isPaused -> Color(0xFFFFD54F)
+                    task.isDone -> Color(0xFF009900)
+                    else -> null
+                }
+            Box(
+                modifier = GlanceModifier
+                    .size(16.dp)
+                    .clickable(
+                        actionRunCallback<ToggleTaskActionCallback>(
+                            actionParametersOf(TaskUidKey to task.uid)
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                if (fillColor != null) {
+                    // Collection-colored rounded box with status fill
+                    Image(
+                        provider = ImageProvider(R.drawable.widget_box_rounded),
+                        contentDescription = null,
+                        modifier = GlanceModifier.fillMaxSize(),
+                        colorFilter = ColorFilter.tint(ColorProvider(calColor)),
                     )
-                ),
-                style = TextStyle(
-                    fontSize = 16.sp,
-                    color = ColorProvider(calColor),
-                )
-            )
+                    Image(
+                        provider = ImageProvider(R.drawable.widget_box_rounded),
+                        contentDescription = null,
+                        modifier = GlanceModifier.size(13.dp),
+                        colorFilter = ColorFilter.tint(ColorProvider(fillColor)),
+                    )
+                } else {
+                    // Unchecked: collection-colored ring, like the in-app border
+                    Image(
+                        provider = ImageProvider(R.drawable.widget_box_stroke),
+                        contentDescription = null,
+                        modifier = GlanceModifier.fillMaxSize(),
+                        colorFilter = ColorFilter.tint(ColorProvider(calColor)),
+                    )
+                }
+                // Status icon
+                when {
+                    task.statusString == "Cancelled" -> Image(
+                        provider = ImageProvider(R.drawable.widget_cross),
+                        contentDescription = null,
+                        modifier = GlanceModifier.size(12.dp),
+                    )
+                    task.statusString == "InProcess" -> Image(
+                        provider = ImageProvider(R.drawable.widget_play),
+                        contentDescription = null,
+                        modifier = GlanceModifier.size(10.dp),
+                    )
+                    task.isPaused -> Image(
+                        provider = ImageProvider(R.drawable.widget_pause),
+                        contentDescription = null,
+                        modifier = GlanceModifier.size(10.dp),
+                    )
+                    task.isDone -> Image(
+                        provider = ImageProvider(R.drawable.widget_check),
+                        contentDescription = null,
+                        modifier = GlanceModifier.size(12.dp),
+                    )
+                }
+            }
             Spacer(modifier = GlanceModifier.width(6.dp))
         }
 
