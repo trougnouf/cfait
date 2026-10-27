@@ -1293,16 +1293,29 @@ fn mobile_calendars_to_model(cals: &[MobileCalendar]) -> Vec<crate::model::Calen
 }
 
 /// Filter firing alarm-index entries against the store and map them to FFI records.
+///
+/// Entries arrive sorted by trigger time. When several alarms of the same task
+/// trigger at the same moment (e.g. two snooze chains of one doubled reminder),
+/// only the first is surfaced; the rest are dropped so the user is not
+/// notified twice.
 fn firing_entries_to_mobile(
     store: &TaskStore,
     entries: Vec<AlarmIndexEntry>,
 ) -> Vec<MobileAlarmInfo> {
+    let mut last_kept_ms: HashMap<String, i64> = HashMap::new();
     entries
         .into_iter()
         .filter(|e| {
             store.get_task_ref(&e.task_uid).is_some_and(|task| {
                 !task.status.is_done() && !crate::storage::is_system_calendar(&task.calendar_href)
             })
+        })
+        .filter(|e| match last_kept_ms.get(&e.task_uid) {
+            Some(last) if (e.trigger_ms - last).abs() < 60_000 => false,
+            _ => {
+                last_kept_ms.insert(e.task_uid.clone(), e.trigger_ms);
+                true
+            }
         })
         .map(|e| MobileAlarmInfo {
             task_uid: e.task_uid,
@@ -2138,7 +2151,7 @@ impl CfaitMobile {
                         .any(|a| a.acknowledged.is_none() && !a.is_snooze())
                 {
                     let mut check_implicit = |dt: DateTime<Utc>| {
-                        if !task.has_alarm_at(dt) {
+                        if !task.has_alarm_at(dt, default_time) {
                             check_ts(dt.timestamp(), &mut global_earliest);
                         }
                     };
@@ -2226,7 +2239,10 @@ impl CfaitMobile {
                         .any(|a| a.acknowledged.is_none() && !a.is_snooze())
                 {
                     let mut check_implicit = |dt: DateTime<Utc>, desc: &str, type_key: &str| {
-                        if !task.has_alarm_at(dt) && dt <= now && (now - dt).num_minutes() < 120 {
+                        if !task.has_alarm_at(dt, default_time)
+                            && dt <= now
+                            && (now - dt).num_minutes() < 120
+                        {
                             let synth_id =
                                 format!("implicit_{}:|{}|{}", type_key, dt.to_rfc3339(), task.uid);
                             results.push(MobileAlarmInfo {
@@ -3829,7 +3845,7 @@ impl CfaitMobile {
                     }
 
                     if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(expected_ts)
-                        && task.has_alarm_at(dt.with_timezone(&chrono::Utc))
+                        && task.has_alarm_at(dt.with_timezone(&chrono::Utc), default_time)
                     {
                         return false;
                     }
@@ -4155,9 +4171,15 @@ impl CfaitMobile {
 #[cfg(test)]
 mod tests {
     use super::{
-        CfaitMobile, LOCAL_CALENDAR_HREF, Uuid, apply_mobile_credentials_update, task_to_summary,
+        CfaitMobile, LOCAL_CALENDAR_HREF, Uuid, apply_mobile_credentials_update,
+        firing_entries_to_mobile, task_to_summary,
     };
+    use crate::alarm_index::AlarmIndexEntry;
     use crate::config::Config;
+    use crate::model::Task;
+    use crate::store::TaskStore;
+    use std::collections::HashMap;
+    use std::sync::Arc;
 
     #[test]
     fn preserves_existing_password_when_android_ui_leaves_password_blank() {
@@ -4357,5 +4379,41 @@ mod tests {
         let plain_summary = task_to_summary(&plain, &std::collections::HashMap::new());
         assert!(!plain_summary.description_inline.is_empty());
         assert!(plain_summary.has_description);
+    }
+
+    #[test]
+    fn firing_entries_dedupe_same_moment_per_task() {
+        let mut store = TaskStore::new(Arc::new(crate::context::TestContext::new()));
+        for (uid, summary) in [
+            ("task-1", "water the tomatoes"),
+            ("task-2", "bake the sourdough"),
+        ] {
+            let mut task = Task::new(summary, &HashMap::new(), None);
+            task.uid = uid.to_string();
+            store.add_task(task);
+        }
+
+        let t_ms = 1_700_000_000_000;
+        let entry = |task_uid: &str, alarm_uid: &str, trigger_ms: i64| AlarmIndexEntry {
+            trigger_ms,
+            task_uid: task_uid.to_string(),
+            alarm_uid: alarm_uid.to_string(),
+            task_title: "a task".to_string(),
+            calendar_href: "cal".to_string(),
+            is_implicit: false,
+            description: None,
+        };
+
+        // Entries arrive sorted by trigger_ms: two snooze chains of task-1 are
+        // 6s apart, with an unrelated task's alarm in between.
+        let entries = vec![
+            entry("task-1", "snooze-a", t_ms),
+            entry("task-2", "other-task-alarm", t_ms + 2_000),
+            entry("task-1", "snooze-b", t_ms + 6_000),
+        ];
+
+        let infos = firing_entries_to_mobile(&store, entries);
+        let alarm_uids: Vec<_> = infos.iter().map(|i| i.alarm_uid.clone()).collect();
+        assert_eq!(alarm_uids, vec!["snooze-a", "other-task-alarm"]);
     }
 }

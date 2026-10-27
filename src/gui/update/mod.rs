@@ -437,7 +437,7 @@ fn is_ringing_valid(
         }
 
         if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(expected_ts)
-            && store_task.has_alarm_at(dt.with_timezone(&chrono::Utc))
+            && store_task.has_alarm_at(dt.with_timezone(&chrono::Utc), default_time)
         {
             return false;
         }

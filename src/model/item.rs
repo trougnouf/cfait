@@ -1316,9 +1316,14 @@ impl Task {
         let now = Utc::now();
         let mut new_alarm_opt = None;
         let mut root_uid_opt = None;
+        let mut parent_trigger_opt = None;
 
         if let Some(parent_alarm) = self.alarms.iter_mut().find(|a| a.uid == alarm_uid) {
             parent_alarm.acknowledged = Some(now);
+
+            if let AlarmTrigger::Absolute(t) = &parent_alarm.trigger {
+                parent_trigger_opt = Some(*t);
+            }
 
             let trigger_time = now + chrono::Duration::minutes(minutes as i64);
             let mut snooze = Alarm::new_absolute(trigger_time);
@@ -1342,6 +1347,7 @@ impl Task {
         }
 
         if let Some(root_uid) = root_uid_opt {
+            let parent_trigger = parent_trigger_opt;
             self.alarms.retain(|a| {
                 if a.uid == alarm_uid && a.is_snooze() {
                     return false;
@@ -1352,6 +1358,19 @@ impl Task {
                 if a.is_snooze()
                     && a.acknowledged.is_none()
                     && a.related_to_uid.as_ref() == Some(&root_uid)
+                {
+                    return false;
+                }
+                // A sibling snooze of another chain that triggered at the same
+                // moment (within 60s) is the other half of a doubled reminder;
+                // retiring it here makes the double self-heal on the next
+                // snooze instead of firing in parallel forever.
+                if a.uid != alarm_uid
+                    && a.is_snooze()
+                    && a.acknowledged.is_none()
+                    && let Some(parent_ts) = parent_trigger
+                    && let AlarmTrigger::Absolute(sib_ts) = &a.trigger
+                    && (*sib_ts - parent_ts).num_seconds().abs() < 60
                 {
                     return false;
                 }
@@ -1415,11 +1434,27 @@ impl Task {
         earliest
     }
 
-    pub fn has_alarm_at(&self, dt: DateTime<Utc>) -> bool {
-        self.alarms.iter().any(|a| match a.trigger {
-            AlarmTrigger::Absolute(t) => t == dt,
-            _ => false,
+    /// Returns true if any alarm of this task triggers at exactly `dt`.
+    /// Relative alarms are resolved against their anchor with the default
+    /// reminder time, matching how the alarm actors compute their trigger.
+    pub fn has_alarm_at(&self, dt: DateTime<Utc>, default_time: NaiveTime) -> bool {
+        self.alarms.iter().any(|a| {
+            let trigger = match a.trigger {
+                AlarmTrigger::Absolute(t) => Some(t),
+                AlarmTrigger::Relative(mins) => self
+                    .relative_alarm_anchor(default_time)
+                    .map(|anchor| anchor + chrono::Duration::minutes(mins as i64)),
+            };
+            trigger == Some(dt)
         })
+    }
+
+    /// Returns true if an explicit absolute alarm triggers at exactly `dt`.
+    /// Relative alarms are not resolved here.
+    pub fn has_absolute_alarm_at(&self, dt: DateTime<Utc>) -> bool {
+        self.alarms
+            .iter()
+            .any(|a| matches!(a.trigger, AlarmTrigger::Absolute(t) if t == dt))
     }
 
     pub fn has_active_or_recent_alarm(&self, default_time: NaiveTime) -> bool {
@@ -1444,7 +1479,9 @@ impl Task {
 
     /// Add an implicit dismissed alarm record so UI can show it as acknowledged.
     pub fn dismiss_implicit_alarm(&mut self, trigger_dt: DateTime<Utc>, description: String) {
-        if self.has_alarm_at(trigger_dt) {
+        // Absolute-only on purpose: this path has no default reminder time in
+        // scope to resolve relative alarms against.
+        if self.has_absolute_alarm_at(trigger_dt) {
             return;
         }
 

@@ -199,7 +199,7 @@ impl AlarmIndex {
                                 // Check if there's already ANY alarm (including acknowledged/dismissed)
                                 // for this task at this exact time. This prevents firing on restart
                                 // after dismissal.
-                                if task.has_alarm_at(dt) {
+                                if task.has_alarm_at(dt, default_time) {
                                     return;
                                 }
 

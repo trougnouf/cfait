@@ -487,6 +487,27 @@ fn save_alarm_history(ctx: &dyn AppContext, history: &HashMap<String, i64>) {
     }
 }
 
+/// Decides which alarms in `entries` (sorted by trigger time) actually fire.
+///
+/// Alarms of the same task whose triggers fall within 60s of each other — or
+/// of the task's previous fire — count as one moment: the earliest fires, the
+/// rest are suppressed. Returns one bool per entry, in order.
+fn select_fires(entries: &[(String, i64)], last_fire_ts: &HashMap<String, i64>) -> Vec<bool> {
+    let mut kept: HashMap<String, i64> = last_fire_ts.clone();
+    entries
+        .iter()
+        .map(|(task_uid, ts)| {
+            let fire = kept
+                .get(task_uid)
+                .is_none_or(|last| (*ts - last).abs() >= 60);
+            if fire {
+                kept.insert(task_uid.clone(), *ts);
+            }
+            fire
+        })
+        .collect()
+}
+
 /// Spawns the background alarm manager.
 /// returns: Sender to update the task list or change state.
 pub fn spawn_alarm_actor(
@@ -505,6 +526,9 @@ pub fn spawn_alarm_actor(
     tokio::spawn(async move {
         let mut tasks: Vec<Task> = Vec::new();
         let mut fired_history: HashMap<String, i64> = load_alarm_history(&ctx);
+        // Trigger timestamp of the last fired alarm per task, used to suppress
+        // sibling alarms that come due at the same moment.
+        let mut last_fire_ts: HashMap<String, i64> = HashMap::new();
         // Start muted
         let mut alarms_enabled = false;
         let mut last_sync_request = Instant::now() - Duration::from_secs(60);
@@ -549,7 +573,7 @@ pub fn spawn_alarm_actor(
 
                                 // Don't fire if ANY alarm (even acknowledged/dismissed) exists for this exact time.
                                 // This prevents firing on restart after dismissal.
-                                if !task.has_alarm_at(trigger_dt) {
+                                if !task.has_alarm_at(trigger_dt, default_time) {
                                     // Encode the timestamp into the UID so the UI knows exactly what time to write back
                                     let ts_str = trigger_dt.to_rfc3339();
                                     let implicit_alarm = Alarm {
@@ -602,6 +626,7 @@ pub fn spawn_alarm_actor(
                                     alarm.clone(),
                                     is_implicit,
                                     history_key.clone(),
+                                    timestamp,
                                 ));
                             }
                         } else {
@@ -642,8 +667,35 @@ pub fn spawn_alarm_actor(
                     }
                 }
 
-                for (task, alarm, _is_implicit, history_key) in ready_to_fire {
-                    fired_history.insert(history_key.clone(), now.timestamp());
+                // One notification per task per moment: alarms of the same task
+                // that trigger within 60s of each other (an explicit reminder
+                // plus the implicit "due now", or two snooze chains of the same
+                // reminder) count as one. The earliest fires; the rest are
+                // marked as fired so they cannot re-fire, and die naturally
+                // once their trigger ages out of the firing window.
+                ready_to_fire.sort_by_key(|entry| entry.4);
+                let fire_flags = select_fires(
+                    &ready_to_fire
+                        .iter()
+                        .map(|(task, _alarm, _implicit, _key, ts)| (task.uid.clone(), *ts))
+                        .collect::<Vec<_>>(),
+                    &last_fire_ts,
+                );
+                for ((task, alarm, _is_implicit, history_key, timestamp), fire) in
+                    ready_to_fire.into_iter().zip(fire_flags)
+                {
+                    // Suppressed alarms are also recorded as fired so they
+                    // cannot re-fire later in the window.
+                    fired_history.insert(history_key, now.timestamp());
+                    if !fire {
+                        log::debug!(
+                            "Suppressed alarm {} of task {}: triggered within 60s of a recent fire",
+                            alarm.uid,
+                            task.uid
+                        );
+                        continue;
+                    }
+                    last_fire_ts.insert(task.uid.clone(), timestamp);
 
                     // In-app notifications are per-window and always sent, for
                     // both explicit and implicit (auto-reminder) alarms.
@@ -814,5 +866,35 @@ mod tests {
         let dir = ctx.get_data_dir().unwrap();
         std::fs::write(dir.join(ALARM_HISTORY_FILE), "not json").unwrap();
         assert!(load_alarm_history(&ctx).is_empty());
+    }
+
+    #[test]
+    fn select_fires_suppresses_same_moment_siblings() {
+        let t = 1_700_000_000;
+        let entries = vec![
+            ("task-a".to_string(), t),
+            ("task-a".to_string(), t + 6),
+            ("task-b".to_string(), t + 3),
+        ];
+        let flags = select_fires(&entries, &HashMap::new());
+        assert_eq!(flags, vec![true, false, true]);
+    }
+
+    #[test]
+    fn select_fires_allows_distinct_moments() {
+        let t = 1_700_000_000;
+        let entries = vec![("task-a".to_string(), t), ("task-a".to_string(), t + 120)];
+        let flags = select_fires(&entries, &HashMap::new());
+        assert_eq!(flags, vec![true, true]);
+    }
+
+    #[test]
+    fn select_fires_considers_previous_cycle_fires() {
+        let t = 1_700_000_000;
+        let mut last = HashMap::new();
+        last.insert("task-a".to_string(), t);
+        let entries = vec![("task-a".to_string(), t + 6)];
+        let flags = select_fires(&entries, &last);
+        assert_eq!(flags, vec![false]);
     }
 }

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Tests for alarm snoozing and dismissal logic.
-use cfait::model::{AlarmTrigger, DateType, Task};
+use cfait::model::{Alarm, AlarmTrigger, DateType, Task};
 use chrono::{Duration, Utc};
 use std::collections::HashMap;
 
@@ -126,5 +126,84 @@ fn test_implicit_alarm_dismissal_creates_entry() {
     assert!(t.alarms[0].acknowledged.is_some());
 
     // Ensure `has_alarm_at` returns true so system doesn't refire
-    assert!(t.has_alarm_at(due));
+    let default_time = chrono::NaiveTime::from_hms_opt(8, 0, 0).unwrap();
+    assert!(t.has_alarm_at(due, default_time));
+}
+
+#[test]
+fn test_has_alarm_at_resolves_relative_trigger() {
+    let mut t = Task::new("Water the tomatoes", &HashMap::new(), None);
+    let due = Utc::now();
+    t.due = Some(DateType::Specific(due));
+    t.alarms.push(Alarm::new_relative(0)); // "remind me at the due time"
+
+    let default_time = chrono::NaiveTime::from_hms_opt(7, 30, 0).unwrap();
+    assert!(t.has_alarm_at(due, default_time));
+    assert!(!t.has_alarm_at(due + Duration::minutes(1), default_time));
+    // The absolute-only variant must not see relative alarms.
+    assert!(!t.has_absolute_alarm_at(due));
+}
+
+/// Two snooze chains born from a doubled reminder (an explicit reminder plus
+/// the implicit "due now") fire in parallel every cycle. Snoozing one of them
+/// must retire the other so the double self-heals.
+#[test]
+fn test_snooze_retires_sibling_snooze_from_doubled_moment() {
+    let mut t = Task::new("Shutoff frost sensitive stuff", &HashMap::new(), None);
+    let moment = Utc::now() - Duration::minutes(1);
+
+    let mut snooze_a = Alarm::new_absolute(moment);
+    snooze_a.uid = "snooze-a".to_string();
+    snooze_a.related_to_uid = Some("root-a".to_string());
+    snooze_a.relation_type = Some("SNOOZE".to_string());
+
+    let mut snooze_b = Alarm::new_absolute(moment + Duration::seconds(6));
+    snooze_b.uid = "snooze-b".to_string();
+    snooze_b.related_to_uid = Some("root-b".to_string());
+    snooze_b.relation_type = Some("SNOOZE".to_string());
+
+    t.alarms.push(snooze_a);
+    t.alarms.push(snooze_b);
+
+    assert!(t.snooze_alarm("snooze-a", 5));
+
+    let active: Vec<&Alarm> = t
+        .alarms
+        .iter()
+        .filter(|a| a.acknowledged.is_none())
+        .collect();
+    assert_eq!(active.len(), 1, "the sibling snooze chain must be retired");
+    assert_eq!(active[0].related_to_uid.as_deref(), Some("root-a"));
+    assert!(!t.alarms.iter().any(|a| a.uid == "snooze-b"));
+}
+
+/// A sibling snooze that triggered at a different moment (more than 60s away)
+/// is a separate reminder and must survive.
+#[test]
+fn test_snooze_keeps_distinct_sibling_snooze() {
+    let mut t = Task::new("Bake the sourdough", &HashMap::new(), None);
+    let moment = Utc::now() - Duration::minutes(1);
+
+    let mut snooze_a = Alarm::new_absolute(moment);
+    snooze_a.uid = "snooze-a".to_string();
+    snooze_a.related_to_uid = Some("root-a".to_string());
+    snooze_a.relation_type = Some("SNOOZE".to_string());
+
+    let mut snooze_b = Alarm::new_absolute(moment + Duration::minutes(5));
+    snooze_b.uid = "snooze-b".to_string();
+    snooze_b.related_to_uid = Some("root-b".to_string());
+    snooze_b.relation_type = Some("SNOOZE".to_string());
+
+    t.alarms.push(snooze_a);
+    t.alarms.push(snooze_b);
+
+    assert!(t.snooze_alarm("snooze-a", 5));
+
+    let active: Vec<&Alarm> = t
+        .alarms
+        .iter()
+        .filter(|a| a.acknowledged.is_none())
+        .collect();
+    assert_eq!(active.len(), 2, "the distant sibling snooze must survive");
+    assert!(t.alarms.iter().any(|a| a.uid == "snooze-b"));
 }
