@@ -675,11 +675,16 @@ impl CompiledTerm {
 
         // --- Collection Filter (col:name) ---
         if let Some(col_query) = &self.col_query {
-            let href = task.calendar_href.to_lowercase();
+            // The name matches as a case-insensitive substring; the href only
+            // as an exact match. A substring href match would hit the account
+            // path shared by every remote collection (e.g. "trougnouf" inside
+            // /trougnouf/<uuid>/), so col:<account> would match everything.
+            let href_match = task.calendar_href.to_lowercase().trim_end_matches('/')
+                == col_query.trim_end_matches('/');
             let name_match = col_names
                 .get(&task.calendar_href)
                 .is_some_and(|name| contains_ignore_case(name, col_query));
-            return contains_ignore_case(&href, col_query) || name_match;
+            return href_match || name_match;
         }
 
         // --- Status Filters ---
@@ -859,11 +864,34 @@ mod tests {
                 supports_vjournal: None,
                 supports_vevent: None,
             },
+            // Remote collections share the account path in their hrefs.
+            crate::model::CalendarListEntry {
+                name: "trougnouf".to_string(),
+                href: "/trougnouf/18ead562-aaaa-bbbb-cccc-000000000001/".to_string(),
+                color: None,
+                supports_vjournal: None,
+                supports_vevent: None,
+            },
+            crate::model::CalendarListEntry {
+                name: "Workout".to_string(),
+                href: "/trougnouf/07f0b86f-aaaa-bbbb-cccc-000000000002/".to_string(),
+                color: None,
+                supports_vjournal: None,
+                supports_vevent: None,
+            },
         ];
 
         let mut t = Task::new("Test", &aliases, None);
         t.summary = "Water the tomatoes".to_string();
         t.calendar_href = "local://herbary".to_string();
+
+        let mut a = Task::new("Test", &aliases, None);
+        a.summary = "Water the arugula".to_string();
+        a.calendar_href = "/trougnouf/18ead562-aaaa-bbbb-cccc-000000000001/".to_string();
+
+        let mut w = Task::new("Test", &aliases, None);
+        w.summary = "Chop the squash".to_string();
+        w.calendar_href = "/trougnouf/07f0b86f-aaaa-bbbb-cccc-000000000002/".to_string();
 
         let lex_guard = crate::model::parser::LEXICON.read().unwrap();
 
@@ -896,6 +924,36 @@ mod tests {
         assert!(q.matches(&t, &store));
         let q = Query::new("col:kitchen|col:balcony", &lex_guard, &calendars);
         assert!(!q.matches(&t, &store));
+
+        // A collection whose name is a substring of the shared account path
+        // must match only its own tasks, not every remote task.
+        let q = Query::new("col:trougnouf", &lex_guard, &calendars);
+        assert!(q.matches(&a, &store));
+        assert!(!q.matches(&w, &store));
+        assert!(!q.matches(&t, &store));
+
+        // Name substring still works on remote collections
+        let q = Query::new("col:work", &lex_guard, &calendars);
+        assert!(q.matches(&w, &store));
+        assert!(!q.matches(&a, &store));
+
+        // Exact href match, with or without the trailing slash
+        let q = Query::new(
+            "col:/trougnouf/07f0b86f-aaaa-bbbb-cccc-000000000002",
+            &lex_guard,
+            &calendars,
+        );
+        assert!(q.matches(&w, &store));
+        let q = Query::new(
+            "col:/trougnouf/07f0b86f-aaaa-bbbb-cccc-000000000002/",
+            &lex_guard,
+            &calendars,
+        );
+        assert!(q.matches(&w, &store));
+
+        // A partial href (uuid prefix) is not a match
+        let q = Query::new("col:07f0b86f", &lex_guard, &calendars);
+        assert!(!q.matches(&w, &store));
     }
 
     #[test]

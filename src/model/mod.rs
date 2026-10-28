@@ -117,12 +117,92 @@ pub fn compare_calendars_with_size(
 
 pub fn resolve_collection(target: &str, calendars: &[CalendarListEntry], default: &str) -> String {
     let lower = target.to_lowercase();
+    let norm = lower.trim_end_matches('/');
+    // Exact name first, then exact href, then name substring. Href substring
+    // is deliberately not used: CalDAV hrefs embed the account path, so a
+    // collection named like the account ("trougnouf") would resolve to
+    // whichever remote collection happens to be listed first.
+    if let Some(c) = calendars.iter().find(|c| c.name.to_lowercase() == lower) {
+        return c.href.clone();
+    }
     if let Some(c) = calendars
         .iter()
-        .find(|c| c.name.to_lowercase().contains(&lower) || c.href.to_lowercase().contains(&lower))
+        .find(|c| c.href.to_lowercase().trim_end_matches('/') == norm)
     {
-        c.href.clone()
-    } else {
-        default.to_string()
+        return c.href.clone();
+    }
+    if let Some(c) = calendars
+        .iter()
+        .find(|c| c.name.to_lowercase().contains(&lower))
+    {
+        return c.href.clone();
+    }
+    default.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(name: &str, href: &str) -> CalendarListEntry {
+        CalendarListEntry {
+            name: name.to_string(),
+            href: href.to_string(),
+            color: None,
+            supports_vjournal: None,
+            supports_vevent: None,
+        }
+    }
+
+    #[test]
+    fn resolve_collection_prefers_exact_name_over_shared_href() {
+        // Remote collections all share the /trougnouf/ account path, so a
+        // target equal to the account must not resolve to whichever remote
+        // href happens to be listed first.
+        let calendars = vec![
+            entry("todo", "/trougnouf/5f710d0c-aaaa-bbbb-cccc-000000000003/"),
+            entry(
+                "trougnouf",
+                "/trougnouf/18ead562-aaaa-bbbb-cccc-000000000001/",
+            ),
+            entry(
+                "Workout",
+                "/trougnouf/07f0b86f-aaaa-bbbb-cccc-000000000002/",
+            ),
+            entry("Herbary", "local://herbary"),
+        ];
+
+        assert_eq!(
+            resolve_collection("trougnouf", &calendars, "local://default"),
+            "/trougnouf/18ead562-aaaa-bbbb-cccc-000000000001/"
+        );
+        // Case-insensitive exact name
+        assert_eq!(
+            resolve_collection("WORKOUT", &calendars, "local://default"),
+            "/trougnouf/07f0b86f-aaaa-bbbb-cccc-000000000002/"
+        );
+        // Exact href, with or without the trailing slash
+        assert_eq!(
+            resolve_collection("local://herbary", &calendars, "local://default"),
+            "local://herbary"
+        );
+        assert_eq!(
+            resolve_collection(
+                "/trougnouf/5f710d0c-aaaa-bbbb-cccc-000000000003",
+                &calendars,
+                "local://default"
+            ),
+            "/trougnouf/5f710d0c-aaaa-bbbb-cccc-000000000003/"
+        );
+        // Name substring
+        assert_eq!(
+            resolve_collection("herb", &calendars, "local://default"),
+            "local://herbary"
+        );
+        // Unknown target falls back to the default
+        assert_eq!(
+            resolve_collection("balcony", &calendars, "local://default"),
+            "local://default"
+        );
     }
 }

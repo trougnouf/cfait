@@ -187,7 +187,7 @@ The search bar supports a boolean recursive-descent parser.
     *   *Actionable:* `is:ready` (Excludes completed tasks, explicitly/implicitly blocked tasks, tasks starting in the future, and Notes whose children are all unready. `InProcess` bypasses this).
     *   *Comparison:* `~<30m` (duration < 30m), `!<4` (priority < 4).
     *   *Dates:* `@<today` (Overdue), `^>1w` (Starts in > 1 week).
-    *   *Collections:* `col:Herbary` (matches the task's collection by name or href, case-insensitive substring).
+    *   *Collections:* `col:Herbary` (matches the task's collection by name — case-insensitive substring — or by exact href, case-insensitive. Hrefs are never substring-matched: remote CalDAV hrefs all share the account path, so a substring match on `col:<account>` would hit every remote collection. The same name/href rules resolve a `col:` target when assigning a task to a collection.)
 *   **Match Highlighting:** Search terms are highlighted inline in task titles and descriptions across all clients.
 *   **Result Count:** While a search is active, the GUI top bar shows the number of results for the current query instead of the total task count.
 *   **Parent Inclusion:** Search matches include parents of matching tasks in the results, so searching for a subtask surfaces its full ancestry.
