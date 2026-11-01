@@ -581,3 +581,150 @@ fn test_hierarchy_expansion_with_completed_tasks() {
         panic!("Expected Task variant");
     }
 }
+
+fn filter_with_search(store: &TaskStore, search_term: &str) -> Vec<cfait::store::TaskListItem> {
+    let filter_res = store.filter(FilterOptions {
+        active_cal_href: None,
+        hidden_calendars: &HashSet::new(),
+        calendars: &[],
+        selected_categories: &HashSet::new(),
+        selected_locations: &HashSet::new(),
+        match_all_categories: false,
+        search_term,
+        hide_completed_global: false,
+        hide_fully_completed_tags: false,
+        hide_aliases_in_sidebar: false,
+        cutoff_date: None,
+        min_duration: None,
+        max_duration: None,
+        include_unset_duration: true,
+        urgent_days: 1,
+        urgent_prio: 1,
+        default_priority: 5,
+        start_grace_period_days: 1,
+        sort_standard_by_priority: false,
+        sort_preset: SortPreset::default(),
+        expanded_done_groups: &HashSet::new(),
+        expanded_tags: &HashSet::new(),
+        expanded_locations: &HashSet::new(),
+
+        max_done_roots: usize::MAX,
+        max_done_subtasks: usize::MAX,
+        tag_aliases: &HashMap::new(),
+        search_collapsed_tasks: &HashSet::new(),
+        focused_task_uid: None,
+        paused_sort_behavior: PausedSortBehavior::default(),
+        sort_tiebreak_recent: false,
+        default_reminder_time: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
+    });
+    filter_res.items
+}
+
+#[test]
+fn test_negated_tag_hides_children_of_matching_parent() {
+    // Issue #100: a parent tagged #project with children tagged #task.
+    // `#project -#task` must show the parent and hide the #task children,
+    // even though the children match `#project` through their ancestor.
+    let ctx = Arc::new(TestContext::new());
+    let mut store = TaskStore::new(ctx);
+    let aliases = HashMap::new();
+
+    let mut parent = Task::new("Project", &aliases, None);
+    parent.uid = "parent".to_string();
+    parent.calendar_href = "cal1".to_string();
+    parent.categories.push("project".to_string());
+
+    let mut child = Task::new("Child task", &aliases, None);
+    child.uid = "child".to_string();
+    child.parent_uid = Some("parent".to_string());
+    child.calendar_href = "cal1".to_string();
+    child.categories.push("task".to_string());
+
+    store.add_task(parent);
+    store.add_task(child);
+
+    let results = filter_with_search(&store, "#project -#task");
+    assert_eq!(results.len(), 1);
+    if let cfait::store::TaskListItem::Task(task) = &results[0] {
+        assert_eq!(task.uid, "parent");
+    } else {
+        panic!("Expected Task variant");
+    }
+}
+
+#[test]
+fn test_negated_tag_hides_subtree_below_excluded_child() {
+    // The exclusion is structural: a child excluded by the search also hides
+    // its own descendants, keeping the visible tree connected.
+    let ctx = Arc::new(TestContext::new());
+    let mut store = TaskStore::new(ctx);
+    let aliases = HashMap::new();
+
+    let mut parent = Task::new("Project", &aliases, None);
+    parent.uid = "parent".to_string();
+    parent.calendar_href = "cal1".to_string();
+    parent.categories.push("project".to_string());
+
+    let mut child = Task::new("Child task", &aliases, None);
+    child.uid = "child".to_string();
+    child.parent_uid = Some("parent".to_string());
+    child.calendar_href = "cal1".to_string();
+    child.categories.push("task".to_string());
+
+    let mut grandchild = Task::new("Grandchild", &aliases, None);
+    grandchild.uid = "grandchild".to_string();
+    grandchild.parent_uid = Some("child".to_string());
+    grandchild.calendar_href = "cal1".to_string();
+
+    store.add_task(parent);
+    store.add_task(child);
+    store.add_task(grandchild);
+
+    let results = filter_with_search(&store, "#project -#task");
+    assert_eq!(results.len(), 1);
+    if let cfait::store::TaskListItem::Task(task) = &results[0] {
+        assert_eq!(task.uid, "parent");
+    } else {
+        panic!("Expected Task variant");
+    }
+}
+
+#[test]
+fn test_plain_tag_search_still_expands_subtree() {
+    // Regression guard: without a negation, a matching parent still pulls its
+    // whole subtree into the view (documented hierarchy behavior).
+    let ctx = Arc::new(TestContext::new());
+    let mut store = TaskStore::new(ctx);
+    let aliases = HashMap::new();
+
+    let mut parent = Task::new("Project", &aliases, None);
+    parent.uid = "parent".to_string();
+    parent.calendar_href = "cal1".to_string();
+    parent.categories.push("project".to_string());
+
+    let mut child = Task::new("Child task", &aliases, None);
+    child.uid = "child".to_string();
+    child.parent_uid = Some("parent".to_string());
+    child.calendar_href = "cal1".to_string();
+    child.categories.push("task".to_string());
+
+    store.add_task(parent);
+    store.add_task(child);
+
+    let results = filter_with_search(&store, "#project");
+    assert_eq!(results.len(), 2);
+    assert!(results.iter().any(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.uid == "parent"
+        } else {
+            false
+        }
+    }));
+    assert!(results.iter().any(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.uid == "child"
+        } else {
+            false
+        }
+    }));
+}

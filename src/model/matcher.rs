@@ -93,6 +93,10 @@ pub struct Query {
     expr: SearchExpr,
     /// Lowercased collection name per href, used by the `col:` filter.
     col_names: std::collections::HashMap<String, String>,
+    /// Whether the query contains a `-` (NOT) operator anywhere. Callers use
+    /// this to decide whether subtree expansion must respect per-task matches
+    /// (so a negation can actually exclude descendants of a matching node).
+    has_negation: bool,
 }
 
 pub fn extract_highlight_terms(query: &str) -> Vec<String> {
@@ -152,18 +156,35 @@ impl Query {
     ) -> Self {
         let tokens = tokenize_query(query);
         let mut parser = Parser::new(tokens);
+        let raw = parser.parse();
+        let has_negation = raw_has_negation(&raw);
         let col_names = calendars
             .iter()
             .map(|c| (c.href.clone(), c.name.to_lowercase()))
             .collect();
         Self {
-            expr: compile_expr(parser.parse(), lex),
+            expr: compile_expr(raw, lex),
             col_names,
+            has_negation,
         }
     }
 
     pub fn matches(&self, task: &Task, store: &crate::store::TaskStore) -> bool {
         self.expr.matches(task, store, &self.col_names)
+    }
+
+    /// Whether the query contains a `-` (NOT) operator anywhere in its tree.
+    pub fn has_negation(&self) -> bool {
+        self.has_negation
+    }
+}
+
+fn raw_has_negation(e: &RawExpr) -> bool {
+    match e {
+        RawExpr::Term(_) => false,
+        RawExpr::And(a, b) => raw_has_negation(a) || raw_has_negation(b),
+        RawExpr::Or(a, b) => raw_has_negation(a) || raw_has_negation(b),
+        RawExpr::Not(_) => true,
     }
 }
 

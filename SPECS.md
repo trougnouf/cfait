@@ -182,6 +182,7 @@ Cfait natively supports rendering basic inline Markdown across task summaries, d
 ### 3.1. Search Operators & Primitives
 The search bar supports a boolean recursive-descent parser.
 *   **Logic:** Implicit `AND` (space), `OR` (`|`), `NOT` (`-`), and Grouping `()`.
+*   **Negation vs. Hierarchy:** A `-` term excludes a node even when an ancestor matches the rest of the query, and subtree expansion stops at excluded nodes — `#project -#task` shows a `#project` parent but hides its `#task` children and everything below them. Without a `-`, a match's whole subtree stays visible (see Tree Navigation & Expansion).
 *   **Primitives:**
     *   *State:* `is:done`, `is:active`, `is:started` / `is:ongoing`, `is:blocked`, `is:note`, `is:page`, `is:flat` / `is:doc` (flat-document task), `is:archived` (manually archived page), `is:canceled` / `is:cancelled`, `is:recurrent` (has a recurrence rule; `-is:recurrent` matches non-recurring tasks).
     *   *Actionable:* `is:ready` (Excludes completed tasks, explicitly/implicitly blocked tasks, tasks starting in the future, and Notes whose children are all unready. `InProcess` bypasses this).
@@ -245,7 +246,7 @@ When completing a recurring task:
     *   Tags and Locations automatically expand transiently to reveal their active selection, returning to their configured collapsed state when unselected.
         *   **Search & Filter Context:** When searching or filtering by tags/locations, the task tree is filtered to show exact matches alongside their full ancestry and descendants.
             *   *Direct Matches:* Tasks that explicitly match the active filters.
-            *   *Descendants:* All subtasks of a direct match are fully visible and treated as matches (inheriting the parent's context).
+            *   *Descendants:* All subtasks of a direct match are fully visible and treated as matches (inheriting the parent's context) — except when the search query contains a negation (`-`), in which case expansion follows only the children the query itself accepts, so a negated term can hide descendants of a matching node (e.g. `#project -#task` hides the `#task` children of a `#project` parent, with their subtrees, keeping the visible tree connected).
             *   *Ancestors (Context):* Parent tasks all the way to the root are included to provide structural context, but are visually dimmed (`is_search_context = true`).
             *   *Unrelated Siblings:* Branches without any matches are completely hidden.
         *   During active searches or filtering, all matching task trees are automatically expanded. Users can manually collapse them, but this state is overridden on new queries.
