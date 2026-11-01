@@ -4127,6 +4127,33 @@ pub async fn handle_key_event(
                             state.input_buffer = state.input_buffer[2..].to_string();
                         }
                         state.input_buffer = format!("is:page {}", state.input_buffer);
+                        // A dated entry (daily journal) carries its date anchor
+                        // on the line: apply_smart_input resets dtstart unless a
+                        // ^date token is present, which would un-anchor the
+                        // entry from its day.
+                        if let Some(dt) = &t.dtstart {
+                            state
+                                .input_buffer
+                                .push_str(&format!(" ^{}", dt.format_smart()));
+                        }
+                        // Keep the page's tags, locations and archive flag on
+                        // the line: apply_smart_input resets them unless the
+                        // tokens are present, so saving the edit would
+                        // silently drop them.
+                        for cat in &t.categories {
+                            state
+                                .input_buffer
+                                .push_str(&format!(" #{}", crate::model::parser::quote_value(cat)));
+                        }
+                        for loc in &t.locations {
+                            state.input_buffer.push_str(&format!(
+                                " @@{}",
+                                crate::model::parser::quote_value(loc)
+                            ));
+                        }
+                        if t.archived {
+                            state.input_buffer.push_str(" is:archived");
+                        }
                         state.cursor_position = state.input_buffer.chars().count();
                         state.editing_uid = Some(uid.clone());
                         state.mode = InputMode::Editing;
