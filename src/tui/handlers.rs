@@ -1460,11 +1460,17 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
 // Helper to notify the alarm system of local changes immediately
 fn update_alarms(state: &AppState) {
     if let Some(tx) = &state.alarm_actor_tx {
+        // Exclude settings-disabled calendars so the alarm actor
+        // never fires for them (issue #121). Calendars merely
+        // hidden/untoggled in the collections tab keep their alarms.
         let all = state
             .store
             .calendars
-            .values()
-            .flat_map(|m| m.values())
+            .iter()
+            .filter(|(href, _)| {
+                !state.disabled_calendars.contains(*href)
+            })
+            .flat_map(|(_, m)| m.values())
             .cloned()
             .collect();
         let _ = tx.try_send(SystemEvent::UpdateTasks(all));

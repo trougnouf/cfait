@@ -7291,4 +7291,88 @@ mod tests {
             .expect("history snapshot rendered");
         assert_eq!(snap_depth, 0, "history snapshot renders at root depth");
     }
+
+    #[test]
+    fn issue_121_recurring_todo_visible_in_default_view() {
+        // https://github.com/trougnouf/cfait/issues/121
+        // Recurring VTODO (no DTSTART, DUE + RRULE) that fired its due alert
+        // but did not appear in the TUI default view while `list --all` showed it.
+        let ics = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Radicale//NONSGML Version 3.8.3//EN\r\nBEGIN:VTODO\r\nCATEGORIES:wireguard\r\nDESCRIPTION: wireguard\r r\r\nDTSTAMP:20261021T100112Z\r\nDUE:20261025T112825Z\r\nRRULE:FREQ=WEEKLY;INTERVAL=2\r\nSTATUS:NEEDS-ACTION\r\nSUMMARY: look at easy-wg\r\nUID:afbabdf8-5639-469c-98ae-d64e75289cea\r\nEND:VTODO\r\nEND:VCALENDAR";
+
+        let task = Task::from_ics(
+            ics,
+            "etag-121".to_string(),
+            "/cal/afbabdf8.ics".to_string(),
+            "remote://radicale/calendar".to_string(),
+        )
+        .expect("issue 121 ICS parses");
+
+        assert_eq!(task.status, TaskStatus::NeedsAction, "status parsed");
+        assert!(task.due.is_some(), "due parsed");
+        assert!(task.rrule.is_some(), "rrule parsed");
+        let uid = task.uid.clone();
+
+        let ctx = std::sync::Arc::new(crate::context::TestContext::new());
+        let mut store = TaskStore::new(ctx);
+        store.add_task(task);
+
+        let hidden = HashSet::new();
+        let categories = HashSet::new();
+        let locations = HashSet::new();
+        let aliases = HashMap::new();
+        let collapsed = HashSet::new();
+        let done_groups = HashSet::new();
+        let tags = HashSet::new();
+        let locs_expanded = HashSet::new();
+
+        let run_filter = |store: &TaskStore, cutoff: Option<chrono::DateTime<chrono::Utc>>| {
+            store.filter(FilterOptions {
+                active_cal_href: None,
+                hidden_calendars: &hidden,
+                calendars: &[],
+                selected_categories: &categories,
+                selected_locations: &locations,
+                match_all_categories: false,
+                search_term: "",
+                hide_completed_global: false,
+                hide_fully_completed_tags: false,
+                hide_aliases_in_sidebar: false,
+                cutoff_date: cutoff,
+                min_duration: None,
+                max_duration: None,
+                include_unset_duration: true,
+                urgent_days: 1,
+                urgent_prio: 1,
+                default_priority: 5,
+                start_grace_period_days: 1,
+                sort_standard_by_priority: false,
+                sort_preset: crate::config::SortPreset::UrgentStartedDue,
+                expanded_done_groups: &done_groups,
+                expanded_tags: &tags,
+                expanded_locations: &locs_expanded,
+                max_done_roots: 10,
+                max_done_subtasks: 10,
+                tag_aliases: &aliases,
+                search_collapsed_tasks: &collapsed,
+                focused_task_uid: None,
+                paused_sort_behavior: crate::config::PausedSortBehavior::default(),
+                sort_tiebreak_recent: true,
+                default_reminder_time: chrono::NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
+            })
+        };
+
+        let contains = |res: &crate::store::FilterResult| {
+            res.items
+                .iter()
+                .any(|item| matches!(item, TaskListItem::Task(t) if t.uid == uid))
+        };
+
+        // TUI default view: cutoff = now + sort_cutoff_days (default 30)
+        let tui_res = run_filter(&store, Some(chrono::Utc::now() + chrono::Duration::days(30)));
+        assert!(contains(&tui_res), "issue 121: recurring task must be visible in the default (TUI) view");
+
+        // cfait list --all: no cutoff
+        let all_res = run_filter(&store, None);
+        assert!(contains(&all_res), "issue 121: recurring task visible with list --all");
+    }
 }
