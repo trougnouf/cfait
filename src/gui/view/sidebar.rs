@@ -322,9 +322,10 @@ fn build_aggregate_item_row<'a>(
 
     let label_btn = button(
         container(label_content)
-            .width(Length::Shrink)
+            .width(Length::Fill)
             .align_x(iced::alignment::Horizontal::Left),
     )
+    .width(Length::Fill)
     .style(move |theme: &Theme, status| {
         let mut st = iced::widget::button::text(theme, status);
         if is_kb_selected {
@@ -378,20 +379,13 @@ fn build_aggregate_item_row<'a>(
 
     let indent = Space::new().width(Length::Fixed(item.depth as f32 * 15.0));
 
-    let item_row = row![
-        indent,
-        icon_btn,
-        label_btn,
-        Space::new().width(Length::Fill),
-        expand_btn,
-        focus_tooltip
-    ]
-    .spacing(3)
-    .align_y(iced::Alignment::Center)
-    .padding(iced::Padding {
-        right: 15.0,
-        ..Default::default()
-    });
+    let item_row = row![indent, icon_btn, label_btn, expand_btn, focus_tooltip]
+        .spacing(3)
+        .align_y(iced::Alignment::Center)
+        .padding(iced::Padding {
+            right: 15.0,
+            ..Default::default()
+        });
 
     if matches!(kind, AggregateKind::Tag) {
         MouseArea::new(item_row)

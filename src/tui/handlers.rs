@@ -1133,9 +1133,8 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
             if let Some(pc) = ext.percent_complete {
                 sub.percent_complete = Some(pc);
             }
-            // Journal components are never serialized with a checkbox, so
-            // `ext.is_note` is noise for them; `Task::new` already derived the
-            // note state from the explicit `is:note` token.
+            // Journal components are never serialized with a checkbox and are
+            // never notes, so `ext.is_note` is noise for them.
             if !sub.is_journal {
                 sub.is_note = ext.is_note;
             }
@@ -1209,10 +1208,20 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
 }
 
 /// Opens the journal entry (or the page attached to it) in the external
-/// editor. The buffer always holds the serialized task tree, so saving
-/// round-trips through a full tree sync. If the text changed, it is saved
-/// immediately; otherwise it is loaded into the buffer for in-TUI editing.
+/// editor, using the open-page pointer as the target.
 fn edit_journal_in_external_editor(state: &mut AppState, action_tx: &Sender<Action>) {
+    edit_journal_description(state, action_tx, state.journal_editing_uid.clone());
+}
+
+/// Opens the page `page_uid` (or the daily entry when `None`) in the
+/// external editor. The buffer holds the serialized document, so saving
+/// round-trips through a document sync. If the text changed, it is saved
+/// immediately; otherwise it is loaded into the buffer for in-TUI editing.
+fn edit_journal_description(
+    state: &mut AppState,
+    action_tx: &Sender<Action>,
+    page_uid: Option<String>,
+) {
     let target_href = state
         .active_cal_href
         .clone()
@@ -1226,14 +1235,15 @@ fn edit_journal_in_external_editor(state: &mut AppState, action_tx: &Sender<Acti
         .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
 
     // A stale page pointer (the task disappeared, e.g. after a reload or
-    // undo) falls back to the daily entry and clears the pointer.
-    let page_uid: Option<String> = match &state.journal_editing_uid {
+    // undo) falls back to the daily entry; when the state owns the pointer,
+    // clear it so the sidebar highlight follows the fallback.
+    let page_uid: Option<String> = match &page_uid {
         Some(uid) if state.store.get_task_ref(uid).is_some() => Some(uid.clone()),
-        Some(_) => {
+        Some(uid) if Some(uid.as_str()) == state.journal_editing_uid.as_deref() => {
             state.journal_editing_uid = None;
             None
         }
-        None => None,
+        _ => None,
     };
 
     let desc = match &page_uid {
@@ -1256,20 +1266,16 @@ fn edit_journal_in_external_editor(state: &mut AppState, action_tx: &Sender<Acti
         }
     };
 
-    // Load the text into the buffer and enter the matching edit mode: the
-    // full-tree mode for pages (save = tree sync) and the daily-note mode
-    // for the daily entry (save = tree sync of the daily entry).
+    // Load the text into the buffer and enter the description mode: a page
+    // saves through the standard description sync of its document, the
+    // daily entry through the daily-note sync (empty deletes it).
     let enter_in_tui_edit = |state: &mut AppState, page_uid: Option<String>, text: &str| {
         state.input_buffer = text.to_string();
         state.cursor_position = state.input_buffer.chars().count();
         state.edit_scroll_offset = 0;
         state.edit_scroll_x = 0;
-        if let Some(uid) = page_uid {
-            state.editing_tree_uid = Some(uid.clone());
-            state.mode = InputMode::EditingTree(uid);
-        } else {
-            state.mode = InputMode::EditingDescription;
-        }
+        state.editing_uid = page_uid;
+        state.mode = InputMode::EditingDescription;
         state.needs_redraw = true;
     };
 
@@ -4028,68 +4034,31 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Char('e') => {
-                if state.sidebar_mode == SidebarMode::Journal
-                    && state.active_focus == Focus::Sidebar
-                {
-                    if let Some(idx) = state.cal_state.selected()
-                        && let Some(page) = state.cached_journal_pages.get(idx)
-                        && page.is_task
+                if state.sidebar_mode == SidebarMode::Journal {
+                    // The journal tab edits the title the way the collections
+                    // tab does: the smart string in the input line.
+                    let target_uid = if state.active_focus == Focus::Sidebar {
+                        state
+                            .cal_state
+                            .selected()
+                            .and_then(|idx| state.cached_journal_pages.get(idx))
+                            .filter(|page| page.is_task)
+                            .map(|page| page.key.clone())
+                            .or_else(|| state.journal_target_uid())
+                    } else {
+                        state.journal_target_uid()
+                    };
+                    if let Some(uid) = target_uid
+                        && let Some(t) = state.store.get_task_ref(&uid)
                     {
-                        let uid = page.key.clone();
-                        let desc = crate::model::extractor::serialize_journal_document(
-                            &state.store,
-                            &uid,
-                            &state.calendars,
-                        );
-                        match run_external_editor(&desc, state.ctx.as_ref()) {
-                            Ok(Some(new_desc)) => {
-                                if new_desc != desc {
-                                    let config =
-                                        Config::load(state.ctx.as_ref()).unwrap_or_default();
-                                    let def_time = chrono::NaiveTime::parse_from_str(
-                                        &config.default_reminder_time,
-                                        "%H:%M",
-                                    )
-                                    .ok();
-                                    let sync_options = crate::store::SyncTreeOptions {
-                                        aliases: &state.tag_aliases,
-                                        default_reminder_time: def_time,
-                                        trash_retention_days: config.trash_retention_days,
-                                        calendars: &state.calendars,
-                                    };
-                                    state.edit_generation = state.edit_generation.wrapping_add(1);
-                                    if let Ok((actions, _warnings, _mints)) =
-                                        state.store.sync_tree_from_markdown(
-                                            &uid,
-                                            &new_desc,
-                                            &sync_options,
-                                            true,
-                                            false, // tree_view: the page editor is a document view
-                                        )
-                                    {
-                                        state.refresh_filtered_view();
-                                        send_persist_batch(action_tx, actions);
-                                    }
-                                }
-                                state.needs_redraw = true;
-                                return None;
-                            }
-                            Ok(None) | Err(_) => {
-                                state.input_buffer = desc;
-                                state.cursor_position = state.input_buffer.chars().count();
-                                state.editing_tree_uid = Some(uid.clone());
-                                state.mode = InputMode::EditingTree(uid);
-                                state.needs_redraw = true;
-                                return None;
-                            }
-                        }
+                        state.input_buffer = t.to_smart_string();
+                        state.cursor_position = state.input_buffer.chars().count();
+                        state.editing_uid = Some(uid);
+                        state.mode = InputMode::Editing;
                     }
-                } else if state.sidebar_mode == SidebarMode::Journal
-                    && state.active_focus == Focus::Main
-                {
-                    edit_journal_in_external_editor(state, action_tx);
                     return None;
-                } else if let Some(t) = state.get_selected_task() {
+                }
+                if let Some(t) = state.get_selected_task() {
                     let smart_string = t.to_smart_string();
                     let uid = t.uid.clone();
                     state.input_buffer = smart_string;
@@ -4099,46 +4068,24 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Char('E') => {
-                let mut target_uid = None;
-                if state.active_focus == Focus::Sidebar
-                    && state.sidebar_mode == SidebarMode::Journal
-                {
-                    if let Some(idx) = state.cal_state.selected()
-                        && let Some(page) = state.cached_journal_pages.get(idx)
-                        && page.is_task
-                    {
-                        target_uid = Some(page.key.clone());
-                    }
-                } else if state.sidebar_mode == SidebarMode::Journal {
-                    target_uid = state.journal_target_uid();
-                } else if let Some(t) = state.get_selected_task() {
-                    target_uid = Some(t.uid.clone());
+                if state.sidebar_mode == SidebarMode::Journal {
+                    // The journal tab edits the body the way the collections
+                    // tab does: the merged description in the editor.
+                    let page_uid = if state.active_focus == Focus::Sidebar {
+                        state
+                            .cal_state
+                            .selected()
+                            .and_then(|idx| state.cached_journal_pages.get(idx))
+                            .filter(|page| page.is_task)
+                            .map(|page| page.key.clone())
+                    } else {
+                        state.journal_editing_uid.clone()
+                    };
+                    edit_journal_description(state, action_tx, page_uid);
+                    return None;
                 }
-
-                // A stale journal page pointer (the task disappeared, e.g.
-                // after a reload or undo) falls through to the daily entry.
-                let target_missing = target_uid
-                    .as_ref()
-                    .map(|uid| state.store.get_task_ref(uid).is_none())
-                    .unwrap_or(false);
-
-                if let Some(uid) = target_uid
-                    && !target_missing
-                {
-                    if state.sidebar_mode == SidebarMode::Journal
-                        && let Some(t) = state.store.get_task_ref(&uid)
-                    {
-                        state.input_buffer = t.summary.clone();
-                        if state.input_buffer.starts_with("- ") {
-                            state.input_buffer = state.input_buffer[2..].to_string();
-                        }
-                        state.input_buffer = format!("is:page {}", state.input_buffer);
-                        state.cursor_position = state.input_buffer.chars().count();
-                        state.editing_uid = Some(uid.clone());
-                        state.mode = InputMode::Editing;
-                        return None;
-                    }
-
+                if let Some(t) = state.get_selected_task() {
+                    let uid = t.uid.clone();
                     if state.store.get_task_ref(&uid).is_some() {
                         // The subtree minus the root line: child shadows
                         // render inline, and a save re-binds what the user
@@ -4179,14 +4126,6 @@ pub async fn handle_key_event(
                             }
                         }
                     }
-                } else if state.sidebar_mode == SidebarMode::Journal
-                    && state.active_focus == Focus::Main
-                {
-                    // No live page in view (or a stale pointer): edit the
-                    // daily entry through the shared external-editor path,
-                    // which serializes the tree and saves via a full sync.
-                    edit_journal_in_external_editor(state, action_tx);
-                    return None;
                 }
             }
             _ => {}

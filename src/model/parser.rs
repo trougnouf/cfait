@@ -3944,6 +3944,11 @@ pub fn apply_smart_input(
         task.summary = String::new();
     }
     task.is_note = explicit_note_flag.unwrap_or(implicit_note);
+    // Journals are never notes: the `- ` prefix a page's smart string always
+    // carries, and any stray `is:note` token, are both ignored for them.
+    if task.is_journal {
+        task.is_note = false;
+    }
 
     task.categories.sort();
     task.categories.dedup();
@@ -4780,6 +4785,39 @@ mod done_roundtrip_tests {
                 .to_string(),
             "completion datetime lost its time on round-trip"
         );
+    }
+
+    #[test]
+    fn journal_pages_never_carry_note_state() {
+        // Journals are never notes: a plain page is is_journal && !is_note,
+        // its smart string carries the `- ` prefix but no `is:note` token,
+        // and re-parsing keeps it a non-note page.
+        let page = Task::new("Garden path ideas is:page", &HashMap::new(), None);
+        assert!(page.is_journal && !page.is_note);
+
+        let smart = page.to_smart_string();
+        assert!(
+            smart.starts_with("- "),
+            "expected a `- ` prefix, got: {smart}"
+        );
+        assert!(
+            !smart.contains("is:note"),
+            "a page must not serialize is:note, got: {smart}"
+        );
+
+        let reparsed = Task::new(&smart, &HashMap::new(), None);
+        assert!(reparsed.is_journal, "page lost its journal type: {smart}");
+        assert!(!reparsed.is_note, "page round-tripped as a note: {smart}");
+
+        // A stray `is:note` token on a page line is a harmless no-op.
+        let parsed = Task::new("Garden path ideas is:note is:page", &HashMap::new(), None);
+        assert!(parsed.is_journal && !parsed.is_note);
+
+        // Even a legacy page with the field force-set true serializes
+        // without `is:note`.
+        let mut legacy = page.clone();
+        legacy.is_note = true;
+        assert!(!legacy.to_smart_string().contains("is:note"));
     }
 }
 

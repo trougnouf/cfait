@@ -33,7 +33,7 @@ pub fn is_action_available(
     task: &crate::model::Task,
     app: &GuiApp,
 ) -> bool {
-    if (task.is_note || task.is_journal)
+    if task.is_note_like()
         && matches!(
             action,
             crate::config::TaskAction::ToggleTimer
