@@ -430,11 +430,19 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
                         .unwrap_or_else(|_| chrono::NaiveTime::from_hms_opt(9, 0, 0).unwrap());
 
                         let mut current_ts = None;
-                        if type_key_with_colon == "implicit_due:"
-                            && let Some(due) = &store_task.due
-                        {
-                            current_ts =
-                                Some(due.to_utc_with_default_time(default_time).to_rfc3339());
+                        if type_key_with_colon == "implicit_due:" {
+                            // Accept the stored due date or any projected RRULE
+                            // occurrence: by the time the reminder rings, the
+                            // projection has already advanced to the next one.
+                            if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(expected_ts)
+                                && crate::model::RecurrenceEngine::is_due_moment(
+                                    store_task,
+                                    dt.with_timezone(&chrono::Utc),
+                                    default_time,
+                                )
+                            {
+                                current_ts = Some(expected_ts.to_string());
+                            }
                         } else if type_key_with_colon == "implicit_start:"
                             && let Some(start) = &store_task.dtstart
                         {

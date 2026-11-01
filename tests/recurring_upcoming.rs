@@ -6,11 +6,12 @@
 //! one. The projection is display-only: the stored `due` is never mutated, so
 //! the recycling model and calendar sync are preserved.
 
+use cfait::alarm_index::AlarmIndex;
 use cfait::config::{PausedSortBehavior, SortPreset};
 use cfait::context::TestContext;
 use cfait::model::{DateType, IcsAdapter, RecurrenceEngine, Task};
 use cfait::store::{FilterOptions, TaskListItem, TaskStore};
-use chrono::{NaiveTime, TimeZone, Utc};
+use chrono::{NaiveDate, NaiveTime, TimeZone, Utc};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -231,5 +232,154 @@ fn projected_due_past_due_recurring_is_future() {
     assert_eq!(
         (projected.to_date_naive() - stored.to_date_naive()).num_days() % 7,
         0
+    );
+}
+
+/// `is_due_moment` accepts the stored due date of a non-recurring task, even
+/// when it is in the past (the "Due now" reminder of a plain overdue task).
+#[test]
+fn is_due_moment_accepts_stored_due() {
+    let aliases = HashMap::new();
+    let mut task = Task::new("read a chapter", &aliases, None);
+    let due = DateType::Specific(Utc.with_ymd_and_hms(2020, 1, 1, 9, 0, 0).unwrap());
+    task.due = Some(due.clone());
+    let default_time = NaiveTime::from_hms_opt(9, 0, 0).unwrap();
+    let moment = due.to_utc_with_default_time(default_time);
+    assert!(RecurrenceEngine::is_due_moment(&task, moment, default_time));
+    // A moment that is not the due date is not a due moment.
+    assert!(!RecurrenceEngine::is_due_moment(
+        &task,
+        moment + chrono::Duration::days(3),
+        default_time
+    ));
+}
+
+/// `is_due_moment` accepts a projected occurrence at the moment its reminder
+/// fires — even though the projection has already advanced to the following
+/// occurrence by then (the fire-time race).
+#[test]
+fn is_due_moment_accepts_projected_occurrence_at_fire_time() {
+    let task = past_due_weekly_task();
+    let default_time = NaiveTime::from_hms_opt(9, 0, 0).unwrap();
+
+    let next = RecurrenceEngine::next_occurrence(&task).expect("a next occurrence exists");
+    let fire_at = next
+        .due
+        .clone()
+        .expect("the occurrence has a due date")
+        .to_utc_with_default_time(default_time);
+
+    assert!(RecurrenceEngine::is_due_moment(
+        &task,
+        fire_at,
+        default_time
+    ));
+}
+
+/// `is_due_moment` accepts the projected occurrence of an all-day recurring
+/// task, whose reminder fires at the default time on the occurrence date.
+#[test]
+fn is_due_moment_accepts_all_day_projected_occurrence() {
+    let aliases = HashMap::new();
+    let mut task = Task::new("turn over the compost", &aliases, None);
+    task.due = Some(DateType::AllDay(
+        NaiveDate::from_ymd_opt(2020, 1, 1).unwrap(),
+    ));
+    task.rrule = Some("FREQ=WEEKLY".to_string());
+    let default_time = NaiveTime::from_hms_opt(9, 0, 0).unwrap();
+
+    let next = RecurrenceEngine::next_occurrence(&task).expect("a next occurrence exists");
+    let fire_at = next
+        .due
+        .clone()
+        .expect("the occurrence has a due date")
+        .to_utc_with_default_time(default_time);
+
+    assert!(RecurrenceEngine::is_due_moment(
+        &task,
+        fire_at,
+        default_time
+    ));
+}
+
+/// `is_due_moment` rejects moments that are not an occurrence of the rule,
+/// and tasks without a due date have no due moments at all.
+#[test]
+fn is_due_moment_rejects_non_occurrences() {
+    let task = past_due_weekly_task();
+    let default_time = NaiveTime::from_hms_opt(9, 0, 0).unwrap();
+
+    let next = RecurrenceEngine::next_occurrence(&task).expect("a next occurrence exists");
+    let fire_at = next
+        .due
+        .clone()
+        .unwrap()
+        .to_utc_with_default_time(default_time);
+
+    // Three days off the weekly grid is not a due moment.
+    assert!(!RecurrenceEngine::is_due_moment(
+        &task,
+        fire_at + chrono::Duration::days(3),
+        default_time
+    ));
+
+    // A recurring task without a due date has no due moments at all.
+    let mut no_due = past_due_weekly_task();
+    no_due.due = None;
+    assert!(!RecurrenceEngine::is_due_moment(
+        &no_due,
+        fire_at,
+        default_time
+    ));
+}
+
+/// The alarm index schedules the "Due now" reminder of a past-due recurring
+/// task at its projected (upcoming) occurrence, not at the stale stored due.
+#[test]
+fn alarm_index_schedules_projected_due_reminder() {
+    let tasks = HashMap::from([(
+        "cal1".to_string(),
+        HashMap::from([("t1".to_string(), past_due_weekly_task())]),
+    )]);
+
+    let index = AlarmIndex::rebuild_from_tasks(&tasks, true, "09:00");
+
+    let entry = index
+        .alarms
+        .iter()
+        .find(|a| a.is_implicit && a.alarm_uid.starts_with("implicit_due:"))
+        .expect("a 'Due now' reminder must be indexed for the projected occurrence");
+    let trigger = chrono::DateTime::from_timestamp_millis(entry.trigger_ms)
+        .expect("a valid trigger timestamp");
+    let now = Utc::now();
+    assert!(
+        trigger > now,
+        "the reminder must target the future occurrence"
+    );
+    assert!(
+        (trigger - now).num_days() <= 8,
+        "a weekly reminder must fall within the next week, got {} days away",
+        (trigger - now).num_days()
+    );
+}
+
+/// Projecting must not invent a reminder for a past-due task without an
+/// RRULE: it stays unindexed, as before.
+#[test]
+fn alarm_index_skips_past_due_non_recurring() {
+    let aliases = HashMap::new();
+    let mut task = Task::new("read a chapter", &aliases, None);
+    task.due = Some(DateType::Specific(
+        Utc.with_ymd_and_hms(2020, 1, 1, 9, 0, 0).unwrap(),
+    ));
+    task.calendar_href = "cal1".to_string();
+    let uid = task.uid.clone();
+
+    let tasks = HashMap::from([("cal1".to_string(), HashMap::from([(uid.clone(), task)]))]);
+
+    let index = AlarmIndex::rebuild_from_tasks(&tasks, true, "09:00");
+    assert!(
+        index.alarms.iter().all(|a| a.task_uid != uid),
+        "a past-due non-recurring task must not gain a reminder"
     );
 }

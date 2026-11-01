@@ -25,7 +25,7 @@
 // the version field in AlarmIndex::default() to invalidate stale indices.
 
 use crate::context::AppContext;
-use crate::model::{AlarmTrigger, Task};
+use crate::model::{AlarmTrigger, RecurrenceEngine, Task};
 use crate::storage::LocalStorage;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
@@ -232,8 +232,12 @@ impl AlarmIndex {
                             }
                         };
 
+                        // The "due" reminder targets the *projected* due date, so a
+                        // past-due recurring task is reminded at its next occurrence
+                        // instead of being silently skipped (its stored due is stale).
+                        let projected_due = RecurrenceEngine::projected_due(task, now);
                         let triggers = [
-                            (task.due.as_ref(), "due", "Due now"),
+                            (projected_due.as_ref(), "due", "Due now"),
                             (task.dtstart.as_ref(), "start", "Starting now"),
                         ];
                         for (date_opt, type_key, desc) in triggers {
