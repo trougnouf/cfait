@@ -4608,6 +4608,14 @@ impl TaskStore {
         // Parse the search query once; run_pipeline is invoked up to 3 times below.
         let query = crate::model::matcher::Query::new(options.search_term, lex, options.calendars);
 
+        // A negation in the search term must be able to exclude descendants of a
+        // matching node (issue #100): subtree expansion is then restricted to
+        // children the search itself accepts, so `#project -#task` hides the
+        // #task children of a matching #project parent. Without a negation the
+        // subtree of a match always expands (e.g. `col:name` keeps children that
+        // live in other collections, which the query itself does not match).
+        let search_gates_expansion = query.has_negation();
+
         // The text-search result for a task is independent of the category/location
         // ignore flags, so compute it once per task and let every pipeline pass reuse
         // it instead of re-running the (relatively costly) text match up to 3 times.
@@ -4787,6 +4795,11 @@ impl TaskStore {
 
                     if let Some(children) = children_map.get(curr) {
                         for child in children {
+                            if search_gates_expansion
+                                && !search_ok.get(child).copied().unwrap_or(false)
+                            {
+                                continue;
+                            }
                             expand_queue.push(*child);
                         }
                     }
