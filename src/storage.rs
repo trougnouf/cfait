@@ -412,6 +412,14 @@ impl LocalStorage {
             }
         }
 
+        // Invariant: journals are never notes. Clean legacy flags on load.
+        for t in tasks.iter_mut() {
+            if t.is_journal && t.is_note {
+                t.is_note = false;
+                needs_save = true;
+            }
+        }
+
         // DEDUPLICATION FIX
         let len_before = tasks.len();
         let mut uid_to_index = HashMap::new();

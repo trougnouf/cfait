@@ -505,7 +505,7 @@ mod tests {
             "| `@@` or `loc:`| Location (Supports multiple via <code>&#124;</code>). | `@@office`,  <code>@@aldi&#124;auchan</code> |",
             "| `dep:` or `depends:`| Set dependency (blocks the task). Supports short UIDs or fuzzy matching by summary. | `dep:\"Install foundation\"`, `dep:abc1234` |",
             "| `[[ ]]` | Wiki-link to jump to or create a task/page. Use `:` for absolute paths and `+` for relative sub-items. | `[[Master plan]]`, `[[+Child]]`, `[[Project:Phase 1]]` |",
-            "| `- ` or `is:note` | Mark task as a note/header (hides checkbox). On journal pages, `is:note` is the explicit note marker in the page line (a plain `is:page` line is a standard page). | `- Pantry`, `is:note` |",
+            "| `- ` or `is:note` | Mark task as a note/header (hides checkbox). Notes are VTODO-only; on a page line `is:note` is a no-op. | `- Pantry`, `is:note` |",
             "Reference resolution (`dep:`/`rel:`/`parent:`): an ambiguous reference — several visible tasks match the same pool — is kept as typed with a visible warning listing the candidates; disambiguate with a short UID (e.g. `parent:abc12345`).",
         ];
 

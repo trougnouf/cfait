@@ -93,6 +93,10 @@ pub struct Query {
     expr: SearchExpr,
     /// Lowercased collection name per href, used by the `col:` filter.
     col_names: std::collections::HashMap<String, String>,
+    /// Whether the query contains a `-` (NOT) operator anywhere. Callers use
+    /// this to decide whether subtree expansion must respect per-task matches
+    /// (so a negation can actually exclude descendants of a matching node).
+    has_negation: bool,
 }
 
 pub fn extract_highlight_terms(query: &str) -> Vec<String> {
@@ -152,18 +156,35 @@ impl Query {
     ) -> Self {
         let tokens = tokenize_query(query);
         let mut parser = Parser::new(tokens);
+        let raw = parser.parse();
+        let has_negation = raw_has_negation(&raw);
         let col_names = calendars
             .iter()
             .map(|c| (c.href.clone(), c.name.to_lowercase()))
             .collect();
         Self {
-            expr: compile_expr(parser.parse(), lex),
+            expr: compile_expr(raw, lex),
             col_names,
+            has_negation,
         }
     }
 
     pub fn matches(&self, task: &Task, store: &crate::store::TaskStore) -> bool {
         self.expr.matches(task, store, &self.col_names)
+    }
+
+    /// Whether the query contains a `-` (NOT) operator anywhere in its tree.
+    pub fn has_negation(&self) -> bool {
+        self.has_negation
+    }
+}
+
+fn raw_has_negation(e: &RawExpr) -> bool {
+    match e {
+        RawExpr::Term(_) => false,
+        RawExpr::And(a, b) => raw_has_negation(a) || raw_has_negation(b),
+        RawExpr::Or(a, b) => raw_has_negation(a) || raw_has_negation(b),
+        RawExpr::Not(_) => true,
     }
 }
 
@@ -696,7 +717,8 @@ impl CompiledTerm {
                 // "ready/blocked" states are computed transiently in store.filter()
                 // but for simple text matching here we mostly ignore them or treat as valid.
                 StatusFilter::Ready => true,
-                StatusFilter::Note => task.is_note,
+                // Notes only; pages are found via `is:page`.
+                StatusFilter::Note => task.is_note && !task.is_journal,
                 StatusFilter::Page => task.is_journal,
                 StatusFilter::Flat => task.flat,
                 StatusFilter::Permanent => task.permanent,
@@ -977,5 +999,28 @@ mod tests {
         store.add_task(child);
 
         assert!(grandchild.matches_search_term("PowerShed bom acier", &store));
+    }
+
+    #[test]
+    fn test_is_note_matches_notes_only_and_is_page_matches_pages() {
+        let store =
+            crate::store::TaskStore::new(std::sync::Arc::new(crate::context::TestContext::new()));
+        let aliases: HashMap<String, Vec<String>> = HashMap::new();
+
+        let mut note = Task::new("Shopping list", &aliases, None);
+        note.is_note = true;
+
+        let page = Task::new("Garden path ideas is:page", &aliases, None);
+        assert!(page.is_journal && !page.is_note);
+
+        // `is:note` finds notes but not pages; `is:page` finds pages only.
+        assert!(note.matches_search_term("is:note", &store));
+        assert!(!page.matches_search_term("is:note", &store));
+        assert!(page.matches_search_term("is:page", &store));
+        assert!(!note.matches_search_term("is:page", &store));
+
+        // "notes that aren't pages" via negation.
+        assert!(note.matches_search_term("is:note -is:page", &store));
+        assert!(!page.matches_search_term("is:note -is:page", &store));
     }
 }

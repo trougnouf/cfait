@@ -519,6 +519,35 @@ fn test_roundtrip_archived_vjournal_ics() {
 
 #[test]
 #[serial]
+fn test_vjournal_never_carries_note_kind_ics() {
+    let ctx = TestContext::new();
+    let href = "local://note-vjournal-src";
+    let import_href = "local://note-vjournal-dst";
+
+    // A page whose note flag was force-set (legacy dirty data) serializes
+    // without X-CFAIT-KIND: a VJOURNAL is never a note.
+    let mut original = Task::new("Garden path ideas is:page", &HashMap::new(), None);
+    assert!(original.is_journal && !original.is_note);
+    original.is_note = true; // legacy data
+    LocalStorage::save_for_href(&ctx, href, std::slice::from_ref(&original)).unwrap();
+    let tasks = LocalStorage::load_for_href(&ctx, href).unwrap();
+    assert!(!tasks[0].is_note, "VJOURNAL parse must drop the note flag");
+    let ics = LocalStorage::to_ics_string(&tasks);
+    assert!(ics.contains("BEGIN:VJOURNAL"));
+    assert!(!ics.contains("X-CFAIT-KIND"));
+
+    // A VJOURNAL carrying a stray X-CFAIT-KIND:NOTE still parses to a
+    // non-note page.
+    let dirty = ics.replace("BEGIN:VJOURNAL", "BEGIN:VJOURNAL\r\nX-CFAIT-KIND:NOTE");
+    let result = LocalStorage::import_from_ics(&ctx, import_href, &dirty);
+    assert!(result.is_ok());
+    let imported = &LocalStorage::load_for_href(&ctx, import_href).unwrap()[0];
+    assert!(imported.is_journal);
+    assert!(!imported.is_note);
+}
+
+#[test]
+#[serial]
 fn test_roundtrip_archived_vtodo_ics() {
     let ctx = TestContext::new();
     let href = "local://archived-vtodo-src";

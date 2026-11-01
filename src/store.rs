@@ -2369,7 +2369,7 @@ impl TaskStore {
                 let mut expected_raw_text = existing.to_smart_string();
                 // Mirror serialize_node: the leading dash is the list marker for
                 // notes and journal pages, and the serializer strips it for both.
-                if existing.is_note || existing.is_journal {
+                if existing.is_note_like() {
                     if expected_raw_text.starts_with("- ") || expected_raw_text.starts_with("* ") {
                         expected_raw_text = expected_raw_text[2..].trim_start().to_string();
                     } else if expected_raw_text == "-" || expected_raw_text == "*" {
@@ -2493,20 +2493,11 @@ impl TaskStore {
                     );
                     clone.inline_media = ext.inline_media.clone();
                 }
-                if wiki_reference {
-                    // The reference line carries no tokens: the page's stored
-                    // note state is the source of truth, not the line's
-                    // (absent) tokens.
-                } else if existing.is_journal {
-                    // Journal components are never serialized with a checkbox,
-                    // so `ext.is_note` is noise for them. The explicit `is:note`
-                    // token in the line is the single source of truth: present
-                    // means note, absent means a standard page.
-                    clone.is_note = ext
-                        .raw_text
-                        .split_whitespace()
-                        .any(|w| w.eq_ignore_ascii_case("is:note"));
-                } else {
+                if existing.is_journal {
+                    // Journals are never notes: any `is:note` token in the
+                    // line is a no-op, and legacy flags are cleaned here.
+                    clone.is_note = false;
+                } else if !wiki_reference {
                     clone.is_note = ext.is_note;
                 }
                 clone.parent_uid = parent_uid.clone();
@@ -2626,9 +2617,8 @@ impl TaskStore {
                 new_task.calendar_href = final_href.clone();
                 resolved_hrefs.insert(task_uid.clone(), final_href);
 
-                // Journal components are never serialized with a checkbox, so
-                // `ext.is_note` is noise for them; `Task::new` already derived
-                // the note state from the explicit `is:note` token.
+                // Journal components are never serialized with a checkbox and
+                // are never notes, so `ext.is_note` is noise for them.
                 if !new_task.is_journal {
                     new_task.is_note = ext.is_note;
                 }
@@ -4615,6 +4605,14 @@ impl TaskStore {
         // Parse the search query once; run_pipeline is invoked up to 3 times below.
         let query = crate::model::matcher::Query::new(options.search_term, lex, options.calendars);
 
+        // A negation in the search term must be able to exclude descendants of a
+        // matching node (issue #100): subtree expansion is then restricted to
+        // children the search itself accepts, so `#project -#task` hides the
+        // #task children of a matching #project parent. Without a negation the
+        // subtree of a match always expands (e.g. `col:name` keeps children that
+        // live in other collections, which the query itself does not match).
+        let search_gates_expansion = query.has_negation();
+
         // The text-search result for a task is independent of the category/location
         // ignore flags, so compute it once per task and let every pipeline pass reuse
         // it instead of re-running the (relatively costly) text match up to 3 times.
@@ -4659,17 +4657,14 @@ impl TaskStore {
                     let is_system_cal = crate::storage::is_system_calendar(&t.calendar_href);
 
                     // Journals stay out of the main list unless they carry tasks, are pinned,
-                    // are a note, or are attached to a regular task. Sub-pages (a journal whose
+                    // or are attached to a regular task. Sub-pages (a journal whose
                     // parent is another journal) only appear in the journal's Pages section.
                     if t.is_journal {
                         let parent = t.parent_uid.as_ref().and_then(|p| self.get_task_ref(p));
                         let has_parent_task = parent.is_some_and(|p| !p.is_journal);
-                        let is_subpage = parent.is_some_and(|p| p.is_journal);
-                        let note_visible = !is_subpage && t.is_note;
                         if !self.children_index.contains_key(&t.uid)
                             && !has_parent_task
                             && !is_system_cal
-                            && !note_visible
                             && !t.pinned
                             && options.search_term.trim().is_empty()
                         {
@@ -4698,10 +4693,10 @@ impl TaskStore {
                         }
                         // Note-only compromise: If a structural note has children, it is not inherently
                         // actionable. It relies on its ready children to pull it into the view as context.
-                        // Journals with is_note or pinned are always visible even without children.
-                        if (t.is_note || t.is_journal)
+                        // Journals that are pinned or parented are always visible even without children.
+                        if t.is_note_like()
                             && !self.children_index.contains_key(&t.uid)
-                            && !(t.is_journal && (t.is_note || t.pinned || t.parent_uid.is_some()))
+                            && !(t.is_journal && (t.pinned || t.parent_uid.is_some()))
                         {
                             return false;
                         }
@@ -4794,6 +4789,11 @@ impl TaskStore {
 
                     if let Some(children) = children_map.get(curr) {
                         for child in children {
+                            if search_gates_expansion
+                                && !search_ok.get(child).copied().unwrap_or(false)
+                            {
+                                continue;
+                            }
                             expand_queue.push(*child);
                         }
                     }
@@ -5671,7 +5671,7 @@ impl TaskStore {
                 }
 
                 if let Some(bc) = best_child_opt {
-                    if t.is_note || t.is_journal || t.is_search_context {
+                    if t.is_note_like() || t.is_search_context {
                         best_sort.rank = bc.0.rank;
                         best_sort.prio = bc.0.prio;
                         best_sort.due = bc.0.due.clone();
@@ -6049,7 +6049,7 @@ impl TaskStore {
                 for u in uids_to_complete {
                     if let Some(t) = self.get_task_ref(&u) {
                         // Prevent structural notes and journal pages from being completed
-                        if (t.is_note || t.is_journal) && target_status.is_done() {
+                        if t.is_note_like() && target_status.is_done() {
                             continue;
                         }
                     }
@@ -6822,7 +6822,7 @@ mod tests {
             t
         };
 
-        // A root page with sub-pages, one of which is a note.
+        // A root page with sub-pages, one of which carries a legacy is_note flag.
         let page = journal("page", None);
         let subpage = journal("subpage", Some("page"));
         let mut note_subpage = journal("note_subpage", Some("page"));
@@ -6832,7 +6832,8 @@ mod tests {
         let mut pinned_subpage = journal("pinned_subpage", Some("page"));
         pinned_subpage.pinned = true;
 
-        // Root note journal, bare root journal, and a journal carrying tasks.
+        // A root journal with a legacy is_note flag, a bare root journal, and
+        // a journal carrying tasks.
         let mut root_note = journal("root_note", None);
         root_note.is_note = true;
         let root_plain = journal("root_plain", None);
@@ -6922,11 +6923,12 @@ mod tests {
         assert!(uids.contains("child_task"));
         // A journal attached to a regular task stays visible.
         assert!(uids.contains("attached"));
-        // A root note journal stays visible; a bare root journal does not.
-        assert!(uids.contains("root_note"));
+        // A root journal with a legacy is_note flag is hidden like any bare
+        // root journal.
+        assert!(!uids.contains("root_note"));
         assert!(!uids.contains("root_plain"));
         // The top-level page is visible (it has children); its sub-pages are not,
-        // even when they are notes.
+        // even when they carry a legacy is_note flag.
         assert!(uids.contains("page"));
         assert!(!uids.contains("subpage"));
         assert!(!uids.contains("note_subpage"));

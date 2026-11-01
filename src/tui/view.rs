@@ -1011,7 +1011,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             let entry = state
                 .store
                 .get_journal_entry(&target_href, state.journal_date);
-            let desc = if let Some(e) = entry {
+            let desc = if let Some(e) = &entry {
                 crate::model::extractor::serialize_journal_document(
                     &state.store,
                     &e.uid,
@@ -1022,15 +1022,28 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 // gesture is Enter (opens the editor, creating the entry).
                 rust_i18n::t!("journal_no_notes_tui", name = target_name).to_string()
             };
-            (
+            // A day's entry titled with something other than the date shows
+            // that title in the header, like a page header shows its summary.
+            let title = if let Some(e) = entry
+                && !e.summary.is_empty()
+                && e.summary != state.journal_date.format("%Y-%m-%d").to_string()
+            {
+                format!(
+                    " {} {} ({}) — {} ",
+                    state.journal_icon,
+                    rust_i18n::t!("journal"),
+                    state.journal_date.format("%Y-%m-%d"),
+                    e.summary
+                )
+            } else {
                 format!(
                     " {} {} ({}) ",
                     state.journal_icon,
                     rust_i18n::t!("journal"),
                     state.journal_date.format("%Y-%m-%d")
-                ),
-                desc,
-            )
+                )
+            };
+            (title, desc)
         };
 
         let visible_cals = state.visible_journal_calendars();
@@ -1307,7 +1320,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                             base_style = base_style.add_modifier(Modifier::CROSSED_OUT);
                         }
 
-                        let is_note_visually = t.is_note || t.is_journal;
+                        let is_note_visually = t.is_note_like();
 
                         // Color the checkbox brackets with the task's collection color,
                         // mirroring the collections sidebar tab.
@@ -2775,11 +2788,25 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         let title_str = if matches!(state.mode, InputMode::EditingTree(_)) {
             " Editing Tree ".to_string()
         } else if state.sidebar_mode == SidebarMode::Journal {
-            format!(
-                " {} ({}) ",
-                rust_i18n::t!("edit_description_title"),
-                state.journal_date.format("%Y-%m-%d")
-            )
+            // A page edited from the journal tab is titled by its summary,
+            // the daily entry by the day's date.
+            if let Some(uid) = &state.editing_uid
+                && let Some(t) = state.store.get_task_ref(uid)
+                && t.is_journal
+                && !t.summary.is_empty()
+            {
+                format!(
+                    " {} ({}) ",
+                    rust_i18n::t!("edit_description_title"),
+                    t.summary
+                )
+            } else {
+                format!(
+                    " {} ({}) ",
+                    rust_i18n::t!("edit_description_title"),
+                    state.journal_date.format("%Y-%m-%d")
+                )
+            }
         } else {
             format!(" {} ", rust_i18n::t!("edit_description_title"))
         };
