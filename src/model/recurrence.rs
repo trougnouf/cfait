@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/model/recurrence.rs
 use crate::model::item::{Alarm, AlarmTrigger, DateType, RawProperty, Task, TaskStatus};
-use chrono::{Datelike, Local, NaiveDate};
+use chrono::{DateTime, Datelike, Local, NaiveDate, Utc};
 use rrule::RRuleSet;
 use std::collections::HashSet; // Import HashSet for deduplication
 use std::str::FromStr;
@@ -227,6 +227,26 @@ impl RecurrenceEngine {
             }
         }
         None
+    }
+
+    /// The due date to display and schedule for a task.
+    ///
+    /// A recurring task whose stored due date is already in the past is
+    /// projected forward to its next RRULE occurrence, so it surfaces as an
+    /// upcoming item rather than a stale overdue one. Non-recurring tasks, and
+    /// recurring tasks whose stored due date is still in the future, return
+    /// their stored due date unchanged.
+    ///
+    /// This is a display-only projection: the stored `due` is never mutated,
+    /// so the recycling model and calendar sync are preserved.
+    pub fn projected_due(task: &Task, now: DateTime<Utc>) -> Option<DateType> {
+        let due = task.due.as_ref()?;
+        if task.rrule.is_none() || due.to_comparison_time() >= now {
+            return Some(due.clone());
+        }
+        Self::next_occurrence(task)
+            .and_then(|next| next.due)
+            .or_else(|| Some(due.clone()))
     }
 
     /// Advances the task to the next recurrence instance IN PLACE.
