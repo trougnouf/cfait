@@ -3944,6 +3944,12 @@ pub fn apply_smart_input(
         task.summary = String::new();
     }
     task.is_note = explicit_note_flag.unwrap_or(implicit_note);
+    // Journal components are never serialized with a checkbox, so the `- `
+    // prefix a page's smart string always carries must not re-mark it as a
+    // note: the explicit `is:note` token is the single source of truth.
+    if task.is_journal {
+        task.is_note = explicit_note_flag.unwrap_or(false);
+    }
 
     task.categories.sort();
     task.categories.dedup();
@@ -4779,6 +4785,47 @@ mod done_roundtrip_tests {
                 .format("%Y-%m-%d %H:%M")
                 .to_string(),
             "completion datetime lost its time on round-trip"
+        );
+    }
+
+    #[test]
+    fn journal_page_note_state_survives_smart_string_roundtrip() {
+        // A journal page always serializes with a `- ` prefix (journals never
+        // carry a checkbox), so a naive re-parse would mark it a note. The
+        // explicit `is:note` token is the single source of truth for pages.
+        let mut page = Task::new("Garden path ideas", &HashMap::new(), None);
+        page.is_journal = true;
+
+        let smart = page.to_smart_string();
+        assert!(
+            smart.starts_with("- "),
+            "expected a `- ` prefix, got: {smart}"
+        );
+        assert!(
+            !smart.contains("is:note"),
+            "a plain page must not serialize is:note, got: {smart}"
+        );
+
+        let reparsed = Task::new(&smart, &HashMap::new(), None);
+        assert!(
+            reparsed.is_journal,
+            "a plain page lost its journal type on round-trip: {smart}"
+        );
+        assert!(
+            !reparsed.is_note,
+            "a plain page must not round-trip as a note: {smart}"
+        );
+
+        page.is_note = true;
+        let smart = page.to_smart_string();
+        assert!(
+            smart.contains("is:note"),
+            "a journal note must serialize is:note, got: {smart}"
+        );
+        let reparsed = Task::new(&smart, &HashMap::new(), None);
+        assert!(
+            reparsed.is_note,
+            "a journal note lost its note state on round-trip: {smart}"
         );
     }
 }

@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Regression tests for pressing E in the TUI journal tab:
-//! - on a wiki page, the smart input line must carry the page's `is:archived`
-//!   flag and `#tags`, so saving the edit neither moves an archived page out
-//!   of the journal Archive nor drops its categories;
-//! - on a daily (dated) entry, the title line must carry the `^date` anchor
-//!   and the entry's `#tags`, so saving the edit keeps the entry on its day
-//!   and lets the tags be edited.
+//! Regression tests for the journal-tab title edit (`e`, which loads the
+//! task's smart string into the input line, like the collections tab; `E`
+//! edits the body): the line must carry `is:archived`, `#tags`, `@@locs`
+//! and the `^date` anchor, so saving the edit round-trips them instead of
+//! silently un-archiving a page, dropping its tags/locations, or
+//! un-anchoring a daily entry from its date.
 use cfait::context::TestContext;
 use cfait::model::{CalendarListEntry, DateType, Task};
 use cfait::tui::action::SidebarMode;
@@ -41,12 +40,12 @@ fn add_page(state: &mut AppState, input: &str) -> String {
 }
 
 #[tokio::test]
-async fn test_e_on_archived_page_keeps_is_archived_token() {
+async fn test_e_on_archived_page_keeps_archive_flag_tags_locations() {
     let ctx = Arc::new(TestContext::new());
     let mut state = journal_state(ctx);
     let uid = add_page(&mut state, "Old plans is:page is:archived #garden @@home");
     assert!(state.store.get_task_ref(&uid).unwrap().archived);
-    // The page body carries tag-like prose and a tagged child; an E edit of
+    // The page body carries tag-like prose and a tagged child; an e edit of
     // the title line must leave the body byte-identical.
     let body = "Body notes about #garden\n- [ ] Water the tomatoes #plants";
     if let Some((t, _)) = state.store.get_task_mut(&uid) {
@@ -56,7 +55,7 @@ async fn test_e_on_archived_page_keeps_is_archived_token() {
 
     let (action_tx, _rx) = mpsc::channel(4);
     handle_key_event(
-        KeyEvent::new(KeyCode::Char('E'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE),
         &mut state,
         &action_tx,
     )
@@ -66,7 +65,7 @@ async fn test_e_on_archived_page_keeps_is_archived_token() {
     assert_eq!(state.editing_uid.as_deref(), Some(uid.as_str()));
     assert_eq!(
         state.input_buffer,
-        "is:page Old plans #garden @@home is:archived"
+        "- Old plans @@home #garden is:page is:archived"
     );
 
     // Saving the edit must not un-archive the page or drop its tags/locations.
@@ -81,20 +80,20 @@ async fn test_e_on_archived_page_keeps_is_archived_token() {
         .store
         .get_task_ref(&uid)
         .expect("page should still be stored");
-    assert!(saved.archived, "saving the E edit un-archived the page");
-    assert!(saved.is_journal, "saving the E edit un-paged the page");
+    assert!(saved.archived, "saving the e edit un-archived the page");
+    assert!(saved.is_journal, "saving the e edit un-paged the page");
     assert_eq!(saved.summary, "Old plans");
     assert!(
         saved.categories.contains(&"garden".to_string()),
-        "saving the E edit dropped the page's categories: {saved:?}"
+        "saving the e edit dropped the page's categories: {saved:?}"
     );
     assert!(
         saved.locations.contains(&"home".to_string()),
-        "saving the E edit dropped the page's locations: {saved:?}"
+        "saving the e edit dropped the page's locations: {saved:?}"
     );
     assert_eq!(
         saved.description, body,
-        "saving the E edit modified the page body"
+        "saving the e edit modified the page body"
     );
     assert!(matches!(state.mode, InputMode::Normal));
 }
@@ -108,14 +107,14 @@ async fn test_e_on_active_page_has_no_is_archived_token() {
 
     let (action_tx, _rx) = mpsc::channel(4);
     handle_key_event(
-        KeyEvent::new(KeyCode::Char('E'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE),
         &mut state,
         &action_tx,
     )
     .await;
 
     assert!(matches!(state.mode, InputMode::Editing));
-    assert_eq!(state.input_buffer, "is:page Garden ideas #home");
+    assert_eq!(state.input_buffer, "- Garden ideas #home is:page");
 }
 
 #[tokio::test]
@@ -135,7 +134,7 @@ async fn test_e_on_daily_entry_keeps_date_anchor_and_edits_tags() {
 
     let (action_tx, _rx) = mpsc::channel(4);
     handle_key_event(
-        KeyEvent::new(KeyCode::Char('E'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE),
         &mut state,
         &action_tx,
     )
@@ -144,7 +143,7 @@ async fn test_e_on_daily_entry_keeps_date_anchor_and_edits_tags() {
     // The title line carries the date anchor and the current tags.
     assert!(matches!(state.mode, InputMode::Editing));
     assert_eq!(state.editing_uid.as_deref(), Some(uid.as_str()));
-    assert_eq!(state.input_buffer, "is:page 2026-10-31 ^2026-10-31 #mood");
+    assert_eq!(state.input_buffer, "- 2026-10-31 #mood is:page ^2026-10-31");
 
     // Add another tag on the line, then save.
     state.input_buffer.push_str(" #plans");
@@ -163,14 +162,14 @@ async fn test_e_on_daily_entry_keeps_date_anchor_and_edits_tags() {
     assert_eq!(
         saved.dtstart,
         Some(DateType::AllDay(day)),
-        "saving the E edit un-anchored the daily entry from its date"
+        "saving the e edit un-anchored the daily entry from its date"
     );
     assert!(saved.is_journal);
     assert_eq!(saved.summary, "2026-10-31");
     assert!(
         saved.categories.contains(&"mood".to_string())
             && saved.categories.contains(&"plans".to_string()),
-        "saving the E edit dropped the daily entry's tags: {saved:?}"
+        "saving the e edit dropped the daily entry's tags: {saved:?}"
     );
     assert!(
         state
