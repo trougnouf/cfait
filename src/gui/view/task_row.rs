@@ -378,7 +378,7 @@ pub fn view_task_row<'a>(
             let visible_tags = &task.visible_categories;
             let visible_locations = &task.visible_locations;
 
-            let is_note_visually = task.is_note || task.is_journal;
+            let is_note_visually = task.is_note_like();
 
             let mut font_size = 20;
             if is_note_visually {

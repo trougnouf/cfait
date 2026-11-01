@@ -391,7 +391,7 @@ impl IcsAdapter {
             if task.pinned {
                 append_folded("X-CFAIT-PINNED:TRUE");
             }
-            if task.is_note {
+            if task.is_note && !task.is_journal {
                 append_folded("X-CFAIT-KIND:NOTE");
             }
             if task.archived {
@@ -630,7 +630,7 @@ impl IcsAdapter {
         if task.pinned {
             todo.add_property("X-CFAIT-PINNED", "TRUE");
         }
-        if task.is_note {
+        if task.is_note && !task.is_journal {
             todo.add_property("X-CFAIT-KIND", "NOTE");
         }
         if task.manual_block {
@@ -1033,9 +1033,6 @@ impl IcsAdapter {
             let pinned = extract_prop(&unfolded, "X-CFAIT-PINNED")
                 .map(|v| v.trim().to_uppercase() == "TRUE")
                 .unwrap_or(false);
-            let is_note = extract_prop(&unfolded, "X-CFAIT-KIND")
-                .map(|v| v.trim().to_uppercase() == "NOTE")
-                .unwrap_or(false);
             let archived = extract_prop(&unfolded, "X-CFAIT-ARCHIVED")
                 .map(|v| v.trim().to_uppercase() == "TRUE")
                 .unwrap_or(false);
@@ -1074,7 +1071,7 @@ impl IcsAdapter {
                 geo,
                 collapsed,
                 pinned,
-                is_note,
+                is_note: false, // journals are never notes, even if a stray X-CFAIT-KIND:NOTE is present
                 manual_block: false,
                 permanent: false,
                 is_journal: true,

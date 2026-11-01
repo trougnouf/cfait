@@ -910,9 +910,8 @@ fn serialize_node(
     let mut smart_string = task.to_smart_string();
     // Notes and journal pages carry a leading dash in their smart string as
     // the list marker; the parent's child prefix already provides the
-    // marker, so strip it for both (a journal page that is NOT a note would
-    // otherwise serialize as `- - Title`).
-    if task.is_note || task.is_journal {
+    // marker, so strip it for both.
+    if task.is_note_like() {
         if smart_string.starts_with("- ") || smart_string.starts_with("* ") {
             smart_string = smart_string[2..].trim_start().to_string();
         } else if smart_string == "-" || smart_string == "*" {

@@ -1320,7 +1320,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                             base_style = base_style.add_modifier(Modifier::CROSSED_OUT);
                         }
 
-                        let is_note_visually = t.is_note || t.is_journal;
+                        let is_note_visually = t.is_note_like();
 
                         // Color the checkbox brackets with the task's collection color,
                         // mirroring the collections sidebar tab.

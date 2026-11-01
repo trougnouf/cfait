@@ -463,6 +463,8 @@ pub struct Task {
     #[serde(default)]
     pub pinned: bool,
     /// When `true`, task acts as a structural note or header (hides checkbox).
+    /// Invariant: never `true` when `is_journal` is `true` — journals are
+    /// non-actionable on their own and never carry the note flag.
     #[serde(default)]
     pub is_note: bool,
     /// When `true`, task is explicitly marked as blocked without relying on dependencies.
@@ -716,6 +718,12 @@ pub fn compare_sortkeys(
 }
 
 impl Task {
+    /// Notes and journal pages are both non-actionable: they render without a
+    /// checkbox, never complete, and never run timers.
+    pub fn is_note_like(&self) -> bool {
+        self.is_note || self.is_journal
+    }
+
     pub fn to_sort_key(&self) -> SortKey {
         SortKey {
             rank: self.sort_rank,
@@ -724,7 +732,7 @@ impl Task {
             start: self.effective_dtstart.clone(),
             is_overdue: self.is_overdue,
             is_paused: self.transient_is_paused,
-            is_note: self.is_note || self.is_journal,
+            is_note: self.is_note_like(),
         }
     }
 
@@ -1045,7 +1053,7 @@ impl Task {
             return 8;
         }
 
-        if self.is_note || self.is_journal {
+        if self.is_note_like() {
             let now = chrono::Utc::now();
             let is_over = if let Some(due) = &self.effective_due {
                 due.to_comparison_time() < now

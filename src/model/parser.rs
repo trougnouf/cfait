@@ -3944,11 +3944,10 @@ pub fn apply_smart_input(
         task.summary = String::new();
     }
     task.is_note = explicit_note_flag.unwrap_or(implicit_note);
-    // Journal components are never serialized with a checkbox, so the `- `
-    // prefix a page's smart string always carries must not re-mark it as a
-    // note: the explicit `is:note` token is the single source of truth.
+    // Journals are never notes: the `- ` prefix a page's smart string always
+    // carries, and any stray `is:note` token, are both ignored for them.
     if task.is_journal {
-        task.is_note = explicit_note_flag.unwrap_or(false);
+        task.is_note = false;
     }
 
     task.categories.sort();
@@ -4789,12 +4788,12 @@ mod done_roundtrip_tests {
     }
 
     #[test]
-    fn journal_page_note_state_survives_smart_string_roundtrip() {
-        // A journal page always serializes with a `- ` prefix (journals never
-        // carry a checkbox), so a naive re-parse would mark it a note. The
-        // explicit `is:note` token is the single source of truth for pages.
-        let mut page = Task::new("Garden path ideas", &HashMap::new(), None);
-        page.is_journal = true;
+    fn journal_pages_never_carry_note_state() {
+        // Journals are never notes: a plain page is is_journal && !is_note,
+        // its smart string carries the `- ` prefix but no `is:note` token,
+        // and re-parsing keeps it a non-note page.
+        let page = Task::new("Garden path ideas is:page", &HashMap::new(), None);
+        assert!(page.is_journal && !page.is_note);
 
         let smart = page.to_smart_string();
         assert!(
@@ -4803,30 +4802,22 @@ mod done_roundtrip_tests {
         );
         assert!(
             !smart.contains("is:note"),
-            "a plain page must not serialize is:note, got: {smart}"
+            "a page must not serialize is:note, got: {smart}"
         );
 
         let reparsed = Task::new(&smart, &HashMap::new(), None);
-        assert!(
-            reparsed.is_journal,
-            "a plain page lost its journal type on round-trip: {smart}"
-        );
-        assert!(
-            !reparsed.is_note,
-            "a plain page must not round-trip as a note: {smart}"
-        );
+        assert!(reparsed.is_journal, "page lost its journal type: {smart}");
+        assert!(!reparsed.is_note, "page round-tripped as a note: {smart}");
 
-        page.is_note = true;
-        let smart = page.to_smart_string();
-        assert!(
-            smart.contains("is:note"),
-            "a journal note must serialize is:note, got: {smart}"
-        );
-        let reparsed = Task::new(&smart, &HashMap::new(), None);
-        assert!(
-            reparsed.is_note,
-            "a journal note lost its note state on round-trip: {smart}"
-        );
+        // A stray `is:note` token on a page line is a harmless no-op.
+        let parsed = Task::new("Garden path ideas is:note is:page", &HashMap::new(), None);
+        assert!(parsed.is_journal && !parsed.is_note);
+
+        // Even a legacy page with the field force-set true serializes
+        // without `is:note`.
+        let mut legacy = page.clone();
+        legacy.is_note = true;
+        assert!(!legacy.to_smart_string().contains("is:note"));
     }
 }
 

@@ -1133,9 +1133,8 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
             if let Some(pc) = ext.percent_complete {
                 sub.percent_complete = Some(pc);
             }
-            // Journal components are never serialized with a checkbox, so
-            // `ext.is_note` is noise for them; `Task::new` already derived the
-            // note state from the explicit `is:note` token.
+            // Journal components are never serialized with a checkbox and are
+            // never notes, so `ext.is_note` is noise for them.
             if !sub.is_journal {
                 sub.is_note = ext.is_note;
             }

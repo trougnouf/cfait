@@ -276,9 +276,8 @@ fn get_journal_entry_falls_back_to_smallest_uid() {
 
 #[test]
 fn plain_is_page_line_parses_without_note_flag() {
-    // A plain `is:page` line is a standard journal page, not a note. The note
-    // state comes only from an explicit `is:note` token (SPECS: pages that
-    // appear in the main list are the ones explicitly tagged with is:note).
+    // A plain `is:page` line is a standard journal page, not a note. Journals
+    // are never notes, so a stray `is:note` token on the page line is a no-op.
     let aliases = HashMap::new();
     let task = Task::new(
         "Morning ritual: check the tomato stakes is:page",
@@ -291,15 +290,15 @@ fn plain_is_page_line_parses_without_note_flag() {
         "a plain is:page line must not implicitly become a note"
     );
 
-    // The explicit token sets the note state, in either token order.
+    // The explicit token is ignored on page lines, in either token order.
     let note_a = Task::new("Morning ritual is:page is:note", &aliases, None);
     let note_b = Task::new("Morning ritual is:note is:page", &aliases, None);
-    assert!(note_a.is_journal && note_a.is_note);
-    assert!(note_b.is_journal && note_b.is_note);
+    assert!(note_a.is_journal && !note_a.is_note);
+    assert!(note_b.is_journal && !note_b.is_note);
 }
 
 #[test]
-fn journal_note_token_round_trips_through_sync() {
+fn journal_page_line_never_carries_note_state() {
     let mut store = make_store();
     let date = chrono::NaiveDate::from_ymd_opt(2026, 10, 3).unwrap();
     let mut root = journal_page(
@@ -316,7 +315,7 @@ fn journal_note_token_round_trips_through_sync() {
         "Stake them before the heat builds up.",
     );
     sub.parent_uid = Some("page-1".to_string());
-    sub.is_note = true;
+    sub.is_note = true; // legacy dirty data: journals are never notes
     store.add_task(sub);
 
     let cals = calendars();
@@ -328,8 +327,9 @@ fn journal_note_token_round_trips_through_sync() {
         calendars: &cals,
     };
 
-    // The user typed the sub-page's reference line (with the note token) into
-    // the daily note: that is what places the link in the document.
+    // The user typed the sub-page's reference line (with a stray note
+    // token) into the daily note: that is what places the link in the
+    // document. The token is a no-op and the legacy flag is cleaned.
     let typed = "Woke up early, the frost was gone by eight.\n- Tomatoes is:note is:page <!-- uid:page-2 -->";
     let (place_actions, place_warnings, _place_mints) = store
         .sync_tree_from_markdown("page-1", typed, &opts, true, false)
@@ -342,11 +342,11 @@ fn journal_note_token_round_trips_through_sync() {
         "placing the link must record its shadow line: {place_actions:?}"
     );
     assert!(
-        store.get_task_ref("page-2").unwrap().is_note,
-        "placing the link must keep the note state"
+        !store.get_task_ref("page-2").unwrap().is_note,
+        "the stray is:note token must not mark the page as a note"
     );
 
-    // The note state must be visible in the serialized line, and the list
+    // The serialized line carries is:page but never is:note, and the list
     // marker must not double up.
     let md = cfait::model::extractor::serialize_journal_document(&store, "page-1", &cals);
     let line = md
@@ -354,24 +354,23 @@ fn journal_note_token_round_trips_through_sync() {
         .find(|l| l.contains("Tomatoes"))
         .expect("sub-page line in the serialized tree");
     assert!(
-        line.contains("is:note"),
-        "a journal note must serialize its note state as a token: {line}"
+        line.contains("is:page"),
+        "the sub-page line must carry is:page: {line}"
+    );
+    assert!(
+        !line.contains("is:note"),
+        "a page line must never serialize is:note: {line}"
     );
     assert!(
         !line.contains("- -"),
         "the list marker must not double up: {line}"
     );
 
-    // Re-saving the identical tree is a no-op: the shadow line is recorded
-    // and the sub-page's document is preserved.
-    let (actions, warnings, _mints) = store
+    // The first re-save normalizes the stored shadow line (dropping the stray
+    // token); after that the round-trip is stable and a no-op.
+    let (_actions, _warnings, _mints) = store
         .sync_tree_from_markdown("page-1", &md, &opts, true, false)
         .unwrap();
-    assert!(warnings.is_empty());
-    assert!(
-        actions.is_empty(),
-        "a settled round-trip of a journal note must produce no actions: {actions:?}"
-    );
     let md2 = cfait::model::extractor::serialize_journal_document(&store, "page-1", &cals);
     assert_eq!(md2, md, "the serialized tree must be stable:\n{md2}");
     let (actions2, warnings2, _mints2) = store
@@ -380,40 +379,9 @@ fn journal_note_token_round_trips_through_sync() {
     assert!(warnings2.is_empty());
     assert!(
         actions2.is_empty(),
-        "a no-op round-trip of a journal note must produce no actions: {actions2:?}"
+        "a settled round-trip must produce no actions: {actions2:?}"
     );
-    assert!(
-        store.get_task_ref("page-2").unwrap().is_note,
-        "the note state must survive the round-trip"
-    );
-
-    // Removing the token turns the page back into a standard page.
-    let unnoted = md.replace(" is:note", "");
-    let (actions, warnings, _mints) = store
-        .sync_tree_from_markdown("page-1", &unnoted, &opts, true, false)
-        .unwrap();
-    assert!(warnings.is_empty());
-    assert!(
-        actions.iter().any(|a| matches!(
-            a,
-            cfait::journal::Action::Update(t) if t.uid == "page-2"
-        )),
-        "removing the token must normalize the page: {actions:?}"
-    );
-    assert!(
-        !store.get_task_ref("page-2").unwrap().is_note,
-        "removing the is:note token must clear the note state"
-    );
-
-    // Adding it back restores the note state.
-    let (_actions, warnings, _mints) = store
-        .sync_tree_from_markdown("page-1", &md, &opts, true, false)
-        .unwrap();
-    assert!(warnings.is_empty());
-    assert!(
-        store.get_task_ref("page-2").unwrap().is_note,
-        "re-adding the is:note token must restore the note state"
-    );
+    assert!(!store.get_task_ref("page-2").unwrap().is_note);
 }
 
 #[test]
