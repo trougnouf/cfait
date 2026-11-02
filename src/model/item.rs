@@ -897,6 +897,31 @@ impl Task {
             .any(|p| p.key == "CREATED" || p.key == "LAST-MODIFIED" || p.key == "DTSTAMP")
     }
 
+    /// Backfill `CREATED` / `LAST-MODIFIED` from `DTSTAMP` (or `CREATED`) when
+    /// missing. `DTSTAMP` itself is always rewritten on ICS serialization (RFC
+    /// 5545), while `CREATED` / `LAST-MODIFIED` round-trip — so this is what
+    /// makes imported created/modified times survive export and sync. Used by
+    /// `cfait import --with-timestamps`.
+    pub fn backfill_timestamps_from_dtstamp(&mut self) {
+        let get = |props: &[RawProperty], key: &str| {
+            props.iter().find(|p| p.key == key).map(|p| p.value.clone())
+        };
+        let Some(source) = get(&self.unmapped_properties, "DTSTAMP")
+            .or_else(|| get(&self.unmapped_properties, "CREATED"))
+        else {
+            return;
+        };
+        for key in ["CREATED", "LAST-MODIFIED"] {
+            if get(&self.unmapped_properties, key).is_none() {
+                self.unmapped_properties.push(RawProperty {
+                    key: key.to_string(),
+                    value: source.clone(),
+                    params: vec![],
+                });
+            }
+        }
+    }
+
     /// Return the explicit COMPLETED date parsed from unmapped properties, if present.
     pub fn completion_date(&self) -> Option<DateTime<Utc>> {
         self.unmapped_properties

@@ -272,10 +272,27 @@ impl LocalStorage {
         calendar_href: &str,
         ics_content: &str,
     ) -> Result<usize> {
+        Self::import_from_ics_with(ctx, calendar_href, ics_content, false)
+    }
+
+    /// Like [`Self::import_from_ics`], but with `with_timestamps` the source
+    /// `CREATED` / `LAST-MODIFIED` are backfilled from `DTSTAMP` when missing so
+    /// imported created/modified times survive ICS serialization and sync.
+    pub fn import_from_ics_with(
+        ctx: &dyn AppContext,
+        calendar_href: &str,
+        ics_content: &str,
+        with_timestamps: bool,
+    ) -> Result<usize> {
         // Prevent writing to trash or recovery calendars - redirect to default
         let calendar_href = safe_target_href(calendar_href);
 
-        let imported_tasks = Self::parse_ics(calendar_href, ics_content)?;
+        let mut imported_tasks = Self::parse_ics(calendar_href, ics_content)?;
+        if with_timestamps {
+            for t in &mut imported_tasks {
+                t.backfill_timestamps_from_dtstamp();
+            }
+        }
         let count = imported_tasks.len();
 
         // Safely upsert tasks using the unified lock

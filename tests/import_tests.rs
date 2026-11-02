@@ -244,3 +244,91 @@ fn test_cli_import_from_file() {
 
     fs::remove_file(&test_file).ok();
 }
+
+fn create_ics_dtstamp_only() -> String {
+    r#"BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//OtherSystem//EN
+BEGIN:VTODO
+UID:dtstamp-only-1
+SUMMARY:Note from another system
+DTSTAMP:20220304T050607Z
+END:VTODO
+END:VCALENDAR"#
+        .to_string()
+}
+
+#[test]
+#[serial]
+fn test_import_with_timestamps_backfills_created_and_modified_from_dtstamp() {
+    let ctx = TestContext::new();
+    let href = "local://test-timestamps-1";
+    let ics_content = create_ics_dtstamp_only();
+
+    let result = LocalStorage::import_from_ics_with(&ctx, href, &ics_content, true);
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), 1);
+
+    let tasks = LocalStorage::load_for_href(&ctx, href).unwrap();
+    let t = &tasks[0];
+    assert_eq!(
+        t.created_date().map(|d| d.to_rfc3339()),
+        Some("2022-03-04T05:06:07+00:00".to_string())
+    );
+    assert_eq!(
+        t.last_modified_date().map(|d| d.to_rfc3339()),
+        Some("2022-03-04T05:06:07+00:00".to_string())
+    );
+
+    // CREATED / LAST-MODIFIED survive ICS serialization (DTSTAMP is rewritten
+    // per RFC 5545, so the backfilled copies are what persist on export/sync).
+    let ics = t.to_ics();
+    assert!(ics.contains("CREATED:20220304T050607Z"), "export: {ics}");
+    assert!(ics.contains("LAST-MODIFIED:20220304T050607Z"), "export: {ics}");
+}
+
+#[test]
+#[serial]
+fn test_import_without_timestamps_leaves_dtstamp_only_task_untitled_timestamps() {
+    let ctx = TestContext::new();
+    let href = "local://test-timestamps-2";
+    let ics_content = create_ics_dtstamp_only();
+
+    let result = LocalStorage::import_from_ics_with(&ctx, href, &ics_content, false);
+    assert!(result.is_ok());
+
+    let tasks = LocalStorage::load_for_href(&ctx, href).unwrap();
+    let t = &tasks[0];
+    // No CREATED property: created_date() stays None (DTSTAMP only feeds
+    // last_modified_date() in memory and is rewritten on export).
+    assert!(t.created_date().is_none());
+    assert!(t.last_modified_date().is_some());
+    assert!(!t.to_ics().contains("CREATED:"));
+}
+
+#[test]
+fn test_backfill_keeps_existing_created_and_modified() {
+    let ics = r#"BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//OtherSystem//EN
+BEGIN:VTODO
+UID:mixed-timestamps-1
+SUMMARY:Note with partial timestamps
+CREATED:20200102T030405Z
+DTSTAMP:20220304T050607Z
+END:VTODO
+END:VCALENDAR"#;
+    let mut tasks = LocalStorage::parse_ics("local://default", ics).unwrap();
+    assert_eq!(tasks.len(), 1);
+    let t = &mut tasks[0];
+    t.backfill_timestamps_from_dtstamp();
+    // CREATED is kept as-is; LAST-MODIFIED is backfilled from DTSTAMP.
+    assert_eq!(
+        t.created_date().map(|d| d.to_rfc3339()),
+        Some("2020-01-02T03:04:05+00:00".to_string())
+    );
+    assert_eq!(
+        t.last_modified_date().map(|d| d.to_rfc3339()),
+        Some("2022-03-04T05:06:07+00:00".to_string())
+    );
+}

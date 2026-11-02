@@ -451,19 +451,34 @@ async fn main() -> Result<()> {
                 std::process::exit(1);
             }
             let file_path = &args[2];
-            let collection_id = if args
-                .get(3)
-                .is_some_and(|a| a == "--collection" || a == "-c")
-            {
-                if args.len() > 4 {
-                    Some(args[4].clone())
-                } else {
-                    eprintln!("Error: Missing value for --collection");
-                    std::process::exit(1);
+            let mut collection_id: Option<String> = None;
+            let mut with_timestamps = false;
+            let mut i = 3;
+            while i < args.len() {
+                match args[i].as_str() {
+                    "--collection" | "-c" => {
+                        if args.len() > i + 1 {
+                            collection_id = Some(args[i + 1].clone());
+                            i += 2;
+                        } else {
+                            eprintln!("Error: Missing value for --collection");
+                            std::process::exit(1);
+                        }
+                    }
+                    "--with-timestamps" => {
+                        with_timestamps = true;
+                        i += 1;
+                    }
+                    other if other.starts_with('-') => {
+                        eprintln!("Error: Unknown flag '{}' for import command", other);
+                        eprintln!("{}", rust_i18n::t!("cli_usage_import"));
+                        std::process::exit(1);
+                    }
+                    _ => {
+                        i += 1;
+                    }
                 }
-            } else {
-                None
-            };
+            }
             let ics_content = std::fs::read_to_string(file_path).unwrap_or_else(|e| {
                 eprintln!(
                     "{}",
@@ -517,7 +532,12 @@ async fn main() -> Result<()> {
             }
 
             if href.starts_with("local://") {
-                match LocalStorage::import_from_ics(ctx.as_ref(), &href, &ics_content) {
+                match LocalStorage::import_from_ics_with(
+                    ctx.as_ref(),
+                    &href,
+                    &ics_content,
+                    with_timestamps,
+                ) {
                     Ok(count) => {
                         println!("{}", cfait::i18n::t_plural("import_success", count));
                     }
@@ -528,13 +548,18 @@ async fn main() -> Result<()> {
                 }
             } else {
                 // Remote collection: parse and create via controller (journaled for sync)
-                let tasks = match LocalStorage::parse_ics(&href, &ics_content) {
+                let mut tasks = match LocalStorage::parse_ics(&href, &ics_content) {
                     Ok(t) => t,
                     Err(e) => {
                         eprintln!("{}", rust_i18n::t!("import_error", error = e.to_string()));
                         std::process::exit(1);
                     }
                 };
+                if with_timestamps {
+                    for t in &mut tasks {
+                        t.backfill_timestamps_from_dtstamp();
+                    }
+                }
                 let store = Arc::new(tokio::sync::Mutex::new(TaskStore::new(ctx.clone())));
                 let client = Arc::new(tokio::sync::Mutex::new(None));
                 let controller = cfait::controller::TaskController::new(store, client, ctx.clone());
@@ -1899,6 +1924,12 @@ async fn main() -> Result<()> {
                 t.checkbox_symbol()
             );
             println!("{}:      {}", rust_i18n::t!("cli_view_uid"), t.uid);
+            if let Some(c) = t.created_date() {
+                println!("{}:   {}", rust_i18n::t!("cli_view_created"), c.to_rfc3339());
+            }
+            if let Some(m) = t.last_modified_date() {
+                println!("{}: {}", rust_i18n::t!("cli_view_modified"), m.to_rfc3339());
+            }
             if let Some(s) = &t.dtstart {
                 println!(
                     "{}:    {}",
