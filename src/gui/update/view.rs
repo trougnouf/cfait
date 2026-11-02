@@ -1127,6 +1127,26 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         crate::journal::Action::Update(clone),
                     ]));
                 }
+                // The store is updated immediately, but the sidebar's page
+                // list is rebuilt from a full re-filter, so debounce the
+                // refresh like search input; otherwise the new title lags
+                // until the journal tab is left and re-entered.
+                app.journal_title_debounce_version =
+                    app.journal_title_debounce_version.wrapping_add(1);
+                let version = app.journal_title_debounce_version;
+                return Task::perform(
+                    async move {
+                        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+                        version
+                    },
+                    Message::ApplyJournalTitle,
+                );
+            }
+            Task::none()
+        }
+        Message::ApplyJournalTitle(version) => {
+            if version == app.journal_title_debounce_version {
+                refresh_filtered_tasks(app);
             }
             Task::none()
         }

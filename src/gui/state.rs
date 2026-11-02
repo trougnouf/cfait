@@ -119,6 +119,7 @@ pub struct GuiApp {
     pub journal_editing_uid: Option<String>,
     pub journal_title_input: String,
     pub journal_debounce_version: usize,
+    pub journal_title_debounce_version: usize,
     /// Whether the Journal tab has been opened at least once since app start.
     /// The first visit defaults to today's daily note; later visits restore
     /// whatever page/date the user left the tab on.
@@ -704,6 +705,7 @@ impl Default for GuiApp {
             journal_editing_uid: None,
             journal_title_input: String::new(),
             journal_debounce_version: 0,
+            journal_title_debounce_version: 0,
             journal_initialized: false,
 
             hovered_tag_uid: None,

@@ -332,6 +332,7 @@ pub enum Message {
     CreateJournalPage,
     CreateJournalSubPage(String),
     JournalTitleInputChanged(String),
+    ApplyJournalTitle(usize),
     ToggleArchivePage(String),
 
     // --- Context Menu ---
