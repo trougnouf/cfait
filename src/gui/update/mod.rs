@@ -431,8 +431,17 @@ fn is_ringing_valid(
 
         let mut current_ts = None;
         if type_key_with_colon == "implicit_due:" {
-            if let Some(due) = &store_task.due {
-                current_ts = Some(due.to_utc_with_default_time(default_time).to_rfc3339());
+            // Accept the stored due date or any projected RRULE occurrence: by
+            // the time the reminder rings, the projection has already advanced
+            // to the next one.
+            if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(expected_ts)
+                && crate::model::RecurrenceEngine::is_due_moment(
+                    store_task,
+                    dt.with_timezone(&chrono::Utc),
+                    default_time,
+                )
+            {
+                current_ts = Some(expected_ts.to_string());
             }
         } else if type_key_with_colon == "implicit_start:"
             && let Some(start) = &store_task.dtstart

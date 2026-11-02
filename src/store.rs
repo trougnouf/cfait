@@ -53,7 +53,7 @@ Implementation notes:
 use crate::config::Config;
 use crate::context::AppContext;
 use crate::journal::Action as JournalAction;
-use crate::model::{AppIntent, DateType, Task, TaskStatus};
+use crate::model::{AppIntent, DateType, RecurrenceEngine, Task, TaskStatus};
 use chrono::{DateTime, Datelike, Utc};
 use fastrand;
 use std::collections::{HashMap, HashSet};
@@ -4047,12 +4047,19 @@ impl TaskStore {
                     }
                 }
 
-                // 2. Due today (exclude done tasks)
-                if !is_done
-                    && let Some(due) = &task.due
-                    && due.to_date_naive() == date
-                {
-                    ctx.due_tasks.push(task.clone());
+                // 2. Due today (exclude done tasks). A recurring task whose
+                // stored due date is in the past is also matched on its next
+                // projected occurrence, so it shows up in the journal for the
+                // upcoming date (the stored due date still matches too).
+                if !is_done {
+                    let now = Utc::now();
+                    let stored_due_on_date =
+                        task.due.as_ref().is_some_and(|d| d.to_date_naive() == date);
+                    let projected_due_on_date = RecurrenceEngine::projected_due(task, now)
+                        .is_some_and(|d| d.to_date_naive() == date);
+                    if stored_due_on_date || projected_due_on_date {
+                        ctx.due_tasks.push(task.clone());
+                    }
                 }
 
                 // 3. Started today (exclude if completed today to avoid duplicates)
@@ -5440,7 +5447,11 @@ impl TaskStore {
                 } else {
                     t.priority
                 };
-                t.effective_due = t.due.clone();
+                // Project a recurring task's due date forward to its next
+                // occurrence when the stored due date is already in the past,
+                // so it surfaces as an upcoming item (display-only; the stored
+                // `due` is untouched, preserving the recycling model).
+                t.effective_due = RecurrenceEngine::projected_due(&t, now);
                 t.effective_dtstart = t.dtstart.clone();
                 t
             })
