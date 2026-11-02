@@ -817,6 +817,21 @@ impl fmt::Display for AppTheme {
     }
 }
 
+/// The authentication scheme used against the CalDAV server.
+///
+/// `basic` (default) uses username/password with HTTP Basic/Digest;
+/// `bearer` sends a static or command-produced token; `oidc` signs in
+/// through an OpenID Connect provider and keeps the token refreshed
+/// (issue #118).
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum AuthMode {
+    #[default]
+    Basic,
+    Bearer,
+    Oidc,
+}
+
 #[derive(Deserialize, Serialize, Clone, Debug)]
 #[serde(default)]
 pub struct Config {
@@ -847,8 +862,34 @@ pub struct Config {
 
     /// Shell command that prints the CalDAV password (e.g. `pass show cfait`).
     /// Takes precedence over the OS keyring; its output is never stored.
+    /// In `bearer` auth mode this command prints the bearer token instead.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub password_command: Option<String>,
+
+    /// Authentication scheme (basic / bearer / oidc).
+    #[serde(default)]
+    pub auth_mode: AuthMode,
+
+    /// OIDC issuer URL (e.g. `https://accounts.example.com`), used for
+    /// discovery when `auth_mode` is `oidc`.
+    #[serde(default)]
+    pub oidc_issuer: String,
+
+    /// OIDC client id registered with the provider.
+    #[serde(default)]
+    pub oidc_client_id: String,
+
+    /// Optional OIDC scope; `None` lets the provider use its default
+    /// (usually `openid`).
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub oidc_scope: Option<String>,
+
+    /// Optional shell command that prints the OIDC client secret
+    /// (confidential clients only); its output is never stored.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub oidc_client_secret_command: Option<String>,
 
     /// Runtime-only flag: the in-memory password is confirmed to live outside
     /// the config file (fetched from or written to the keyring, or owned by
@@ -1067,6 +1108,11 @@ impl Default for Config {
             username: String::new(),
             password: String::new(),
             password_command: None,
+            auth_mode: AuthMode::default(),
+            oidc_issuer: String::new(),
+            oidc_client_id: String::new(),
+            oidc_scope: None,
+            oidc_client_secret_command: None,
             password_persisted_elsewhere: false,
             tls_client_cert_path: None,
             tls_client_key_path: None,
@@ -1380,6 +1426,17 @@ impl Config {
         match host_of(&self.url) {
             Some(host) => format!("{}@{}", user, host),
             None => user.to_string(),
+        }
+    }
+
+    /// Keyring entry name for this profile's OIDC token bundle.
+    ///
+    /// Namespaced by host like [`Config::keyring_key`] so that separate
+    /// OIDC profiles pointing at different servers never share a token.
+    pub fn oidc_keyring_key(&self) -> String {
+        match host_of(&self.url) {
+            Some(host) => format!("oidc@{}", host),
+            None => "oidc".to_string(),
         }
     }
 

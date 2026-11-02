@@ -2057,6 +2057,15 @@ async fn main() -> Result<()> {
             return Ok(());
         }
         "login" => {
+            let rest: Vec<&str> = args[2..].iter().map(|s| s.as_str()).collect();
+            if rest.iter().any(|a| *a == "--oidc") {
+                login_oidc_cmd(ctx.clone(), &rest).await?;
+                return Ok(());
+            }
+            if rest.iter().any(|a| *a == "--bearer") {
+                login_bearer_cmd(ctx.clone(), &rest)?;
+                return Ok(());
+            }
             if args.len() < 4 {
                 eprintln!("Usage: {} login <url> <username>", binary_name);
                 std::process::exit(1);
@@ -2087,6 +2096,21 @@ async fn main() -> Result<()> {
                     rust_i18n::t!("password_kept_in_file_note", path = path)
                 );
             }
+            return Ok(());
+        }
+        "logout" => {
+            let mut config =
+                cfait::config::Config::load_with_credentials(ctx.as_ref()).unwrap_or_default();
+            // Best-effort: drop the stored OIDC token bundle.
+            cfait::client::oidc::clear_bundle(&config.oidc_keyring_key());
+            config.auth_mode = cfait::config::AuthMode::Basic;
+            config.password = String::new();
+            config.oidc_issuer = String::new();
+            config.oidc_client_id = String::new();
+            config.oidc_scope = None;
+            config.oidc_client_secret_command = None;
+            config.save_with_credentials(ctx.as_ref())?;
+            println!("{}", rust_i18n::t!("logout_done"));
             return Ok(());
         }
         "collection" => {
@@ -2206,12 +2230,9 @@ async fn main() -> Result<()> {
             let sub = &args[2];
             let config =
                 cfait::config::Config::load_with_credentials(ctx.as_ref()).unwrap_or_default();
-            let client = match cfait::client::RustyClient::new(
+            let client = match cfait::client::RustyClient::from_config(
                 ctx.clone(),
-                &config.url,
-                &config.username,
-                &config.password,
-                config.allow_insecure_certs,
+                &config,
                 Some("CLI"),
             ) {
                 Ok(c) => c,
@@ -2561,4 +2582,150 @@ async fn main() -> Result<()> {
         .ok();
 
     cfait::tui::run(ctx).await
+}
+
+// ---------------------------------------------------------------------------
+// `login --oidc` / `login --bearer` / `logout` helpers
+// ---------------------------------------------------------------------------
+
+/// `cfait login --oidc <issuer> <client_id> [url] [--scope <scope>]`
+///
+/// Runs the RFC 8628 device flow: the user completes sign-in on any device
+/// (browser, phone, ...) and the token bundle is stored in the OS keyring.
+async fn login_oidc_cmd(ctx: Arc<dyn AppContext>, rest: &[&str]) -> Result<()> {
+    use cfait::client::oidc;
+
+    let mut issuer: Option<&str> = None;
+    let mut client_id: Option<&str> = None;
+    let mut url: Option<&str> = None;
+    let mut scope: Option<&str> = None;
+    let mut i = rest
+        .iter()
+        .position(|a| *a == "--oidc")
+        .map(|p| p + 1)
+        .unwrap_or(1);
+    while i < rest.len() {
+        if rest[i] == "--scope" {
+            if i + 1 < rest.len() {
+                scope = Some(rest[i + 1]);
+                i += 2;
+            } else {
+                eprintln!("Error: Missing value for --scope");
+                std::process::exit(1);
+            }
+        } else {
+            match (issuer, client_id, url) {
+                (None, _, _) => issuer = Some(rest[i]),
+                (_, None, _) => client_id = Some(rest[i]),
+                (_, _, None) => url = Some(rest[i]),
+                (_, _, Some(_)) => {
+                    eprintln!("Usage: cfait login --oidc <issuer> <client_id> [url] [--scope <scope>]");
+                    std::process::exit(1);
+                }
+            }
+            i += 1;
+        }
+    }
+    let (Some(issuer), Some(client_id)) = (issuer, client_id) else {
+        eprintln!("Usage: cfait login --oidc <issuer> <client_id> [url] [--scope <scope>]");
+        std::process::exit(1);
+    };
+
+    println!("{}", rust_i18n::t!("oidc_contacting_provider"));
+    let transport = oidc::HyperTransport::new()?;
+    let client = oidc::OidcClient::new(transport);
+    let (meta, authz) = oidc::start_device_login(&client, issuer, client_id, None, scope).await?;
+
+    let display_url = authz
+        .verification_uri_complete
+        .clone()
+        .unwrap_or_else(|| authz.verification_uri.clone());
+    println!("{}", rust_i18n::t!("oidc_user_code", code = authz.user_code));
+    println!("{}", rust_i18n::t!("oidc_visit_url", url = display_url));
+    if let Err(e) = oidc::open_url(&display_url) {
+        log::debug!("could not open a browser automatically: {e}");
+    }
+    println!("{}", rust_i18n::t!("oidc_waiting_auth"));
+    let bundle = oidc::finish_device_login(&client, &meta, client_id, None, &authz).await?;
+
+    let mut config = cfait::config::Config::load(ctx.as_ref()).unwrap_or_default();
+    let old_config = config.clone();
+    config.auth_mode = cfait::config::AuthMode::Oidc;
+    config.oidc_issuer = issuer.to_string();
+    config.oidc_client_id = client_id.to_string();
+    if let Some(u) = url {
+        config.url = u.to_string();
+    }
+    config.update_sync_timestamp_if_changed(&old_config);
+    config.save(ctx.as_ref())?;
+    oidc::save_bundle(&config.oidc_keyring_key(), &bundle)?;
+
+    println!("{}", rust_i18n::t!("oidc_login_success", issuer = issuer));
+
+    // Best-effort: verify the new credentials actually reach the CalDAV server.
+    match tokio::time::timeout(
+        std::time::Duration::from_secs(15),
+        async {
+            let c = cfait::client::RustyClient::from_config(ctx.clone(), &config, Some("CLI"))?;
+            c.get_calendars().await
+        },
+    )
+    .await
+    {
+        Ok(Ok(_)) => println!("{}", rust_i18n::t!("oidc_login_test_ok")),
+        Ok(Err(e)) => {
+            eprintln!("{}", rust_i18n::t!("oidc_login_test_failed", error = e.to_string()));
+        }
+        Err(_) => eprintln!(
+            "{}",
+            rust_i18n::t!("oidc_login_test_failed", error = "timeout".to_string())
+        ),
+    }
+    Ok(())
+}
+
+/// `cfait login --bearer <url> [token]`
+///
+/// Stores a static bearer token, vaulted in the OS keyring like a password.
+fn login_bearer_cmd(ctx: Arc<dyn AppContext>, rest: &[&str]) -> Result<()> {
+    let mut url: Option<&str> = None;
+    let mut token: Option<&str> = None;
+    for arg in rest
+        .iter()
+        .skip(rest.iter().position(|a| *a == "--bearer").map(|p| p + 1).unwrap_or(1))
+    {
+        if url.is_none() {
+            url = Some(*arg);
+        } else if token.is_none() {
+            token = Some(*arg);
+        } else {
+            eprintln!("Usage: cfait login --bearer <url> [token]");
+            std::process::exit(1);
+        }
+    }
+    let Some(url) = url else {
+        eprintln!("Usage: cfait login --bearer <url> [token]");
+        std::process::exit(1);
+    };
+    let token = match token {
+        Some(t) => t.to_string(),
+        None => rpassword::prompt_password(rust_i18n::t!("tui_bearer_token_prompt").to_string())?,
+    };
+
+    let mut config = cfait::config::Config::load(ctx.as_ref()).unwrap_or_default();
+    let old_config = config.clone();
+    config.auth_mode = cfait::config::AuthMode::Bearer;
+    config.url = url.to_string();
+    config.password = token;
+    config.update_sync_timestamp_if_changed(&old_config);
+    let persisted = config.save_with_credentials(ctx.as_ref())?;
+    if config.password_command.is_some() {
+        println!("{}", rust_i18n::t!("login_password_command"));
+    } else if persisted {
+        println!("{}", rust_i18n::t!("login_saved_keyring"));
+    } else {
+        let path = cfait::config::Config::get_path_string(ctx.as_ref()).unwrap_or_default();
+        println!("{}", rust_i18n::t!("password_kept_in_file_note", path = path));
+    }
+    Ok(())
 }

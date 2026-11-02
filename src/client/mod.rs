@@ -5,6 +5,7 @@ pub mod auth;
 pub mod cert;
 pub mod core;
 pub mod middleware;
+pub mod oidc;
 pub mod redirect;
 pub mod sync; // Restore this module
 pub mod timeout;

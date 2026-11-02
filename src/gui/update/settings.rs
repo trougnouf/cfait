@@ -223,6 +223,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.ob_local_url_expanded = false;
             app.ob_user = config.username.clone();
             app.ob_pass = config.password.clone();
+            app.ob_auth_mode = config.auth_mode;
+            app.ob_oidc_issuer = config.oidc_issuer.clone();
+            app.ob_oidc_client_id = config.oidc_client_id.clone();
+            app.ob_oidc_signed_in =
+                crate::client::oidc::load_bundle(&config.oidc_keyring_key()).is_some();
+            app.ob_oidc_signing_in = false;
             app.ob_insecure = config.allow_insecure_certs;
             app.ob_tls_client_cert_path = config.tls_client_cert_path.clone().unwrap_or_default();
             app.ob_tls_client_key_path = config.tls_client_key_path.clone().unwrap_or_default();
@@ -348,6 +354,77 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.ob_password_visible = !app.ob_password_visible;
             Task::none()
         }
+        Message::ObAuthModeChanged(mode) => {
+            app.ob_auth_mode = mode;
+            Task::none()
+        }
+        Message::ObOidcIssuerChanged(v) => {
+            app.ob_oidc_issuer = v;
+            Task::none()
+        }
+        Message::ObOidcClientIdChanged(v) => {
+            app.ob_oidc_client_id = v;
+            Task::none()
+        }
+        Message::OidcSignIn => {
+            if app.ob_oidc_signing_in {
+                return Task::none();
+            }
+            let issuer = app.ob_oidc_issuer.trim().to_string();
+            let client_id = app.ob_oidc_client_id.trim().to_string();
+            if issuer.is_empty() || client_id.is_empty() {
+                app.error_msg = Some(rust_i18n::t!("oidc_missing_fields").to_string());
+                return Task::none();
+            }
+            app.ob_oidc_signing_in = true;
+            let scope = app.core_config.oidc_scope.clone();
+            let secret = app
+                .core_config
+                .oidc_client_secret_command
+                .as_ref()
+                .filter(|c| !c.trim().is_empty())
+                .and_then(|cmd| crate::config::Config::run_password_command(cmd).ok());
+            Task::perform(
+                async move {
+                    crate::client::oidc::pkce_login(
+                        &issuer,
+                        &client_id,
+                        secret,
+                        scope.as_deref(),
+                    )
+                    .await
+                },
+                |res| Message::OidcSignInResult(res.map_err(|e| e.to_string())),
+            )
+        }
+        Message::OidcSignInResult(Ok(bundle)) => {
+            app.ob_oidc_signing_in = false;
+            let key = app.core_config.oidc_keyring_key();
+            match crate::client::oidc::save_bundle(&key, &bundle) {
+                Ok(()) => {
+                    app.ob_oidc_signed_in = true;
+                    app.ob_auth_mode = crate::config::AuthMode::Oidc;
+                    save_config(app);
+                    flash_info_message(app, rust_i18n::t!("oidc_signin_success").to_string())
+                }
+                Err(e) => {
+                    app.error_msg = Some(format!("OIDC sign-in failed: {e}"));
+                    Task::none()
+                }
+            }
+        }
+        Message::OidcSignInResult(Err(e)) => {
+            app.ob_oidc_signing_in = false;
+            app.error_msg = Some(e);
+            Task::none()
+        }
+        Message::OidcSignOut => {
+            app.ob_oidc_signed_in = false;
+            app.ob_oidc_signing_in = false;
+            crate::client::oidc::clear_bundle(&app.core_config.oidc_keyring_key());
+            save_config(app);
+            flash_info_message(app, rust_i18n::t!("oidc_signout_done").to_string())
+        }
         Message::ObDefaultCalChanged(v) => {
             app.ob_default_cal = Some(v);
             save_config(app);
@@ -396,6 +473,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.ob_local_url_expanded = false;
             app.ob_user = cfg.username.clone();
             // app.ob_pass is already securely held in memory from startup
+            app.ob_auth_mode = cfg.auth_mode;
+            app.ob_oidc_issuer = cfg.oidc_issuer.clone();
+            app.ob_oidc_client_id = cfg.oidc_client_id.clone();
+            app.ob_oidc_signed_in =
+                crate::client::oidc::load_bundle(&cfg.oidc_keyring_key()).is_some();
+            app.ob_oidc_signing_in = false;
 
             app.remote_cals_editing = app
                 .calendars

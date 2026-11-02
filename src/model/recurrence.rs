@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/model/recurrence.rs
 use crate::model::item::{Alarm, AlarmTrigger, DateType, RawProperty, Task, TaskStatus};
-use chrono::{Datelike, Local, NaiveDate};
+use chrono::{DateTime, Datelike, Local, NaiveDate, NaiveDateTime, NaiveTime, Utc};
 use rrule::RRuleSet;
 use std::collections::HashSet; // Import HashSet for deduplication
 use std::str::FromStr;
@@ -13,12 +13,15 @@ impl RecurrenceEngine {
     /// Calculates the next occurrence of a task based on its RRULE.
     /// Returns a new Task instance for the next occurrence, or None if finished.
     pub fn next_occurrence(task: &Task) -> Option<Task> {
-        let rule_str = task.rrule.as_ref()?;
-        let seed_date_type = task.dtstart.as_ref().or(task.due.as_ref())?;
+        Self::next_occurrence_after(task, Local::now())
+    }
 
-        // 1. Establish the Local Naive seed for the recurrence engine.
-        // For AllDay tasks, we use midnight (or a specific time if one exists on the other date field).
-        let seed_local_naive = match seed_date_type {
+    /// The local-naive seed date for the recurrence engine: `DTSTART` if
+    /// present, else `DUE`. AllDay seeds use midnight, or the time of a
+    /// specific sibling date field when one exists.
+    fn seed_local_naive(task: &Task) -> Option<NaiveDateTime> {
+        let seed = task.dtstart.as_ref().or(task.due.as_ref())?;
+        Some(match seed {
             DateType::AllDay(d) => {
                 let local_time = match (task.dtstart.as_ref(), task.due.as_ref()) {
                     (Some(DateType::Specific(dt)), _) => Some(dt.with_timezone(&Local).time()),
@@ -32,15 +35,18 @@ impl RecurrenceEngine {
                 }
             }
             DateType::Specific(dt) => dt.with_timezone(&Local).naive_local(),
-            DateType::Month(y, m) => {
-                let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
-                d.and_hms_opt(0, 0, 0).unwrap()
-            }
-            DateType::Year(y) => {
-                let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
-                d.and_hms_opt(0, 0, 0).unwrap()
-            }
-        };
+            DateType::Month(y, m) => NaiveDate::from_ymd_opt(*y, *m, 1)?.and_hms_opt(0, 0, 0)?,
+            DateType::Year(y) => NaiveDate::from_ymd_opt(*y, 1, 1)?.and_hms_opt(0, 0, 0)?,
+        })
+    }
+
+    /// Calculates the next occurrence of a task strictly after `now`, based on
+    /// its RRULE. Returns a new Task instance for the next occurrence, or None
+    /// if finished. `next_occurrence` is the same call with `now = Local::now()`.
+    pub fn next_occurrence_after(task: &Task, now: DateTime<Local>) -> Option<Task> {
+        let rule_str = task.rrule.as_ref()?;
+        let seed_date_type = task.dtstart.as_ref().or(task.due.as_ref())?;
+        let seed_local_naive = Self::seed_local_naive(task)?;
 
         // Construct RRULE string using Floating Time (No 'Z' suffix)
         let dtstart_str = seed_local_naive.format("%Y%m%dT%H%M%S").to_string();
@@ -76,10 +82,10 @@ impl RecurrenceEngine {
 
         if let Ok(rrule_set) = RRuleSet::from_str(&rrule_string) {
             let comparison_now_local = match seed_date_type {
-                DateType::AllDay(_) => Local::now().date_naive().and_hms_opt(0, 0, 0).unwrap(),
-                DateType::Specific(_) => Local::now().naive_local(),
-                DateType::Month(_, _) => Local::now().date_naive().and_hms_opt(0, 0, 0).unwrap(),
-                DateType::Year(_) => Local::now().date_naive().and_hms_opt(0, 0, 0).unwrap(),
+                DateType::AllDay(_) => now.date_naive().and_hms_opt(0, 0, 0).unwrap(),
+                DateType::Specific(_) => now.naive_local(),
+                DateType::Month(_, _) => now.date_naive().and_hms_opt(0, 0, 0).unwrap(),
+                DateType::Year(_) => now.date_naive().and_hms_opt(0, 0, 0).unwrap(),
             };
 
             let search_floor_local = std::cmp::max(comparison_now_local, seed_local_naive);
@@ -227,6 +233,83 @@ impl RecurrenceEngine {
             }
         }
         None
+    }
+
+    /// The due date to display and schedule for a task.
+    ///
+    /// A recurring task whose stored due date is already in the past is
+    /// projected forward to its next RRULE occurrence, so it surfaces as an
+    /// upcoming item rather than a stale overdue one. Non-recurring tasks, and
+    /// recurring tasks whose stored due date is still in the future, return
+    /// their stored due date unchanged.
+    ///
+    /// This is a display-only projection: the stored `due` is never mutated,
+    /// so the recycling model and calendar sync are preserved.
+    pub fn projected_due(task: &Task, now: DateTime<Utc>) -> Option<DateType> {
+        let due = task.due.as_ref()?;
+        if task.rrule.is_none() || due.to_comparison_time() >= now {
+            return Some(due.clone());
+        }
+        Self::next_occurrence(task)
+            .and_then(|next| next.due)
+            .or_else(|| Some(due.clone()))
+    }
+
+    /// Returns true if `dt` is a due moment of the task — the moment its
+    /// "Due now" reminder is supposed to fire.
+    ///
+    /// This validates a ringing alarm. A projected occurrence's reminder
+    /// fires at a moment when `projected_due` has already advanced to the
+    /// following occurrence (the projection only ever looks strictly ahead of
+    /// now), so comparing the ringing alarm against the current projection
+    /// would kill it the instant it rings. Instead, `dt` is accepted when it
+    /// matches the stored due date, or — for recurring tasks — when it is the
+    /// due moment of any `RRULE` occurrence, with EXDATEs and UNTIL respected
+    /// exactly as in `next_occurrence_after`.
+    pub fn is_due_moment(task: &Task, dt: DateTime<Utc>, default_time: NaiveTime) -> bool {
+        let Some(due) = task.due.as_ref() else {
+            return false;
+        };
+        if due.to_utc_with_default_time(default_time) == dt {
+            return true;
+        }
+        if task.rrule.is_none() {
+            return false;
+        }
+        let Some(seed_local_naive) = Self::seed_local_naive(task) else {
+            return false;
+        };
+        let dt_naive = dt.with_timezone(&Local).naive_local();
+        // Reconstruct the occurrence the reminder was projected onto.
+        let candidate = match due {
+            // Specific due: the reminder sits `due - seed` after the occurrence.
+            DateType::Specific(d) => {
+                let due_naive = d.with_timezone(&Local).naive_local();
+                dt_naive - (due_naive - seed_local_naive)
+            }
+            // AllDay/Month/Year due: the reminder fires at `default_time` on
+            // the due's date, where the occurrence sits at the seed's
+            // wall-clock time.
+            _ => dt_naive.date().and_time(seed_local_naive.time()),
+        };
+        if candidate <= seed_local_naive {
+            return false;
+        }
+        // The first occurrence strictly after `candidate - 1s` must be exactly
+        // `candidate` (the 1s backoff stays sound even for SECONDLY rules).
+        let Some(probe) = (candidate - chrono::Duration::seconds(1))
+            .and_local_timezone(Local)
+            .earliest()
+        else {
+            return false;
+        };
+        let Some(next) = Self::next_occurrence_after(task, probe) else {
+            return false;
+        };
+        next.due
+            .as_ref()
+            .map(|d| d.to_utc_with_default_time(default_time))
+            == Some(dt)
     }
 
     /// Advances the task to the next recurrence instance IN PLACE.

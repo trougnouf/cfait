@@ -245,11 +245,17 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
     app.cached_task_goals = task_goals;
 
     if let Some(tx) = &app.alarm_tx {
+        // Exclude settings-disabled calendars so the alarm actor
+        // never fires for them (issue #121). Calendars merely
+        // hidden/untoggled in the collections tab keep their alarms.
         let all_tasks: Vec<crate::model::Task> = app
             .store
             .calendars
-            .values()
-            .flat_map(|m| m.values())
+            .iter()
+            .filter(|(href, _)| {
+                !app.disabled_calendars.contains(*href)
+            })
+            .flat_map(|(_, m)| m.values())
             .cloned()
             .collect();
         let _ = tx.try_send(SystemEvent::UpdateTasks(all_tasks));
@@ -283,6 +289,9 @@ pub fn save_config(app: &mut GuiApp) -> Config {
     cfg.local_url = app.ob_local_url.clone();
     cfg.username = app.ob_user.clone();
     cfg.password = app.ob_pass.clone();
+    cfg.auth_mode = app.ob_auth_mode;
+    cfg.oidc_issuer = app.ob_oidc_issuer.trim().to_string();
+    cfg.oidc_client_id = app.ob_oidc_client_id.trim().to_string();
     cfg.tls_client_cert_path = if app.ob_tls_client_cert_path.trim().is_empty() {
         None
     } else {
@@ -358,6 +367,9 @@ pub fn save_config(app: &mut GuiApp) -> Config {
     let connection_changed = cfg.url != app.core_config.url
         || cfg.username != app.core_config.username
         || cfg.password != app.core_config.password
+        || cfg.auth_mode != app.core_config.auth_mode
+        || cfg.oidc_issuer != app.core_config.oidc_issuer
+        || cfg.oidc_client_id != app.core_config.oidc_client_id
         || cfg.tls_client_cert_path != app.core_config.tls_client_cert_path
         || cfg.tls_client_key_path != app.core_config.tls_client_key_path
         || cfg.allow_insecure_certs != app.core_config.allow_insecure_certs;
