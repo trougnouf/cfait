@@ -2083,6 +2083,7 @@ impl CfaitMobile {
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let index = AlarmIndex::rebuild_from_tasks(
             &store.calendars,
+            &config.disabled_calendars,
             config.auto_reminders,
             &config.default_reminder_time,
         );
@@ -2880,6 +2881,7 @@ impl CfaitMobile {
                 let s = store_arc.lock().await;
                 crate::alarm_index::AlarmIndex::rebuild_from_tasks(
                     &s.calendars,
+                    &config.disabled_calendars,
                     config.auto_reminders,
                     &config.default_reminder_time,
                 )
@@ -4059,6 +4061,7 @@ impl CfaitMobile {
             let store = self.controller.store.lock().await;
             AlarmIndex::rebuild_from_tasks(
                 &store.calendars,
+                &config.disabled_calendars,
                 config.auto_reminders,
                 &config.default_reminder_time,
             )

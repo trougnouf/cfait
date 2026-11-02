@@ -362,11 +362,17 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
 
             if let Some(tx) = &app_state.alarm_actor_tx {
                 if is_task_update {
+                    // Exclude settings-disabled calendars so the alarm actor
+                    // never fires for them (issue #121). Calendars merely
+                    // hidden/untoggled in the collections tab keep their alarms.
                     let all_tasks: Vec<_> = app_state
                         .store
                         .calendars
-                        .values()
-                        .flat_map(|m| m.values())
+                        .iter()
+                        .filter(|(href, _)| {
+                            !app_state.disabled_calendars.contains(*href)
+                        })
+                        .flat_map(|(_, m)| m.values())
                         .cloned()
                         .collect();
                     let tx_clone = tx.clone();

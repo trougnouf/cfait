@@ -245,11 +245,17 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
     app.cached_task_goals = task_goals;
 
     if let Some(tx) = &app.alarm_tx {
+        // Exclude settings-disabled calendars so the alarm actor
+        // never fires for them (issue #121). Calendars merely
+        // hidden/untoggled in the collections tab keep their alarms.
         let all_tasks: Vec<crate::model::Task> = app
             .store
             .calendars
-            .values()
-            .flat_map(|m| m.values())
+            .iter()
+            .filter(|(href, _)| {
+                !app.disabled_calendars.contains(*href)
+            })
+            .flat_map(|(_, m)| m.values())
             .cloned()
             .collect();
         let _ = tx.try_send(SystemEvent::UpdateTasks(all_tasks));

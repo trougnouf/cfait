@@ -315,11 +315,17 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::InitAlarmActor(tx) => {
             app.alarm_tx = Some(tx.clone());
             if !app.tasks.is_empty() {
+                // Exclude settings-disabled calendars so the alarm actor
+                // never fires for them (issue #121). Calendars merely
+                // hidden/untoggled in the collections tab keep their alarms.
                 let all = app
                     .store
                     .calendars
-                    .values()
-                    .flat_map(|m| m.values())
+                    .iter()
+                    .filter(|(href, _)| {
+                        !app.disabled_calendars.contains(*href)
+                    })
+                    .flat_map(|(_, m)| m.values())
                     .cloned()
                     .collect();
                 let _ = tx.try_send(SystemEvent::UpdateTasks(all));
