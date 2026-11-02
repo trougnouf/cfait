@@ -27,6 +27,21 @@ impl std::fmt::Display for LangOption {
     }
 }
 
+/// One entry of the authentication-method picker (issue #118).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct AuthOption(crate::config::AuthMode);
+
+impl std::fmt::Display for AuthOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let label = match self.0 {
+            crate::config::AuthMode::Basic => rust_i18n::t!("auth_basic"),
+            crate::config::AuthMode::Bearer => rust_i18n::t!("auth_bearer"),
+            crate::config::AuthMode::Oidc => rust_i18n::t!("auth_oidc"),
+        };
+        write!(f, "{label}")
+    }
+}
+
 // Dynamically maps ISO codes to their native names using `isolang`
 fn get_native_language_name(code: &str) -> String {
     // Extract base code (e.g., "pt" from "pt-BR") for the lookup
@@ -1382,18 +1397,86 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         local_url_toggle_button.into()
     };
 
-    // --- FORM LAYOUT ---
-    let form = column![
-        // 1. Connection Section
-        container(
+    // --- Authentication method (issue #118) ---
+    let auth_mode_row: Element<_> = {
+        let options = [
+            AuthOption(crate::config::AuthMode::Basic),
+            AuthOption(crate::config::AuthMode::Bearer),
+            AuthOption(crate::config::AuthMode::Oidc),
+        ];
+        row![
+            text(rust_i18n::t!("auth_method")),
+            iced::widget::pick_list(
+                options.to_vec(),
+                Some(AuthOption(app.ob_auth_mode)),
+                |opt| Message::ObAuthModeChanged(opt.0)
+            )
+        ]
+        .spacing(10)
+        .align_y(iced::Alignment::Center)
+        .into()
+    };
+
+    let oidc_section: Element<_> = if app.ob_auth_mode == crate::config::AuthMode::Oidc {
+        let signed_in = app.ob_oidc_signed_in;
+        let signing_in = app.ob_oidc_signing_in;
+        let sign_out_btn: Element<'_, Message> = if signed_in {
+            button(text(rust_i18n::t!("sign_out")))
+                .style(button::secondary)
+                .padding(10)
+                .on_press(Message::OidcSignOut)
+                .into()
+        } else {
+            Space::new().width(0).into()
+        };
+        let signed_in_note: Element<'_, Message> = if signed_in {
+            muted_note(rust_i18n::t!("oidc_signed_in_note")).into()
+        } else {
+            Space::new().height(0).into()
+        };
+        column![
+            text(rust_i18n::t!("oidc_issuer")),
+            text_input("https://accounts.example.com", &app.ob_oidc_issuer)
+                .on_input(Message::ObOidcIssuerChanged)
+                .padding(10)
+                .on_submit(Message::OidcSignIn),
+            text(rust_i18n::t!("oidc_client_id")),
+            text_input("my-client", &app.ob_oidc_client_id)
+                .on_input(Message::ObOidcClientIdChanged)
+                .padding(10)
+                .on_submit(Message::OidcSignIn),
+            row![
+                button(text(rust_i18n::t!("sign_in_oidc")))
+                    .style(button::primary)
+                    .padding(10)
+                    .on_press_maybe(if signing_in {
+                        None
+                    } else {
+                        Some(Message::OidcSignIn)
+                    }),
+                sign_out_btn,
+            ]
+            .spacing(10)
+            .align_y(iced::Alignment::Center),
+            signed_in_note,
+        ]
+        .spacing(8)
+        .into()
+    } else {
+        Space::new().width(0).height(0).into()
+    };
+
+    let bearer_hint: Element<_> = if app.ob_auth_mode == crate::config::AuthMode::Bearer {
+        muted_note(rust_i18n::t!("bearer_hint")).into()
+    } else {
+        Space::new().width(0).height(0).into()
+    };
+
+    let credentials_section: Element<_> =
+        if app.ob_auth_mode == crate::config::AuthMode::Oidc {
+            Space::new().width(0).height(0).into()
+        } else {
             column![
-                text(rust_i18n::t!("server_connection")).size(20),
-                text(rust_i18n::t!("caldav_url")),
-                text_input("https://...", &app.ob_url)
-                    .on_input(Message::ObUrlChanged)
-                    .padding(10),
-                muted_note(rust_i18n::t!("caldav_url_hint")),
-                local_url_section,
                 text(rust_i18n::t!("username")),
                 text_input(&rust_i18n::t!("username"), &app.ob_user)
                     .on_input(Message::ObUserChanged)
@@ -1419,6 +1502,27 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 ]
                 .spacing(8)
                 .align_y(iced::Alignment::Center),
+                bearer_hint,
+            ]
+            .spacing(15)
+            .into()
+        };
+
+    // --- FORM LAYOUT ---
+    let form = column![
+        // 1. Connection Section
+        container(
+            column![
+                text(rust_i18n::t!("server_connection")).size(20),
+                text(rust_i18n::t!("caldav_url")),
+                text_input("https://...", &app.ob_url)
+                    .on_input(Message::ObUrlChanged)
+                    .padding(10),
+                muted_note(rust_i18n::t!("caldav_url_hint")),
+                local_url_section,
+                auth_mode_row,
+                oidc_section,
+                credentials_section,
                 insecure_check,
                 cb(app.sync_settings)
                     .label(rust_i18n::t!("sync_settings"))

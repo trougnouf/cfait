@@ -242,6 +242,18 @@ pub fn print_help(binary_name: &str) {
             &format!("{} login <url> <username>", binary_name),
             rust_i18n::t!("cli_desc_login").to_string(),
         );
+        print_cmd(
+            &format!("{} login --oidc <issuer> <client_id> [url]", binary_name),
+            rust_i18n::t!("cli_desc_login_oidc").to_string(),
+        );
+        print_cmd(
+            &format!("{} login --bearer <url> [token]", binary_name),
+            rust_i18n::t!("cli_desc_login_bearer").to_string(),
+        );
+        print_cmd(
+            &format!("{} logout", binary_name),
+            rust_i18n::t!("cli_desc_logout").to_string(),
+        );
         println!();
     }
 

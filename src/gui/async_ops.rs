@@ -339,14 +339,7 @@ pub fn spawn_background_worker(
                             let ctx_ref = ctx.clone();
                             let res = tokio::task::spawn_blocking(move || {
                                 let cfg = Config::load_with_credentials(ctx_ref.as_ref())?;
-                                RustyClient::new(
-                                    ctx_ref,
-                                    &cfg.url,
-                                    &cfg.username,
-                                    &cfg.password,
-                                    cfg.allow_insecure_certs,
-                                    Some("GUI"),
-                                )
+                                RustyClient::from_config(ctx_ref, &cfg, Some("GUI"))
                             })
                             .await;
                             match res {

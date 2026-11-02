@@ -342,7 +342,7 @@ fn alarm_index_schedules_projected_due_reminder() {
         HashMap::from([("t1".to_string(), past_due_weekly_task())]),
     )]);
 
-    let index = AlarmIndex::rebuild_from_tasks(&tasks, true, "09:00");
+    let index = AlarmIndex::rebuild_from_tasks(&tasks, &[], true, "09:00");
 
     let entry = index
         .alarms
@@ -377,7 +377,7 @@ fn alarm_index_skips_past_due_non_recurring() {
 
     let tasks = HashMap::from([("cal1".to_string(), HashMap::from([(uid.clone(), task)]))]);
 
-    let index = AlarmIndex::rebuild_from_tasks(&tasks, true, "09:00");
+    let index = AlarmIndex::rebuild_from_tasks(&tasks, &[], true, "09:00");
     assert!(
         index.alarms.iter().all(|a| a.task_uid != uid),
         "a past-due non-recurring task must not gain a reminder"

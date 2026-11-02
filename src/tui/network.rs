@@ -221,14 +221,23 @@ pub async fn run_network_actor(
     // ------------------------------------------------------------------
     // 1. CONNECT & SYNC
     // ------------------------------------------------------------------
-    let client: RustyClient =
-        match RustyClient::new(ctx.clone(), &url, &user, &pass, allow_insecure, Some("TUI")) {
-            Ok(c) => c,
-            Err(e) => {
-                let _ = event_tx.send(AppEvent::Error(e.to_string())).await;
-                return;
+    // Basic auth uses the startup snapshot (url/user/pass) so callers can
+    // override the on-disk config; bearer and oidc resolve their
+    // credentials from the saved config.
+    let client_result =
+        match crate::config::Config::load_with_credentials(ctx.as_ref()) {
+            Ok(cfg) if cfg.auth_mode != crate::config::AuthMode::Basic => {
+                RustyClient::from_config(ctx.clone(), &cfg, Some("TUI"))
             }
+            _ => RustyClient::new(ctx.clone(), &url, &user, &pass, allow_insecure, Some("TUI")),
         };
+    let client: RustyClient = match client_result {
+        Ok(c) => c,
+        Err(e) => {
+            let _ = event_tx.send(AppEvent::Error(e.to_string())).await;
+            return;
+        }
+    };
     let _ = event_tx
         .send(AppEvent::Status {
             key: "connecting".to_string(),

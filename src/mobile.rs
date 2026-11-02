@@ -526,6 +526,11 @@ pub struct MobileConfig {
     pub local_url: String,
     pub username: String,
     pub password: String,
+    /// Authentication scheme: "basic", "bearer" or "oidc" (issue #118).
+    pub auth_mode: String,
+    pub oidc_issuer: String,
+    pub oidc_client_id: String,
+    pub oidc_signed_in: bool,
     pub tls_client_cert_path: Option<String>,
     pub tls_client_key_path: Option<String>,
     pub data_dir: Option<String>,
@@ -578,6 +583,25 @@ pub struct MobileConfig {
     pub show_undo_snackbar: bool,
     pub celebrate_completions: bool,
     pub first_day_of_week: MobileFirstDayOfWeek,
+}
+
+/// A pending OIDC device-flow login (RFC 8628). The app shows `user_code`
+/// and `verification_uri` to the user, who completes the sign-in on any
+/// device; then `finish_oidc_login` polls the provider until the token
+/// arrives (issue #118).
+#[derive(uniffi::Record)]
+pub struct MobileOidcLogin {
+    pub user_code: String,
+    pub verification_uri: String,
+    pub verification_uri_complete: Option<String>,
+    pub issuer: String,
+    pub client_id: String,
+    pub client_secret: Option<String>,
+    pub scope: Option<String>,
+    pub device_code: String,
+    pub token_endpoint: String,
+    pub expires_in: u32,
+    pub interval: u32,
 }
 
 #[derive(uniffi::Record)]
@@ -1595,11 +1619,21 @@ impl CfaitMobile {
 
     pub fn get_config(&self) -> MobileConfig {
         let c = load_mobile_config_with_credentials(self.ctx.as_ref());
+        let oidc_signed_in =
+            crate::client::oidc::load_bundle(&c.oidc_keyring_key()).is_some();
         MobileConfig {
             url: c.url,
             local_url: c.local_url,
             username: c.username,
             password: c.password,
+            auth_mode: match c.auth_mode {
+                crate::config::AuthMode::Basic => "basic".to_string(),
+                crate::config::AuthMode::Bearer => "bearer".to_string(),
+                crate::config::AuthMode::Oidc => "oidc".to_string(),
+            },
+            oidc_issuer: c.oidc_issuer,
+            oidc_client_id: c.oidc_client_id,
+            oidc_signed_in,
             tls_client_cert_path: c.tls_client_cert_path,
             tls_client_key_path: c.tls_client_key_path,
             data_dir: c.data_dir,
@@ -1778,6 +1812,13 @@ impl CfaitMobile {
         c.url = config.url;
         c.local_url = config.local_url;
         apply_mobile_credentials_update(&mut c, &config.username, &config.password);
+        c.auth_mode = match config.auth_mode.as_str() {
+            "bearer" => crate::config::AuthMode::Bearer,
+            "oidc" => crate::config::AuthMode::Oidc,
+            _ => crate::config::AuthMode::Basic,
+        };
+        c.oidc_issuer = config.oidc_issuer;
+        c.oidc_client_id = config.oidc_client_id;
         c.tls_client_cert_path = config.tls_client_cert_path;
         c.tls_client_key_path = config.tls_client_key_path;
         c.data_dir = config.data_dir;
@@ -1870,6 +1911,24 @@ impl CfaitMobile {
         c.save_with_credentials(self.ctx.as_ref())
             .map(|_| ())
             .map_err(MobileError::from)
+    }
+
+    /// Sign out of the OIDC provider: discard the stored token bundle and
+    /// revert to basic authentication (issue #118).
+    pub fn oidc_logout(&self) -> Result<(), MobileError> {
+        let c = load_mobile_config_with_credentials(self.ctx.as_ref());
+        crate::client::oidc::clear_bundle(&c.oidc_keyring_key());
+        let mut c2 = load_mobile_config_with_credentials(self.ctx.as_ref());
+        c2.auth_mode = crate::config::AuthMode::Basic;
+        c2.save_with_credentials(self.ctx.as_ref())
+            .map(|_| ())
+            .map_err(MobileError::from)
+    }
+
+    /// Whether an OIDC token bundle is stored in the OS keyring.
+    pub fn is_oidc_signed_in(&self) -> bool {
+        let c = load_mobile_config_with_credentials(self.ctx.as_ref());
+        crate::client::oidc::load_bundle(&c.oidc_keyring_key()).is_some()
     }
 
     pub fn move_calendar(&self, href: String, direction: i8) -> Result<(), MobileError> {
@@ -3866,6 +3925,96 @@ impl CfaitMobile {
         }
 
         true
+    }
+
+    /// Start an OIDC device-flow login (RFC 8628) for a CalDAV server that
+    /// only accepts OIDC authorization (issue #118). Returns a pending login
+    /// the user completes on any device: show `user_code` and open
+    /// `verification_uri`, then call [`Self::finish_oidc_login`].
+    pub async fn start_oidc_login(
+        &self,
+        issuer: String,
+        client_id: String,
+        client_secret: Option<String>,
+        scope: Option<String>,
+    ) -> Result<MobileOidcLogin, MobileError> {
+        use crate::client::oidc::{start_device_login, HyperTransport, OidcClient};
+
+        let transport =
+            HyperTransport::new().map_err(|e| MobileError::Generic(e.to_string()))?;
+        let client = OidcClient::new(transport);
+        let (meta, authz) = start_device_login(
+            &client,
+            &issuer,
+            &client_id,
+            client_secret.as_deref(),
+            scope.as_deref(),
+        )
+        .await
+        .map_err(|e| MobileError::Generic(e.to_string()))?;
+
+        Ok(MobileOidcLogin {
+            user_code: authz.user_code,
+            verification_uri: authz.verification_uri,
+            verification_uri_complete: authz.verification_uri_complete,
+            issuer: meta.issuer,
+            client_id,
+            client_secret,
+            scope,
+            device_code: authz.device_code,
+            token_endpoint: meta.token_endpoint,
+            expires_in: authz.expires_in as u32,
+            interval: authz.interval as u32,
+        })
+    }
+
+    /// Complete a device-flow login started with [`Self::start_oidc_login`].
+    /// Polls the provider's token endpoint until the user authorizes (or the
+    /// code expires), then persists the token bundle in the OS keyring and
+    /// switches the account to OIDC authentication.
+    pub async fn finish_oidc_login(&self, login: MobileOidcLogin) -> Result<(), MobileError> {
+        use crate::client::oidc::{
+            finish_device_login, save_bundle, DeviceAuthorization, HyperTransport, OidcClient,
+            OidcMetadata,
+        };
+
+        let transport =
+            HyperTransport::new().map_err(|e| MobileError::Generic(e.to_string()))?;
+        let client = OidcClient::new(transport);
+        let meta = OidcMetadata {
+            issuer: login.issuer.clone(),
+            authorization_endpoint: String::new(),
+            token_endpoint: login.token_endpoint.clone(),
+            device_authorization_endpoint: None,
+        };
+        let authz = DeviceAuthorization {
+            device_code: login.device_code,
+            user_code: login.user_code,
+            verification_uri: login.verification_uri,
+            verification_uri_complete: login.verification_uri_complete,
+            expires_in: login.expires_in as u64,
+            interval: login.interval as u64,
+        };
+        let bundle = finish_device_login(
+            &client,
+            &meta,
+            &login.client_id,
+            login.client_secret.as_deref(),
+            &authz,
+        )
+        .await
+        .map_err(|e| MobileError::Generic(e.to_string()))?;
+
+        let mut c = load_mobile_config_with_credentials(self.ctx.as_ref());
+        c.auth_mode = crate::config::AuthMode::Oidc;
+        c.oidc_issuer = login.issuer;
+        c.oidc_client_id = login.client_id;
+        c.oidc_scope = login.scope;
+        save_bundle(&c.oidc_keyring_key(), &bundle)
+            .map_err(|e| MobileError::Generic(e.to_string()))?;
+        c.save_with_credentials(self.ctx.as_ref())
+            .map(|_| ())
+            .map_err(MobileError::from)
     }
 }
 

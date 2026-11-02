@@ -19,7 +19,7 @@ responsibilities clear.
 
 use crate::cache::Cache;
 
-use crate::client::auth::DynamicAuthLayer;
+use crate::client::auth::{Auth, DynamicAuthLayer};
 use crate::client::cert::NoVerifier;
 use crate::client::middleware::{UserAgentLayer, UserAgentService};
 use crate::config::Config;
@@ -369,7 +369,49 @@ impl RustyClient {
         results
     }
 
-    /// Construct a new client. If `url` is empty, this returns an "offline" client
+    /// Build a rustls client-config builder with the appropriate trust
+    /// anchors: native roots (webpki-roots on Android), or a no-verify
+    /// verifier when `insecure` is set.
+    pub(crate) fn root_tls_builder(
+        insecure: bool,
+    ) -> anyhow::Result<
+        rustls::ConfigBuilder<rustls::ClientConfig, rustls::client::WantsClientCert>,
+    > {
+        let tls_config_builder = rustls::ClientConfig::builder();
+        let builder_with_roots = if insecure {
+            tls_config_builder
+                .dangerous()
+                .with_custom_certificate_verifier(Arc::new(NoVerifier))
+        } else {
+            #[cfg(not(target_os = "android"))]
+            {
+                static ROOT_STORE: std::sync::OnceLock<rustls::RootCertStore> =
+                    std::sync::OnceLock::new();
+                let root_store = ROOT_STORE.get_or_init(|| {
+                    let mut store = rustls::RootCertStore::empty();
+                    let result = rustls_native_certs::load_native_certs();
+                    store.add_parsable_certificates(result.certs);
+                    store
+                });
+
+                if root_store.is_empty() {
+                    return Err(anyhow::anyhow!(rust_i18n::t!("error_no_certs").to_string()));
+                }
+                tls_config_builder.with_root_certificates(root_store.clone())
+            }
+
+            #[cfg(target_os = "android")]
+            {
+                let mut root_store = rustls::RootCertStore::empty();
+                root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+                tls_config_builder.with_root_certificates(root_store)
+            }
+        };
+        Ok(builder_with_roots)
+    }
+
+    /// Construct a new client with username/password (Basic/Digest) auth.
+    /// If `url` is empty, this returns an "offline" client
     /// (client == None) which is used for local-only operations.
     pub fn new(
         ctx: Arc<dyn AppContext>,
@@ -379,15 +421,100 @@ impl RustyClient {
         insecure: bool,
         client_type: Option<&str>,
     ) -> anyhow::Result<Self> {
-        if url.is_empty() {
-            return Ok(Self {
-                client: None,
-                ctx: ctx.clone(),
-            });
-        }
+        Self::new_auth(ctx, url, Auth::basic(user, pass), insecure, client_type)
+    }
 
+    /// Construct a new client with an explicit auth scheme.
+    /// If `url` is empty, this returns an "offline" client
+    /// (client == None) which is used for local-only operations.
+    pub fn new_auth(
+        ctx: Arc<dyn AppContext>,
+        url: &str,
+        auth: Auth,
+        insecure: bool,
+        client_type: Option<&str>,
+    ) -> anyhow::Result<Self> {
+        if url.is_empty() {
+            return Ok(Self { client: None, ctx });
+        }
         let config = crate::config::Config::load(ctx.as_ref()).unwrap_or_default();
-        let url = resolve_preferred_url(&config, url);
+        Self::new_auth_with_config(ctx, url, auth, insecure, client_type, &config)
+    }
+
+    /// Construct a new client from a saved config, resolving the auth scheme
+    /// (basic / bearer / oidc) from `config.auth_mode`.
+    pub fn from_config(
+        ctx: Arc<dyn AppContext>,
+        config: &Config,
+        client_type: Option<&str>,
+    ) -> anyhow::Result<Self> {
+        if config.url.is_empty() {
+            return Ok(Self { client: None, ctx });
+        }
+        let auth = Self::resolve_auth(config)?;
+        Self::new_auth_with_config(
+            ctx,
+            &config.url,
+            auth,
+            config.allow_insecure_certs,
+            client_type,
+            config,
+        )
+    }
+
+    /// Resolve the auth scheme to use for `config`.
+    ///
+    /// `basic` uses the username/password; `bearer` uses a stored token or
+    /// the output of `password_command`; `oidc` loads the token bundle from
+    /// the OS keyring (erroring when the user has not signed in yet).
+    fn resolve_auth(config: &Config) -> anyhow::Result<Auth> {
+        use crate::config::AuthMode;
+        match config.auth_mode {
+            AuthMode::Basic => Ok(Auth::basic(&config.username, &config.password)),
+            AuthMode::Bearer => {
+                let command = config
+                    .password_command
+                    .clone()
+                    .filter(|c| !c.trim().is_empty());
+                let token = match &command {
+                    Some(cmd) => match Config::run_password_command(cmd) {
+                        Ok(t) if !t.trim().is_empty() => t,
+                        Ok(_) => config.password.clone(),
+                        Err(e) => {
+                            log::warn!(
+                                "token command failed, falling back to the stored token: {e}"
+                            );
+                            config.password.clone()
+                        }
+                    },
+                    None => config.password.clone(),
+                };
+                Ok(Auth::bearer(token, command))
+            }
+            AuthMode::Oidc => {
+                let key = config.oidc_keyring_key();
+                let bundle = crate::client::oidc::load_bundle(&key).ok_or_else(|| {
+                    anyhow::anyhow!(rust_i18n::t!("error_oidc_not_signed_in").to_string())
+                })?;
+                Ok(Auth::oidc(Arc::new(crate::client::oidc::TokenManager::new(
+                    bundle,
+                    Some(key),
+                ))))
+            }
+        }
+    }
+
+    /// The actual client construction, shared by [`Self::new_auth`] and
+    /// [`Self::from_config`].
+    fn new_auth_with_config(
+        ctx: Arc<dyn AppContext>,
+        url: &str,
+        auth: Auth,
+        insecure: bool,
+        client_type: Option<&str>,
+        config: &Config,
+    ) -> anyhow::Result<Self> {
+        let url = resolve_preferred_url(config, url);
         let uri: Uri = url
             .parse()
             .map_err(|e: http::uri::InvalidUri| anyhow::anyhow!("Invalid URI: {}", e))?;
@@ -444,36 +571,7 @@ impl RustyClient {
             client_auth_cert = Some((certs, key));
         }
 
-        let tls_config_builder = rustls::ClientConfig::builder();
-        let builder_with_roots = if insecure {
-            tls_config_builder
-                .dangerous()
-                .with_custom_certificate_verifier(Arc::new(NoVerifier))
-        } else {
-            #[cfg(not(target_os = "android"))]
-            {
-                static ROOT_STORE: std::sync::OnceLock<rustls::RootCertStore> =
-                    std::sync::OnceLock::new();
-                let root_store = ROOT_STORE.get_or_init(|| {
-                    let mut store = rustls::RootCertStore::empty();
-                    let result = rustls_native_certs::load_native_certs();
-                    store.add_parsable_certificates(result.certs);
-                    store
-                });
-
-                if root_store.is_empty() {
-                    return Err(anyhow::anyhow!(rust_i18n::t!("error_no_certs").to_string()));
-                }
-                tls_config_builder.with_root_certificates(root_store.clone())
-            }
-
-            #[cfg(target_os = "android")]
-            {
-                let mut root_store = rustls::RootCertStore::empty();
-                root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-                tls_config_builder.with_root_certificates(root_store)
-            }
-        };
+        let builder_with_roots = Self::root_tls_builder(insecure)?;
 
         let tls_config = if let Some((certs, key)) = client_auth_cert {
             builder_with_roots
@@ -501,8 +599,7 @@ impl RustyClient {
         };
 
         let ua_client = UserAgentLayer::new(ua_string).layer(decomp_client);
-        let auth_client =
-            DynamicAuthLayer::new(user.to_string(), pass.to_string()).layer(ua_client);
+        let auth_client = DynamicAuthLayer::new(auth).layer(ua_client);
         let redirect_client = FollowRedirectLayer::new(10).layer(auth_client);
         let timeout_client = TimeoutService::new(redirect_client, HTTP_REQUEST_TIMEOUT);
 
@@ -560,14 +657,7 @@ impl RustyClient {
         // Clone config so we can update/save if we detect an auto-corrected root.
         let mut config_for_saving = config.clone();
 
-        let client = Self::new(
-            ctx.clone(),
-            &config.url,
-            &config.username,
-            &config.password,
-            config.allow_insecure_certs,
-            client_type,
-        )?;
+        let client = Self::from_config(ctx.clone(), &config, client_type)?;
 
         // Limit timeout to ensure a clean fallback in problematic scenarios.
         // If the queue is massive, we don't want to block the initial load forever.
