@@ -1015,7 +1015,13 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
             }
         }
 
-        if parent.summary.trim().is_empty() && !clean_input.trim().is_empty() {
+        // Metadata-only input (e.g. a bare date) falls back to the raw input as
+        // the summary, but a bare type token is not a title: leave the summary
+        // empty so a page shows as untitled instead of "is:page".
+        if parent.summary.trim().is_empty()
+            && !clean_input.trim().is_empty()
+            && !parent.is_journal
+        {
             parent.summary = clean_input.clone();
         }
         if !clean_desc.is_empty() {
@@ -2064,9 +2070,11 @@ pub async fn handle_key_event(
                     }
 
                     if task.summary.trim().is_empty() && task.description.trim().is_empty() {
-                        if !clean_input.trim().is_empty() {
+                        // A bare type token (e.g. `is:page`) is not a title:
+                        // leave the summary empty so a page shows as untitled.
+                        if !clean_input.trim().is_empty() && !task.is_journal {
                             task.summary = clean_input.clone();
-                        } else {
+                        } else if clean_input.trim().is_empty() {
                             state.mode = InputMode::Normal;
                             state.reset_input();
                             state.creating_child_of = None;
