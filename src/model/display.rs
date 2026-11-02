@@ -511,7 +511,18 @@ impl TaskDisplay for Task {
 
         if let (Some(start), Some(due)) = (&self.dtstart, &self.due) {
             if start == due {
-                s.push_str(&format!(" ^@{}", start.format_smart()));
+                // An auto-anchored recurrence start (`@date rec:...`) must be
+                // rendered as `@date`, not `^@date`, so that editing the task
+                // does not turn the anchor into an explicit (deferring) start.
+                let anchored = self
+                    .unmapped_properties
+                    .iter()
+                    .any(|p| p.key == "X-CFAIT-ANCHORED-START");
+                if anchored {
+                    s.push_str(&format!(" @{}", due.format_smart()));
+                } else {
+                    s.push_str(&format!(" ^@{}", start.format_smart()));
+                }
             } else if let (
                 crate::model::DateType::Specific(s_dt),
                 crate::model::DateType::Specific(d_dt),

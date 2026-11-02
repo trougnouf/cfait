@@ -812,6 +812,26 @@ impl Task {
             .any(|p| p.key == "X-CFAIT-RECUR-FROM-COMPLETION")
     }
 
+    /// A recurring task whose start was auto-anchored to its due date
+    /// (marked with X-CFAIT-ANCHORED-START, e.g. `@date rec:...`) carries an
+    /// *anchor* start: it exists to give the RRULE a DTSTART (RFC 5545
+    /// requires one). Such a start is not a scheduling constraint, so the
+    /// task must not be treated as "starting in the future" for
+    /// readiness/deferral purposes — it is ranked by its due date like a
+    /// plain `@date` task. An explicit `^@date rec:...` has no marker and
+    /// keeps its deferral semantics.
+    pub fn has_anchored_recurrence_start(&self) -> bool {
+        self.rrule.is_some()
+            && self
+                .unmapped_properties
+                .iter()
+                .any(|p| p.key == "X-CFAIT-ANCHORED-START")
+            && self
+                .dtstart
+                .as_ref()
+                .is_some_and(|s| self.due.as_ref().is_some_and(|d| s.to_date_naive() == d.to_date_naive()))
+    }
+
     pub fn inherit_metadata_if_pending(&mut self, other: &Task) {
         if (self.etag.is_empty() || self.etag == PENDING_REFRESH_ETAG)
             && !other.etag.is_empty()
@@ -1081,6 +1101,7 @@ impl Task {
                 let grace_threshold = now + chrono::Duration::days(start_grace_period_days as i64);
                 if start_time > grace_threshold
                     && !self.has_active_or_recent_alarm(default_reminder_time)
+                    && !self.has_anchored_recurrence_start()
                 {
                     return 7;
                 }

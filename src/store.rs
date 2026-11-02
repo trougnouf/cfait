@@ -4066,6 +4066,12 @@ impl TaskStore {
                 if !completed_today {
                     if let Some(start) = &task.dtstart
                         && start.to_date_naive() == date
+                        // A ^@ item (start and due on the same day) is already
+                        // listed under "due today"; treat it as due-only.
+                        && !task
+                            .due
+                            .as_ref()
+                            .is_some_and(|d| d.to_date_naive() == date)
                     {
                         ctx.started_tasks.push(task.clone());
                     }
@@ -4481,6 +4487,7 @@ impl TaskStore {
             loop {
                 if let Some(start) = &current.dtstart
                     && start.to_start_comparison_time() > now
+                    && !current.has_anchored_recurrence_start()
                 {
                     return true;
                 }
@@ -4530,9 +4537,11 @@ impl TaskStore {
         // instead of an O(depth) walk with a fresh visited-set per task. Only the
         // ready/blocked modes consult these maps, so skip the work entirely otherwise.
         let is_future_start = |t: &Task| -> bool {
-            t.dtstart
-                .as_ref()
-                .is_some_and(|s| s.to_start_comparison_time() > now)
+            !t.has_anchored_recurrence_start()
+                && t
+                    .dtstart
+                    .as_ref()
+                    .is_some_and(|s| s.to_start_comparison_time() > now)
         };
 
         let mut eff_blocked_map: HashMap<&str, bool> = HashMap::new();
@@ -5553,11 +5562,11 @@ impl TaskStore {
             t.has_blocking_tasks = self.has_tasks_blocking(&t.uid);
             t.has_related_tasks = self.has_tasks_related_to(&t.uid);
 
-            t.is_future_start = t
-                .dtstart
-                .as_ref()
-                .map(|start| start.to_start_comparison_time() > now)
-                .unwrap_or(false);
+            t.is_future_start = !t.has_anchored_recurrence_start()
+                && t
+                    .dtstart
+                    .as_ref()
+                    .is_some_and(|start| start.to_start_comparison_time() > now);
             t.is_implicitly_future = !t.is_future_start
                 && eff_future_map
                     .get(t.uid.as_str())

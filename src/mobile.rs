@@ -964,11 +964,11 @@ fn populate_transient(t: &mut Task, store: &TaskStore, aliases: &HashMap<String,
     t.has_related_tasks = store.has_tasks_related_to(&t.uid);
     t.has_subtasks = store.children_index.contains_key(&t.uid);
     let now = Utc::now();
-    t.is_future_start = t
-        .dtstart
-        .as_ref()
-        .map(|start| start.to_start_comparison_time() > now)
-        .unwrap_or(false);
+    t.is_future_start = !t.has_anchored_recurrence_start()
+        && t
+            .dtstart
+            .as_ref()
+            .is_some_and(|start| start.to_start_comparison_time() > now);
     t.is_overdue = t
         .due
         .as_ref()

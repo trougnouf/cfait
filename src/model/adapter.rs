@@ -483,6 +483,26 @@ impl IcsAdapter {
             }
         }
 
+        // RFC 5545 3.6.1.1/3.8.5.3: DTSTART is REQUIRED for VTODO and is
+        // the anchor of any RRULE. Items created before the parser fix (or
+        // imported from elsewhere) may carry a recurrence without a start;
+        // anchor it to the due date so strict parsers accept the item.
+        // The synthetic anchor is marked X-CFAIT-ANCHORED-START (unless the
+        // task already carries the marker) so that, once re-parsed, the item
+        // is still not treated as having an explicit future start.
+        if task.rrule.is_some() && emit_dtstart.is_none() {
+            emit_dtstart = emit_due
+                .clone()
+                .or_else(|| Some(DateType::AllDay(chrono::Local::now().date_naive())));
+            if !task
+                .unmapped_properties
+                .iter()
+                .any(|p| p.key == "X-CFAIT-ANCHORED-START")
+            {
+                todo.add_property("X-CFAIT-ANCHORED-START", "TRUE");
+            }
+        }
+
         let dtstart_is_time = emit_dtstart
             .as_ref()
             .map(|d| matches!(d, DateType::Specific(_)))

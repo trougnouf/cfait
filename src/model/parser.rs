@@ -3052,8 +3052,9 @@ pub fn apply_smart_input(
     let saved_deps = std::mem::take(&mut task.dependencies);
     let saved_related = std::mem::take(&mut task.related_to);
     // Reset fields
-    task.unmapped_properties
-        .retain(|p| p.key != "X-CFAIT-RECUR-FROM-COMPLETION");
+    task.unmapped_properties.retain(|p| {
+        p.key != "X-CFAIT-RECUR-FROM-COMPLETION" && p.key != "X-CFAIT-ANCHORED-START"
+    });
     task.priority = 0;
     task.due = None;
     task.dtstart = None;
@@ -3961,6 +3962,27 @@ pub fn apply_smart_input(
         let first_occurrence = calculate_first_occurrence(rrule, today);
         task.dtstart = Some(DateType::AllDay(first_occurrence));
         task.due = Some(DateType::AllDay(first_occurrence));
+    }
+
+    // A recurrence must have a start anchor (RFC 5545 3.8.5.3). When the
+    // user gave only a due date (`@date rec:...`), anchor the recurrence
+    // to it, so the serialized VTODO carries a DTSTART. The anchor is marked
+    // with X-CFAIT-ANCHORED-START so it can be told apart from an explicit
+    // `^@date` (which remains a scheduling constraint): the marker survives
+    // ICS round-trips and syncs via unmapped_properties.
+    if task.rrule.is_some() && task.dtstart.is_none() && task.due.is_some() {
+        task.dtstart = task.due.clone();
+        if !task
+            .unmapped_properties
+            .iter()
+            .any(|p| p.key == "X-CFAIT-ANCHORED-START")
+        {
+            task.unmapped_properties.push(crate::model::RawProperty {
+                key: "X-CFAIT-ANCHORED-START".to_string(),
+                value: "TRUE".to_string(),
+                params: vec![],
+            });
+        }
     }
 
     if let (Some(start), Some(due)) = (&task.dtstart, &task.due)
