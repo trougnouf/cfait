@@ -237,6 +237,9 @@ fun HomeScreen(
     var journalDateStr by rememberSaveable { mutableStateOf(SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())) }
     var journalWikiUid by rememberSaveable { mutableStateOf<String?>(null) }
     var journalWikiTitle by rememberSaveable { mutableStateOf("") }
+    // Bumped whenever a brand-new wiki page is opened so the journal view can
+    // focus the title field and let the user start typing immediately.
+    var newPageFocusToken by remember { mutableIntStateOf(0) }
     var isManualSyncing by remember { mutableStateOf(false) }
     var activeOpCount by remember { mutableIntStateOf(0) }
     var journalSelectedHref by rememberSaveable { mutableStateOf<String?>(null) }
@@ -614,6 +617,8 @@ fun HomeScreen(
             if (journalTodayHref.isNotEmpty()) {
                 journalSelectedHref = journalTodayHref
             }
+            // A deep link navigates to the journal; make sure the drawer is out of the way.
+            scope.launch { drawerState.close() }
             scope.launch(Dispatchers.IO) {
                 activeOpCount++
                 try {
@@ -2105,6 +2110,8 @@ fun HomeScreen(
                                                                 clickedCal.time = calData.parsedDate
                                                                 clickedCal.set(Calendar.DAY_OF_MONTH, day)
                                                                 selectJournalDate(sdf.format(clickedCal.time))
+                                                                // Picked a specific day to view; get out of its way.
+                                                                scope.launch { drawerState.close() }
                                                             },
                                                         contentAlignment = Alignment.Center
                                                     ) {
@@ -2130,13 +2137,17 @@ fun HomeScreen(
                                             c.time = calData.parsedDate
                                             c.add(Calendar.DAY_OF_MONTH, -1)
                                             selectJournalDate(sdf.format(c.time))
+                                            scope.launch { drawerState.close() }
                                         },
                                         colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.onSurface),
                                         contentPadding = PaddingValues(0.dp)
                                     ) { Text("< ${stringResource(R.string.journal_yesterday)}", fontSize = 12.sp) }
 
                                     Button(
-                                        onClick = { selectJournalDate(sdf.format(Date())) },
+                                        onClick = {
+                                            selectJournalDate(sdf.format(Date()))
+                                            scope.launch { drawerState.close() }
+                                        },
                                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer),
                                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                                     ) { Text(stringResource(R.string.journal_today), fontSize = 12.sp) }
@@ -2147,6 +2158,7 @@ fun HomeScreen(
                                             c.time = calData.parsedDate
                                             c.add(Calendar.DAY_OF_MONTH, 1)
                                             selectJournalDate(sdf.format(c.time))
+                                            scope.launch { drawerState.close() }
                                         },
                                         colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.onSurface),
                                         contentPadding = PaddingValues(0.dp)
@@ -2169,7 +2181,12 @@ fun HomeScreen(
                                             journalWikiTitle = ""
                                             // Collapse the sidebar so the user can start
                                             // typing in the new page immediately.
+                                            newPageFocusToken++
                                             withContext(Dispatchers.Main) { drawerState.close() }
+                                            // Refresh so the new page appears in the
+                                            // sidebar list right away.
+                                            updateTaskList()
+                                            triggerBackgroundSync(context, api)
                                         }
                                     }) {
                                         NfIcon(NfIcons.NEW_FILE)
@@ -2204,6 +2221,8 @@ fun HomeScreen(
                                             if (isTask) {
                                                 journalWikiUid = page.uid
                                                 journalWikiTitle = page.title
+                                                // Opened a page from the sidebar; get out of its way.
+                                                scope.launch { drawerState.close() }
                                             } else {
                                                 onToggleCollapse(page.uid)
                                             }
@@ -2913,13 +2932,17 @@ fun HomeScreen(
                                     journalDateStr = journalDateStr,
                                     journalWikiUid = journalWikiUid,
                                     journalWikiTitle = journalWikiTitle,
+                                    focusTitleToken = newPageFocusToken,
                                     onDateChange = { d -> selectJournalDate(d) },
                                     onOpenWikiPage = { newUid, newTitle ->
                                         journalWikiUid = newUid
                                         journalWikiTitle = newTitle
+                                        // A freshly created subpage: focus its title for immediate typing.
+                                        newPageFocusToken++
                                     },
                                     onCloseWikiPage = {
                                         journalWikiUid = null
+                                        journalWikiTitle = ""
                                     },
                                     onTaskClick = onTaskClick,
                                     onDataChanged = {

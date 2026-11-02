@@ -22,10 +22,13 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
@@ -274,6 +277,7 @@ fun JournalMainView(
     journalDateStr: String,
     journalWikiUid: String?,
     journalWikiTitle: String,
+    focusTitleToken: Int = 0,
     onDateChange: (String) -> Unit,
     onOpenWikiPage: (String, String) -> Unit,
     onCloseWikiPage: () -> Unit,
@@ -284,6 +288,7 @@ fun JournalMainView(
     val text = remember { TextFieldState() }
     var initialText by remember { mutableStateOf("") }
     val titleInputState = remember(journalWikiTitle) { TextFieldState(journalWikiTitle) }
+    val titleFocusRequester = remember { FocusRequester() }
     var initialTitle by remember { mutableStateOf("") }
     var uid by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -299,6 +304,7 @@ fun JournalMainView(
     val scope = rememberCoroutineScope()
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val context = LocalContext.current
+    val keyboardController = LocalSoftwareKeyboardController.current
     val isImeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     var isMaximized by remember { mutableStateOf(false) }
     val hideExtras = isMaximized || isImeVisible
@@ -331,6 +337,21 @@ fun JournalMainView(
                 undoStack = listOf(snap)
                 redoStack = emptyList()
                 isLoading = false
+            }
+        }
+    }
+
+    // A new page was just created: put the cursor in the title field so the
+    // user can start typing immediately (also raises the keyboard).
+    LaunchedEffect(focusTitleToken) {
+        if (focusTitleToken > 0) {
+            // A tiny delay ensures the title TextField is fully laid out in the
+            // Compose tree (it is composed only once journalWikiUid is set).
+            delay(50)
+            try {
+                titleFocusRequester.requestFocus()
+                keyboardController?.show()
+            } catch (_: Exception) {
             }
         }
     }
@@ -444,7 +465,7 @@ fun JournalMainView(
                 }
                 OutlinedTextField(
                     state = titleInputState,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).focusRequester(titleFocusRequester),
                     lineLimits = TextFieldLineLimits.SingleLine,
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,
@@ -508,6 +529,8 @@ fun JournalMainView(
                                     api.createWikiPage("", href, journalWikiUid)
                                 }
                                 onOpenWikiPage(newUid, "")
+                                // Refresh so the new subpage appears in the sidebar list.
+                                onDataChanged()
                             }
                         }, modifier = Modifier.size(40.dp)) {
                             NfIcon(NfIcons.CHILD, 20.sp)
@@ -542,6 +565,8 @@ fun JournalMainView(
                                     api.createWikiPage("", href, parentUid)
                                 }
                                 onOpenWikiPage(newUid, "")
+                                // Refresh so the new subpage appears in the sidebar list.
+                                onDataChanged()
                             }
                         }, modifier = Modifier.size(40.dp)) {
                             NfIcon(NfIcons.CHILD, 20.sp)
