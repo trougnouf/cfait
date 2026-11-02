@@ -1396,7 +1396,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                                     Style::default().fg(Color::DarkGray),
                                 )
                             }
-                        } else if let Some(d) = &t.due {
+                        } else if let Some(d) = t.effective_due.as_ref().or(t.due.as_ref()) {
                             let style = if t.is_overdue {
                                 Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
                             } else if t.is_due_today {

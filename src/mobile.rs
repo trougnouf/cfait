@@ -16,7 +16,7 @@ use crate::context::{AppContext, StandardContext};
 use crate::controller::TaskController;
 use crate::help::HelpTab;
 use crate::model::parser::{SyntaxType, tokenize_smart_input};
-use crate::model::{AlarmTrigger, DateType, PENDING_REFRESH_ETAG, Task};
+use crate::model::{AlarmTrigger, DateType, PENDING_REFRESH_ETAG, RecurrenceEngine, Task};
 use crate::storage::{LOCAL_CALENDAR_HREF, LocalCalendarRegistry, LocalStorage};
 use crate::store::{FilterOptions, TaskStore, UNCATEGORIZED_ID};
 use chrono::{DateTime, NaiveTime, Utc};
@@ -2142,6 +2142,7 @@ impl CfaitMobile {
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let index = AlarmIndex::rebuild_from_tasks(
             &store.calendars,
+            &config.disabled_calendars,
             config.auto_reminders,
             &config.default_reminder_time,
         );
@@ -2939,6 +2940,7 @@ impl CfaitMobile {
                 let s = store_arc.lock().await;
                 crate::alarm_index::AlarmIndex::rebuild_from_tasks(
                     &s.calendars,
+                    &config.disabled_calendars,
                     config.auto_reminders,
                     &config.default_reminder_time,
                 )
@@ -3888,9 +3890,17 @@ impl CfaitMobile {
 
                     let mut current_ts = None;
                     if type_key_with_colon == "implicit_due:" {
-                        if let Some(due) = &task.due {
-                            current_ts =
-                                Some(due.to_utc_with_default_time(default_time).to_rfc3339());
+                        // Accept the stored due date or any projected RRULE
+                        // occurrence: by the time the reminder rings, the
+                        // projection has already advanced to the next one.
+                        if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(expected_ts)
+                            && RecurrenceEngine::is_due_moment(
+                                task,
+                                dt.with_timezone(&chrono::Utc),
+                                default_time,
+                            )
+                        {
+                            current_ts = Some(expected_ts.to_string());
                         }
                     } else if type_key_with_colon == "implicit_start:"
                         && let Some(start) = &task.dtstart
@@ -4200,6 +4210,7 @@ impl CfaitMobile {
             let store = self.controller.store.lock().await;
             AlarmIndex::rebuild_from_tasks(
                 &store.calendars,
+                &config.disabled_calendars,
                 config.auto_reminders,
                 &config.default_reminder_time,
             )

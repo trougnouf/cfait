@@ -497,7 +497,7 @@ pub fn view_task_row<'a>(
                     } else {
                         row_content = row_content.push(start_btn);
                     }
-                } else if let Some(d) = &task.due {
+                } else if let Some(d) = task.effective_due.as_ref().or(task.due.as_ref()) {
                     let due_date_str = d.to_date_naive().format("%Y-%m-%d").to_string();
                     row_content = row_content.push(
                         button(

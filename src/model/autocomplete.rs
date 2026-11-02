@@ -222,7 +222,75 @@ pub fn suggest(
         }
     }
 
-    // 4. Dependencies, Relations, Parents & WikiLinks
+    // 4. Status filters (is:...)
+    if lower.starts_with("is:")
+        || lex
+            .search_prefix
+            .iter()
+            .any(|p| !p.is_empty() && lower.starts_with(p))
+    {
+        // Candidates are the values the matcher accepts: the lexicon's
+        // `is:*` alias lists (defaults plus configured/localized overrides)
+        // and the pinned exact token, in the order the filters are documented.
+        let mut seen: HashSet<String> = HashSet::new();
+        let mut candidates: Vec<(String, String)> = Vec::new();
+        for (list, description) in [
+            (&lex.search_is_done, "Done"),
+            (&lex.search_is_started, "Started (in process)"),
+            (&lex.search_is_ongoing, "Started (in process)"),
+            (&lex.search_is_active, "Not done"),
+            (&lex.search_is_ready, "Ready (not blocked)"),
+            (&lex.search_is_blocked, "Blocked"),
+            (&lex.search_is_note, "Note"),
+            (&lex.search_is_page, "Wiki page"),
+            (&lex.search_is_flat, "Flat document"),
+            (&lex.search_is_permanent, "Permanent tracker"),
+            (&lex.search_is_canceled, "Canceled"),
+            (&lex.search_is_recurrent, "Recurring"),
+        ] {
+            for value in list {
+                if seen.insert(value.clone()) {
+                    candidates.push((value.clone(), description.to_string()));
+                }
+            }
+        }
+        // `is:pinned` is an exact token rather than an alias list; the exact
+        // map is a HashMap, so sort its pinned keys to keep the order
+        // deterministic, and slot them in where the matcher checks them.
+        let mut pinned: Vec<&String> = lex
+            .exact
+            .iter()
+            .filter(|(_, token)| **token == crate::model::parser::ExactToken::IsPinned)
+            .map(|(value, _)| value)
+            .collect();
+        pinned.sort();
+        for value in pinned {
+            if seen.insert(value.clone()) {
+                candidates.push((value.clone(), "Pinned".to_string()));
+            }
+        }
+        for value in &lex.search_is_archived {
+            if seen.insert(value.clone()) {
+                candidates.push((value.clone(), "Archived".to_string()));
+            }
+        }
+
+        let suggestions: Vec<Suggestion> = candidates
+            .into_iter()
+            .filter(|(value, _)| starts_with_ignore_case(value, &lower))
+            .map(|(value, description)| Suggestion {
+                replacement: value.clone(),
+                display: value,
+                description,
+            })
+            .collect();
+
+        if !suggestions.is_empty() {
+            return Some((start..end, suggestions));
+        }
+    }
+
+    // 5. Dependencies, Relations, Parents & WikiLinks
     let mut is_task_lookup = false;
     let mut orig_prefix = "";
     let mut search_query = "";

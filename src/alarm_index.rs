@@ -25,7 +25,7 @@
 // the version field in AlarmIndex::default() to invalidate stale indices.
 
 use crate::context::AppContext;
-use crate::model::{AlarmTrigger, Task};
+use crate::model::{AlarmTrigger, RecurrenceEngine, Task};
 use crate::storage::LocalStorage;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
@@ -126,8 +126,12 @@ impl AlarmIndex {
 
     /// Regenerates the entire alarm index from a list of tasks.
     /// This should be called whenever the task store is loaded or significantly modified.
+    /// `disabled_calendars` lists calendar hrefs that are disabled in the settings; tasks in
+    /// those calendars must not produce alarms (issue #121). Calendars that are merely
+    /// hidden/untoggled in the collections tab are still active and keep their alarms.
     pub fn rebuild_from_tasks(
         tasks: &HashMap<String, HashMap<String, Task>>,
+        disabled_calendars: &[String],
         auto_reminders_enabled: bool,
         default_reminder_time: &str,
     ) -> Self {
@@ -142,6 +146,11 @@ impl AlarmIndex {
 
         for (calendar_href, task_map) in tasks {
             if crate::storage::is_system_calendar(calendar_href) {
+                continue;
+            }
+            // Tasks in calendars disabled in the settings must not produce
+            // alarms (issue #121). Merely hidden/untoggled calendars keep theirs.
+            if disabled_calendars.iter().any(|h| h == calendar_href) {
                 continue;
             }
 
@@ -232,8 +241,12 @@ impl AlarmIndex {
                             }
                         };
 
+                        // The "due" reminder targets the *projected* due date, so a
+                        // past-due recurring task is reminded at its next occurrence
+                        // instead of being silently skipped (its stored due is stale).
+                        let projected_due = RecurrenceEngine::projected_due(task, now);
                         let triggers = [
-                            (task.due.as_ref(), "due", "Due now"),
+                            (projected_due.as_ref(), "due", "Due now"),
                             (task.dtstart.as_ref(), "start", "Starting now"),
                         ];
                         for (date_opt, type_key, desc) in triggers {
@@ -539,8 +552,10 @@ mod tests {
 
         // Rebuild the alarm index
         let index = AlarmIndex::rebuild_from_tasks(
-            &calendars, true,    // auto_reminders_enabled
-            "09:00", // default_reminder_time
+            &calendars,
+            &[],               // disabled_calendars
+            true,              // auto_reminders_enabled
+            "09:00",           // default_reminder_time
         );
 
         // The index should NOT contain any alarms for this task
@@ -554,6 +569,128 @@ mod tests {
             task_alarms.len(),
             0,
             "Dismissed implicit alarm should not be in the index"
+        );
+    }
+
+    #[test]
+    fn test_disabled_calendars_suppress_alarms_but_hidden_keep_them() {
+        use crate::model::DateType;
+        use std::collections::HashMap;
+
+        let now = Utc::now();
+        let due_dt = now + chrono::Duration::hours(1);
+
+        fn make_due_task(uid: &str, calendar_href: &str, due: DateTime<Utc>) -> Task {
+            Task {
+                uid: uid.to_string(),
+                summary: format!("Task {}", uid),
+                description: String::new(),
+                status: crate::model::TaskStatus::NeedsAction,
+                estimated_duration: None,
+                estimated_duration_max: None,
+                due: Some(DateType::Specific(due)),
+                dtstart: None,
+                alarms: vec![],
+                exdates: vec![],
+                priority: 0,
+                percent_complete: None,
+                parent_uid: None,
+                dependencies: vec![],
+                related_to: vec![],
+                etag: String::new(),
+                href: String::new(),
+                calendar_href: calendar_href.to_string(),
+                categories: vec![],
+                depth: 0,
+                rrule: None,
+                locations: vec![],
+                url: None,
+                geo: None,
+                collapsed: false,
+                pinned: false,
+                is_note: false,
+                manual_block: false,
+                permanent: false,
+                is_journal: false,
+                flat: false,
+                archived: false,
+                is_event: false,
+                manual_sort: false,
+                sort_position: String::new(),
+                time_spent_seconds: 0,
+                last_started_at: None,
+                sessions: vec![],
+                unmapped_properties: vec![],
+                sequence: 0,
+                raw_alarms: vec![],
+                raw_components: vec![],
+                create_event: None,
+                goal: None,
+                inline_media: std::collections::HashMap::new(),
+                target_collection: None,
+                is_blocked: false,
+                is_implicitly_blocked: false,
+                is_implicitly_future: false,
+                has_subtasks: false,
+                has_visible_subtasks: false,
+                sort_rank: 0,
+                effective_priority: 0,
+                effective_due: None,
+                effective_dtstart: None,
+                visible_categories: vec![],
+                visible_locations: vec![],
+                has_blocking_tasks: false,
+                has_related_tasks: false,
+                is_future_start: false,
+                is_overdue: false,
+                is_due_today: false,
+                tree_location_count: 0,
+                is_search_context: false,
+                transient_is_paused: false,
+                transient_recent_ts: 0,
+                transient_desc_tags: Vec::new(),
+                transient_desc_locs: Vec::new(),
+                cached_has_subtasks: None,
+            }
+        }
+
+        let mut calendars = HashMap::new();
+        for (uid, href) in [
+            ("visible-task", "dav://visible"),
+            ("hidden-task", "dav://hidden"),
+            ("disabled-task", "dav://disabled"),
+        ] {
+            let mut task_map = HashMap::new();
+            task_map.insert(uid.to_string(), make_due_task(uid, href, due_dt));
+            calendars.insert(href.to_string(), task_map);
+        }
+
+        // No disabled calendars: all three tasks are indexed.
+        let index = AlarmIndex::rebuild_from_tasks(&calendars, &[], true, "09:00");
+        assert_eq!(index.alarms.len(), 3, "all tasks should be indexed");
+
+        // Only the settings-disabled calendar is excluded (issue #121). A calendar
+        // that is merely hidden/untoggled in the collections tab is still active and
+        // must keep its alarms.
+        let disabled = vec!["dav://disabled".to_string()];
+        let index = AlarmIndex::rebuild_from_tasks(&calendars, &disabled, true, "09:00");
+        let hrefs: Vec<&str> = index.alarms.iter().map(|a| a.calendar_href.as_str()).collect();
+        assert_eq!(
+            hrefs.len(),
+            2,
+            "only the disabled calendar's task is excluded"
+        );
+        assert!(
+            hrefs.contains(&"dav://hidden"),
+            "a merely-hidden calendar must still produce alarms"
+        );
+        assert!(
+            hrefs.contains(&"dav://visible"),
+            "the visible calendar must still produce alarms"
+        );
+        assert!(
+            !hrefs.contains(&"dav://disabled"),
+            "tasks in disabled calendars must not produce alarms"
         );
     }
 }
