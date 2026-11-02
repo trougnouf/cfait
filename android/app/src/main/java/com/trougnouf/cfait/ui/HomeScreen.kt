@@ -2167,6 +2167,9 @@ fun HomeScreen(
                                             val uid = api.createWikiPage("", href, null)
                                             journalWikiUid = uid
                                             journalWikiTitle = ""
+                                            // Collapse the sidebar so the user can start
+                                            // typing in the new page immediately.
+                                            withContext(Dispatchers.Main) { drawerState.close() }
                                         }
                                     }) {
                                         NfIcon(NfIcons.NEW_FILE)
