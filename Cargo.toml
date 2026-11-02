@@ -45,8 +45,10 @@ tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"
 camino = "1.2"
 libdav = "0.11"
 http = "1.5"
+hyper = "1"
 hyper-util = { version = "0.1", features = ["client", "client-legacy", "http1", "tokio"] }
 hyper-rustls = { version = "0.27", features = ["native-tokio"] }
+http-body-util = "0.1"
 tower-http = { version = "0.7", features = ["auth", "decompression-full"] }
 rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -65,6 +67,9 @@ roxmltree = "0.21"
 fs2 = "0.4"
 digest_auth = "0.3"
 base64 = "0.23"
+# OIDC / OAuth2 client support (PKCE code challenge + secure randomness)
+sha2 = "0.10"
+getrandom = "0.3"
 tower = { version = "0.5", features = ["util"] }
 tower-service = "0.3" # Explicitly add tower-service for the trait
 tower-layer = "0.3"   # And tower-layer for the Layer trait

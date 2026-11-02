@@ -56,6 +56,12 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ObUserChanged(_)
         | Message::ObPassChanged(_)
         | Message::ToggleObPasswordVisibility
+        | Message::ObAuthModeChanged(_)
+        | Message::ObOidcIssuerChanged(_)
+        | Message::ObOidcClientIdChanged(_)
+        | Message::OidcSignIn
+        | Message::OidcSignOut
+        | Message::OidcSignInResult(_)
         | Message::ObDefaultCalChanged(_)
         | Message::SetTlsClientCertPath(_)
         | Message::SetTlsClientKeyPath(_)
