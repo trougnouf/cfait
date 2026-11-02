@@ -769,6 +769,18 @@ impl Task {
         None
     }
 
+    /// Whether this task's own `goal:` is listed in the Goals tab. Done tasks
+    /// (completed/cancelled) and history snapshots of recurring tasks are
+    /// excluded: once its single task is done, the goal no longer tracks
+    /// anything in the Goals tab (the task row itself still shows its badge).
+    pub fn goal_in_goals_tab(&self) -> bool {
+        !self.status.is_done()
+            && !self
+                .unmapped_properties
+                .iter()
+                .any(|p| p.key == "X-CFAIT-HISTORY-OF")
+    }
+
     /// Whether the description is parsed as a flat document (journal rules):
     /// Markdown headers and plain list items stay prose instead of being
     /// extracted into subtasks. True for journal pages (`is:page`) and for

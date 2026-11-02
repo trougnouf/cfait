@@ -218,10 +218,7 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
                 continue;
             }
             for t in map.values() {
-                if t.unmapped_properties
-                    .iter()
-                    .any(|p| p.key == "X-CFAIT-HISTORY-OF")
-                {
+                if !t.goal_in_goals_tab() {
                     continue;
                 }
                 if let Some(goal) = &t.goal {

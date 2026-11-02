@@ -8,7 +8,7 @@
 use cfait::config::{Goal, GoalType, Interval, IntervalUnit};
 use cfait::context::AppContext;
 use cfait::context::TestContext;
-use cfait::model::Task;
+use cfait::model::{Task, TaskStatus};
 use cfait::model::item::WorkSession;
 use cfait::store::TaskStore;
 use std::collections::HashMap;
@@ -593,4 +593,64 @@ fn count_progress_and_history_agree_with_individual_calls() {
 
     assert_eq!(progress, store.calculate_goal_progress("#work", &goal));
     assert_eq!(history, store.calculate_goal_history("#work", &goal, 7));
+}
+
+/// A task-specific goal is listed in the Goals tab while the task is
+/// actionable, but not once the single task is done (completed/cancelled) —
+/// a finished task no longer tracks a goal. Undoing the completion brings
+/// the goal back.
+#[test]
+fn done_task_goal_hidden_from_goals_tab() {
+    let mut store = make_store();
+
+    let mut task = Task::new("Do math goal:7/w", &HashMap::new(), None);
+    task.uid = "math".to_string();
+    task.calendar_href = "cal".to_string();
+    assert!(task.goal.is_some(), "goal: token should be parsed");
+    store.add_task(task);
+
+    assert!(store.get_task_ref("math").unwrap().goal_in_goals_tab());
+
+    store.set_status("math", TaskStatus::Completed, false);
+    assert!(
+        !store.get_task_ref("math").unwrap().goal_in_goals_tab(),
+        "completed task's goal must not remain in the Goals tab"
+    );
+
+    store.set_status("math", TaskStatus::NeedsAction, false);
+    assert!(store.get_task_ref("math").unwrap().goal_in_goals_tab());
+
+    store.set_status("math", TaskStatus::Cancelled, false);
+    assert!(!store.get_task_ref("math").unwrap().goal_in_goals_tab());
+}
+
+/// A recurring task with a goal keeps its Goals tab entry after completion:
+/// the live instance is advanced (NeedsAction) while only the history
+/// snapshot is done, so the snapshot is the one excluded.
+#[test]
+fn recurring_task_goal_stays_in_goals_tab_after_completion() {
+    let mut store = make_store();
+
+    let mut task = Task::new("Do math goal:7/w", &HashMap::new(), None);
+    task.uid = "math-rec".to_string();
+    task.calendar_href = "cal".to_string();
+    task.due = Some(cfait::model::DateType::Specific(
+        chrono::Utc::now() - chrono::Duration::days(1),
+    ));
+    task.rrule = Some("FREQ=DAILY".to_string());
+    store.add_task(task);
+
+    let (history, secondary, _) = store
+        .set_status("math-rec", TaskStatus::Completed, false)
+        .unwrap();
+    let next = secondary.expect("recurring task should advance to a next instance");
+
+    assert!(
+        next.goal_in_goals_tab(),
+        "live recurring instance keeps its goal"
+    );
+    assert!(
+        !history.goal_in_goals_tab(),
+        "history snapshot is done and must be excluded"
+    );
 }
