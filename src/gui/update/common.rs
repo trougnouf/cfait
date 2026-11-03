@@ -249,9 +249,7 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
             .store
             .calendars
             .iter()
-            .filter(|(href, _)| {
-                !app.disabled_calendars.contains(*href)
-            })
+            .filter(|(href, _)| !app.disabled_calendars.contains(*href))
             .flat_map(|(_, m)| m.values())
             .cloned()
             .collect();

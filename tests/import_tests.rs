@@ -284,7 +284,10 @@ fn test_import_with_timestamps_backfills_created_and_modified_from_dtstamp() {
     // per RFC 5545, so the backfilled copies are what persist on export/sync).
     let ics = t.to_ics();
     assert!(ics.contains("CREATED:20220304T050607Z"), "export: {ics}");
-    assert!(ics.contains("LAST-MODIFIED:20220304T050607Z"), "export: {ics}");
+    assert!(
+        ics.contains("LAST-MODIFIED:20220304T050607Z"),
+        "export: {ics}"
+    );
 }
 
 #[test]

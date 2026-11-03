@@ -369,9 +369,7 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
                         .store
                         .calendars
                         .iter()
-                        .filter(|(href, _)| {
-                            !app_state.disabled_calendars.contains(*href)
-                        })
+                        .filter(|(href, _)| !app_state.disabled_calendars.contains(*href))
                         .flat_map(|(_, m)| m.values())
                         .cloned()
                         .collect();

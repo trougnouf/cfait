@@ -11,7 +11,7 @@
 use base64::Engine;
 use getrandom::fill as getrandom_fill;
 use http_body_util::BodyExt;
-use percent_encoding::{percent_decode_str, utf8_percent_encode, AsciiSet, CONTROLS};
+use percent_encoding::{AsciiSet, CONTROLS, percent_decode_str, utf8_percent_encode};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -75,12 +75,18 @@ impl std::fmt::Display for OidcError {
                 "Network error while contacting the identity provider: {msg}"
             ),
             OidcError::Discovery(msg) => write!(f, "OIDC discovery failed: {msg}"),
-            OidcError::Parse(msg) => write!(f, "Unexpected response from the identity provider: {msg}"),
+            OidcError::Parse(msg) => {
+                write!(f, "Unexpected response from the identity provider: {msg}")
+            }
             OidcError::Provider(msg) => write!(f, "{msg}"),
             OidcError::DevicePending => write!(f, "Waiting for authorization"),
             OidcError::DeviceSlowDown => write!(f, "Slowing down"),
-            OidcError::DeviceAccessDenied => write!(f, "Authorization was denied by the identity provider"),
-            OidcError::DeviceExpired => write!(f, "The authorization code expired, please try again"),
+            OidcError::DeviceAccessDenied => {
+                write!(f, "Authorization was denied by the identity provider")
+            }
+            OidcError::DeviceExpired => {
+                write!(f, "The authorization code expired, please try again")
+            }
             OidcError::NoToken => write!(f, "No valid token available, please sign in again"),
             OidcError::LoginTimeout => write!(f, "Timed out waiting for the browser authorization"),
             OidcError::StateMismatch => write!(f, "Authorization state mismatch, please try again"),
@@ -242,7 +248,10 @@ impl OidcTransport for HyperTransport {
         let req = http::Request::builder()
             .method(http::Method::POST)
             .uri(url)
-            .header(http::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+            .header(
+                http::header::CONTENT_TYPE,
+                "application/x-www-form-urlencoded",
+            )
             .header(http::header::ACCEPT, "application/json")
             .body(body)
             .map_err(|e| OidcError::Io(e.to_string()))?;
@@ -261,8 +270,8 @@ impl OidcTransport for HyperTransport {
         if body.len() > MAX_BODY_BYTES {
             return Err(OidcError::Parse("response too large".to_string()));
         }
-        let json: serde_json::Value =
-            serde_json::from_slice(&body).map_err(|e| OidcError::Parse(format!("HTTP {status}: {e}")))?;
+        let json: serde_json::Value = serde_json::from_slice(&body)
+            .map_err(|e| OidcError::Parse(format!("HTTP {status}: {e}")))?;
         Ok((status, json))
     }
 }
@@ -365,7 +374,10 @@ impl<T: OidcTransport> OidcClient<T> {
         if let Some(secret) = client_secret {
             form.push(("client_secret".to_string(), secret.to_string()));
         }
-        let (status, value) = self.transport.post_form(&meta.token_endpoint, &form).await?;
+        let (status, value) = self
+            .transport
+            .post_form(&meta.token_endpoint, &form)
+            .await?;
         if (200..300).contains(&status) {
             return token_bundle_from_response(
                 &value,
@@ -375,11 +387,7 @@ impl<T: OidcTransport> OidcClient<T> {
                 None,
             );
         }
-        match value
-            .get("error")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-        {
+        match value.get("error").and_then(|v| v.as_str()).unwrap_or("") {
             "authorization_pending" => Err(OidcError::DevicePending),
             "slow_down" => Err(OidcError::DeviceSlowDown),
             "access_denied" => Err(OidcError::DeviceAccessDenied),
@@ -489,8 +497,7 @@ impl TokenManager {
 
         let refresh_token = refresh_token.ok_or(OidcError::NoToken)?;
 
-        let transport =
-            HyperTransport::new().map_err(|e| OidcError::Io(e.to_string()))?;
+        let transport = HyperTransport::new().map_err(|e| OidcError::Io(e.to_string()))?;
         let mut form = vec![
             ("grant_type".to_string(), "refresh_token".to_string()),
             ("refresh_token".to_string(), refresh_token.clone()),
@@ -507,18 +514,13 @@ impl TokenManager {
             // The refresh token is likely revoked; the user must sign in again.
             return Err(provider_error(&value));
         }
-        let new_bundle = token_bundle_from_response(
-            &value,
-            &endpoint,
-            &client_id,
-            secret,
-            Some(refresh_token),
-        )?;
+        let new_bundle =
+            token_bundle_from_response(&value, &endpoint, &client_id, secret, Some(refresh_token))?;
         let token = new_bundle.access_token.clone();
-        if let Some(key) = &self.keyring_key {
-            if let Err(e) = save_bundle(key, &new_bundle) {
-                log::warn!("Failed to persist refreshed OIDC token: {e}");
-            }
+        if let Some(key) = &self.keyring_key
+            && let Err(e) = save_bundle(key, &new_bundle)
+        {
+            log::warn!("Failed to persist refreshed OIDC token: {e}");
         }
         {
             let mut state = self.state.lock().await;
@@ -616,8 +618,7 @@ pub async fn pkce_login(
     client_secret: Option<String>,
     scope: Option<&str>,
 ) -> Result<OidcTokenBundle, OidcError> {
-    let transport =
-        HyperTransport::new().map_err(|e| OidcError::Io(e.to_string()))?;
+    let transport = HyperTransport::new().map_err(|e| OidcError::Io(e.to_string()))?;
     let client = OidcClient::new(transport);
     let meta = client.discover(issuer).await?;
 
@@ -649,10 +650,11 @@ pub async fn pkce_login(
     // still complete the login manually (the wait runs for 5 minutes).
     let _ = open_url(&auth_url);
 
-    let (mut socket, _) = tokio::time::timeout(Duration::from_secs(PKCE_WAIT_SECS), listener.accept())
-        .await
-        .map_err(|_| OidcError::LoginTimeout)?
-        .map_err(|e| OidcError::Io(e.to_string()))?;
+    let (mut socket, _) =
+        tokio::time::timeout(Duration::from_secs(PKCE_WAIT_SECS), listener.accept())
+            .await
+            .map_err(|_| OidcError::LoginTimeout)?
+            .map_err(|e| OidcError::Io(e.to_string()))?;
 
     // Read the request head (up to the blank line), bounded.
     let mut buf: Vec<u8> = Vec::new();
@@ -681,8 +683,12 @@ pub async fn pkce_login(
         let _ = socket
             .write_all(
                 browser_page(
-                    rust_i18n::t!("oidc_browser_failed_title").to_string().as_str(),
-                    rust_i18n::t!("oidc_browser_failed_body").to_string().as_str(),
+                    rust_i18n::t!("oidc_browser_failed_title")
+                        .to_string()
+                        .as_str(),
+                    rust_i18n::t!("oidc_browser_failed_body")
+                        .to_string()
+                        .as_str(),
                 )
                 .as_bytes(),
             )
@@ -698,8 +704,12 @@ pub async fn pkce_login(
                 .cloned()
                 .unwrap_or_else(|| "missing code".to_string());
             let page = browser_page(
-                rust_i18n::t!("oidc_browser_failed_title").to_string().as_str(),
-                rust_i18n::t!("oidc_browser_failed_body").to_string().as_str(),
+                rust_i18n::t!("oidc_browser_failed_title")
+                    .to_string()
+                    .as_str(),
+                rust_i18n::t!("oidc_browser_failed_body")
+                    .to_string()
+                    .as_str(),
             );
             let _ = socket.write_all(page.as_bytes()).await;
             let _ = socket.shutdown().await;
@@ -710,7 +720,9 @@ pub async fn pkce_login(
     };
 
     let page = browser_page(
-        rust_i18n::t!("oidc_browser_done_title").to_string().as_str(),
+        rust_i18n::t!("oidc_browser_done_title")
+            .to_string()
+            .as_str(),
         rust_i18n::t!("oidc_browser_done_body").to_string().as_str(),
     );
     let _ = socket.write_all(page.as_bytes()).await;
@@ -837,12 +849,10 @@ fn parse_query(query: &str) -> HashMap<String, String> {
 }
 
 fn find_subsequence(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    haystack
-        .windows(needle.len())
-        .position(|w| w == needle)
+    haystack.windows(needle.len()).position(|w| w == needle)
 }
 
-fn required_str<'a>(value: &'a serde_json::Value, field: &str) -> Result<String, OidcError> {
+fn required_str(value: &serde_json::Value, field: &str) -> Result<String, OidcError> {
     value
         .get(field)
         .and_then(|v| v.as_str())
@@ -857,9 +867,7 @@ fn provider_error(value: &serde_json::Value) -> OidcError {
         .get("error")
         .and_then(|v| v.as_str())
         .unwrap_or("unknown error");
-    let description = value
-        .get("error_description")
-        .and_then(|v| v.as_str());
+    let description = value.get("error_description").and_then(|v| v.as_str());
     match description {
         Some(d) if !d.trim().is_empty() => OidcError::Provider(format!("{code}: {d}")),
         _ => OidcError::Provider(code.to_string()),
@@ -882,9 +890,7 @@ fn token_bundle_from_response(
     let refresh_token = resp.refresh_token.or(previous_refresh);
     Ok(OidcTokenBundle {
         access_token: resp.access_token,
-        token_type: resp
-            .token_type
-            .unwrap_or_else(|| "Bearer".to_string()),
+        token_type: resp.token_type.unwrap_or_else(|| "Bearer".to_string()),
         expires_at,
         refresh_token,
         scope: resp.scope,
@@ -968,11 +974,11 @@ mod tests {
             ..Default::default()
         };
         let client = OidcClient::new(transport);
-        let meta = client
-            .discover("https://idp.example.com/")
-            .await
-            .unwrap();
-        assert_eq!(meta.authorization_endpoint, "https://idp.example.com/authorize");
+        let meta = client.discover("https://idp.example.com/").await.unwrap();
+        assert_eq!(
+            meta.authorization_endpoint,
+            "https://idp.example.com/authorize"
+        );
         assert_eq!(
             meta.device_authorization_endpoint.as_deref(),
             Some("https://idp.example.com/device")
@@ -1040,10 +1046,7 @@ mod tests {
         let transport = MockTransport {
             post_responses: Mutex::new(vec![
                 (400, serde_json::json!({"error": "authorization_pending"})),
-                (
-                    200,
-                    token_json("at-1", 3600, Some("rt-1")),
-                ),
+                (200, token_json("at-1", 3600, Some("rt-1"))),
             ]),
             ..Default::default()
         };
@@ -1088,15 +1091,24 @@ mod tests {
             device_authorization_endpoint: None,
         };
         assert!(matches!(
-            client.device_token(&meta, "c", None, "dc").await.unwrap_err(),
+            client
+                .device_token(&meta, "c", None, "dc")
+                .await
+                .unwrap_err(),
             OidcError::DeviceAccessDenied
         ));
         assert!(matches!(
-            client.device_token(&meta, "c", None, "dc").await.unwrap_err(),
+            client
+                .device_token(&meta, "c", None, "dc")
+                .await
+                .unwrap_err(),
             OidcError::DeviceExpired
         ));
         assert!(matches!(
-            client.device_token(&meta, "c", None, "dc").await.unwrap_err(),
+            client
+                .device_token(&meta, "c", None, "dc")
+                .await
+                .unwrap_err(),
             OidcError::DeviceSlowDown
         ));
     }
@@ -1106,10 +1118,7 @@ mod tests {
         // RFC 7636 §4.1 appendix test vector (truncated verifier).
         let verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
         let challenge = pkce_challenge_s256(verifier);
-        assert_eq!(
-            challenge,
-            "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
-        );
+        assert_eq!(challenge, "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM");
     }
 
     #[test]
@@ -1118,9 +1127,10 @@ mod tests {
         let v2 = pkce_verifier().unwrap();
         assert_eq!(v1.len(), 43);
         assert_ne!(v1, v2);
-        assert!(v1
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'));
+        assert!(
+            v1.chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        );
     }
 
     #[test]
@@ -1137,10 +1147,7 @@ mod tests {
         let s = "http://127.0.0.1:54321/callback";
         let enc = url_encode(s);
         assert!(!enc.contains(' '));
-        assert_eq!(
-            percent_decode_str(&enc).decode_utf8_lossy().as_ref(),
-            s
-        );
+        assert_eq!(percent_decode_str(&enc).decode_utf8_lossy().as_ref(), s);
     }
 
     #[test]

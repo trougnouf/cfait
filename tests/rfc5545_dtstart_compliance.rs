@@ -77,7 +77,12 @@ fn test_due_only_without_recurrence_keeps_no_start() {
     // Non-recurring tasks keep their existing semantics (no implicit start),
     // so sorting/display behavior is unchanged.
     let task = parse("Buy milk @2026-11-02");
-    assert_eq!(task.due, Some(DateType::AllDay(NaiveDate::from_ymd_opt(2026, 11, 2).unwrap())));
+    assert_eq!(
+        task.due,
+        Some(DateType::AllDay(
+            NaiveDate::from_ymd_opt(2026, 11, 2).unwrap()
+        ))
+    );
     assert!(
         task.dtstart.is_none(),
         "non-recurring due-only tasks must not gain an implicit start"
@@ -124,7 +129,9 @@ fn test_legacy_recurring_item_without_start_is_repaired_on_write() {
     // Items created by older cfait versions (or imported) may have a
     // recurrence with a due but no start; serializing must repair them.
     let mut task = parse("Legacy recurring task");
-    task.due = Some(DateType::AllDay(NaiveDate::from_ymd_opt(2026, 11, 2).unwrap()));
+    task.due = Some(DateType::AllDay(
+        NaiveDate::from_ymd_opt(2026, 11, 2).unwrap(),
+    ));
     task.rrule = Some("FREQ=WEEKLY".to_string());
     assert!(task.dtstart.is_none());
 
@@ -143,7 +150,10 @@ fn test_recurring_item_without_any_date_gets_today_anchor() {
     assert!(task.dtstart.is_none() && task.due.is_none());
 
     let ics = task.to_ics();
-    let today = chrono::Local::now().date_naive().format("%Y%m%d").to_string();
+    let today = chrono::Local::now()
+        .date_naive()
+        .format("%Y%m%d")
+        .to_string();
     assert!(
         ics.contains(&format!("DTSTART;VALUE=DATE:{}", today)),
         "Dateless recurring item must get a DTSTART anchored to today. Got:\n{}",
@@ -183,7 +193,11 @@ fn test_roundtrip_recurring_all_day_task() {
     .expect("ICS should round-trip");
 
     let d = DateType::AllDay(NaiveDate::from_ymd_opt(2026, 11, 2).unwrap());
-    assert_eq!(restored.dtstart, Some(d.clone()), "DTSTART should survive round-trip");
+    assert_eq!(
+        restored.dtstart,
+        Some(d.clone()),
+        "DTSTART should survive round-trip"
+    );
     assert_eq!(restored.due, Some(d), "DUE should survive round-trip");
     assert_eq!(restored.rrule.as_deref(), Some("FREQ=WEEKLY"));
 }
@@ -232,8 +246,14 @@ fn test_day_context_same_day_start_due_not_double_listed() {
     let due_uids: Vec<&str> = ctx.due_tasks.iter().map(|t| t.uid.as_str()).collect();
     let started_uids: Vec<&str> = ctx.started_tasks.iter().map(|t| t.uid.as_str()).collect();
 
-    assert!(due_uids.contains(&"same-day"), "^@ item must appear under due today");
-    assert!(due_uids.contains(&"due-only"), "due-only item must appear under due today");
+    assert!(
+        due_uids.contains(&"same-day"),
+        "^@ item must appear under due today"
+    );
+    assert!(
+        due_uids.contains(&"due-only"),
+        "due-only item must appear under due today"
+    );
     assert!(
         !due_uids.contains(&"start-only"),
         "start-only item must not appear under due today"
@@ -265,8 +285,7 @@ fn static_empty_set() -> &'static HashSet<String> {
 }
 
 fn static_empty_alias_map() -> &'static HashMap<String, Vec<String>> {
-    static MAP: std::sync::OnceLock<HashMap<String, Vec<String>>> =
-        std::sync::OnceLock::new();
+    static MAP: std::sync::OnceLock<HashMap<String, Vec<String>>> = std::sync::OnceLock::new();
     MAP.get_or_init(HashMap::new)
 }
 
@@ -307,14 +326,12 @@ fn ready_filter_options() -> FilterOptions<'static> {
 }
 
 fn summary_of(items: &[cfait::store::TaskListItem], needle: &str) -> Option<Task> {
-    items
-        .iter()
-        .find_map(|item| match item {
-            cfait::store::TaskListItem::Task(t) if t.summary.contains(needle) => {
-                Some(t.as_ref().clone())
-            }
-            _ => None,
-        })
+    items.iter().find_map(|item| match item {
+        cfait::store::TaskListItem::Task(t) if t.summary.contains(needle) => {
+            Some(t.as_ref().clone())
+        }
+        _ => None,
+    })
 }
 
 fn store_task(mut t: Task, uid: &str) -> Task {
@@ -343,7 +360,10 @@ fn test_anchored_recurrence_start_stays_in_is_ready() {
 #[test]
 fn test_anchored_recurrence_start_is_not_deferred_in_ranking() {
     let mut store = make_store();
-    store.add_task(store_task(parse("Anchored recurring @10d rec:weekly"), "anchored"));
+    store.add_task(store_task(
+        parse("Anchored recurring @10d rec:weekly"),
+        "anchored",
+    ));
     store.add_task(store_task(parse("Plain due task @10d"), "plain"));
 
     let filtered = store.filter(ready_filter_options());
@@ -351,10 +371,14 @@ fn test_anchored_recurrence_start_is_not_deferred_in_ranking() {
     let plain_rank = summary_of(&filtered.items, "Plain").map(|t| t.sort_rank);
 
     assert_eq!(
-        anchored_rank, Some(4),
+        anchored_rank,
+        Some(4),
         "anchored recurring task must keep its due-based rank, not be deferred to 7"
     );
-    assert_eq!(anchored_rank, plain_rank, "anchored and plain due tasks must rank alike");
+    assert_eq!(
+        anchored_rank, plain_rank,
+        "anchored and plain due tasks must rank alike"
+    );
 }
 
 #[test]
@@ -441,8 +465,13 @@ fn test_anchored_marker_survives_ics_roundtrip() {
         ics
     );
 
-    let restored = Task::from_ics(&ics, "etag".to_string(), "href".to_string(), "cal1".to_string())
-        .expect("ICS should round-trip");
+    let restored = Task::from_ics(
+        &ics,
+        "etag".to_string(),
+        "href".to_string(),
+        "cal1".to_string(),
+    )
+    .expect("ICS should round-trip");
     assert!(
         restored.has_anchored_recurrence_start(),
         "marker must survive the ICS round-trip"
@@ -468,8 +497,13 @@ fn test_explicit_start_due_recurrence_roundtrips_as_deferred() {
         ics
     );
 
-    let restored = Task::from_ics(&ics, "etag".to_string(), "href".to_string(), "cal1".to_string())
-        .expect("ICS should round-trip");
+    let restored = Task::from_ics(
+        &ics,
+        "etag".to_string(),
+        "href".to_string(),
+        "cal1".to_string(),
+    )
+    .expect("ICS should round-trip");
     assert!(
         !restored.has_anchored_recurrence_start(),
         "explicit ^@ must stay non-anchored after round-trip"
@@ -503,8 +537,13 @@ fn test_legacy_item_repaired_with_anchor_marker() {
         ics
     );
 
-    let restored = Task::from_ics(&ics, "etag".to_string(), "href".to_string(), "cal1".to_string())
-        .expect("ICS should round-trip");
+    let restored = Task::from_ics(
+        &ics,
+        "etag".to_string(),
+        "href".to_string(),
+        "cal1".to_string(),
+    )
+    .expect("ICS should round-trip");
     assert!(
         restored.has_anchored_recurrence_start(),
         "repaired legacy item must be treated as anchored"
@@ -516,10 +555,22 @@ fn test_to_smart_string_keeps_anchor_rendered_as_due() {
     // Editing an anchored task must not turn `@date rec:` into `^@date rec:`.
     let anchored = parse("Anchored recurring @5d rec:weekly");
     let s = anchored.to_smart_string();
-    assert!(s.contains(" @"), "anchored task must render as @date. Got: {}", s);
-    assert!(!s.contains("^@"), "anchored task must not render as ^@. Got: {}", s);
+    assert!(
+        s.contains(" @"),
+        "anchored task must render as @date. Got: {}",
+        s
+    );
+    assert!(
+        !s.contains("^@"),
+        "anchored task must not render as ^@. Got: {}",
+        s
+    );
 
     let explicit = parse("Explicit ^@5d rec:weekly");
     let s = explicit.to_smart_string();
-    assert!(s.contains("^@"), "explicit ^@ must keep rendering as ^@. Got: {}", s);
+    assert!(
+        s.contains("^@"),
+        "explicit ^@ must keep rendering as ^@. Got: {}",
+        s
+    );
 }

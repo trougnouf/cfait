@@ -1925,7 +1925,11 @@ async fn main() -> Result<()> {
             );
             println!("{}:      {}", rust_i18n::t!("cli_view_uid"), t.uid);
             if let Some(c) = t.created_date() {
-                println!("{}:   {}", rust_i18n::t!("cli_view_created"), c.to_rfc3339());
+                println!(
+                    "{}:   {}",
+                    rust_i18n::t!("cli_view_created"),
+                    c.to_rfc3339()
+                );
             }
             if let Some(m) = t.last_modified_date() {
                 println!("{}: {}", rust_i18n::t!("cli_view_modified"), m.to_rfc3339());
@@ -2089,11 +2093,11 @@ async fn main() -> Result<()> {
         }
         "login" => {
             let rest: Vec<&str> = args[2..].iter().map(|s| s.as_str()).collect();
-            if rest.iter().any(|a| *a == "--oidc") {
+            if rest.contains(&"--oidc") {
                 login_oidc_cmd(ctx.clone(), &rest).await?;
                 return Ok(());
             }
-            if rest.iter().any(|a| *a == "--bearer") {
+            if rest.contains(&"--bearer") {
                 login_bearer_cmd(ctx.clone(), &rest)?;
                 return Ok(());
             }
@@ -2261,17 +2265,14 @@ async fn main() -> Result<()> {
             let sub = &args[2];
             let config =
                 cfait::config::Config::load_with_credentials(ctx.as_ref()).unwrap_or_default();
-            let client = match cfait::client::RustyClient::from_config(
-                ctx.clone(),
-                &config,
-                Some("CLI"),
-            ) {
-                Ok(c) => c,
-                Err(e) => {
-                    eprintln!("Failed to initialize client: {}", e);
-                    std::process::exit(1);
-                }
-            };
+            let client =
+                match cfait::client::RustyClient::from_config(ctx.clone(), &config, Some("CLI")) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        eprintln!("Failed to initialize client: {}", e);
+                        std::process::exit(1);
+                    }
+                };
 
             match sub.as_str() {
                 "create" => {
@@ -2650,7 +2651,9 @@ async fn login_oidc_cmd(ctx: Arc<dyn AppContext>, rest: &[&str]) -> Result<()> {
                 (_, None, _) => client_id = Some(rest[i]),
                 (_, _, None) => url = Some(rest[i]),
                 (_, _, Some(_)) => {
-                    eprintln!("Usage: cfait login --oidc <issuer> <client_id> [url] [--scope <scope>]");
+                    eprintln!(
+                        "Usage: cfait login --oidc <issuer> <client_id> [url] [--scope <scope>]"
+                    );
                     std::process::exit(1);
                 }
             }
@@ -2671,7 +2674,10 @@ async fn login_oidc_cmd(ctx: Arc<dyn AppContext>, rest: &[&str]) -> Result<()> {
         .verification_uri_complete
         .clone()
         .unwrap_or_else(|| authz.verification_uri.clone());
-    println!("{}", rust_i18n::t!("oidc_user_code", code = authz.user_code));
+    println!(
+        "{}",
+        rust_i18n::t!("oidc_user_code", code = authz.user_code)
+    );
     println!("{}", rust_i18n::t!("oidc_visit_url", url = display_url));
     if let Err(e) = oidc::open_url(&display_url) {
         log::debug!("could not open a browser automatically: {e}");
@@ -2694,18 +2700,18 @@ async fn login_oidc_cmd(ctx: Arc<dyn AppContext>, rest: &[&str]) -> Result<()> {
     println!("{}", rust_i18n::t!("oidc_login_success", issuer = issuer));
 
     // Best-effort: verify the new credentials actually reach the CalDAV server.
-    match tokio::time::timeout(
-        std::time::Duration::from_secs(15),
-        async {
-            let c = cfait::client::RustyClient::from_config(ctx.clone(), &config, Some("CLI"))?;
-            c.get_calendars().await
-        },
-    )
+    match tokio::time::timeout(std::time::Duration::from_secs(15), async {
+        let c = cfait::client::RustyClient::from_config(ctx.clone(), &config, Some("CLI"))?;
+        c.get_calendars().await
+    })
     .await
     {
         Ok(Ok(_)) => println!("{}", rust_i18n::t!("oidc_login_test_ok")),
         Ok(Err(e)) => {
-            eprintln!("{}", rust_i18n::t!("oidc_login_test_failed", error = e.to_string()));
+            eprintln!(
+                "{}",
+                rust_i18n::t!("oidc_login_test_failed", error = e.to_string())
+            );
         }
         Err(_) => eprintln!(
             "{}",
@@ -2721,10 +2727,12 @@ async fn login_oidc_cmd(ctx: Arc<dyn AppContext>, rest: &[&str]) -> Result<()> {
 fn login_bearer_cmd(ctx: Arc<dyn AppContext>, rest: &[&str]) -> Result<()> {
     let mut url: Option<&str> = None;
     let mut token: Option<&str> = None;
-    for arg in rest
-        .iter()
-        .skip(rest.iter().position(|a| *a == "--bearer").map(|p| p + 1).unwrap_or(1))
-    {
+    for arg in rest.iter().skip(
+        rest.iter()
+            .position(|a| *a == "--bearer")
+            .map(|p| p + 1)
+            .unwrap_or(1),
+    ) {
         if url.is_none() {
             url = Some(*arg);
         } else if token.is_none() {
@@ -2756,7 +2764,10 @@ fn login_bearer_cmd(ctx: Arc<dyn AppContext>, rest: &[&str]) -> Result<()> {
         println!("{}", rust_i18n::t!("login_saved_keyring"));
     } else {
         let path = cfait::config::Config::get_path_string(ctx.as_ref()).unwrap_or_default();
-        println!("{}", rust_i18n::t!("password_kept_in_file_note", path = path));
+        println!(
+            "{}",
+            rust_i18n::t!("password_kept_in_file_note", path = path)
+        );
     }
     Ok(())
 }

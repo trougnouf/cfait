@@ -1018,9 +1018,7 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
         // Metadata-only input (e.g. a bare date) falls back to the raw input as
         // the summary, but a bare type token is not a title: leave the summary
         // empty so a page shows as untitled instead of "is:page".
-        if parent.summary.trim().is_empty()
-            && !clean_input.trim().is_empty()
-            && !parent.is_journal
+        if parent.summary.trim().is_empty() && !clean_input.trim().is_empty() && !parent.is_journal
         {
             parent.summary = clean_input.clone();
         }
@@ -1479,9 +1477,7 @@ fn update_alarms(state: &AppState) {
             .store
             .calendars
             .iter()
-            .filter(|(href, _)| {
-                !state.disabled_calendars.contains(*href)
-            })
+            .filter(|(href, _)| !state.disabled_calendars.contains(*href))
             .flat_map(|(_, m)| m.values())
             .cloned()
             .collect();
