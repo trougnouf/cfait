@@ -311,6 +311,7 @@ Tasks tagged with `is:permanent` act as endless trackers. When checked off (Comp
 *   **Modals:** Hovering overlays with dimmed backdrops (Move Task, ICS Import, Alarm Notification).
 *   **Context Menu keyboard navigation:** `Enter` opens the selected task's context menu with the first entry highlighted; `Up`/`Down` (or `j`/`k`) move the highlight (the menu scrolls to follow), `Enter` activates the highlighted entry, and any other key closes the menu.
 *   **Privacy Mode:** When `blur_when_unfocused` is enabled, the window content is blurred when the app loses focus, preventing shoulder-surfing.
+*   **Settings — Authentication:** The settings screen offers an "Authentication method" picker: username & password (default), bearer token, or single sign-on (OIDC). Selecting OIDC reveals issuer and client ID fields, a Sign in button (PKCE loopback flow — see 1.3) and, once signed in, a Sign out button; selecting bearer hints that the token is entered in the password field.
 *   **Tooltips:** Any GUI button that has an associated keyboard shortcut must include that shortcut in its tooltip (when applicable).
 
 ### 5.2. Terminal Interface (TUI)
