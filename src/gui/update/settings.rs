@@ -386,13 +386,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 .and_then(|cmd| crate::config::Config::run_password_command(cmd).ok());
             Task::perform(
                 async move {
-                    crate::client::oidc::pkce_login(
-                        &issuer,
-                        &client_id,
-                        secret,
-                        scope.as_deref(),
-                    )
-                    .await
+                    crate::client::oidc::pkce_login(&issuer, &client_id, secret, scope.as_deref())
+                        .await
                 },
                 |res| Message::OidcSignInResult(res.map_err(|e| e.to_string())),
             )

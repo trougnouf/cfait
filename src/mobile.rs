@@ -965,8 +965,7 @@ fn populate_transient(t: &mut Task, store: &TaskStore, aliases: &HashMap<String,
     t.has_subtasks = store.children_index.contains_key(&t.uid);
     let now = Utc::now();
     t.is_future_start = !t.has_anchored_recurrence_start()
-        && t
-            .dtstart
+        && t.dtstart
             .as_ref()
             .is_some_and(|start| start.to_start_comparison_time() > now);
     t.is_overdue = t
@@ -1619,8 +1618,7 @@ impl CfaitMobile {
 
     pub fn get_config(&self) -> MobileConfig {
         let c = load_mobile_config_with_credentials(self.ctx.as_ref());
-        let oidc_signed_in =
-            crate::client::oidc::load_bundle(&c.oidc_keyring_key()).is_some();
+        let oidc_signed_in = crate::client::oidc::load_bundle(&c.oidc_keyring_key()).is_some();
         MobileConfig {
             url: c.url,
             local_url: c.local_url,
@@ -3935,10 +3933,9 @@ impl CfaitMobile {
         client_secret: Option<String>,
         scope: Option<String>,
     ) -> Result<MobileOidcLogin, MobileError> {
-        use crate::client::oidc::{start_device_login, HyperTransport, OidcClient};
+        use crate::client::oidc::{HyperTransport, OidcClient, start_device_login};
 
-        let transport =
-            HyperTransport::new().map_err(|e| MobileError::Generic(e.to_string()))?;
+        let transport = HyperTransport::new().map_err(|e| MobileError::Generic(e.to_string()))?;
         let client = OidcClient::new(transport);
         let (meta, authz) = start_device_login(
             &client,
@@ -3971,12 +3968,11 @@ impl CfaitMobile {
     /// switches the account to OIDC authentication.
     pub async fn finish_oidc_login(&self, login: MobileOidcLogin) -> Result<(), MobileError> {
         use crate::client::oidc::{
-            finish_device_login, save_bundle, DeviceAuthorization, HyperTransport, OidcClient,
-            OidcMetadata,
+            DeviceAuthorization, HyperTransport, OidcClient, OidcMetadata, finish_device_login,
+            save_bundle,
         };
 
-        let transport =
-            HyperTransport::new().map_err(|e| MobileError::Generic(e.to_string()))?;
+        let transport = HyperTransport::new().map_err(|e| MobileError::Generic(e.to_string()))?;
         let client = OidcClient::new(transport);
         let meta = OidcMetadata {
             issuer: login.issuer.clone(),

@@ -8,8 +8,8 @@
 use cfait::config::{Goal, GoalType, Interval, IntervalUnit};
 use cfait::context::AppContext;
 use cfait::context::TestContext;
-use cfait::model::{Task, TaskStatus};
 use cfait::model::item::WorkSession;
+use cfait::model::{Task, TaskStatus};
 use cfait::store::TaskStore;
 use std::collections::HashMap;
 use std::sync::Arc;

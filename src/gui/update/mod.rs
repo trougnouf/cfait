@@ -329,9 +329,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
                     .store
                     .calendars
                     .iter()
-                    .filter(|(href, _)| {
-                        !app.disabled_calendars.contains(*href)
-                    })
+                    .filter(|(href, _)| !app.disabled_calendars.contains(*href))
                     .flat_map(|(_, m)| m.values())
                     .cloned()
                     .collect();

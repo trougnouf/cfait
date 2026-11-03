@@ -224,13 +224,12 @@ pub async fn run_network_actor(
     // Basic auth uses the startup snapshot (url/user/pass) so callers can
     // override the on-disk config; bearer and oidc resolve their
     // credentials from the saved config.
-    let client_result =
-        match crate::config::Config::load_with_credentials(ctx.as_ref()) {
-            Ok(cfg) if cfg.auth_mode != crate::config::AuthMode::Basic => {
-                RustyClient::from_config(ctx.clone(), &cfg, Some("TUI"))
-            }
-            _ => RustyClient::new(ctx.clone(), &url, &user, &pass, allow_insecure, Some("TUI")),
-        };
+    let client_result = match crate::config::Config::load_with_credentials(ctx.as_ref()) {
+        Ok(cfg) if cfg.auth_mode != crate::config::AuthMode::Basic => {
+            RustyClient::from_config(ctx.clone(), &cfg, Some("TUI"))
+        }
+        _ => RustyClient::new(ctx.clone(), &url, &user, &pass, allow_insecure, Some("TUI")),
+    };
     let client: RustyClient = match client_result {
         Ok(c) => c,
         Err(e) => {

@@ -553,9 +553,9 @@ mod tests {
         // Rebuild the alarm index
         let index = AlarmIndex::rebuild_from_tasks(
             &calendars,
-            &[],               // disabled_calendars
-            true,              // auto_reminders_enabled
-            "09:00",           // default_reminder_time
+            &[],     // disabled_calendars
+            true,    // auto_reminders_enabled
+            "09:00", // default_reminder_time
         );
 
         // The index should NOT contain any alarms for this task
@@ -674,7 +674,11 @@ mod tests {
         // must keep its alarms.
         let disabled = vec!["dav://disabled".to_string()];
         let index = AlarmIndex::rebuild_from_tasks(&calendars, &disabled, true, "09:00");
-        let hrefs: Vec<&str> = index.alarms.iter().map(|a| a.calendar_href.as_str()).collect();
+        let hrefs: Vec<&str> = index
+            .alarms
+            .iter()
+            .map(|a| a.calendar_href.as_str())
+            .collect();
         assert_eq!(
             hrefs.len(),
             2,

@@ -3052,9 +3052,8 @@ pub fn apply_smart_input(
     let saved_deps = std::mem::take(&mut task.dependencies);
     let saved_related = std::mem::take(&mut task.related_to);
     // Reset fields
-    task.unmapped_properties.retain(|p| {
-        p.key != "X-CFAIT-RECUR-FROM-COMPLETION" && p.key != "X-CFAIT-ANCHORED-START"
-    });
+    task.unmapped_properties
+        .retain(|p| p.key != "X-CFAIT-RECUR-FROM-COMPLETION" && p.key != "X-CFAIT-ANCHORED-START");
     task.priority = 0;
     task.due = None;
     task.dtstart = None;

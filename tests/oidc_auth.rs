@@ -12,11 +12,11 @@
 //! Keyring-dependent tests skip gracefully when no keyring backend is
 //! available in the environment (e.g. a container without a Secret
 //! Service provider).
-use cfait::client::oidc::{
-    clear_bundle, finish_device_login, load_bundle, save_bundle, start_device_login,
-    unix_now, HyperTransport, OidcClient, OidcTokenBundle, TokenManager,
-};
 use cfait::client::RustyClient;
+use cfait::client::oidc::{
+    HyperTransport, OidcClient, OidcTokenBundle, TokenManager, clear_bundle, finish_device_login,
+    load_bundle, save_bundle, start_device_login, unix_now,
+};
 use cfait::config::{AuthMode, Config};
 use cfait::context::TestContext;
 use mockito::Server;
@@ -73,7 +73,10 @@ fn auth_mode_serde_round_trip() {
     ];
     for (mode, name) in cases {
         assert_eq!(serde_json::to_string(&mode).unwrap(), format!("\"{name}\""));
-        assert_eq!(serde_json::from_value::<AuthMode>(serde_json::json!(name)).unwrap(), mode);
+        assert_eq!(
+            serde_json::from_value::<AuthMode>(serde_json::json!(name)).unwrap(),
+            mode
+        );
     }
 }
 
@@ -129,16 +132,14 @@ async fn device_flow_end_to_end_via_http() {
         .mock("POST", "/device")
         .match_header("content-type", "application/x-www-form-urlencoded")
         .with_status(200)
-        .with_body(json_body(
-            &serde_json::json!({
-                "device_code": "dc-e2e",
-                "user_code": "WXYZ-9876",
-                "verification_uri": format!("{issuer}/activate"),
-                "verification_uri_complete": format!("{issuer}/activate?user_code=WXYZ-9876"),
-                "expires_in": 120,
-                "interval": 1,
-            }),
-        ))
+        .with_body(json_body(&serde_json::json!({
+            "device_code": "dc-e2e",
+            "user_code": "WXYZ-9876",
+            "verification_uri": format!("{issuer}/activate"),
+            "verification_uri_complete": format!("{issuer}/activate?user_code=WXYZ-9876"),
+            "expires_in": 120,
+            "interval": 1,
+        })))
         .create_async()
         .await;
 
@@ -148,7 +149,9 @@ async fn device_flow_end_to_end_via_http() {
         .mock("POST", "/token")
         .expect(1)
         .with_status(400)
-        .with_body(json_body(&serde_json::json!({"error": "authorization_pending"})))
+        .with_body(json_body(
+            &serde_json::json!({"error": "authorization_pending"}),
+        ))
         .create_async()
         .await;
     let mock_token_ok = server
@@ -201,15 +204,13 @@ async fn device_flow_slow_down_then_success() {
     let _mock_device = server
         .mock("POST", "/device")
         .with_status(200)
-        .with_body(json_body(
-            &serde_json::json!({
-                "device_code": "dc-sd",
-                "user_code": "AAAA-1111",
-                "verification_uri": format!("{issuer}/activate"),
-                "expires_in": 120,
-                "interval": 1,
-            }),
-        ))
+        .with_body(json_body(&serde_json::json!({
+            "device_code": "dc-sd",
+            "user_code": "AAAA-1111",
+            "verification_uri": format!("{issuer}/activate"),
+            "expires_in": 120,
+            "interval": 1,
+        })))
         .create_async()
         .await;
 
@@ -227,7 +228,9 @@ async fn device_flow_slow_down_then_success() {
         .mock("POST", "/token")
         .expect(1)
         .with_status(400)
-        .with_body(json_body(&serde_json::json!({"error": "authorization_pending"})))
+        .with_body(json_body(
+            &serde_json::json!({"error": "authorization_pending"}),
+        ))
         .create_async()
         .await;
     let mock_ok = server
@@ -298,12 +301,10 @@ async fn token_manager_refresh_error_propagates() {
     let _mock_refresh = server
         .mock("POST", "/token")
         .with_status(400)
-        .with_body(json_body(
-            &serde_json::json!({
-                "error": "invalid_grant",
-                "error_description": "refresh token revoked"
-            }),
-        ))
+        .with_body(json_body(&serde_json::json!({
+            "error": "invalid_grant",
+            "error_description": "refresh token revoked"
+        })))
         .create_async()
         .await;
 

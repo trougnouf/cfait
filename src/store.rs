@@ -4538,8 +4538,7 @@ impl TaskStore {
         // ready/blocked modes consult these maps, so skip the work entirely otherwise.
         let is_future_start = |t: &Task| -> bool {
             !t.has_anchored_recurrence_start()
-                && t
-                    .dtstart
+                && t.dtstart
                     .as_ref()
                     .is_some_and(|s| s.to_start_comparison_time() > now)
         };
@@ -5563,8 +5562,7 @@ impl TaskStore {
             t.has_related_tasks = self.has_tasks_related_to(&t.uid);
 
             t.is_future_start = !t.has_anchored_recurrence_start()
-                && t
-                    .dtstart
+                && t.dtstart
                     .as_ref()
                     .is_some_and(|start| start.to_start_comparison_time() > now);
             t.is_implicitly_future = !t.is_future_start
@@ -7390,11 +7388,20 @@ mod tests {
         };
 
         // TUI default view: cutoff = now + sort_cutoff_days (default 30)
-        let tui_res = run_filter(&store, Some(chrono::Utc::now() + chrono::Duration::days(30)));
-        assert!(contains(&tui_res), "issue 121: recurring task must be visible in the default (TUI) view");
+        let tui_res = run_filter(
+            &store,
+            Some(chrono::Utc::now() + chrono::Duration::days(30)),
+        );
+        assert!(
+            contains(&tui_res),
+            "issue 121: recurring task must be visible in the default (TUI) view"
+        );
 
         // cfait list --all: no cutoff
         let all_res = run_filter(&store, None);
-        assert!(contains(&all_res), "issue 121: recurring task visible with list --all");
+        assert!(
+            contains(&all_res),
+            "issue 121: recurring task visible with list --all"
+        );
     }
 }

@@ -25,13 +25,18 @@ use crate::client::oidc::TokenManager;
 ///   alive by a [`TokenManager`] (transparent refresh, keyring persistence).
 #[derive(Clone)]
 pub enum Auth {
-    Basic { user: String, pass: String },
+    Basic {
+        user: String,
+        pass: String,
+    },
     Bearer {
         token: String,
         /// Optional shell command that prints a fresh token; re-run once on 401.
         token_command: Option<String>,
     },
-    Oidc { manager: Arc<TokenManager> },
+    Oidc {
+        manager: Arc<TokenManager>,
+    },
 }
 
 impl Auth {
@@ -142,10 +147,8 @@ where
             // Attach the initial Authorization header for the scheme.
             match &auth {
                 Auth::Basic { user, pass } => {
-                    let basic_header_val = format!(
-                        "Basic {}",
-                        STANDARD.encode(format!("{}:{}", user, pass))
-                    );
+                    let basic_header_val =
+                        format!("Basic {}", STANDARD.encode(format!("{}:{}", user, pass)));
                     if let Ok(val) = HeaderValue::from_str(&basic_header_val) {
                         req.headers_mut().insert(http::header::AUTHORIZATION, val);
                     }
@@ -235,8 +238,7 @@ where
                     match crate::config::Config::run_password_command(cmd) {
                         Ok(new_token) if !new_token.trim().is_empty() => {
                             let mut new_req = req_clone;
-                            if let Ok(val) =
-                                HeaderValue::from_str(&format!("Bearer {}", new_token))
+                            if let Ok(val) = HeaderValue::from_str(&format!("Bearer {}", new_token))
                             {
                                 new_req
                                     .headers_mut()

@@ -374,9 +374,8 @@ impl RustyClient {
     /// verifier when `insecure` is set.
     pub(crate) fn root_tls_builder(
         insecure: bool,
-    ) -> anyhow::Result<
-        rustls::ConfigBuilder<rustls::ClientConfig, rustls::client::WantsClientCert>,
-    > {
+    ) -> anyhow::Result<rustls::ConfigBuilder<rustls::ClientConfig, rustls::client::WantsClientCert>>
+    {
         let tls_config_builder = rustls::ClientConfig::builder();
         let builder_with_roots = if insecure {
             tls_config_builder
@@ -496,10 +495,9 @@ impl RustyClient {
                 let bundle = crate::client::oidc::load_bundle(&key).ok_or_else(|| {
                     anyhow::anyhow!(rust_i18n::t!("error_oidc_not_signed_in").to_string())
                 })?;
-                Ok(Auth::oidc(Arc::new(crate::client::oidc::TokenManager::new(
-                    bundle,
-                    Some(key),
-                ))))
+                Ok(Auth::oidc(Arc::new(
+                    crate::client::oidc::TokenManager::new(bundle, Some(key)),
+                )))
             }
         }
     }

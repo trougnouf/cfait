@@ -838,10 +838,11 @@ impl Task {
                 .unmapped_properties
                 .iter()
                 .any(|p| p.key == "X-CFAIT-ANCHORED-START")
-            && self
-                .dtstart
-                .as_ref()
-                .is_some_and(|s| self.due.as_ref().is_some_and(|d| s.to_date_naive() == d.to_date_naive()))
+            && self.dtstart.as_ref().is_some_and(|s| {
+                self.due
+                    .as_ref()
+                    .is_some_and(|d| s.to_date_naive() == d.to_date_naive())
+            })
     }
 
     pub fn inherit_metadata_if_pending(&mut self, other: &Task) {
