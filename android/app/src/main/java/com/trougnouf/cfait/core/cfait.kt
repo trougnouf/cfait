@@ -861,6 +861,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_extract_list_prefix(): Int
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_finish_oidc_login(): Int
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_available_locales(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_calendars(): Int
@@ -903,6 +905,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_import_local_ics(): Int
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_is_oidc_signed_in(): Int
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_isolate_calendar(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_load_from_cache(): Int
@@ -916,6 +920,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_cfait_checksum_method_cfaitmobile_move_task(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_move_task_tree(): Int
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_oidc_logout(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_open_wiki_link(): Int
 
@@ -960,6 +966,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_cfait_checksum_method_cfaitmobile_should_keep_notification(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_snooze_alarm(): Int
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_start_oidc_login(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_start_task(): Int
 
@@ -1170,6 +1178,11 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
+    external fun uniffi_cfait_fn_method_cfaitmobile_finish_oidc_login(
+        `ptr`: Long,
+        `login`: RustBuffer.ByValue,
+    ): Long
+
     external fun uniffi_cfait_fn_method_cfaitmobile_get_available_locales(
         `ptr`: Long,
         uniffi_out_err: UniffiRustCallStatus,
@@ -1286,6 +1299,11 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
+    external fun uniffi_cfait_fn_method_cfaitmobile_is_oidc_signed_in(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Byte
+
     external fun uniffi_cfait_fn_method_cfaitmobile_isolate_calendar(
         `ptr`: Long,
         `href`: RustBuffer.ByValue,
@@ -1329,6 +1347,11 @@ internal object UniffiLib {
         `uid`: RustBuffer.ByValue,
         `newCalHref`: RustBuffer.ByValue,
     ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_oidc_logout(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
 
     external fun uniffi_cfait_fn_method_cfaitmobile_open_wiki_link(
         `ptr`: Long,
@@ -1459,6 +1482,14 @@ internal object UniffiLib {
         `taskUid`: RustBuffer.ByValue,
         `alarmUid`: RustBuffer.ByValue,
         `minutes`: Int,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_start_oidc_login(
+        `ptr`: Long,
+        `issuer`: RustBuffer.ByValue,
+        `clientId`: RustBuffer.ByValue,
+        `clientSecret`: RustBuffer.ByValue,
+        `scope`: RustBuffer.ByValue,
     ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_start_task(
@@ -1848,6 +1879,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_cfait_checksum_method_cfaitmobile_extract_list_prefix() and 0xFFFF) != 48803) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if ((lib.uniffi_cfait_checksum_method_cfaitmobile_finish_oidc_login() and 0xFFFF) != 36129) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_cfait_checksum_method_cfaitmobile_get_available_locales() and 0xFFFF) != 45059) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1911,6 +1945,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_cfait_checksum_method_cfaitmobile_import_local_ics() and 0xFFFF) != 30933) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if ((lib.uniffi_cfait_checksum_method_cfaitmobile_is_oidc_signed_in() and 0xFFFF) != 11090) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_cfait_checksum_method_cfaitmobile_isolate_calendar() and 0xFFFF) != 31406) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1930,6 +1967,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cfait_checksum_method_cfaitmobile_move_task_tree() and 0xFFFF) != 45149) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_cfait_checksum_method_cfaitmobile_oidc_logout() and 0xFFFF) != 52861) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cfait_checksum_method_cfaitmobile_open_wiki_link() and 0xFFFF) != 61662) {
@@ -1996,6 +2036,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cfait_checksum_method_cfaitmobile_snooze_alarm() and 0xFFFF) != 32966) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_cfait_checksum_method_cfaitmobile_start_oidc_login() and 0xFFFF) != 10158) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cfait_checksum_method_cfaitmobile_start_task() and 0xFFFF) != 9033) {
@@ -2677,6 +2720,14 @@ public interface CfaitMobileInterface {
 
     fun `extractListPrefix`(`line`: kotlin.String): kotlin.String
 
+    /**
+     * Complete a device-flow login started with [`Self::start_oidc_login`].
+     * Polls the provider's token endpoint until the user authorizes (or the
+     * code expires), then persists the token bundle in the OS keyring and
+     * switches the account to OIDC authentication.
+     */
+    suspend fun `finishOidcLogin`(`login`: MobileOidcLogin)
+
     fun `getAvailableLocales`(): List<kotlin.String>
 
     fun `getCalendars`(): List<MobileCalendar>
@@ -2736,6 +2787,11 @@ public interface CfaitMobileInterface {
         `icsContent`: kotlin.String,
     ): kotlin.String
 
+    /**
+     * Whether an OIDC token bundle is stored in the OS keyring.
+     */
+    fun `isOidcSignedIn`(): kotlin.Boolean
+
     fun `isolateCalendar`(`href`: kotlin.String)
 
     fun `loadFromCache`()
@@ -2765,6 +2821,12 @@ public interface CfaitMobileInterface {
         `uid`: kotlin.String,
         `newCalHref`: kotlin.String,
     ): kotlin.String
+
+    /**
+     * Sign out of the OIDC provider: discard the stored token bundle and
+     * revert to basic authentication (issue #118).
+     */
+    fun `oidcLogout`()
 
     /**
      * Resolve a `[[wiki link]]` to an existing task, or create the missing
@@ -2844,6 +2906,19 @@ public interface CfaitMobileInterface {
         `alarmUid`: kotlin.String,
         `minutes`: kotlin.UInt,
     )
+
+    /**
+     * Start an OIDC device-flow login (RFC 8628) for a CalDAV server that
+     * only accepts OIDC authorization (issue #118). Returns a pending login
+     * the user completes on any device: show `user_code` and open
+     * `verification_uri`, then call [`Self::finish_oidc_login`].
+     */
+    suspend fun `startOidcLogin`(
+        `issuer`: kotlin.String,
+        `clientId`: kotlin.String,
+        `clientSecret`: kotlin.String?,
+        `scope`: kotlin.String?,
+    ): MobileOidcLogin
 
     suspend fun `startTask`(`uid`: kotlin.String): kotlin.String
 
@@ -3544,6 +3619,31 @@ open class CfaitMobile :
             },
         )
 
+    /**
+     * Complete a device-flow login started with [`Self::start_oidc_login`].
+     * Polls the provider's token endpoint until the user authorizes (or the
+     * code expires), then persists the token bundle in the OS keyring and
+     * switches the account to OIDC authentication.
+     */
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `finishOidcLogin`(`login`: MobileOidcLogin) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_finish_oidc_login(
+                    uniffiHandle,
+                    FfiConverterTypeMobileOidcLogin.lower(`login`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+            // lift function
+            { },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
+
     override fun `getAvailableLocales`(): List<kotlin.String> =
         FfiConverterSequenceString.lift(
             callWithHandle {
@@ -3857,6 +3957,21 @@ open class CfaitMobile :
             },
         )
 
+    /**
+     * Whether an OIDC token bundle is stored in the OS keyring.
+     */
+    override fun `isOidcSignedIn`(): kotlin.Boolean =
+        FfiConverterBoolean.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_is_oidc_signed_in(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
     @Throws(MobileException::class)
     override fun `isolateCalendar`(`href`: kotlin.String) =
         callWithHandle {
@@ -3978,6 +4093,21 @@ open class CfaitMobile :
             // Error FFI converter
             MobileException.ErrorHandler,
         )
+
+    /**
+     * Sign out of the OIDC provider: discard the stored token bundle and
+     * revert to basic authentication (issue #118).
+     */
+    @Throws(MobileException::class)
+    override fun `oidcLogout`() =
+        callWithHandle {
+            uniffiRustCallWithError(MobileException) { _status ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_oidc_logout(
+                    it,
+                    _status,
+                )
+            }
+        }
 
     /**
      * Resolve a `[[wiki link]]` to an existing task, or create the missing
@@ -4371,6 +4501,39 @@ open class CfaitMobile :
         // Error FFI converter
         MobileException.ErrorHandler,
     )
+
+    /**
+     * Start an OIDC device-flow login (RFC 8628) for a CalDAV server that
+     * only accepts OIDC authorization (issue #118). Returns a pending login
+     * the user completes on any device: show `user_code` and open
+     * `verification_uri`, then call [`Self::finish_oidc_login`].
+     */
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `startOidcLogin`(
+        `issuer`: kotlin.String,
+        `clientId`: kotlin.String,
+        `clientSecret`: kotlin.String?,
+        `scope`: kotlin.String?,
+    ): MobileOidcLogin =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_start_oidc_login(
+                    uniffiHandle,
+                    FfiConverterString.lower(`issuer`),
+                    FfiConverterString.lower(`clientId`),
+                    FfiConverterOptionalString.lower(`clientSecret`),
+                    FfiConverterOptionalString.lower(`scope`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeMobileOidcLogin.lift(it) },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
@@ -4778,6 +4941,13 @@ data class MobileConfig(
     var `localUrl`: kotlin.String,
     var `username`: kotlin.String,
     var `password`: kotlin.String,
+    /**
+     * Authentication scheme: "basic", "bearer" or "oidc" (issue #118).
+     */
+    var `authMode`: kotlin.String,
+    var `oidcIssuer`: kotlin.String,
+    var `oidcClientId`: kotlin.String,
+    var `oidcSignedIn`: kotlin.Boolean,
     var `tlsClientCertPath`: kotlin.String?,
     var `tlsClientKeyPath`: kotlin.String?,
     var `dataDir`: kotlin.String?,
@@ -4844,6 +5014,10 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
@@ -4904,6 +5078,10 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
                 FfiConverterString.allocationSize(value.`localUrl`) +
                 FfiConverterString.allocationSize(value.`username`) +
                 FfiConverterString.allocationSize(value.`password`) +
+                FfiConverterString.allocationSize(value.`authMode`) +
+                FfiConverterString.allocationSize(value.`oidcIssuer`) +
+                FfiConverterString.allocationSize(value.`oidcClientId`) +
+                FfiConverterBoolean.allocationSize(value.`oidcSignedIn`) +
                 FfiConverterOptionalString.allocationSize(value.`tlsClientCertPath`) +
                 FfiConverterOptionalString.allocationSize(value.`tlsClientKeyPath`) +
                 FfiConverterOptionalString.allocationSize(value.`dataDir`) +
@@ -4966,6 +5144,10 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
         FfiConverterString.write(value.`localUrl`, buf)
         FfiConverterString.write(value.`username`, buf)
         FfiConverterString.write(value.`password`, buf)
+        FfiConverterString.write(value.`authMode`, buf)
+        FfiConverterString.write(value.`oidcIssuer`, buf)
+        FfiConverterString.write(value.`oidcClientId`, buf)
+        FfiConverterBoolean.write(value.`oidcSignedIn`, buf)
         FfiConverterOptionalString.write(value.`tlsClientCertPath`, buf)
         FfiConverterOptionalString.write(value.`tlsClientKeyPath`, buf)
         FfiConverterOptionalString.write(value.`dataDir`, buf)
@@ -5503,6 +5685,80 @@ public object FfiConverterTypeMobileLocation : FfiConverterRustBuffer<MobileLoca
         FfiConverterUInt.write(value.`depth`, buf)
         FfiConverterBoolean.write(value.`hasChildren`, buf)
         FfiConverterBoolean.write(value.`isExpanded`, buf)
+    }
+}
+
+/**
+ * A pending OIDC device-flow login (RFC 8628). The app shows `user_code`
+ * and `verification_uri` to the user, who completes the sign-in on any
+ * device; then `finish_oidc_login` polls the provider until the token
+ * arrives (issue #118).
+ */
+data class MobileOidcLogin(
+    var `userCode`: kotlin.String,
+    var `verificationUri`: kotlin.String,
+    var `verificationUriComplete`: kotlin.String?,
+    var `issuer`: kotlin.String,
+    var `clientId`: kotlin.String,
+    var `clientSecret`: kotlin.String?,
+    var `scope`: kotlin.String?,
+    var `deviceCode`: kotlin.String,
+    var `tokenEndpoint`: kotlin.String,
+    var `expiresIn`: kotlin.UInt,
+    var `interval`: kotlin.UInt,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMobileOidcLogin : FfiConverterRustBuffer<MobileOidcLogin> {
+    override fun read(buf: ByteBuffer): MobileOidcLogin =
+        MobileOidcLogin(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+
+    override fun allocationSize(value: MobileOidcLogin) =
+        (
+            FfiConverterString.allocationSize(value.`userCode`) +
+                FfiConverterString.allocationSize(value.`verificationUri`) +
+                FfiConverterOptionalString.allocationSize(value.`verificationUriComplete`) +
+                FfiConverterString.allocationSize(value.`issuer`) +
+                FfiConverterString.allocationSize(value.`clientId`) +
+                FfiConverterOptionalString.allocationSize(value.`clientSecret`) +
+                FfiConverterOptionalString.allocationSize(value.`scope`) +
+                FfiConverterString.allocationSize(value.`deviceCode`) +
+                FfiConverterString.allocationSize(value.`tokenEndpoint`) +
+                FfiConverterUInt.allocationSize(value.`expiresIn`) +
+                FfiConverterUInt.allocationSize(value.`interval`)
+        )
+
+    override fun write(
+        value: MobileOidcLogin,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`userCode`, buf)
+        FfiConverterString.write(value.`verificationUri`, buf)
+        FfiConverterOptionalString.write(value.`verificationUriComplete`, buf)
+        FfiConverterString.write(value.`issuer`, buf)
+        FfiConverterString.write(value.`clientId`, buf)
+        FfiConverterOptionalString.write(value.`clientSecret`, buf)
+        FfiConverterOptionalString.write(value.`scope`, buf)
+        FfiConverterString.write(value.`deviceCode`, buf)
+        FfiConverterString.write(value.`tokenEndpoint`, buf)
+        FfiConverterUInt.write(value.`expiresIn`, buf)
+        FfiConverterUInt.write(value.`interval`, buf)
     }
 }
 

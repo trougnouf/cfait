@@ -90,11 +90,13 @@ fn config_oidc_fields_serde_defaults() {
     assert_eq!(cfg.oidc_scope, None);
     assert_eq!(cfg.oidc_client_secret_command, None);
 
-    let mut cfg2 = Config::default();
-    cfg2.auth_mode = AuthMode::Oidc;
-    cfg2.oidc_issuer = "https://idp.example.com".into();
-    cfg2.oidc_client_id = "cfait".into();
-    cfg2.oidc_scope = Some("openid".into());
+    let cfg2 = Config {
+        auth_mode: AuthMode::Oidc,
+        oidc_issuer: "https://idp.example.com".into(),
+        oidc_client_id: "cfait".into(),
+        oidc_scope: Some("openid".into()),
+        ..Default::default()
+    };
     let back: Config = serde_json::from_value(serde_json::to_value(&cfg2).unwrap()).unwrap();
     assert_eq!(back.auth_mode, AuthMode::Oidc);
     assert_eq!(back.oidc_issuer, "https://idp.example.com");
@@ -104,8 +106,10 @@ fn config_oidc_fields_serde_defaults() {
 
 #[test]
 fn oidc_keyring_key_namespaced_by_host() {
-    let mut cfg = Config::default();
-    cfg.url = "https://cloud.example.com/remote.php/dav/".into();
+    let cfg = Config {
+        url: "https://cloud.example.com/remote.php/dav/".into(),
+        ..Default::default()
+    };
     assert_eq!(cfg.oidc_keyring_key(), "oidc@cloud.example.com");
 
     // No URL → no host → unnamespaced key.
@@ -370,11 +374,13 @@ fn rusty_client_oidc_sends_bearer_header() {
         let mut server = Server::new_async().await;
         let issuer = server.url();
 
-        let mut config = Config::default();
-        config.url = issuer.clone();
-        config.auth_mode = AuthMode::Oidc;
-        config.oidc_issuer = issuer.clone();
-        config.oidc_client_id = "cfait".into();
+        let config = Config {
+            url: issuer.clone(),
+            auth_mode: AuthMode::Oidc,
+            oidc_issuer: issuer.clone(),
+            oidc_client_id: "cfait".into(),
+            ..Default::default()
+        };
 
         let bundle = test_bundle("at-caldav", unix_now() + 3600, Some("rt-caldav"));
         if save_bundle(&config.oidc_keyring_key(), &bundle).is_err() {
@@ -412,10 +418,12 @@ fn rusty_client_bearer_sends_static_token() {
     runtime.block_on(async {
         let mut server = Server::new_async().await;
 
-        let mut config = Config::default();
-        config.url = server.url();
-        config.auth_mode = AuthMode::Bearer;
-        config.password = "static-token-123".into();
+        let config = Config {
+            url: server.url(),
+            auth_mode: AuthMode::Bearer,
+            password: "static-token-123".into(),
+            ..Default::default()
+        };
 
         let mock_propfind = server
             .mock("PROPFIND", "/")
