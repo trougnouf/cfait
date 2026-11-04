@@ -503,6 +503,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     app.description_value.text()
                 }
                 crate::gui::state::SuggestionEditor::TaskInput => app.input_value.text(),
+                crate::gui::state::SuggestionEditor::Search => app.search_value.text(),
             };
 
             let cycled = app.suggestion_cycle.as_ref().filter(|c| {
@@ -514,14 +515,26 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             let suggs = match cycled {
                 Some(c) => c.suggestions.clone(),
                 None => {
-                    let Some((_, suggs)) = crate::model::autocomplete::suggest(
-                        &text,
-                        range.end,
-                        &app.store,
-                        &app.tag_aliases,
-                        &app.calendars,
-                        &app.visible_calendar_hrefs(),
-                    ) else {
+                    let fresh = if editor == crate::gui::state::SuggestionEditor::Search {
+                        crate::model::autocomplete::suggest_search(
+                            &text,
+                            range.end,
+                            &app.store,
+                            &app.tag_aliases,
+                            &app.calendars,
+                            &app.visible_calendar_hrefs(),
+                        )
+                    } else {
+                        crate::model::autocomplete::suggest(
+                            &text,
+                            range.end,
+                            &app.store,
+                            &app.tag_aliases,
+                            &app.calendars,
+                            &app.visible_calendar_hrefs(),
+                        )
+                    };
+                    let Some((_, suggs)) = fresh else {
                         return Task::none();
                     };
                     suggs
@@ -535,6 +548,14 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             handle(app, Message::ApplySuggestion(range, replacement))
         }
         Message::ApplySuggestion(range, text) => {
+            if common::active_suggestion_editor(app) == crate::gui::state::SuggestionEditor::Search
+            {
+                apply_suggestion_to_content(&mut app.search_value, range, &text);
+                app.session.search_term = app.search_value.text();
+                return iced::widget::operation::focus(iced::widget::Id::new(
+                    "header_search_input",
+                ));
+            }
             if app.sidebar_mode == SidebarMode::Journal {
                 let current = app.journal_editor_content.text();
                 app.journal_history.push(current.clone());

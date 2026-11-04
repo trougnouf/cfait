@@ -63,6 +63,7 @@ pub enum SuggestionEditor {
     TaskInput,
     TaskDescription,
     Journal,
+    Search,
 }
 
 /// Repeated Tab presses cycle through the suggestion list produced for a

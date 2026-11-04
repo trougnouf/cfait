@@ -855,10 +855,14 @@ impl AppState {
     // --- AUTO-COMPLETE ---
 
     /// Recompute suggestions for the current buffer and cursor. Suggestions
-    /// are only offered while creating or editing a task; any stale popup
-    /// state is cleared in every other mode.
+    /// are offered while creating or editing a task (full syntax) and while
+    /// searching (search operators only); any stale popup state is cleared
+    /// in every other mode.
     pub fn refresh_suggestions(&mut self) {
-        if !matches!(self.mode, InputMode::Creating | InputMode::Editing) {
+        if !matches!(
+            self.mode,
+            InputMode::Creating | InputMode::Editing | InputMode::Searching
+        ) {
             if self.suggestions.is_some() {
                 self.dismiss_suggestions();
             }
@@ -872,14 +876,25 @@ impl AppState {
             .map(|(i, _)| i)
             .nth(self.cursor_position)
             .unwrap_or(self.input_buffer.len());
-        let result = crate::model::autocomplete::suggest(
-            &self.input_buffer,
-            cursor_byte,
-            &self.store,
-            &self.tag_aliases,
-            &self.calendars,
-            &self.visible_calendar_hrefs(),
-        );
+        let result = if self.mode == InputMode::Searching {
+            crate::model::autocomplete::suggest_search(
+                &self.input_buffer,
+                cursor_byte,
+                &self.store,
+                &self.tag_aliases,
+                &self.calendars,
+                &self.visible_calendar_hrefs(),
+            )
+        } else {
+            crate::model::autocomplete::suggest(
+                &self.input_buffer,
+                cursor_byte,
+                &self.store,
+                &self.tag_aliases,
+                &self.calendars,
+                &self.visible_calendar_hrefs(),
+            )
+        };
         let range_changed = match (&self.suggestions, &result) {
             (Some((r, _)), Some((nr, _))) => r != nr,
             (None, Some(_)) | (Some(_), None) => true,

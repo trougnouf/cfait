@@ -44,6 +44,8 @@ struct CompiledTerm {
     col_query: Option<String>,
     /// Status filter (`is:done`, ...).
     status: Option<StatusFilter>,
+    /// Presence filter (`has:url`, `has:desc`, ...).
+    presence: Option<PresenceFilter>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,6 +71,23 @@ enum StatusFilter {
     Pinned,
     Recurrent,
     Archived,
+}
+
+/// Presence filters (`has:url`, `has:desc`, ...): the task itself carries the
+/// field. Unlike tag/location filters these are never evaluated against
+/// ancestors — search results already include ancestor context, and walking up
+/// the tree would make e.g. every descendant match `has:parent`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PresenceFilter {
+    Url,
+    Desc,
+    Reminder,
+    Due,
+    Start,
+    Dep,
+    Time,
+    Subtasks,
+    Parent,
 }
 
 /// Raw (uncompiled) syntax tree produced by the parser.
@@ -120,6 +139,10 @@ pub fn extract_highlight_terms(query: &str) -> Vec<String> {
                 || lex_guard.search_is_canceled.contains(&lower)
                 || lex_guard.search_is_recurrent.contains(&lower)
                 || lex_guard.search_is_archived.contains(&lower)
+                || lex_guard
+                    .search_has_prefix
+                    .iter()
+                    .any(|p| !p.is_empty() && lower.starts_with(p.as_str()))
             {
                 continue;
             }
@@ -566,6 +589,32 @@ fn compile_term(part: &str, lex: &crate::model::parser::ParserLexicon) -> Compil
         None
     };
 
+    // --- Presence Filters (has:url, has:desc, ...) ---
+    // Each list holds full terms (e.g. "has:url"); the hardcoded canonical
+    // English term is also accepted so localized overrides never disable it.
+    let has = |canonical: &str, list: &[String]| lower == canonical || list.contains(&lower);
+    let presence = if has("has:url", &lex.search_has_url) || lower == "is:url" {
+        Some(PresenceFilter::Url)
+    } else if has("has:desc", &lex.search_has_desc) {
+        Some(PresenceFilter::Desc)
+    } else if has("has:rem", &lex.search_has_reminder) {
+        Some(PresenceFilter::Reminder)
+    } else if has("has:due", &lex.search_has_due) {
+        Some(PresenceFilter::Due)
+    } else if has("has:start", &lex.search_has_start) {
+        Some(PresenceFilter::Start)
+    } else if has("has:dep", &lex.search_has_dep) {
+        Some(PresenceFilter::Dep)
+    } else if has("has:spent", &lex.search_has_time) {
+        Some(PresenceFilter::Time)
+    } else if has("has:subtasks", &lex.search_has_subtasks) {
+        Some(PresenceFilter::Subtasks)
+    } else if has("has:parent", &lex.search_has_parent) {
+        Some(PresenceFilter::Parent)
+    } else {
+        None
+    };
+
     CompiledTerm {
         lower,
         loc_query,
@@ -576,6 +625,7 @@ fn compile_term(part: &str, lex: &crate::model::parser::ParserLexicon) -> Compil
         tag_query,
         col_query,
         status,
+        presence,
     }
 }
 
@@ -706,6 +756,26 @@ impl CompiledTerm {
                 .get(&task.calendar_href)
                 .is_some_and(|name| contains_ignore_case(name, col_query));
             return href_match || name_match;
+        }
+
+        // --- Presence Filters (has:...) ---
+        // Evaluated on the task itself only, never via `any_ancestor_matches`:
+        // result lists already carry ancestor context, and ancestor matching
+        // here would make every descendant satisfy `has:parent`.
+        if let Some(presence) = &self.presence {
+            return match presence {
+                PresenceFilter::Url => task.first_url().is_some(),
+                PresenceFilter::Desc => !task.description.trim().is_empty(),
+                PresenceFilter::Reminder => !task.alarms.is_empty() || !task.raw_alarms.is_empty(),
+                PresenceFilter::Due => task.due.is_some(),
+                PresenceFilter::Start => task.dtstart.is_some(),
+                PresenceFilter::Dep => !task.dependencies.is_empty(),
+                PresenceFilter::Time => {
+                    task.time_spent_seconds > 0 || task.last_started_at.is_some()
+                }
+                PresenceFilter::Subtasks => store.children_index.contains_key(&task.uid),
+                PresenceFilter::Parent => task.parent_uid.is_some(),
+            };
         }
 
         // --- Status Filters ---
@@ -864,6 +934,139 @@ mod tests {
         // Location filters: 'loc:' and '@@' prefixes should both work
         assert!(t.matches_search_term("loc:Kitchen", &store));
         assert!(t.matches_search_term("@@Kitchen", &store));
+    }
+
+    #[test]
+    fn test_has_url_filter() {
+        let store =
+            crate::store::TaskStore::new(std::sync::Arc::new(crate::context::TestContext::new()));
+        let aliases: HashMap<String, Vec<String>> = HashMap::new();
+
+        // Bare URL in the description
+        let mut t = Task::new("Test", &aliases, None);
+        t.summary = "Read the docs".to_string();
+        t.description = "See https://example.com/docs for details".to_string();
+        assert!(t.matches_search_term("has:url", &store));
+        assert!(t.matches_search_term("is:url", &store));
+        assert!(!t.matches_search_term("-has:url", &store));
+        // Combines with other terms
+        assert!(t.matches_search_term("has:url docs", &store));
+        assert!(!t.matches_search_term("has:url garden", &store));
+
+        // Markdown link in the description
+        let mut t_md = Task::new("Test", &aliases, None);
+        t_md.description = "[website](https://example.org)".to_string();
+        assert!(t_md.matches_search_term("has:url", &store));
+
+        // mailto: link in the description
+        let mut t_mail = Task::new("Test", &aliases, None);
+        t_mail.description = "Contact mailto:someone@example.org".to_string();
+        assert!(t_mail.matches_search_term("has:url", &store));
+
+        // Explicit URL property, no description link
+        let mut t_prop = Task::new("Test", &aliases, None);
+        t_prop.url = Some("https://example.net".to_string());
+        assert!(t_prop.matches_search_term("has:url", &store));
+
+        // No URL anywhere
+        let mut t_plain = Task::new("Test", &aliases, None);
+        t_plain.summary = "Plain task".to_string();
+        t_plain.description = "Nothing to see here".to_string();
+        assert!(!t_plain.matches_search_term("has:url", &store));
+        assert!(t_plain.matches_search_term("-has:url", &store));
+    }
+
+    #[test]
+    fn test_has_presence_filters() {
+        let mut store =
+            crate::store::TaskStore::new(std::sync::Arc::new(crate::context::TestContext::new()));
+        let aliases: HashMap<String, Vec<String>> = HashMap::new();
+        let day =
+            crate::model::DateType::AllDay(chrono::NaiveDate::from_ymd_opt(2026, 11, 3).unwrap());
+
+        let mut t = Task::new("Full task", &aliases, None);
+        t.uid = "full".to_string();
+        t.description = "with details".to_string();
+        t.raw_alarms.push("BEGIN:VALARM".to_string());
+        t.due = Some(day.clone());
+        t.dtstart = Some(day.clone());
+        t.dependencies.push("other_uid".to_string());
+        t.time_spent_seconds = 600;
+
+        let mut child = Task::new("Child task", &aliases, None);
+        child.uid = "child".to_string();
+        child.parent_uid = Some("full".to_string());
+
+        let mut grandchild = Task::new("Grandchild task", &aliases, None);
+        grandchild.uid = "grandchild".to_string();
+        grandchild.parent_uid = Some("child".to_string());
+
+        store.add_task(t);
+        store.add_task(child);
+        store.add_task(grandchild);
+        let full = store.get_task_ref("full").unwrap().clone();
+        let child = store.get_task_ref("child").unwrap().clone();
+        let grandchild = store.get_task_ref("grandchild").unwrap().clone();
+
+        // Each field-backed presence filter matches only the task carrying it
+        for q in [
+            "has:desc",
+            "has:description",
+            "has:rem",
+            "has:reminder",
+            "has:due",
+            "has:start",
+            "has:dep",
+            "has:depends",
+            "has:spent",
+            "has:time",
+            "has:time_spent",
+        ] {
+            assert!(full.matches_search_term(q, &store), "full should match {q}");
+            assert!(
+                !child.matches_search_term(q, &store),
+                "child should not match {q}"
+            );
+            assert!(
+                !grandchild.matches_search_term(q, &store),
+                "grandchild should not match {q}"
+            );
+        }
+        // has:subtasks: `full` and `child` have children; the grandchild must
+        // NOT match even though an ancestor has children (no ancestor leak)
+        for q in ["has:subtasks", "has:children"] {
+            assert!(full.matches_search_term(q, &store), "full should match {q}");
+            assert!(
+                child.matches_search_term(q, &store),
+                "child should match {q}"
+            );
+            assert!(
+                !grandchild.matches_search_term(q, &store),
+                "grandchild should not match {q}"
+            );
+        }
+        // has:parent is true for child and grandchild — and must NOT leak to
+        // the root via ancestor matching
+        for q in ["has:parent", "has:parents"] {
+            assert!(
+                child.matches_search_term(q, &store),
+                "child should match {q}"
+            );
+            assert!(
+                grandchild.matches_search_term(q, &store),
+                "grandchild should match {q}"
+            );
+            assert!(
+                !full.matches_search_term(q, &store),
+                "full should not match {q}"
+            );
+        }
+        // Negation works
+        assert!(!full.matches_search_term("-has:rem", &store));
+        assert!(child.matches_search_term("-has:rem", &store));
+        // Combines with other operators
+        assert!(full.matches_search_term("has:dep has:due -has:url", &store));
+        assert!(!child.matches_search_term("has:dep has:due", &store));
     }
 
     #[test]

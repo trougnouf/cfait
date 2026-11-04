@@ -50,7 +50,9 @@ pub fn set_active_focus(app: &mut GuiApp, focus: Focus) {
 /// the description/tree editor when it was the last one edited, else the
 /// add-task input.
 pub fn active_suggestion_editor(app: &GuiApp) -> SuggestionEditor {
-    if app.sidebar_mode == SidebarMode::Journal {
+    if app.active_focus == Focus::SearchInput {
+        SuggestionEditor::Search
+    } else if app.sidebar_mode == SidebarMode::Journal {
         SuggestionEditor::Journal
     } else if app.last_edited_field == 1 || app.editing_tree_uid.is_some() {
         SuggestionEditor::TaskDescription

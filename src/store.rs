@@ -7313,6 +7313,106 @@ mod tests {
     }
 
     #[test]
+    fn filter_has_presence_operators() {
+        let ctx = std::sync::Arc::new(crate::context::TestContext::new());
+        let mut store = TaskStore::new(ctx);
+        let aliases: HashMap<String, Vec<String>> = HashMap::new();
+
+        let mut parent = Task::new("Parent with link", &aliases, None);
+        parent.uid = "parent".to_string();
+        parent.description = "see https://example.com".to_string();
+
+        let mut child = Task::new("Child", &aliases, None);
+        child.uid = "child".to_string();
+        child.parent_uid = Some("parent".to_string());
+
+        let mut plain = Task::new("Plain", &aliases, None);
+        plain.uid = "plain".to_string();
+
+        store.add_task(parent);
+        store.add_task(child);
+        store.add_task(plain);
+
+        let hidden = HashSet::new();
+        let categories = HashSet::new();
+        let locations = HashSet::new();
+        let collapsed = HashSet::new();
+        let done_groups = HashSet::new();
+        let tags = HashSet::new();
+        let locs_expanded = HashSet::new();
+
+        let run = |store: &TaskStore, term: &str| {
+            store.filter(FilterOptions {
+                active_cal_href: None,
+                hidden_calendars: &hidden,
+                calendars: &[],
+                selected_categories: &categories,
+                selected_locations: &locations,
+                match_all_categories: false,
+                search_term: term,
+                hide_completed_global: false,
+                hide_fully_completed_tags: false,
+                hide_aliases_in_sidebar: false,
+                cutoff_date: None,
+                min_duration: None,
+                max_duration: None,
+                include_unset_duration: true,
+                urgent_days: 7,
+                urgent_prio: 9,
+                default_priority: 5,
+                start_grace_period_days: 0,
+                sort_standard_by_priority: false,
+                sort_preset: crate::config::SortPreset::UrgentStartedDue,
+                expanded_done_groups: &done_groups,
+                expanded_tags: &tags,
+                expanded_locations: &locs_expanded,
+                max_done_roots: 10,
+                max_done_subtasks: 10,
+                tag_aliases: &aliases,
+                search_collapsed_tasks: &collapsed,
+                focused_task_uid: None,
+                paused_sort_behavior: crate::config::PausedSortBehavior::default(),
+                sort_tiebreak_recent: false,
+                default_reminder_time: chrono::NaiveTime::from_hms_opt(9, 0, 0).unwrap(),
+            })
+        };
+        let uids = |res: &crate::store::FilterResult| -> HashSet<String> {
+            res.items
+                .iter()
+                .filter_map(|i| match i {
+                    TaskListItem::Task(t) => Some(t.uid.clone()),
+                    _ => None,
+                })
+                .collect()
+        };
+
+        // has:url matches the task carrying the link; its subtree (the child)
+        // stays visible as context, but the unrelated plain task must not appear
+        let res = uids(&run(&store, "has:url"));
+        assert!(res.contains("parent"));
+        assert!(!res.contains("plain"));
+
+        // has:subtasks matches the parent (child may appear as subtree context,
+        // but the plain task must not)
+        let res = uids(&run(&store, "has:subtasks"));
+        assert!(res.contains("parent"));
+        assert!(!res.contains("plain"));
+
+        // has:parent matches the child; the parent appears only as ancestor
+        // context, the plain task not at all
+        let res = uids(&run(&store, "has:parent"));
+        assert!(res.contains("child"));
+        assert!(!res.contains("plain"));
+
+        // -has:url matches the child and the plain task (the parent only ever
+        // appears as ancestor context, never as a match — the strict match set
+        // is covered by the matcher tests)
+        let res = uids(&run(&store, "-has:url"));
+        assert!(res.contains("child"));
+        assert!(res.contains("plain"));
+    }
+
+    #[test]
     fn issue_121_recurring_todo_visible_in_default_view() {
         // https://github.com/trougnouf/cfait/issues/121
         // Recurring VTODO (no DTSTART, DUE + RRULE) that fired its due alert

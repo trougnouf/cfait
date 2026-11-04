@@ -13,6 +13,15 @@ pub struct Suggestion {
     pub description: String,
 }
 
+/// Where the autocompleted input is used: task creation/editing (full syntax,
+/// including commands and task lookups) or the search bar (search operators
+/// only: tags, locations, collections, `is:*`/`has:*`, date operators).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SuggestContext {
+    Creation,
+    Search,
+}
+
 pub fn suggest(
     input: &str,
     cursor_byte_idx: usize,
@@ -21,6 +30,48 @@ pub fn suggest(
     calendars: &[CalendarListEntry],
     visible_hrefs: &[String],
 ) -> Option<(Range<usize>, Vec<Suggestion>)> {
+    suggest_impl(
+        input,
+        cursor_byte_idx,
+        store,
+        aliases,
+        calendars,
+        visible_hrefs,
+        SuggestContext::Creation,
+    )
+}
+
+/// Search-bar variant of [`suggest`]: only search-relevant operators are
+/// offered (no creation commands or task lookups).
+pub fn suggest_search(
+    input: &str,
+    cursor_byte_idx: usize,
+    store: &TaskStore,
+    aliases: &HashMap<String, Vec<String>>,
+    calendars: &[CalendarListEntry],
+    visible_hrefs: &[String],
+) -> Option<(Range<usize>, Vec<Suggestion>)> {
+    suggest_impl(
+        input,
+        cursor_byte_idx,
+        store,
+        aliases,
+        calendars,
+        visible_hrefs,
+        SuggestContext::Search,
+    )
+}
+
+fn suggest_impl(
+    input: &str,
+    cursor_byte_idx: usize,
+    store: &TaskStore,
+    aliases: &HashMap<String, Vec<String>>,
+    calendars: &[CalendarListEntry],
+    visible_hrefs: &[String],
+    context: SuggestContext,
+) -> Option<(Range<usize>, Vec<Suggestion>)> {
+    let for_search = context == SuggestContext::Search;
     let line_start = input[..cursor_byte_idx]
         .rfind('\n')
         .map(|i| i + 1)
@@ -54,8 +105,8 @@ pub fn suggest(
 
     let lower = word.to_lowercase();
 
-    // 0. Commands
-    if lower.starts_with(':') && !lower.contains(' ') && start == 0 {
+    // 0. Commands (creation/editing only)
+    if !for_search && lower.starts_with(':') && !lower.contains(' ') && start == 0 {
         let cmds = vec![
             (":undo", "Undo last action"),
             (":redo", "Redo last undone action"),
@@ -222,12 +273,16 @@ pub fn suggest(
         }
     }
 
-    // 4. Status filters (is:...)
+    // 4. Status filters (is:...) and presence filters (has:...)
     if lower.starts_with("is:")
         || lex
             .search_prefix
             .iter()
             .any(|p| !p.is_empty() && lower.starts_with(p))
+        || lex
+            .search_has_prefix
+            .iter()
+            .any(|p| !p.is_empty() && lower.starts_with(p.as_str()))
     {
         // Candidates are the values the matcher accepts: the lexicon's
         // `is:*` alias lists (defaults plus configured/localized overrides)
@@ -274,6 +329,23 @@ pub fn suggest(
                 candidates.push((value.clone(), "Archived".to_string()));
             }
         }
+        for (list, description) in [
+            (&lex.search_has_url, "Has a URL/link"),
+            (&lex.search_has_desc, "Has a description"),
+            (&lex.search_has_reminder, "Has a reminder"),
+            (&lex.search_has_due, "Has a due date"),
+            (&lex.search_has_start, "Has a start date"),
+            (&lex.search_has_dep, "Has dependencies"),
+            (&lex.search_has_time, "Has tracked time"),
+            (&lex.search_has_subtasks, "Has subtasks"),
+            (&lex.search_has_parent, "Has a parent"),
+        ] {
+            for value in list {
+                if seen.insert(value.clone()) {
+                    candidates.push((value.clone(), description.to_string()));
+                }
+            }
+        }
 
         let suggestions: Vec<Suggestion> = candidates
             .into_iter()
@@ -290,13 +362,63 @@ pub fn suggest(
         }
     }
 
-    // 5. Dependencies, Relations, Parents & WikiLinks
+    // 4b. Date operators in the search bar (@today, ^next week, due:..., ...).
+    // `@@` is the location prefix, handled above; bare `@`/`^` are dates.
+    if for_search {
+        let date_op = if lower.starts_with("@@") {
+            None
+        } else if let Some(stripped) = lower.strip_prefix('@') {
+            Some(("@", stripped.to_string()))
+        } else if let Some(stripped) = lower.strip_prefix('^') {
+            Some(("^", stripped.to_string()))
+        } else if let Some((kind, _, rem)) = lex.extract_prefix(&word, &lower)
+            && (kind == PrefixToken::Due || kind == PrefixToken::Start)
+        {
+            Some((&word[..word.len() - rem.len()], rem.to_lowercase()))
+        } else {
+            None
+        };
+        if let Some((prefix_str, rem)) = date_op {
+            let mut cands: Vec<String> = lex
+                .exact
+                .iter()
+                .filter(|(k, tok)| {
+                    matches!(
+                        tok,
+                        crate::model::parser::ExactToken::Today
+                            | crate::model::parser::ExactToken::Tomorrow
+                            | crate::model::parser::ExactToken::Yesterday
+                            | crate::model::parser::ExactToken::Now
+                            | crate::model::parser::ExactToken::Next
+                            | crate::model::parser::ExactToken::In
+                            | crate::model::parser::ExactToken::Weekday(_)
+                            | crate::model::parser::ExactToken::Month(_)
+                    ) && starts_with_ignore_case(k, &rem)
+                })
+                .map(|(k, _)| k.clone())
+                .collect();
+            cands.sort();
+            let suggestions: Vec<Suggestion> = cands
+                .into_iter()
+                .map(|c| Suggestion {
+                    replacement: format!("{}{}", prefix_str, c),
+                    display: format!("{}{}", prefix_str, c),
+                    description: String::new(),
+                })
+                .collect();
+            if !suggestions.is_empty() {
+                return Some((start..end, suggestions));
+            }
+        }
+    }
+
+    // 5. Dependencies, Relations, Parents & WikiLinks (creation/editing only)
     let mut is_task_lookup = false;
     let mut orig_prefix = "";
     let mut search_query = "";
     let mut is_wiki = false;
 
-    if let Some(stripped) = word.strip_prefix("[[") {
+    if !for_search && let Some(stripped) = word.strip_prefix("[[") {
         // A completed [[wiki link]] is followed or created through the
         // context banner, not autocompleted. Without this, re-applying a
         // suggestion would keep the cursor inside the finished link and
@@ -308,7 +430,8 @@ pub fn suggest(
         is_wiki = true;
         orig_prefix = "[[";
         search_query = stripped.trim_end_matches("]]");
-    } else if let Some((kind, _, rem_original)) = lex.extract_prefix(&word, &lower)
+    } else if !for_search
+        && let Some((kind, _, rem_original)) = lex.extract_prefix(&word, &lower)
         && (kind == PrefixToken::Dependency
             || kind == PrefixToken::Rel
             || kind == PrefixToken::Parent)

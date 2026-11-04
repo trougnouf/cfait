@@ -708,6 +708,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 crate::gui::state::SuggestionEditor::TaskInput => {
                     content_text_and_offset(&app.input_value)
                 }
+                crate::gui::state::SuggestionEditor::Search => {
+                    content_text_and_offset(&app.search_value)
+                }
             };
 
             // Repeated Tab presses cycle through the suggestions produced for
@@ -731,14 +734,27 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 return tasks::handle(app, Message::ApplySuggestion(cycle.range, replacement));
             }
 
-            if let Some((range, suggs)) = crate::model::autocomplete::suggest(
-                &target_text,
-                cursor_pos,
-                &app.store,
-                &app.tag_aliases,
-                &app.calendars,
-                &app.visible_calendar_hrefs(),
-            ) && let Some(s) = suggs.first().cloned()
+            let fresh = if editor == crate::gui::state::SuggestionEditor::Search {
+                crate::model::autocomplete::suggest_search(
+                    &target_text,
+                    cursor_pos,
+                    &app.store,
+                    &app.tag_aliases,
+                    &app.calendars,
+                    &app.visible_calendar_hrefs(),
+                )
+            } else {
+                crate::model::autocomplete::suggest(
+                    &target_text,
+                    cursor_pos,
+                    &app.store,
+                    &app.tag_aliases,
+                    &app.calendars,
+                    &app.visible_calendar_hrefs(),
+                )
+            };
+            if let Some((range, suggs)) = fresh
+                && let Some(s) = suggs.first().cloned()
             {
                 app.suggestion_cycle = Some(crate::gui::state::SuggestionCycle {
                     range: range.start..range.start + s.replacement.len(),
@@ -758,7 +774,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 crate::gui::state::SuggestionEditor::TaskDescription => {
                     tasks::handle(app, Message::DescriptionIndent(forward))
                 }
-                crate::gui::state::SuggestionEditor::TaskInput => {
+                crate::gui::state::SuggestionEditor::TaskInput
+                | crate::gui::state::SuggestionEditor::Search => {
                     handle(app, Message::CycleFocus(forward))
                 }
             }
@@ -1416,7 +1433,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 iced::widget::text_editor::Edit::Insert('\t'),
             ) = &action
             {
-                return Task::done(Message::CycleFocus(true));
+                // Tab in the search box applies/cycles a search suggestion when
+                // one is available; TabPressed falls back to focus cycling.
+                return Task::done(Message::TabPressed(true));
             }
             app.search_value.perform(action);
             app.session.search_term = app.search_value.text();

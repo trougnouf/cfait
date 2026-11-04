@@ -113,6 +113,17 @@ pub struct ParserLexicon {
     pub search_is_canceled: Vec<String>,
     pub search_is_recurrent: Vec<String>,
     pub search_is_archived: Vec<String>,
+    /// Prefixes that introduce a presence filter (`has:url`, ...).
+    pub search_has_prefix: Vec<String>,
+    pub search_has_url: Vec<String>,
+    pub search_has_desc: Vec<String>,
+    pub search_has_reminder: Vec<String>,
+    pub search_has_due: Vec<String>,
+    pub search_has_start: Vec<String>,
+    pub search_has_dep: Vec<String>,
+    pub search_has_time: Vec<String>,
+    pub search_has_subtasks: Vec<String>,
+    pub search_has_parent: Vec<String>,
     pub parser_collection: Vec<String>,
 }
 
@@ -448,6 +459,16 @@ impl ParserLexicon {
             search_is_canceled: get_all("search_is_canceled", "is:canceled,is:cancelled"),
             search_is_recurrent: get_all("search_is_recurrent", "is:recurrent"),
             search_is_archived: get_all("search_is_archived", "is:archived"),
+            search_has_prefix: get_all("search_has_prefix", "has:"),
+            search_has_url: get_all("search_has_url", "has:url,is:url"),
+            search_has_desc: get_all("search_has_desc", "has:desc,has:description"),
+            search_has_reminder: get_all("search_has_reminder", "has:rem,has:reminder,has:alarm"),
+            search_has_due: get_all("search_has_due", "has:due"),
+            search_has_start: get_all("search_has_start", "has:start"),
+            search_has_dep: get_all("search_has_dep", "has:dep,has:depends"),
+            search_has_time: get_all("search_has_time", "has:spent,has:time,has:time_spent"),
+            search_has_subtasks: get_all("search_has_subtasks", "has:subtasks,has:children"),
+            search_has_parent: get_all("search_has_parent", "has:parent,has:parents"),
             parser_collection: get_all("parser_collection", "col:"),
         }
     }

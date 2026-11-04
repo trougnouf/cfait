@@ -1877,7 +1877,19 @@ fn view_main_content(app: &GuiApp, show_logo: bool, is_expanded: bool) -> Elemen
 
     let window_controls = window_controls(app.force_ssd);
 
-    let mut right_section = row![search_row]
+    // Search-bar autocomplete banner, shown directly under the search input
+    // while it has focus and the current word produces suggestions.
+    let search_banner = if app.active_focus == Focus::SearchInput {
+        build_context_banner(app, &app.search_value, SuggestionEditor::Search)
+    } else {
+        None
+    };
+    let search_col: Element<'_, Message> = match search_banner {
+        Some(banner) => column![search_row, banner].spacing(4).into(),
+        None => search_row.into(),
+    };
+
+    let mut right_section = row![search_col]
         .spacing(10)
         .align_y(iced::Alignment::Center);
 
@@ -3254,15 +3266,26 @@ fn build_context_banner<'a>(
     let banner_data = if let Some(c) = cycled {
         Some((c.range.clone(), c.suggestions.clone(), Some(c.index)))
     } else {
-        crate::model::autocomplete::suggest(
-            &target_text,
-            cursor_pos,
-            &app.store,
-            &app.tag_aliases,
-            &app.calendars,
-            &app.visible_calendar_hrefs(),
-        )
-        .map(|(range, suggs)| (range, suggs, None))
+        let fresh = if editor == crate::gui::state::SuggestionEditor::Search {
+            crate::model::autocomplete::suggest_search(
+                &target_text,
+                cursor_pos,
+                &app.store,
+                &app.tag_aliases,
+                &app.calendars,
+                &app.visible_calendar_hrefs(),
+            )
+        } else {
+            crate::model::autocomplete::suggest(
+                &target_text,
+                cursor_pos,
+                &app.store,
+                &app.tag_aliases,
+                &app.calendars,
+                &app.visible_calendar_hrefs(),
+            )
+        };
+        fresh.map(|(range, suggs)| (range, suggs, None))
     };
     if let Some((range, suggs, active_index)) = banner_data {
         let mut sugg_row = row![].spacing(8).padding(iced::Padding {

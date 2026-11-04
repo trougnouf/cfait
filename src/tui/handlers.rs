@@ -2513,6 +2513,11 @@ pub async fn handle_key_event(
             _ => {}
         },
         InputMode::Searching => match key.code {
+            KeyCode::Tab if state.suggestions.is_some() => {
+                state.apply_suggestion();
+            }
+            KeyCode::Up if state.suggestions.is_some() => state.move_suggestion_cursor(true),
+            KeyCode::Down if state.suggestions.is_some() => state.move_suggestion_cursor(false),
             KeyCode::Enter => {
                 if state.input_buffer.starts_with('#') && !state.input_buffer.contains(' ') {
                     let tag = state.input_buffer.trim_start_matches('#').to_string();
@@ -2566,11 +2571,15 @@ pub async fn handle_key_event(
                 state.refresh_filtered_view();
             }
             KeyCode::Esc => {
-                state.active_search_query.clear();
-                state.search_collapsed_tasks.clear();
-                state.mode = InputMode::Normal;
-                state.reset_input();
-                state.refresh_filtered_view();
+                if state.suggestions.is_some() {
+                    state.dismiss_suggestions();
+                } else {
+                    state.active_search_query.clear();
+                    state.search_collapsed_tasks.clear();
+                    state.mode = InputMode::Normal;
+                    state.reset_input();
+                    state.refresh_filtered_view();
+                }
             }
             KeyCode::Char(c) => {
                 state.enter_char(c);

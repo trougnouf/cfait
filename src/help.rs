@@ -346,6 +346,11 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                     example: format!("{}, {}, ...", is_done, rust_i18n::t!("search_is_active")),
                 },
                 HelpItem {
+                    keys: format!("{}...", get_first("search_has_prefix")),
+                    desc: rust_i18n::t!("help_search_has_fields").to_string(),
+                    example: format!("{} -{}", get_first("search_has_reminder"), is_done),
+                },
+                HelpItem {
                     keys: "< > <=".to_string(),
                     desc: rust_i18n::t!("help_search_operators").to_string(),
                     example: format!("{p_duration}<20{u_m}, !<4"),

@@ -2467,8 +2467,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
     }
 
     // Auto-complete popup, anchored directly above the input line
-    if matches!(state.mode, InputMode::Creating | InputMode::Editing)
-        && let Some((_, suggestions)) = &state.suggestions
+    if matches!(
+        state.mode,
+        InputMode::Creating | InputMode::Editing | InputMode::Searching
+    ) && let Some((_, suggestions)) = &state.suggestions
     {
         // Leave at least one row of main content visible above the popup.
         let available = footer_area.y.saturating_sub(1);
