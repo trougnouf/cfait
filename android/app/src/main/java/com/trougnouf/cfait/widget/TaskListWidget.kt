@@ -29,6 +29,7 @@ import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.provideContent
+import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.glance.background
 import androidx.glance.currentState
 import androidx.glance.layout.Alignment
@@ -96,6 +97,14 @@ suspend fun updateAllTaskListWidgets(context: Context) {
     appWidgetManager.getAppWidgetIds(componentName).forEach { id ->
         try {
             val glanceId = manager.getGlanceIdBy(id)
+            // Invalidate the Glance state before updating: while a Glance
+            // session is alive, update() only recomposes if the state has
+            // changed, and the task data is reloaded only when the refresh
+            // tick changes. Keep the tick strictly increasing so two
+            // refreshes within the same millisecond still trigger a reload.
+            updateAppWidgetState(context, glanceId) { prefs ->
+                prefs[RefreshTickKey] = maxOf(System.currentTimeMillis(), (prefs[RefreshTickKey] ?: 0L) + 1)
+            }
             TaskListWidget().update(context, glanceId)
         } catch (e: Exception) {
             Log.e("CfaitWidget", "Failed to update TaskList widget $id", e)

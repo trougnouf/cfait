@@ -16,6 +16,7 @@ import com.trougnouf.cfait.R
 import com.trougnouf.cfait.receivers.NotificationActionReceiver
 import com.trougnouf.cfait.util.AlarmScheduler
 import com.trougnouf.cfait.util.NotificationHelper
+import com.trougnouf.cfait.widget.updateAllTaskListWidgets
 import kotlinx.coroutines.CancellationException
 
 class NotificationActionWorker(
@@ -133,6 +134,10 @@ class NotificationActionWorker(
             // Refresh UI and Scheduler
             AlarmScheduler.scheduleNextAlarm(context, api)
             AlarmScheduler.cleanupObsoleteNotifications(context, api)
+
+            // The action mutated a task; refresh widgets directly since the
+            // broadcast below only reaches the UI if it is currently open.
+            updateAllTaskListWidgets(context)
 
             val intent = Intent(BROADCAST_REFRESH)
             intent.putExtra(KEY_SYNC_ERROR, syncErrorMsg)

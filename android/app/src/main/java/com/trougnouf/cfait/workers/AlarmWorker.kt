@@ -21,6 +21,7 @@ import com.trougnouf.cfait.R
 import com.trougnouf.cfait.receivers.NotificationActionReceiver
 import com.trougnouf.cfait.util.AlarmScheduler
 import com.trougnouf.cfait.widget.EXTRA_FOCUS_TASK_UID
+import com.trougnouf.cfait.widget.updateAllTaskListWidgets
 import kotlinx.coroutines.CancellationException
 
 class AlarmWorker(
@@ -83,6 +84,11 @@ class AlarmWorker(
             }
 
             AlarmScheduler.scheduleNextAlarm(context, api)
+
+            // The pre-alarm sync may have pulled in changes from other
+            // clients; refresh the widgets even if the UI is not open.
+            updateAllTaskListWidgets(context)
+
             Result.success()
         } catch (e: Exception) {
             if (e is CancellationException) throw e
