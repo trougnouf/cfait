@@ -40,7 +40,7 @@ name = "cfait"
 chrono = { version = "0.4", features = ["serde"] }
 chrono-tz = "0.10"
 icalendar = "0.17"
-uuid = { version = "1.28", features = ["v4"] }
+uuid = { version = "1.29", features = ["v4"] }
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros", "fs", "io-util"] }
 camino = "1.2"
 libdav = "0.11"
@@ -52,7 +52,7 @@ http-body-util = "0.1"
 tower-http = { version = "0.7", features = ["auth", "decompression-full"] }
 rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
 serde = { version = "1.0", features = ["derive"] }
-toml = "1.1"
+toml = "1.2"
 directories = "6.0"
 anyhow = "1.0"
 rrule = "0.14"
@@ -68,14 +68,14 @@ fs2 = "0.4"
 digest_auth = "0.3"
 base64 = "0.23"
 # OIDC / OAuth2 client support (PKCE code challenge + secure randomness)
-sha2 = "0.10"
-getrandom = "0.3"
+sha2 = "0.11"
+getrandom = "0.4"
 tower = { version = "0.5", features = ["util"] }
 tower-service = "0.3" # Explicitly add tower-service for the trait
 tower-layer = "0.3"   # And tower-layer for the Layer trait
 strum = { version = "0.28", features = ["derive"] }
 # Filesystem watching for cross-instance sync (enabled by the tui and gui features)
-notify = { version = "8.2.0", optional = true }
+notify = { version = "8.2.2", optional = true }
 
 # --- ANDROID / INTEROP ---
 uniffi = { version = "0.32", features = ["tokio", "build", "cli"], optional = true }
@@ -100,7 +100,7 @@ unicode-segmentation = { version = "1", optional = true }
 # --- GUI ONLY (Future) ---
 iced = { version = "0.14", features = ["tokio", "svg", "advanced", "image", "canvas"], optional = true }
 iced_aw = { version = "0.14", features = ["color_picker"], optional = true }
-rfd = { version = "0.17", optional = true, default-features = false, features = ["xdg-portal"] }
+rfd = { version = "0.18", optional = true, default-features = false, features = ["xdg-portal"] }
 fastrand = "2.5"
 regex = { version = "1", optional = true }
 
@@ -122,7 +122,7 @@ notify-rust = "4"
 webpki-roots = "1.0"
 android_logger = "0.15"
 log = "0.4"
-zip = "9.0"
+zip = "9.4"
 android-native-keyring-store = "1.0"
 jni = "0.22"
 ndk-context = "0.1"
@@ -130,7 +130,7 @@ ndk-context = "0.1"
 [dev-dependencies]
 mockito = "1.7" # For mocking the HTTP server
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros", "fs", "io-util"] }
-uuid = { version = "1.28", features = ["v4"] }
+uuid = { version = "1.29", features = ["v4"] }
 serial_test = "4.0"
 uniffi_meta = "0.32"
 # Required to run the bindgen binary
@@ -215,28 +215,34 @@ version = "1.0"
 apple-native-keyring-store = { version = "1.0", features = ["keychain"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-oo7 = "0.6"
+oo7 = "0.7"
 linux-keyutils-keyring-store = "1.0"
 
-# The iced workspace crates are patched from a fork of iced to carry a
-# local fix: `iced_graphics::Editor::highlight()` re-shapes lines with new
-# (e.g. bold) attributes without clearing the cached selection, so the
-# caret is drawn at the pre-highlight position after pasting stylized text.
+# The iced workspace crates are patched from a fork of iced to carry local
+# fixes, backported to the 0.14 line on branch fix/stale-caret-link-hover-0.14:
+# - `iced_graphics::Editor::highlight()` re-shapes lines with new (e.g. bold)
+#   attributes without clearing the cached selection, so the caret is drawn at
+#   the pre-highlight position after pasting stylized text
+#   (https://github.com/trougnouf/cfait/issues/24)
+# - `iced_widget::text::Rich` requests a redraw whenever the hovered link
+#   changes, not only when hover begins/ends, so moving the cursor directly
+#   from one link to an adjacent one removes the stale underline
+#   (https://codeberg.org/trougnouf/cfait/issues/109,
+#    upstream PR: https://github.com/iced-rs/iced/compare/master...trougnouf:iced:fix/rich-link-hover-redraw)
 # Every crate of the iced workspace is patched so the whole stack resolves
 # from a single source — the fork's manifests link workspace members by
 # path, and mixing git and registry copies of e.g. iced_core breaks the
 # build with duplicate-crate type errors.
-# See https://github.com/trougnouf/cfait/issues/24
 [patch.crates-io]
-iced = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-0.14" }
-iced_core = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-0.14" }
-iced_debug = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-0.14" }
-iced_futures = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-0.14" }
-iced_graphics = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-0.14" }
-iced_program = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-0.14" }
-iced_renderer = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-0.14" }
-iced_runtime = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-0.14" }
-iced_tiny_skia = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-0.14" }
-iced_wgpu = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-0.14" }
-iced_widget = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-0.14" }
-iced_winit = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-0.14" }
+iced = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-link-hover-0.14" }
+iced_core = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-link-hover-0.14" }
+iced_debug = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-link-hover-0.14" }
+iced_futures = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-link-hover-0.14" }
+iced_graphics = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-link-hover-0.14" }
+iced_program = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-link-hover-0.14" }
+iced_renderer = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-link-hover-0.14" }
+iced_runtime = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-link-hover-0.14" }
+iced_tiny_skia = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-link-hover-0.14" }
+iced_wgpu = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-link-hover-0.14" }
+iced_widget = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-link-hover-0.14" }
+iced_winit = { git = "https://github.com/trougnouf/iced.git", branch = "fix/stale-caret-link-hover-0.14" }
