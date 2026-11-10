@@ -1079,6 +1079,29 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         app.journal_editing_href = Some(href.clone());
                         app.active_cal_href = Some(href.clone());
                         load_daily_note_into(app, &href, today);
+                    } else if let Some(uid) = app.journal_editing_uid.clone() {
+                        // Reload the editor from the store: a sync that ran
+                        // while this tab was closed may have updated the entry,
+                        // and keeping the stale editor text would flush it back
+                        // over the newer version when leaving the tab.
+                        if app.store.get_task_ref(&uid).is_some() {
+                            let md = crate::model::extractor::serialize_journal_document(
+                                &app.store,
+                                &uid,
+                                &app.calendars,
+                            );
+                            app.journal_editor_content =
+                                iced::widget::text_editor::Content::with_text(&md);
+                            app.journal_history.clear();
+                        }
+                    } else if let Some(href) = app
+                        .journal_editing_href
+                        .clone()
+                        .or_else(|| app.active_cal_href.clone())
+                    {
+                        // Same reload for the daily-note binding (no page uid).
+                        let date = app.journal_date;
+                        load_daily_note_into(app, &href, date);
                     }
                 }
             }
