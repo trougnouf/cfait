@@ -2440,11 +2440,26 @@ impl TaskStore {
 
                     clone.alarms.extend(preserved_alarms);
 
+                    // The buffer serializes dep:/rel: tokens, so the line's
+                    // own tokens are authoritative: replace instead of merge.
+                    // apply_smart_input restores the saved relations when the
+                    // input carries none (the single-line editor does not
+                    // serialize them), which would resurrect a removed dep/rel
+                    // on every save. ext.dependencies additionally carries the
+                    // implicit numbered-list dependencies.
+                    let dummy = crate::model::Task::new(
+                        &ext.raw_text,
+                        options.aliases,
+                        options.default_reminder_time,
+                    );
+                    let mut new_deps = dummy.dependencies;
                     for dep in &ext.dependencies {
-                        if !clone.dependencies.contains(dep) {
-                            clone.dependencies.push(dep.clone());
+                        if !new_deps.contains(dep) {
+                            new_deps.push(dep.clone());
                         }
                     }
+                    clone.dependencies = new_deps;
+                    clone.related_to = dummy.related_to;
                     actually_changed = true;
                 } else {
                     let dummy = crate::model::Task::new(
