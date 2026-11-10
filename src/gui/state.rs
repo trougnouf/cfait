@@ -265,6 +265,12 @@ pub struct GuiApp {
     pub ob_tls_client_key_path: String,
     /// If true, the config file exists but is invalid. We must block overwrites.
     pub config_was_corrupted: bool,
+    /// False until the initial `ConfigLoaded` message has been processed.
+    /// Saves are skipped before this: `ConfigLoaded` is async and can block on
+    /// the keyring unlock prompt, while window events can trigger saves before
+    /// it lands, which would persist the empty pre-load defaults over a real
+    /// config.toml.
+    pub config_loaded: bool,
 
     // Local Calendar Management
     pub local_cals_editing: Vec<CalendarListEntry>,
@@ -827,6 +833,7 @@ impl Default for GuiApp {
             ob_tls_client_cert_path: String::new(),
             ob_tls_client_key_path: String::new(),
             config_was_corrupted: false,
+            config_loaded: false,
 
             local_cals_editing: vec![],
             remote_cals_editing: vec![],

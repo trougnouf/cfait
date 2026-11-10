@@ -207,6 +207,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::ConfigLoaded(Ok(config_box)) => {
             let config = *config_box;
 
+            app.config_loaded = true;
             app.ob_password_visible = false;
             let locals = LocalCalendarRegistry::load(app.ctx.as_ref()).unwrap_or_default();
             app.local_cals_editing = locals.clone();
@@ -774,7 +775,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 crate::model::parser::rebuild_lexicon();
             }
             app.core_config.language = app.language.clone();
-            let _ = app.core_config.save(app.ctx.as_ref());
+            if app.config_loaded {
+                let _ = app.core_config.save(app.ctx.as_ref());
+            }
             Task::none()
         }
         Message::SetFirstDayOfWeek(val) => {

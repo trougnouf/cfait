@@ -280,6 +280,16 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
 /// leave some fields empty while the user types; callers should ensure validation
 /// where necessary.
 pub fn save_config(app: &mut GuiApp) -> Config {
+    // Startup race guard: the initial ConfigLoaded is async and can block on
+    // the keyring unlock prompt, while window resize/maximize events can
+    // trigger saves before it lands. Persisting now would overwrite
+    // url/username/password in config.toml with the empty pre-load defaults
+    // (and could clear the keyring credential), so skip the write until the
+    // initial load has completed.
+    if !app.config_loaded {
+        return app.core_config.clone();
+    }
+
     let mut cfg = app.core_config.clone();
 
     cfg.url = app.ob_url.clone();
