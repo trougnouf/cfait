@@ -13,8 +13,37 @@ use fastrand;
 use iced::widget::operation;
 use iced::{Task, window};
 
+/// Push the pending page title into the store and journal queue. No-op when
+/// the bound entry is a dated daily note (its summary is the date and the
+/// title input is hidden) or when the title is unchanged, so idle keystrokes
+/// never produce an update.
+fn flush_journal_title_save(app: &mut GuiApp) {
+    let Some(uid) = app.journal_editing_uid.clone() else {
+        return;
+    };
+    let Some((t, _)) = app.store.get_task_mut(&uid) else {
+        return;
+    };
+    if t.dtstart.is_some() || t.summary == app.journal_title_input {
+        return;
+    }
+    app.edit_generation = app.edit_generation.wrapping_add(1);
+    t.summary = app.journal_title_input.clone();
+    t.sequence += 1;
+    let clone = t.clone();
+    if let Some(tx) = &app.bg_tx {
+        let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(vec![
+            crate::journal::Action::Update(clone),
+        ]));
+    }
+}
+
 fn flush_journal_save(app: &mut GuiApp) {
     app.journal_debounce_version = app.journal_debounce_version.wrapping_add(1);
+    // Cancel a pending debounced title save and flush it now, so leaving the
+    // tab (or switching date/page/collection) never loses a typed title.
+    app.journal_title_debounce_version = app.journal_title_debounce_version.wrapping_add(1);
+    flush_journal_title_save(app);
 
     let new_text = app.journal_editor_content.text();
 
@@ -1153,39 +1182,23 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::JournalTitleInputChanged(s) => {
             set_active_focus(app, Focus::JournalTitle);
-            app.journal_title_input = s.clone();
-            if let Some(uid) = &app.journal_editing_uid
-                && let Some((t, _)) = app.store.get_task_mut(uid)
-                && t.summary != s
-            {
-                app.edit_generation = app.edit_generation.wrapping_add(1);
-                t.summary = s.clone();
-                t.sequence += 1;
-                let clone = t.clone();
-                if let Some(tx) = &app.bg_tx {
-                    let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(vec![
-                        crate::journal::Action::Update(clone),
-                    ]));
-                }
-                // The store is updated immediately, but the sidebar's page
-                // list is rebuilt from a full re-filter, so debounce the
-                // refresh like search input; otherwise the new title lags
-                // until the journal tab is left and re-entered.
-                app.journal_title_debounce_version =
-                    app.journal_title_debounce_version.wrapping_add(1);
-                let version = app.journal_title_debounce_version;
-                return Task::perform(
-                    async move {
-                        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
-                        version
-                    },
-                    Message::ApplyJournalTitle,
-                );
-            }
-            Task::none()
+            app.journal_title_input = s;
+            // Debounce the store/journal update: a burst of keystrokes yields
+            // a single update (applied in ApplyJournalTitle or on flush), not
+            // one Batch per keystroke.
+            app.journal_title_debounce_version = app.journal_title_debounce_version.wrapping_add(1);
+            let version = app.journal_title_debounce_version;
+            Task::perform(
+                async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+                    version
+                },
+                Message::ApplyJournalTitle,
+            )
         }
         Message::ApplyJournalTitle(version) => {
             if version == app.journal_title_debounce_version {
+                flush_journal_title_save(app);
                 refresh_filtered_tasks(app);
             }
             Task::none()
