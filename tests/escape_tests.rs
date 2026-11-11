@@ -169,3 +169,64 @@ fn test_alias_escaping() {
     assert_eq!(clean, r#"\#key:=val"#);
     assert!(aliases.is_empty());
 }
+
+#[test]
+fn test_windows_path_backslash_is_not_an_escape() {
+    let aliases = HashMap::new();
+    // `\W` has nothing relevant to escape, so the backslash is literal.
+    let task = Task::new(r"C:\Windows", &aliases, None);
+    assert_eq!(task.summary, r"C:\Windows");
+    // The edit representation escapes the backslash, so re-parsing restores
+    // the original path instead of eating the backslash.
+    let smart = task.to_smart_string();
+    assert_eq!(smart, r"C:\\Windows");
+    let reparsed = Task::new(&smart, &aliases, None);
+    assert_eq!(reparsed.summary, r"C:\Windows");
+    assert_eq!(reparsed.to_smart_string(), smart, "round-trip must be stable");
+}
+
+#[test]
+fn test_double_backslash_roundtrip() {
+    let aliases = HashMap::new();
+    // `\\` is a real escape (one literal backslash); the `'` after it is not
+    // escaped away.
+    let task = Task::new(r"Apple\\'s", &aliases, None);
+    assert_eq!(task.summary, r"Apple\'s");
+    let smart = task.to_smart_string();
+    assert_eq!(smart, r"Apple\\'s");
+    let reparsed = Task::new(&smart, &aliases, None);
+    assert_eq!(reparsed.summary, r"Apple\'s");
+    assert_eq!(reparsed.to_smart_string(), smart, "round-trip must be stable");
+    // Editing and saving again must not eat the remaining backslash.
+    let reparsed2 = Task::new(&reparsed.to_smart_string(), &aliases, None);
+    assert_eq!(reparsed2.summary, r"Apple\'s");
+}
+
+#[test]
+fn test_backslash_in_tag_roundtrip() {
+    let aliases = HashMap::new();
+    let task = Task::new(r"Backup #C:\Users", &aliases, None);
+    assert_eq!(task.categories, vec![r"C:\Users".to_string()]);
+    let smart = task.to_smart_string();
+    let reparsed = Task::new(&smart, &aliases, None);
+    assert_eq!(reparsed.categories, vec![r"C:\Users".to_string()]);
+}
+
+#[test]
+fn test_escaped_space_in_tag_still_works() {
+    let aliases = HashMap::new();
+    let task = Task::new(r"Listen #rock\ and\ roll", &aliases, None);
+    assert_eq!(task.summary, "Listen");
+    assert_eq!(task.categories, vec!["rock and roll".to_string()]);
+    let smart = task.to_smart_string();
+    let reparsed = Task::new(&smart, &aliases, None);
+    assert_eq!(reparsed.categories, vec!["rock and roll".to_string()]);
+}
+
+#[test]
+fn test_backslash_in_quoted_dep_value() {
+    let aliases = HashMap::new();
+    let task = Task::new(r#"Do thing dep:"C:\Windows""#, &aliases, None);
+    // The reference stays as typed (unresolvable) but the backslash survives.
+    assert_eq!(task.dependencies, vec![r#"C:\Windows"#.to_string()]);
+}

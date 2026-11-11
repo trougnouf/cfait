@@ -1549,19 +1549,35 @@ pub fn tokenize_smart_input(input: &str, is_search_query: bool) -> Vec<SyntaxTok
     tokens
 }
 
+/// Whether the character after a backslash makes the backslash a real escape
+/// (consumed on parse) or just a literal backslash. `\\` and `\"` are the
+/// escapes the serializer emits inside quotes, and a backslash before
+/// non-alphanumeric punctuation escapes that punctuation (e.g. `\#`, `\ `,
+/// `\-`). A backslash before an alphanumeric or apostrophe — the `W` in
+/// `C:\Windows`, the `'` in `Apple\'s` — has nothing to escape and is kept.
+fn is_escape_target(c: char) -> bool {
+    !c.is_alphanumeric() && c != '\'' && c != '\u{2019}'
+}
+
 fn unescape(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
-    let mut chars = s.chars();
+    let mut chars = s.chars().peekable();
+    // A backslash at the very start of a token escapes the whole token
+    // (`\#tag`, `\loc:home`), whatever follows it.
+    let mut at_start = true;
     while let Some(c) = chars.next() {
         if c == '\\' {
-            if let Some(next) = chars.next() {
-                out.push(next);
-            } else {
-                out.push('\\');
+            match chars.peek() {
+                Some(&next) if at_start || is_escape_target(next) => {
+                    out.push(next);
+                    chars.next();
+                }
+                _ => out.push('\\'),
             }
         } else {
             out.push(c);
         }
+        at_start = false;
     }
     out
 }
@@ -2953,11 +2969,14 @@ pub fn escape_summary(summary: &str) -> String {
     let lex_guard = LEXICON.read().unwrap();
     let mut escaped_words = Vec::new();
     for word in summary.split_whitespace() {
+        // Escape backslashes and quotes first so a re-parse restores the
+        // literal word: a Windows path like `C:\Windows` must survive the
+        // edit round-trip instead of losing its backslashes.
+        let mut escaped = word.replace('\\', "\\\\").replace('"', "\\\"");
         if is_special_token_with_lex(word, &lex_guard) {
-            escaped_words.push(format!("\\{}", word));
-        } else {
-            escaped_words.push(word.to_string());
+            escaped = format!("\\{}", escaped);
         }
+        escaped_words.push(escaped);
     }
     let joined = escaped_words.join(" ");
     // A summary that is a whole wiki link is a literal link title: escape the
