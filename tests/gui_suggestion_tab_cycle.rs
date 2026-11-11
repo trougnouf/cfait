@@ -121,3 +121,67 @@ fn tab_without_suggestion_leaves_text_untouched() {
         "Tab without a suggestion must not edit the text"
     );
 }
+
+fn app_with_tasks(summaries: &[&str]) -> GuiApp {
+    // The engine only suggests tasks from collections the user can see.
+    let mut app = GuiApp {
+        calendars: vec![cfait::model::CalendarListEntry {
+            name: "Local".to_string(),
+            href: "local://default".to_string(),
+            color: None,
+            supports_vjournal: Some(true),
+            supports_vevent: Some(true),
+        }],
+        ..Default::default()
+    };
+    for (i, summary) in summaries.iter().enumerate() {
+        let mut t = Task::new(summary, &HashMap::new(), None);
+        t.uid = format!("uid-{i}");
+        t.calendar_href = "local://default".to_string();
+        app.store.add_task(t);
+    }
+    app
+}
+
+#[test]
+fn space_after_completed_dep_ends_the_cycle() {
+    let mut app = app_with_tasks(&["Test task A", "Test task B"]);
+
+    type_text(&mut app, "dep:Test");
+    press_tab(&mut app, true);
+    assert_eq!(
+        app.input_value.text(),
+        "dep:\"Test task A\" ",
+        "Tab should complete the dep with a quoted title and a trailing space"
+    );
+
+    // Pressing space must end the autocomplete: the next Tab must not cycle
+    // back into the first dep's suggestion list.
+    type_text(&mut app, " ");
+    assert_eq!(app.input_value.text(), "dep:\"Test task A\"  ");
+    press_tab(&mut app, true);
+    assert_eq!(
+        app.input_value.text(),
+        "dep:\"Test task A\"  ",
+        "after pressing space, Tab must not cycle the completed dep anymore"
+    );
+}
+
+#[test]
+fn second_dep_autocompletes_after_space() {
+    let mut app = app_with_tasks(&["Buy painter's tape", "Buy paint"]);
+
+    type_text(&mut app, "Paint the room dep:Buy");
+    press_tab(&mut app, true);
+    assert_eq!(app.input_value.text(), "Paint the room dep:\"Buy paint\" ");
+
+    // Type a space and start a second dep: — Tab must complete the *second*
+    // dep, not re-cycle the first one.
+    type_text(&mut app, " dep:Buy");
+    press_tab(&mut app, true);
+    assert_eq!(
+        app.input_value.text(),
+        "Paint the room dep:\"Buy paint\"  dep:\"Buy paint\" ",
+        "Tab after a space must autocomplete the new dep, leaving the first one intact"
+    );
+}

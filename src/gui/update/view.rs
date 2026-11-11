@@ -744,11 +744,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             // Repeated Tab presses cycle through the suggestions produced for
             // the same word: the stored range covers the completed word, so if
-            // the text is still intact there, the next match replaces it.
+            // the text is still intact there and the caret is still on it,
+            // the next match replaces it. Once the user moves on (e.g. pressed
+            // space to start a new word), the cycle is over.
             if let Some(cycle) = app.suggestion_cycle.take()
                 && cycle.editor == editor
-                && target_text.get(cycle.range.clone())
-                    == Some(cycle.suggestions[cycle.index].replacement.as_str())
+                && cycle.is_live_at(&target_text, cursor_pos)
             {
                 let len = cycle.suggestions.len();
                 let step = if forward { 1 } else { len - 1 };
@@ -756,6 +757,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 let replacement = cycle.suggestions[next].replacement.clone();
                 app.suggestion_cycle = Some(crate::gui::state::SuggestionCycle {
                     range: cycle.range.start..cycle.range.start + replacement.len(),
+                    caret_end: crate::gui::state::SuggestionCycle::caret_after_apply(
+                        &cycle.range,
+                        &replacement,
+                        target_text.len(),
+                    ),
                     index: next,
                     suggestions: cycle.suggestions,
                     editor: cycle.editor,
@@ -787,6 +793,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             {
                 app.suggestion_cycle = Some(crate::gui::state::SuggestionCycle {
                     range: range.start..range.start + s.replacement.len(),
+                    caret_end: crate::gui::state::SuggestionCycle::caret_after_apply(
+                        &range,
+                        &s.replacement,
+                        target_text.len(),
+                    ),
                     index: 0,
                     suggestions: suggs,
                     editor,

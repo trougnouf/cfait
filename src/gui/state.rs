@@ -72,9 +72,38 @@ pub enum SuggestionEditor {
 /// swap in the next match.
 pub struct SuggestionCycle {
     pub range: std::ops::Range<usize>,
+    /// Byte offset where the caret was left after the last application:
+    /// `range.end`, plus one when a trailing space was auto-appended because
+    /// the word ended the buffer. The cycle ends as soon as the caret moves
+    /// past this offset (typing a space or any other key).
+    pub caret_end: usize,
     pub index: usize,
     pub suggestions: Vec<crate::model::autocomplete::Suggestion>,
     pub editor: SuggestionEditor,
+}
+
+impl SuggestionCycle {
+    /// Caret offset after applying `replacement` over `range` in a buffer of
+    /// length `text_len` (mirrors `apply_suggestion_to_content`: a trailing
+    /// space is appended when the word ended the buffer).
+    pub fn caret_after_apply(
+        range: &std::ops::Range<usize>,
+        replacement: &str,
+        text_len: usize,
+    ) -> usize {
+        range.start + replacement.len() + usize::from(range.end == text_len)
+    }
+
+    /// Whether the cycle is still live at `cursor`: the completed word must
+    /// still be intact at `range` and the caret must still be on it (or on
+    /// the auto-appended space right after it). Moving the caret anywhere
+    /// else — e.g. pressing space to start a new word — ends the cycle.
+    pub fn is_live_at(&self, text: &str, cursor: usize) -> bool {
+        cursor >= self.range.start
+            && cursor <= self.caret_end
+            && text.get(self.range.clone())
+                == Some(self.suggestions[self.index].replacement.as_str())
+    }
 }
 
 pub struct GuiApp {

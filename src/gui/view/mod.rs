@@ -3258,11 +3258,14 @@ fn build_context_banner<'a>(
 
     // While a Tab cycle is running, the completed word no longer produces the
     // original suggestion list, so the banner renders the cycle's list with
-    // the applied entry highlighted instead of re-running the engine.
-    let cycled = app.suggestion_cycle.as_ref().filter(|c| {
-        c.editor == editor
-            && target_text.get(c.range.clone()) == Some(c.suggestions[c.index].replacement.as_str())
-    });
+    // the applied entry highlighted instead of re-running the engine. The
+    // cycle only stays open while the caret is still on the completed word:
+    // pressing space (or typing anything else) moves the caret past it and
+    // the banner falls back to a fresh suggestion run, which ends the cycle.
+    let cycled = app
+        .suggestion_cycle
+        .as_ref()
+        .filter(|c| c.editor == editor && c.is_live_at(&target_text, cursor_pos));
     let banner_data = if let Some(c) = cycled {
         Some((c.range.clone(), c.suggestions.clone(), Some(c.index)))
     } else {
