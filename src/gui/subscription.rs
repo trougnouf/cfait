@@ -384,6 +384,27 @@ fn handle_hotkey(
             return None;
         }
 
+        // A focused text field captures every key it handles, so a key that
+        // still arrives here was not consumed by it. On Windows, AltGr is
+        // reported without its Ctrl/Alt modifiers (winit filters them out),
+        // so the check above cannot catch e.g. AltGr+Space: without this
+        // guard it would fall through to the list commands below and toggle
+        // the selected task while the user is typing. Escape still leaves the
+        // field, and Tab still jumps from the journal title into the note body.
+        if let Ok(focus) = ACTIVE_FOCUS.read()
+            && matches!(
+                *focus,
+                Focus::SearchInput | Focus::AddTaskInput | Focus::Journal | Focus::JournalTitle
+            )
+        {
+            let is_escape = key == keyboard::Key::Named(Named::Escape);
+            let is_journal_title_tab =
+                *focus == Focus::JournalTitle && key == keyboard::Key::Named(Named::Tab);
+            if !is_escape && !is_journal_title_tab {
+                return None;
+            }
+        }
+
         // Bare digit: switch sidebar tab by logical character (matches the typed
         // digit on any layout, e.g. Shift+key on programmer Dvorak)
         if let Some(msg) = digit_sidebar_message(&modified_key) {
@@ -471,5 +492,114 @@ fn handle_hotkey(
         }
     } else {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use iced::keyboard::key::{Code, Physical};
+    use iced::keyboard::{Key, Location, Modifiers};
+    use std::sync::Mutex;
+
+    // ACTIVE_FOCUS is global, so serialize the tests that mutate it.
+    static FOCUS_LOCK: Mutex<()> = Mutex::new(());
+
+    fn key_press(key: Key, modified_key: Key, modifiers: Modifiers, text: Option<&str>) -> iced::Event {
+        iced::Event::Keyboard(keyboard::Event::KeyPressed {
+            key,
+            modified_key,
+            physical_key: Physical::Code(Code::Space),
+            location: Location::Standard,
+            modifiers,
+            text: text.map(|t| t.into()),
+            repeat: false,
+        })
+    }
+
+    fn space(modifiers: Modifiers) -> iced::Event {
+        key_press(
+            Key::Named(keyboard::key::Named::Space),
+            Key::Named(keyboard::key::Named::Space),
+            modifiers,
+            None,
+        )
+    }
+
+    fn set_focus(focus: Focus) {
+        if let Ok(mut g) = ACTIVE_FOCUS.write() {
+            *g = focus;
+        }
+    }
+
+    #[test]
+    fn altgr_style_space_in_text_input_is_not_a_list_command() {
+        let _guard = FOCUS_LOCK.lock().unwrap();
+        // On Windows, AltGr is reported without Ctrl/Alt modifiers, so an
+        // AltGr+Space arrives as a bare, uncaptured Space. While a text input
+        // has focus it must not toggle the selected task.
+        set_focus(Focus::AddTaskInput);
+        let msg = handle_hotkey(space(Modifiers::empty()), iced::event::Status::Ignored, iced::window::Id::unique());
+        assert!(
+            !matches!(msg, Some(Message::ToggleSelected) | Some(Message::ShiftSpaceSelected)),
+            "AltGr+Space in the input bar must not toggle tasks, got {msg:?}"
+        );
+
+        // The same keypress on the task list still toggles the selection.
+        set_focus(Focus::MainList);
+        let msg = handle_hotkey(space(Modifiers::empty()), iced::event::Status::Ignored, iced::window::Id::unique());
+        assert!(matches!(msg, Some(Message::ToggleSelected)));
+
+        // Shift+Space on the list still completes the whole tree.
+        let msg = handle_hotkey(space(Modifiers::SHIFT), iced::event::Status::Ignored, iced::window::Id::unique());
+        assert!(matches!(msg, Some(Message::ShiftSpaceSelected)));
+    }
+
+    #[test]
+    fn text_input_keeps_escape_and_journal_title_tab() {
+        let _guard = FOCUS_LOCK.lock().unwrap();
+        set_focus(Focus::AddTaskInput);
+        let esc = key_press(
+            Key::Named(keyboard::key::Named::Escape),
+            Key::Named(keyboard::key::Named::Escape),
+            Modifiers::empty(),
+            None,
+        );
+        let msg = handle_hotkey(esc, iced::event::Status::Ignored, iced::window::Id::unique());
+        assert!(matches!(msg, Some(Message::EscapePressed)), "Escape must still leave the text field, got {msg:?}");
+
+        set_focus(Focus::JournalTitle);
+        let tab = key_press(
+            Key::Named(keyboard::key::Named::Tab),
+            Key::Named(keyboard::key::Named::Tab),
+            Modifiers::empty(),
+            None,
+        );
+        let msg = handle_hotkey(tab, iced::event::Status::Ignored, iced::window::Id::unique());
+        assert!(matches!(msg, Some(Message::FocusJournalEditor)), "Tab must still jump from the journal title to the body, got {msg:?}");
+    }
+
+    #[test]
+    fn uncaptured_letter_in_text_input_is_not_a_list_command() {
+        let _guard = FOCUS_LOCK.lock().unwrap();
+        set_focus(Focus::SearchInput);
+        let j = key_press(
+            Key::Character("j".into()),
+            Key::Character("j".into()),
+            Modifiers::empty(),
+            None,
+        );
+        let msg = handle_hotkey(j, iced::event::Status::Ignored, iced::window::Id::unique());
+        assert!(msg.is_none(), "a key the search box did not capture must not run list commands, got {msg:?}");
+
+        set_focus(Focus::MainList);
+        let j = key_press(
+            Key::Character("j".into()),
+            Key::Character("j".into()),
+            Modifiers::empty(),
+            Some("j"),
+        );
+        let msg = handle_hotkey(j, iced::event::Status::Ignored, iced::window::Id::unique());
+        assert!(matches!(msg, Some(Message::SelectNext)), "j on the list must still move the selection, got {msg:?}");
     }
 }
