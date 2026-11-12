@@ -996,7 +996,7 @@
     "trash_is_empty": "La papelera ya está vacía.",
     "trash_retention_days_label": "Tiempo de conservación en la papelera (días)",
     "trash_retention_explain": "Conservar los elementos eliminados en la papelera local durante este número de días. Establece el valor en 0 para eliminarlos inmediatamente.",
-    "tui_alarm_help": "d/Esc:Descartar 1/2:Posponer s:Personalizado c:Hecho x:Cancelar q:Salir",
+    "tui_alarm_help": "d/Esc:Descartar 1/2:Posponer %{short}/%{long} s:Personalizado c:Hecho x:Cancelar q:Salir",
     "tui_bearer_token_prompt": "Token bearer: ",
     "tui_caldav_setup_title": "Configuración de la conexión CalDAV",
     "tui_caldav_url_prompt": "Dirección del servidor (por ejemplo, https://cloud.example.com/remote.php/dav/): ",

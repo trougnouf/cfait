@@ -1009,7 +1009,7 @@
     "trash_is_empty": "Papierkorb ist bereits leer.",
     "trash_retention_days_label": "Papierkorb-Aufbewahrung (Tage)",
     "trash_retention_explain": "Gelöschte Elemente so viele Tage im lokalen Papierkorb behalten. 0 zum sofortigen Löschen.",
-    "tui_alarm_help": "d/Esc:Verwerfen 1/2:Schlummern s:Speziell c:Erledigt x:Abbrechen q:Beenden",
+    "tui_alarm_help": "d/Esc:Verwerfen 1/2:Schlummern %{short}/%{long} s:Speziell c:Erledigt x:Abbrechen q:Beenden",
     "tui_bearer_token_prompt": "Bearer-Token: ",
     "tui_caldav_setup_title": "CalDAV Verbindungs-Konfiguration",
     "tui_caldav_url_prompt": "Server URL (z.B. https://cloud.example.com/remote.php/dav/): ",

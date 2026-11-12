@@ -12,7 +12,7 @@
 
 use crate::color_utils;
 use crate::model::CalendarListEntry;
-use crate::model::parser::{SyntaxType, tokenize_smart_input};
+use crate::model::parser::{SyntaxType, format_duration_compact, tokenize_smart_input};
 use crate::store::{TaskListItem, UNCATEGORIZED_ID};
 use crate::tui::action::SidebarMode;
 use crate::tui::state::{AppState, Focus, InputMode};
@@ -2613,6 +2613,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
     // Alarm popup (simplified rendering if active)
     if let Some((task, _alarm_uid)) = &state.active_alarm {
         let area = centered_rect(60, 40, f.area());
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(0), Constraint::Length(3)])
+            .split(area);
         let block = Block::default()
             .title(format!(" {} ", rust_i18n::t!("reminder_title")))
             .borders(Borders::ALL)
@@ -2641,18 +2645,25 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             )));
             lines.push(Line::from(""));
         }
-        lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled(
-            rust_i18n::t!("tui_alarm_help"),
-            Style::default().fg(Color::DarkGray),
-        )));
         let p = Paragraph::new(lines)
             .block(block)
             .alignment(Alignment::Center)
             .wrap(Wrap { trim: true })
             .scroll((state.alarm_scroll, 0));
+        let footer = Paragraph::new(rust_i18n::t!(
+            "tui_alarm_help",
+            short = format_duration_compact(state.snooze_short_mins),
+            long = format_duration_compact(state.snooze_long_mins)
+        ))
+        .alignment(Alignment::Center)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(format!(" {} ", rust_i18n::t!("reminder_actions"))),
+        );
         f.render_widget(Clear, area);
-        f.render_widget(p, area);
+        f.render_widget(p, chunks[0]);
+        f.render_widget(footer, chunks[1]);
     }
 
     // Viewing Details popup
