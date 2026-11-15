@@ -182,7 +182,11 @@ fn test_windows_path_backslash_is_not_an_escape() {
     assert_eq!(smart, r"C:\\Windows");
     let reparsed = Task::new(&smart, &aliases, None);
     assert_eq!(reparsed.summary, r"C:\Windows");
-    assert_eq!(reparsed.to_smart_string(), smart, "round-trip must be stable");
+    assert_eq!(
+        reparsed.to_smart_string(),
+        smart,
+        "round-trip must be stable"
+    );
 }
 
 #[test]
@@ -196,7 +200,11 @@ fn test_double_backslash_roundtrip() {
     assert_eq!(smart, r"Apple\\'s");
     let reparsed = Task::new(&smart, &aliases, None);
     assert_eq!(reparsed.summary, r"Apple\'s");
-    assert_eq!(reparsed.to_smart_string(), smart, "round-trip must be stable");
+    assert_eq!(
+        reparsed.to_smart_string(),
+        smart,
+        "round-trip must be stable"
+    );
     // Editing and saving again must not eat the remaining backslash.
     let reparsed2 = Task::new(&reparsed.to_smart_string(), &aliases, None);
     assert_eq!(reparsed2.summary, r"Apple\'s");

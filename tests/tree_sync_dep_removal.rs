@@ -29,7 +29,10 @@ fn task(uid: &str, summary: &str, parent: Option<&str>, deps: &[&str]) -> Task {
     t
 }
 
-fn options<'a>(aliases: &'a HashMap<String, Vec<String>>, calendars: &'a [cfait::model::CalendarListEntry]) -> SyncTreeOptions<'a> {
+fn options<'a>(
+    aliases: &'a HashMap<String, Vec<String>>,
+    calendars: &'a [cfait::model::CalendarListEntry],
+) -> SyncTreeOptions<'a> {
     SyncTreeOptions {
         aliases,
         default_reminder_time: None,
@@ -44,16 +47,42 @@ fn options<'a>(aliases: &'a HashMap<String, Vec<String>>, calendars: &'a [cfait:
 fn tree_sync_removes_last_dep_token() {
     let mut store = make_store();
     store.add_task(task("bench", "Long bench", None, &[]));
-    store.add_task(task("stain-base", "**Prep & Pre-Stain Base:**", Some("bench"), &["decking"]));
-    store.add_task(task("decking", "**Stretchers & Decking:**", Some("bench"), &["frame"]));
-    store.add_task(task("frame", "**Build Frame:**", Some("bench"), &["ledger"]));
-    store.add_task(task("ledger", "**Mount Ledger:**", Some("bench"), &["stain-base"]));
+    store.add_task(task(
+        "stain-base",
+        "**Prep & Pre-Stain Base:**",
+        Some("bench"),
+        &["decking"],
+    ));
+    store.add_task(task(
+        "decking",
+        "**Stretchers & Decking:**",
+        Some("bench"),
+        &["frame"],
+    ));
+    store.add_task(task(
+        "frame",
+        "**Build Frame:**",
+        Some("bench"),
+        &["ledger"],
+    ));
+    store.add_task(task(
+        "ledger",
+        "**Mount Ledger:**",
+        Some("bench"),
+        &["stain-base"],
+    ));
 
     let aliases = HashMap::new();
     let calendars: Vec<cfait::model::CalendarListEntry> = Vec::new();
     let md = cfait::model::extractor::serialize_task_tree(&store, "bench", &calendars, false);
-    let line = md.lines().find(|l| l.contains("uid:stain-base")).expect("stain-base line");
-    assert!(line.contains("dep:decking"), "serialized line must carry the dep: {line}");
+    let line = md
+        .lines()
+        .find(|l| l.contains("uid:stain-base"))
+        .expect("stain-base line");
+    assert!(
+        line.contains("dep:decking"),
+        "serialized line must carry the dep: {line}"
+    );
     let edited = md.replace(" dep:decking", "");
     assert!(edited != md);
 
@@ -71,7 +100,10 @@ fn tree_sync_removes_last_dep_token() {
     // Round-trip: re-serializing must not re-add the token.
     let md2 = cfait::model::extractor::serialize_task_tree(&store, "bench", &calendars, false);
     let line2 = md2.lines().find(|l| l.contains("uid:stain-base")).unwrap();
-    assert!(!line2.contains("dep:decking"), "re-serialized line: {line2}");
+    assert!(
+        !line2.contains("dep:decking"),
+        "re-serialized line: {line2}"
+    );
 }
 
 /// Removing one of several deps must drop exactly that one.
@@ -95,7 +127,10 @@ fn tree_sync_removes_one_of_several_deps() {
         .expect("tree sync should succeed");
 
     let deps = &store.get_task_ref("a").unwrap().dependencies;
-    assert!(!deps.iter().any(|d| d == "b"), "dep b must be gone: {deps:?}");
+    assert!(
+        !deps.iter().any(|d| d == "b"),
+        "dep b must be gone: {deps:?}"
+    );
     assert!(deps.iter().any(|d| d == "c"), "dep c must stay: {deps:?}");
 }
 
@@ -118,5 +153,8 @@ fn tree_sync_adds_dep_token() {
         .expect("tree sync should succeed");
 
     let deps = &store.get_task_ref("a").unwrap().dependencies;
-    assert!(deps.iter().any(|d| d == "b"), "dep b must be added: {deps:?}");
+    assert!(
+        deps.iter().any(|d| d == "b"),
+        "dep b must be added: {deps:?}"
+    );
 }

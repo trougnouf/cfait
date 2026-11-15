@@ -505,7 +505,12 @@ mod tests {
     // ACTIVE_FOCUS is global, so serialize the tests that mutate it.
     static FOCUS_LOCK: Mutex<()> = Mutex::new(());
 
-    fn key_press(key: Key, modified_key: Key, modifiers: Modifiers, text: Option<&str>) -> iced::Event {
+    fn key_press(
+        key: Key,
+        modified_key: Key,
+        modifiers: Modifiers,
+        text: Option<&str>,
+    ) -> iced::Event {
         iced::Event::Keyboard(keyboard::Event::KeyPressed {
             key,
             modified_key,
@@ -539,19 +544,34 @@ mod tests {
         // AltGr+Space arrives as a bare, uncaptured Space. While a text input
         // has focus it must not toggle the selected task.
         set_focus(Focus::AddTaskInput);
-        let msg = handle_hotkey(space(Modifiers::empty()), iced::event::Status::Ignored, iced::window::Id::unique());
+        let msg = handle_hotkey(
+            space(Modifiers::empty()),
+            iced::event::Status::Ignored,
+            iced::window::Id::unique(),
+        );
         assert!(
-            !matches!(msg, Some(Message::ToggleSelected) | Some(Message::ShiftSpaceSelected)),
+            !matches!(
+                msg,
+                Some(Message::ToggleSelected) | Some(Message::ShiftSpaceSelected)
+            ),
             "AltGr+Space in the input bar must not toggle tasks, got {msg:?}"
         );
 
         // The same keypress on the task list still toggles the selection.
         set_focus(Focus::MainList);
-        let msg = handle_hotkey(space(Modifiers::empty()), iced::event::Status::Ignored, iced::window::Id::unique());
+        let msg = handle_hotkey(
+            space(Modifiers::empty()),
+            iced::event::Status::Ignored,
+            iced::window::Id::unique(),
+        );
         assert!(matches!(msg, Some(Message::ToggleSelected)));
 
         // Shift+Space on the list still completes the whole tree.
-        let msg = handle_hotkey(space(Modifiers::SHIFT), iced::event::Status::Ignored, iced::window::Id::unique());
+        let msg = handle_hotkey(
+            space(Modifiers::SHIFT),
+            iced::event::Status::Ignored,
+            iced::window::Id::unique(),
+        );
         assert!(matches!(msg, Some(Message::ShiftSpaceSelected)));
     }
 
@@ -565,8 +585,15 @@ mod tests {
             Modifiers::empty(),
             None,
         );
-        let msg = handle_hotkey(esc, iced::event::Status::Ignored, iced::window::Id::unique());
-        assert!(matches!(msg, Some(Message::EscapePressed)), "Escape must still leave the text field, got {msg:?}");
+        let msg = handle_hotkey(
+            esc,
+            iced::event::Status::Ignored,
+            iced::window::Id::unique(),
+        );
+        assert!(
+            matches!(msg, Some(Message::EscapePressed)),
+            "Escape must still leave the text field, got {msg:?}"
+        );
 
         set_focus(Focus::JournalTitle);
         let tab = key_press(
@@ -575,8 +602,15 @@ mod tests {
             Modifiers::empty(),
             None,
         );
-        let msg = handle_hotkey(tab, iced::event::Status::Ignored, iced::window::Id::unique());
-        assert!(matches!(msg, Some(Message::FocusJournalEditor)), "Tab must still jump from the journal title to the body, got {msg:?}");
+        let msg = handle_hotkey(
+            tab,
+            iced::event::Status::Ignored,
+            iced::window::Id::unique(),
+        );
+        assert!(
+            matches!(msg, Some(Message::FocusJournalEditor)),
+            "Tab must still jump from the journal title to the body, got {msg:?}"
+        );
     }
 
     #[test]
@@ -590,7 +624,10 @@ mod tests {
             None,
         );
         let msg = handle_hotkey(j, iced::event::Status::Ignored, iced::window::Id::unique());
-        assert!(msg.is_none(), "a key the search box did not capture must not run list commands, got {msg:?}");
+        assert!(
+            msg.is_none(),
+            "a key the search box did not capture must not run list commands, got {msg:?}"
+        );
 
         set_focus(Focus::MainList);
         let j = key_press(
@@ -600,6 +637,9 @@ mod tests {
             Some("j"),
         );
         let msg = handle_hotkey(j, iced::event::Status::Ignored, iced::window::Id::unique());
-        assert!(matches!(msg, Some(Message::SelectNext)), "j on the list must still move the selection, got {msg:?}");
+        assert!(
+            matches!(msg, Some(Message::SelectNext)),
+            "j on the list must still move the selection, got {msg:?}"
+        );
     }
 }

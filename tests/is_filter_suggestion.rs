@@ -49,6 +49,9 @@ fn bare_prefix_lists_every_filter_value_in_documented_order() {
         "is:recurrent",
         "is:pinned",
         "is:archived",
+        // `is:url` is an alias of `has:url`; the matcher accepts it, so the
+        // bare `is:` prefix offers it after the state filters.
+        "is:url",
     ]
     .into_iter()
     .map(String::from)
