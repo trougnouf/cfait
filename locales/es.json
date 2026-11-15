@@ -801,6 +801,7 @@
     "related_to_tooltip": "Relacionar «%{target}» con «%{yanked}» (l)",
     "reminder": "Recordatorio",
     "reminder_title": "Recordatorio",
+    "reminder_actions": "Acciones del recordatorio",
     "remote_collections": "Colecciones remotas",
     "remote_label": "Remoto",
     "remove_dependency": "Quitar dependencia",

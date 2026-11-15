@@ -804,6 +804,7 @@
     "related_to_tooltip": "Erstelle eine Beziehung von '%{target}' zu '%{yanked}' (l)",
     "reminder": "Erinnerung",
     "reminder_title": "Erinnerung",
+    "reminder_actions": "Erinnerungs-Aktionen",
     "remote_collections": "Server-Sammlungen",
     "remote_label": "Server",
     "remove_dependency": "Abhängigkeit entfernen",

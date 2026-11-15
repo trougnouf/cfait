@@ -803,6 +803,7 @@
     "related_to_tooltip": "Relier '%{target}' à '%{yanked}' (l)",
     "reminder": "Rappel",
     "reminder_title": "Rappel",
+    "reminder_actions": "Actions du rappel",
     "remote_collections": "Collections distantes",
     "remote_label": "Distant",
     "remove_dependency": "Supprimer la dépendance",
