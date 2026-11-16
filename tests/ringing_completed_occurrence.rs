@@ -110,3 +110,90 @@ fn is_due_moment_respects_exdate_on_stored_due() {
     task.exdates.push(task.due.clone().unwrap());
     assert!(!RecurrenceEngine::is_due_moment(&task, ts, default_time()));
 }
+
+#[test]
+fn projected_dtstart_follows_projected_due() {
+    // Stale recurring master: stored start/due in the past (the morning
+    // instance), as after a completion whose advance was clobbered in sync.
+    let task = weekly_garbage_task();
+    let now = Utc::now();
+    let stored_due = task.due.clone().unwrap();
+    let stored_start = task.dtstart.clone().unwrap();
+
+    // Due is projected forward...
+    let proj_due = RecurrenceEngine::projected_due(&task, now).unwrap();
+    assert!(proj_due.to_comparison_time() > now);
+    // ...and the start must be projected as a pair, not left in the past.
+    let proj_start = RecurrenceEngine::projected_dtstart(&task, now).unwrap();
+    assert!(proj_start.to_start_comparison_time() > now);
+    // Same next occurrence: the start->due gap is preserved.
+    let gap = |d: &DateType, s: &DateType| {
+        d.to_comparison_time()
+            .signed_duration_since(s.to_start_comparison_time())
+    };
+    assert_eq!(gap(&proj_due, &proj_start), gap(&stored_due, &stored_start));
+
+    // Ongoing task (start past, due future) must NOT be projected.
+    let mut ongoing = weekly_garbage_task();
+    ongoing.dtstart = Some(DateType::Specific(now - Duration::hours(2)));
+    ongoing.due = Some(DateType::Specific(now + Duration::hours(2)));
+    assert_eq!(
+        RecurrenceEngine::projected_dtstart(&ongoing, now).unwrap(),
+        ongoing.dtstart.clone().unwrap()
+    );
+    assert_eq!(
+        RecurrenceEngine::projected_due(&ongoing, now).unwrap(),
+        ongoing.due.clone().unwrap()
+    );
+
+    // Non-recurring tasks are never projected.
+    let mut plain = weekly_garbage_task();
+    plain.rrule = None;
+    assert_eq!(
+        RecurrenceEngine::projected_dtstart(&plain, now).unwrap(),
+        plain.dtstart.clone().unwrap()
+    );
+}
+
+#[test]
+fn stale_recurring_master_is_deferred_like_a_future_start() {
+    use cfait::config::SortPreset;
+    use chrono::NaiveTime;
+
+    let task = weekly_garbage_task();
+    let now = Utc::now();
+    let default_time = NaiveTime::from_hms_opt(8, 0, 0).unwrap();
+
+    // With the raw (past) start, the task escapes the future-start deferral
+    // and ranks as a dated task...
+    let mut raw = task.clone();
+    raw.effective_due = RecurrenceEngine::projected_due(&task, now);
+    raw.effective_dtstart = task.dtstart.clone();
+    let rank_raw = raw.calculate_base_rank(
+        None,
+        1,
+        1,
+        1,
+        false,
+        SortPreset::UrgentDueStarted,
+        default_time,
+    );
+
+    // ...but with the projected start (next occurrence, beyond grace) it is
+    // deferred to the future group, matching its projected due display.
+    let mut projected = task.clone();
+    projected.effective_due = RecurrenceEngine::projected_due(&task, now);
+    projected.effective_dtstart = RecurrenceEngine::projected_dtstart(&task, now);
+    let rank_projected = projected.calculate_base_rank(
+        None,
+        1,
+        1,
+        1,
+        false,
+        SortPreset::UrgentDueStarted,
+        default_time,
+    );
+
+    assert_eq!(rank_raw, 4);
+    assert_eq!(rank_projected, 7);
+}

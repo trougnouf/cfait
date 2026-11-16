@@ -255,6 +255,28 @@ impl RecurrenceEngine {
             .or_else(|| Some(due.clone()))
     }
 
+    /// The start date to display and rank by for a task, projected forward to
+    /// the next RRULE occurrence under the same condition as
+    /// [`projected_due`]: a recurring task whose stored occurrence is already
+    /// in the past must not be treated as "started" — its start and due are
+    /// projected as a pair, so ranking/readiness and the displayed dates stay
+    /// consistent. Keyed off the stored due when one exists (an ongoing task
+    /// whose start is past but due is future must stay "started"); start-only
+    /// recurring tasks key off the start itself.
+    pub fn projected_dtstart(task: &Task, now: DateTime<Utc>) -> Option<DateType> {
+        let start = task.dtstart.as_ref()?;
+        let occurrence_past = match task.due.as_ref() {
+            Some(due) => due.to_comparison_time() < now,
+            None => start.to_start_comparison_time() < now,
+        };
+        if task.rrule.is_none() || !occurrence_past {
+            return Some(start.clone());
+        }
+        Self::next_occurrence(task)
+            .and_then(|next| next.dtstart)
+            .or_else(|| Some(start.clone()))
+    }
+
     /// Returns true if `dt` is a due moment of the task — the moment its
     /// "Due now" reminder is supposed to fire.
     ///

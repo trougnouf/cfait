@@ -1362,10 +1362,11 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                                 (String::new(), Style::default())
                             }
                         } else if is_future_start && t.dtstart.is_some() {
-                            let start_ref = t.dtstart.as_ref().unwrap();
+                            let start_ref =
+                                t.effective_dtstart.as_ref().or(t.dtstart.as_ref()).unwrap();
                             let start_str = start_ref.format_display();
 
-                            if let Some(due) = &t.due {
+                            if let Some(due) = t.effective_due.as_ref().or(t.due.as_ref()) {
                                 let is_same_day = start_ref.to_date_naive() == due.to_date_naive();
                                 let due_str = if is_same_day {
                                     match due {

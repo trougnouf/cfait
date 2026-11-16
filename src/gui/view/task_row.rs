@@ -448,7 +448,11 @@ pub fn view_task_row<'a>(
                         );
                     }
                 } else if is_future_start {
-                    let start_ref = task.dtstart.as_ref().unwrap();
+                    let start_ref = task
+                        .effective_dtstart
+                        .as_ref()
+                        .or(task.dtstart.as_ref())
+                        .unwrap();
                     let start_str = start_ref.format_display();
                     let start_date_str = start_ref.to_date_naive().format("%Y-%m-%d").to_string();
                     let start_btn = button(
@@ -463,7 +467,7 @@ pub fn view_task_row<'a>(
                     .padding(0)
                     .on_press(Message::SetSearchTerm(format!("^{}", start_date_str)));
 
-                    if let Some(due) = &task.due {
+                    if let Some(due) = task.effective_due.as_ref().or(task.due.as_ref()) {
                         let is_same_day = start_ref.to_date_naive() == due.to_date_naive();
                         let due_str = if is_same_day {
                             match due {

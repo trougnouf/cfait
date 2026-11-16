@@ -4574,7 +4574,7 @@ impl TaskStore {
         // ready/blocked modes consult these maps, so skip the work entirely otherwise.
         let is_future_start = |t: &Task| -> bool {
             !t.has_anchored_recurrence_start()
-                && t.dtstart
+                && RecurrenceEngine::projected_dtstart(t, now)
                     .as_ref()
                     .is_some_and(|s| s.to_start_comparison_time() > now)
         };
@@ -5496,7 +5496,7 @@ impl TaskStore {
                 // so it surfaces as an upcoming item (display-only; the stored
                 // `due` is untouched, preserving the recycling model).
                 t.effective_due = RecurrenceEngine::projected_due(&t, now);
-                t.effective_dtstart = t.dtstart.clone();
+                t.effective_dtstart = RecurrenceEngine::projected_dtstart(&t, now);
                 t
             })
             .collect();
@@ -5598,7 +5598,7 @@ impl TaskStore {
             t.has_related_tasks = self.has_tasks_related_to(&t.uid);
 
             t.is_future_start = !t.has_anchored_recurrence_start()
-                && t.dtstart
+                && t.effective_dtstart
                     .as_ref()
                     .is_some_and(|start| start.to_start_comparison_time() > now);
             t.is_implicitly_future = !t.is_future_start
