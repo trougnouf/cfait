@@ -422,6 +422,28 @@ fn is_ringing_valid(
         return false;
     }
 
+    // A done history snapshot covering the task's current stored occurrence
+    // means that instance was completed — possibly on another device — even
+    // if the local master has not advanced yet (its sync can be masked by a
+    // pending local edit). History snapshots sync as new uids, so trust them.
+    let default_time = chrono::NaiveTime::parse_from_str(default_reminder_time, "%H:%M")
+        .unwrap_or_else(|_| chrono::NaiveTime::from_hms_opt(9, 0, 0).unwrap());
+    let occurrence_ts = store_task
+        .due
+        .as_ref()
+        .map(|d| d.to_utc_with_default_time(default_time))
+        .or_else(|| {
+            store_task
+                .dtstart
+                .as_ref()
+                .map(|d| d.to_utc_with_default_time(default_time))
+        });
+    if let Some(ts) = occurrence_ts
+        && store.occurrence_completed_at(&store_task.uid, ts, default_time)
+    {
+        return false;
+    }
+
     if alarm.uid.starts_with("implicit_") {
         let parts: Vec<&str> = alarm.uid.split('|').collect();
         if parts.len() < 2 {
@@ -429,9 +451,6 @@ fn is_ringing_valid(
         }
         let type_key_with_colon = parts[0];
         let expected_ts = parts[1];
-
-        let default_time = chrono::NaiveTime::parse_from_str(default_reminder_time, "%H:%M")
-            .unwrap_or_else(|_| chrono::NaiveTime::from_hms_opt(9, 0, 0).unwrap());
 
         let mut current_ts = None;
         if type_key_with_colon == "implicit_due:" {

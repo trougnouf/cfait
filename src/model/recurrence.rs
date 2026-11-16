@@ -270,6 +270,16 @@ impl RecurrenceEngine {
         let Some(due) = task.due.as_ref() else {
             return false;
         };
+        // A cancelled occurrence (EXDATE) is not a due moment, even when the
+        // stored due still points at it — e.g. a foreign client excluded the
+        // instance without advancing DUE.
+        if task
+            .exdates
+            .iter()
+            .any(|ex| ex.to_date_naive() == due.to_date_naive())
+        {
+            return false;
+        }
         if due.to_utc_with_default_time(default_time) == dt {
             return true;
         }

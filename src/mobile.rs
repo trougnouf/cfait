@@ -3837,6 +3837,27 @@ impl CfaitMobile {
             return false;
         }
 
+        // A done history snapshot covering the task's current stored occurrence
+        // means that instance was completed — possibly on another device — even
+        // if the local master has not advanced yet. History snapshots sync as
+        // new uids, so trust them.
+        let config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
+        let default_time = config.parsed_default_reminder_time();
+        let occurrence_ts = task
+            .due
+            .as_ref()
+            .map(|d| d.to_utc_with_default_time(default_time))
+            .or_else(|| {
+                task.dtstart
+                    .as_ref()
+                    .map(|d| d.to_utc_with_default_time(default_time))
+            });
+        if let Some(ts) = occurrence_ts
+            && store.occurrence_completed_at(&task.uid, ts, default_time)
+        {
+            return false;
+        }
+
         if notif_type == "ongoing" {
             let config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
             if !config.show_ongoing_notifications {

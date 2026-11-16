@@ -549,6 +549,28 @@ pub fn spawn_alarm_actor(
                         continue;
                     }
 
+                    // Skip tasks whose current stored occurrence was completed
+                    // (a done history snapshot exists) — e.g. marked done on
+                    // another device while this machine slept. History
+                    // snapshots sync as new uids, so they are present even
+                    // when the master task itself has not advanced locally.
+                    let occurrence_ts = task
+                        .due
+                        .as_ref()
+                        .map(|d| d.to_utc_with_default_time(default_time))
+                        .or_else(|| {
+                            task.dtstart
+                                .as_ref()
+                                .map(|d| d.to_utc_with_default_time(default_time))
+                        });
+                    if let Some(ts) = occurrence_ts
+                        && tasks
+                            .iter()
+                            .any(|t| t.is_history_of_occurrence_at(&task.uid, ts, default_time))
+                    {
+                        continue;
+                    }
+
                     // Collect explicit alarms + Implicit alarms (if enabled and no explicit exist)
                     let mut check_list = Vec::new();
 

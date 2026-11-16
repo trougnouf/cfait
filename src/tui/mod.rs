@@ -454,7 +454,21 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
                                 Some(start.to_utc_with_default_time(default_time).to_rfc3339());
                         }
                         if current_ts.as_deref() == Some(expected_ts) {
-                            keep = true;
+                            // A done history snapshot covering the stored
+                            // occurrence means the instance was completed —
+                            // possibly on another device — even if the local
+                            // master has not advanced yet.
+                            let completed = chrono::DateTime::parse_from_rfc3339(expected_ts)
+                                .is_ok_and(|dt| {
+                                    app_state.store.occurrence_completed_at(
+                                        &active_task.uid,
+                                        dt.with_timezone(&chrono::Utc),
+                                        default_time,
+                                    )
+                                });
+                            if !completed {
+                                keep = true;
+                            }
                         }
                     }
                 } else if let Some(store_alarm) = store_task.alarms.iter().find(|a| a.uid == *a_uid)

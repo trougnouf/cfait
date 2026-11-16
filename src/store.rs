@@ -54,7 +54,7 @@ use crate::config::Config;
 use crate::context::AppContext;
 use crate::journal::Action as JournalAction;
 use crate::model::{AppIntent, DateType, RecurrenceEngine, Task, TaskStatus};
-use chrono::{DateTime, Datelike, Utc};
+use chrono::{DateTime, Datelike, NaiveTime, Utc};
 use fastrand;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -3401,6 +3401,27 @@ impl TaskStore {
             }
         }
         false
+    }
+
+    /// Returns true when a done history snapshot of `master_uid` covers the
+    /// occurrence at `ts` (see [`Task::is_history_of_occurrence_at`]). Used to
+    /// invalidate ringing reminders whose instance was completed on another
+    /// device, even if the local master task has not advanced yet.
+    pub fn occurrence_completed_at(
+        &self,
+        master_uid: &str,
+        ts: DateTime<Utc>,
+        default_time: NaiveTime,
+    ) -> bool {
+        self.related_from_index
+            .get(master_uid)
+            .is_some_and(|sources| {
+                sources.iter().any(|source_uid| {
+                    self.get_task_ref(source_uid).is_some_and(|t| {
+                        t.is_history_of_occurrence_at(master_uid, ts, default_time)
+                    })
+                })
+            })
     }
 
     /// Get list of tasks that DECLARE they are related to the provided uid (i.e. sources).

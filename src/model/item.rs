@@ -1832,6 +1832,32 @@ impl Task {
 
         (updated, None)
     }
+
+    /// True if this task is a done history snapshot of `master_uid` covering
+    /// the occurrence at `ts` — i.e. the instance due/starting at `ts` was
+    /// marked done (possibly on another device). History snapshots sync as
+    /// new uids, so they arrive even when the master task itself hits a merge
+    /// conflict; ringing-reminder validation can trust them over a stale
+    /// local master.
+    pub fn is_history_of_occurrence_at(
+        &self,
+        master_uid: &str,
+        ts: DateTime<Utc>,
+        default_time: NaiveTime,
+    ) -> bool {
+        if !self.status.is_done() {
+            return false;
+        }
+        if !self
+            .unmapped_properties
+            .iter()
+            .any(|p| p.key == "X-CFAIT-HISTORY-OF" && p.value == master_uid)
+        {
+            return false;
+        }
+        let at_ts = |d: &DateType| d.to_utc_with_default_time(default_time) == ts;
+        self.due.as_ref().is_some_and(at_ts) || self.dtstart.as_ref().is_some_and(at_ts)
+    }
 }
 
 // --- Convenience wrappers delegating to the ICS adapter and recurrence engine ---
