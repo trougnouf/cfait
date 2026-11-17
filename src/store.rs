@@ -4685,12 +4685,8 @@ impl TaskStore {
                     {
                         return false;
                     }
-                    if t.uid == crate::config::SETTINGS_UID
-                        || t.summary.starts_with("⚙ Cfait Settings")
-                    {
-                        return false;
-                    }
-                    true
+                    !(t.uid == crate::config::SETTINGS_UID
+                        || t.summary.starts_with("⚙ Cfait Settings"))
                 })
                 .collect();
 
