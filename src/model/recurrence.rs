@@ -23,10 +23,9 @@ fn fixed_step_secs(rule_part: &str) -> Option<i64> {
         }
         if let Some(v) = part.strip_prefix("FREQ=") {
             freq = Some(v);
-        } else if let Some(v) = part.strip_prefix("INTERVAL=") {
-            interval = v.parse().ok()?;
         } else {
-            return None;
+            let v = part.strip_prefix("INTERVAL=")?;
+            interval = v.parse().ok()?;
         }
     }
     let unit = match freq?.to_ascii_uppercase().as_str() {
