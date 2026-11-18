@@ -383,3 +383,100 @@ fn alarm_index_skips_past_due_non_recurring() {
         "a past-due non-recurring task must not gain a reminder"
     );
 }
+
+/// A high-frequency RRULE with an old DTSTART must project to its next
+/// occurrence in O(1), not by iterating every occurrence since DTSTART —
+/// a SECONDLY rule from 2020 would iterate ~200M times and freeze the app
+/// while the store lock is held (the Android startup ANR).
+#[test]
+fn dense_rrule_projects_without_iterating_from_dtstart() {
+    let aliases = HashMap::new();
+    let mut task = Task::new("ping", &aliases, None);
+    let seed = Utc.with_ymd_and_hms(2020, 1, 1, 9, 0, 0).unwrap();
+    task.dtstart = Some(DateType::Specific(seed));
+    task.due = Some(DateType::Specific(seed));
+    task.rrule = Some("FREQ=SECONDLY".to_string());
+
+    let now = Utc.with_ymd_and_hms(2026, 11, 18, 8, 30, 0).unwrap();
+    let next = RecurrenceEngine::next_occurrence_after(&task, now.with_timezone(&chrono::Local))
+        .expect("a dense unbounded rule always has a next occurrence");
+    let next_due = next.due.expect("projected occurrence has a due");
+    // The SECONDLY grid covers every second: the next occurrence is exactly
+    // one second after now.
+    assert_eq!(
+        next_due.to_utc_with_default_time(NaiveTime::from_hms_opt(0, 0, 0).unwrap()),
+        now + chrono::Duration::seconds(1)
+    );
+}
+
+/// The fixed-step fast path must respect INTERVAL: a MINUTELY;INTERVAL=15
+/// rule from 2020 lands on the 15-minute grid anchored at the seed.
+#[test]
+fn dense_rrule_interval_respected() {
+    let aliases = HashMap::new();
+    let mut task = Task::new("ping", &aliases, None);
+    let seed = Utc.with_ymd_and_hms(2020, 1, 1, 9, 0, 0).unwrap();
+    task.dtstart = Some(DateType::Specific(seed));
+    task.due = Some(DateType::Specific(seed));
+    task.rrule = Some("FREQ=MINUTELY;INTERVAL=15".to_string());
+
+    let now = Utc.with_ymd_and_hms(2026, 11, 18, 8, 30, 7).unwrap();
+    let next = RecurrenceEngine::next_occurrence_after(&task, now.with_timezone(&chrono::Local))
+        .expect("next occurrence");
+    let next_due = next.due.expect("due");
+    let next_local = next_due
+        .to_utc_with_default_time(NaiveTime::from_hms_opt(0, 0, 0).unwrap())
+        .with_timezone(&chrono::Local)
+        .naive_local();
+    let seed_local = seed.with_timezone(&chrono::Local).naive_local();
+    assert!(next_local > now.with_timezone(&chrono::Local).naive_local());
+    assert_eq!((next_local - seed_local).num_seconds() % (15 * 60), 0);
+}
+
+/// EXDATEs still exclude occurrences on the fast path: a DAILY rule whose
+/// next day is excluded projects to the day after.
+#[test]
+fn fast_path_respects_exdates() {
+    let aliases = HashMap::new();
+    let mut task = Task::new("water the tomatoes", &aliases, None);
+    let seed_local = chrono::Local
+        .with_ymd_and_hms(2026, 11, 10, 9, 0, 0)
+        .unwrap()
+        .naive_local();
+    let seed_utc = cfait::model::item::safe_local_to_utc(seed_local.date(), seed_local.time());
+    task.dtstart = Some(DateType::Specific(seed_utc));
+    task.due = Some(DateType::Specific(seed_utc));
+    task.rrule = Some("FREQ=DAILY".to_string());
+    // Exclude tomorrow (local date) — the whole day is excluded, as the
+    // iterative path does by comparing dates.
+    let excluded = seed_local.date() + chrono::Duration::days(9); // 2026-11-19
+    task.exdates.push(DateType::AllDay(excluded));
+
+    // After today's 09:00 occurrence, so the next one is the excluded 11-19.
+    let now_local = chrono::Local
+        .with_ymd_and_hms(2026, 11, 18, 10, 0, 0)
+        .unwrap();
+    let next = RecurrenceEngine::next_occurrence_after(&task, now_local).expect("next");
+    let next_due = next.due.expect("due");
+    assert_eq!(
+        next_due.to_date_naive(),
+        excluded + chrono::Duration::days(1)
+    );
+}
+
+/// A COUNT-bounded dense rule has no occurrence after now and must return
+/// None via the (bounded) iterative path.
+#[test]
+fn bounded_dense_rrule_returns_none_when_exhausted() {
+    let aliases = HashMap::new();
+    let mut task = Task::new("ping", &aliases, None);
+    let seed = Utc.with_ymd_and_hms(2020, 1, 1, 9, 0, 0).unwrap();
+    task.dtstart = Some(DateType::Specific(seed));
+    task.due = Some(DateType::Specific(seed));
+    task.rrule = Some("FREQ=SECONDLY;COUNT=5".to_string());
+
+    let now = Utc.with_ymd_and_hms(2026, 11, 18, 8, 30, 0).unwrap();
+    assert!(
+        RecurrenceEngine::next_occurrence_after(&task, now.with_timezone(&chrono::Local)).is_none()
+    );
+}

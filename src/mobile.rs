@@ -2133,13 +2133,19 @@ impl CfaitMobile {
         }
 
         // Now acquire the store lock and insert all loaded data
-        let mut store = self.controller.store.blocking_lock();
-        store.clear();
-        store.insert_many(loaded_calendars);
+        let calendars_snapshot = {
+            let mut store = self.controller.store.blocking_lock();
+            store.clear();
+            store.insert_many(loaded_calendars);
+            store.calendars.clone()
+        };
 
+        // Rebuild the alarm index WITHOUT holding the store lock: the rebuild
+        // can be slow (recurrence projection per task) and would block every
+        // other caller — including the main thread via get_calendars().
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let index = AlarmIndex::rebuild_from_tasks(
-            &store.calendars,
+            &calendars_snapshot,
             &config.disabled_calendars,
             config.auto_reminders,
             &config.default_reminder_time,
@@ -2931,15 +2937,18 @@ impl CfaitMobile {
         let alarm_cache = self.alarm_index_cache.clone();
         let ctx_clone = self.ctx.clone();
         tokio::spawn(async move {
-            let index = {
+            // Snapshot under the lock, then rebuild without holding it: the
+            // rebuild can be slow and must not block other store callers.
+            let calendars_snapshot = {
                 let s = store_arc.lock().await;
-                crate::alarm_index::AlarmIndex::rebuild_from_tasks(
-                    &s.calendars,
-                    &config.disabled_calendars,
-                    config.auto_reminders,
-                    &config.default_reminder_time,
-                )
-            }; // Lock is dropped here
+                s.calendars.clone()
+            };
+            let index = crate::alarm_index::AlarmIndex::rebuild_from_tasks(
+                &calendars_snapshot,
+                &config.disabled_calendars,
+                config.auto_reminders,
+                &config.default_reminder_time,
+            );
             let _ = index.save(ctx_clone.as_ref());
             *alarm_cache.lock().await = Some(index);
         });
@@ -4220,15 +4229,18 @@ impl CfaitMobile {
 
     async fn rebuild_alarm_index(&self) {
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
-        let index = {
+        // Snapshot under the lock, then rebuild without holding it (see
+        // load_from_cache): a slow rebuild must not block the store.
+        let calendars_snapshot = {
             let store = self.controller.store.lock().await;
-            AlarmIndex::rebuild_from_tasks(
-                &store.calendars,
-                &config.disabled_calendars,
-                config.auto_reminders,
-                &config.default_reminder_time,
-            )
+            store.calendars.clone()
         };
+        let index = AlarmIndex::rebuild_from_tasks(
+            &calendars_snapshot,
+            &config.disabled_calendars,
+            config.auto_reminders,
+            &config.default_reminder_time,
+        );
         match index.save(self.ctx.as_ref()) {
             Ok(_) => {
                 #[cfg(target_os = "android")]

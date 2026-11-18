@@ -9,6 +9,40 @@ use uuid::Uuid;
 
 pub struct RecurrenceEngine;
 
+/// For an RRULE part string like `FREQ=DAILY;INTERVAL=2`, returns the fixed
+/// step in seconds when the rule generates occurrences at a constant interval
+/// with no expanding or bounding parts (no BY*, COUNT, UNTIL, ...). Such rules
+/// can jump arithmetically to any point in time; anything else must iterate.
+fn fixed_step_secs(rule_part: &str) -> Option<i64> {
+    let mut freq: Option<&str> = None;
+    let mut interval: i64 = 1;
+    for part in rule_part.split(';') {
+        let part = part.trim();
+        if part.is_empty() {
+            continue;
+        }
+        if let Some(v) = part.strip_prefix("FREQ=") {
+            freq = Some(v);
+        } else if let Some(v) = part.strip_prefix("INTERVAL=") {
+            interval = v.parse().ok()?;
+        } else {
+            return None;
+        }
+    }
+    let unit = match freq?.to_ascii_uppercase().as_str() {
+        "SECONDLY" => 1,
+        "MINUTELY" => 60,
+        "HOURLY" => 3600,
+        "DAILY" => 86400,
+        "WEEKLY" => 7 * 86400,
+        _ => return None,
+    };
+    if interval <= 0 {
+        return None;
+    }
+    Some(interval * unit)
+}
+
 impl RecurrenceEngine {
     /// Calculates the next occurrence of a task based on its RRULE.
     /// Returns a new Task instance for the next occurrence, or None if finished.
@@ -100,10 +134,30 @@ impl RecurrenceEngine {
                 }
             }
 
-            let rrule_next_naive = rrule_set
-                .into_iter()
-                .map(|d| d.naive_local())
-                .find(|d| *d > search_floor_local && !exclusion_dates.contains(&d.date()));
+            // Fast path: an unbounded rule with a fixed step jumps straight to
+            // the first occurrence after the search floor. Iterating from
+            // DTSTART instead costs one iteration per occurrence — a SECONDLY
+            // rule from years ago would iterate hundreds of millions of times.
+            let rrule_next_naive = match fixed_step_secs(&final_rule_part) {
+                Some(step) => {
+                    let delta = (search_floor_local - seed_local_naive).num_seconds();
+                    let mut k = delta.div_euclid(step) + 1;
+                    let mut candidate =
+                        seed_local_naive + chrono::Duration::seconds(k.saturating_mul(step));
+                    while candidate <= search_floor_local
+                        || exclusion_dates.contains(&candidate.date())
+                    {
+                        k += 1;
+                        candidate =
+                            seed_local_naive + chrono::Duration::seconds(k.saturating_mul(step));
+                    }
+                    Some(candidate)
+                }
+                None => rrule_set
+                    .into_iter()
+                    .map(|d| d.naive_local())
+                    .find(|d| *d > search_floor_local && !exclusion_dates.contains(&d.date())),
+            };
 
             let is_simple_monthly =
                 final_rule_part.contains("FREQ=MONTHLY") && !final_rule_part.contains("BY");
