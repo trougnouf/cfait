@@ -1,1 +1,6 @@
-{}
+{
+    "auth_basic": "نام کاربری و رمز عبور",
+    "auth_bearer": "توکن Bearer",
+    "auth_method": "روش احراز هویت",
+    "auth_oidc": "ورود یکباره (OIDC)"
+}
