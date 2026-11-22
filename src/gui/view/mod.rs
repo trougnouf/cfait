@@ -90,6 +90,7 @@ pub fn is_action_available(
         crate::config::TaskAction::ToggleTimer
         | crate::config::TaskAction::AddSession
         | crate::config::TaskAction::Cancel => !is_done_or_cancelled,
+        crate::config::TaskAction::EndRecurrence => task.rrule.is_some() && !is_done_or_cancelled,
         crate::config::TaskAction::BrowseRelations => false, // TUI-only
         _ => true,
     }
@@ -202,6 +203,7 @@ pub fn context_menu_action_message(
         TaskAction::Promote => Message::RemoveParent(task.uid.clone()),
         TaskAction::Move => Message::StartMoveTask(task.uid.clone()),
         TaskAction::Cancel => Message::CancelTask(idx),
+        TaskAction::EndRecurrence => Message::EndRecurrence(task.uid.clone()),
         TaskAction::Delete => Message::DeleteTask(idx),
         TaskAction::DeleteTree => Message::DeleteTaskTree(task.uid.clone()),
         TaskAction::Restore => Message::RestoreTask(task.uid.clone()),
@@ -1014,6 +1016,9 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                 TaskAction::Promote => (icon::icon(icon::ELEVATOR_UP).size(14).into(), false),
                 TaskAction::Move => (icon::icon(icon::MOVE).size(14).into(), false),
                 TaskAction::Cancel => (icon::icon(icon::CROSS).size(14).into(), true),
+                TaskAction::EndRecurrence => {
+                    (icon::icon(icon::HOURGLASS_END).size(14).into(), true)
+                }
                 TaskAction::Delete => (icon::icon(icon::TRASH).size(14).into(), true),
                 TaskAction::DeleteTree => (icon::icon(icon::TRASH).size(14).into(), true),
                 TaskAction::Restore => (icon::icon(icon::RESTORE).size(14).into(), false),

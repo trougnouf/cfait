@@ -742,6 +742,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                             crate::config::TaskAction::IncreasePriority => icon::PLUS,
                             crate::config::TaskAction::DecreasePriority => icon::MINUS,
                             crate::config::TaskAction::Cancel => icon::CROSS,
+                            crate::config::TaskAction::EndRecurrence => icon::HOURGLASS_END,
                             crate::config::TaskAction::Edit => icon::EDIT,
                             crate::config::TaskAction::EditTree => icon::EDIT_TREE,
                             crate::config::TaskAction::Delete

@@ -239,6 +239,9 @@ pub enum AppIntent {
     CancelTask {
         uid: String,
     },
+    EndRecurrence {
+        uid: String,
+    },
     ChangePriority {
         uid: String,
         delta: i8,

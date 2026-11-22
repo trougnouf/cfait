@@ -121,6 +121,7 @@ pub enum Message {
     CancelEdit,
     ChangePriority(usize, i8),
     CancelTask(usize),
+    EndRecurrence(String),
     StartTask(String),
     PauseTask(String),
     StopTask(String),

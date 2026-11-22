@@ -223,6 +223,7 @@ fn get_available_actions(state: &AppState, task: &Task) -> Vec<crate::config::Ta
             TaskAction::ToggleTimer | TaskAction::AddSession | TaskAction::Cancel => {
                 !is_done_or_cancelled
             }
+            TaskAction::EndRecurrence => task.rrule.is_some() && !is_done_or_cancelled,
             _ => true,
         };
         if available {
@@ -643,6 +644,9 @@ async fn execute_task_action(
         }
         Cancel => {
             intent = Some(AppIntent::CancelTask { uid });
+        }
+        EndRecurrence => {
+            intent = Some(AppIntent::EndRecurrence { uid });
         }
         Delete => {
             intent = Some(AppIntent::DeleteTask { uid });

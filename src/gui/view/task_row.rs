@@ -1121,6 +1121,11 @@ pub fn view_task_row<'a>(
                     ),
                     TaskAction::Move => (icon::MOVE, Message::StartMoveTask(task.uid.clone()), 0),
                     TaskAction::Cancel => (icon::CROSS, Message::CancelTask(index), 1),
+                    TaskAction::EndRecurrence => (
+                        icon::HOURGLASS_END,
+                        Message::EndRecurrence(task.uid.clone()),
+                        1,
+                    ),
                     TaskAction::Delete => (icon::TRASH, Message::DeleteTask(index), 1),
                     TaskAction::DeleteTree => {
                         (icon::TRASH, Message::DeleteTaskTree(task.uid.clone()), 1)

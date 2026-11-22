@@ -233,6 +233,8 @@ Instead of drag-and-drop, Cfait uses a robust "Yank" (Clipboard) system for hier
 4.  **Re-parent by text:** The `parent:` token (see §2.2) re-parents via the smart input from any client, accepting the same fuzzy references as `dep:`/`rel:`.
 
 ### 4.2. Recurrence Recycling & DST Safety
+*Ending a series* (the action menu's "End recurrence" in the TUI/GUI — no default key, but bindable in settings — or `until now` in the smart syntax) is distinct from completing an occurrence: it caps the `RRULE` with `UNTIL`=today and marks the master `Completed` in place — no history snapshot, no advance — so the series stops after today's occurrence and the master lands in the done group instead of showing a stale overdue occurrence. An existing earlier `UNTIL` is never extended. `is:permanent` tasks only get the `UNTIL` cap. Reviving the master (Space/undo) keeps the `UNTIL` bound, as for any series ended by `UNTIL`.
+
 When completing a recurring task:
 1.  Running timers commit to `time_spent_seconds`.
 2.  A **History Snapshot** is generated (`X-CFAIT-HISTORY-OF: parent_uid`) with the completion date. This snapshot is non-recurring and retains no alarms.
@@ -369,7 +371,7 @@ Daily notes and wiki pages are `VJOURNAL` components (see 1.2). They share a uni
     *   `Shift+Space`: Complete & Shift recurrence (Relative advance).
     *   `s`: Start/Pause timer.
     *   `S`: Stop/Reset timer.
-    *   `x`: Cancel task.
+    *   `x`: Cancel task (on a recurring task: skip only the current occurrence — end the whole series instead via the action menu's "End recurrence" or `until now` in the smart syntax).
     *   `+` / `-`: Increase/Decrease priority.
     *   `e`: Edit title. `E`: Edit description (Markdown). `Ctrl+E`: Edit tree (Markdown) / Switch editor mode. `Ctrl+N`: Create new task with description. `Ctrl+M`: Maximize/Restore description editor.
     *   `Delete`: Move to trash. `Ctrl+Delete`: Delete entire tree.

@@ -1205,6 +1205,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
 
+        Message::EndRecurrence(uid) => {
+            app.selected_uid = Some(uid.clone());
+            dispatch_and_select_next_row(app, AppIntent::EndRecurrence { uid: uid.clone() }, uid);
+            Task::none()
+        }
+
         Message::MoveTask(uid, target_href) => {
             app.selected_uid = Some(uid.clone());
             app.moving_task_uid = None;

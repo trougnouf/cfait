@@ -1979,6 +1979,42 @@ impl TaskStore {
         Some((primary, secondary, reset_children))
     }
 
+    /// End a recurring series: cap the RRULE at `UNTIL`=today and mark the
+    /// master Completed in place. Unlike `set_status(Completed)`, this does
+    /// NOT recycle — no history snapshot, no advance — because the user is
+    /// done with the whole series, not with one occurrence. `UNTIL` is what
+    /// other CalDAV clients understand, and marking the master done keeps it
+    /// out of the active list instead of showing a stale overdue occurrence
+    /// forever. Permanent tasks only get the UNTIL cap; they never complete.
+    /// Returns the updated task, or None for non-recurring/already-done tasks.
+    pub fn end_recurrence(&mut self, uid: &str) -> Option<Task> {
+        let mut task = self.get_task_ref(uid)?.clone();
+        if task.rrule.is_none() || task.status.is_done() {
+            return None;
+        }
+        let today = chrono::Local::now().date_naive();
+        if let Some(rr) = task.rrule.take() {
+            task.rrule = Some(RecurrenceEngine::cap_rrule_until(&rr, today));
+        }
+        // Commit any running timer, as recycle() does before completing.
+        if let Some(start_ts) = task.last_started_at {
+            let now = Utc::now().timestamp();
+            if now > start_ts {
+                task.time_spent_seconds = task
+                    .time_spent_seconds
+                    .saturating_add((now - start_ts) as u64);
+            }
+            task.last_started_at = None;
+        }
+        if !task.permanent {
+            task.percent_complete = Some(100);
+            task.set_completion_date(Some(Utc::now()));
+        }
+        task.sequence += 1;
+        self.update_or_add_task(task.clone());
+        Some(task)
+    }
+
     /// Mark a task InProcess and begin timing; bubble to parent tasks so the timer
     /// context is preserved. Returns the set of tasks that were updated.
     pub fn set_status_in_process(&mut self, uid: &str) -> Vec<Task> {
@@ -5955,6 +5991,7 @@ impl TaskStore {
             AppIntent::ToggleTask { uid }
             | AppIntent::ToggleTaskShift { uid }
             | AppIntent::CancelTask { uid }
+            | AppIntent::EndRecurrence { uid }
             | AppIntent::StartTask { uid }
             | AppIntent::PauseTask { uid }
             | AppIntent::StopTask { uid }
@@ -6205,6 +6242,11 @@ impl TaskStore {
                     }
                 }
             }
+            AppIntent::EndRecurrence { uid } => {
+                if let Some(updated) = self.end_recurrence(uid) {
+                    actions.push(JournalAction::Update(updated));
+                }
+            }
             AppIntent::ChangePriority { uid, delta } => {
                 if let Some(updated) = self.change_priority(uid, *delta, config.default_priority) {
                     actions.push(JournalAction::Update(updated));
@@ -6402,6 +6444,9 @@ impl TaskStore {
                 rust_i18n::t!("intent_desc_completed_tree").to_string()
             }
             AppIntent::CancelTask { .. } => rust_i18n::t!("intent_desc_cancelled").to_string(),
+            AppIntent::EndRecurrence { .. } => {
+                rust_i18n::t!("intent_desc_end_recurrence").to_string()
+            }
             AppIntent::DeleteTask { .. } => rust_i18n::t!("intent_desc_deleted_task").to_string(),
             AppIntent::DeleteTasks { uids } => {
                 if uids.len() == 1 {
@@ -7238,6 +7283,76 @@ mod tests {
             ("done_child", true, false, 3),
         ];
         assert_eq!(entries, expected);
+    }
+
+    #[test]
+    fn end_recurrence_marks_master_done_and_caps_rrule() {
+        let ctx = std::sync::Arc::new(crate::context::StandardContext::new(Some(
+            std::env::temp_dir().join(format!("cfait-store-test-{}", uuid::Uuid::new_v4())),
+        )));
+        let mut store = TaskStore::new(ctx);
+
+        let mut master = make_task("master", None, TaskStatus::NeedsAction, false);
+        master.rrule = Some("FREQ=DAILY;INTERVAL=1".to_string());
+        master.due = Some(crate::model::DateType::AllDay(
+            chrono::Local::now().date_naive(),
+        ));
+        store.insert_many(vec![("local://default".to_string(), vec![master])]);
+
+        let updated = store.end_recurrence("master").expect("recurring task");
+        assert_eq!(updated.status, TaskStatus::Completed);
+        assert_eq!(updated.percent_complete, Some(100));
+        assert!(updated.completion_date().is_some());
+        let rrule = updated.rrule.as_ref().expect("rrule kept");
+        let today = chrono::Local::now()
+            .date_naive()
+            .format("%Y%m%d")
+            .to_string();
+        assert!(
+            rrule.contains(&format!("UNTIL={today}")),
+            "rrule should be capped at today, got: {rrule}"
+        );
+        // No future occurrence remains after now (today's occurrence may still
+        // count, so check strictly after end of today).
+        let after_today = chrono::Local::now()
+            .date_naive()
+            .succ_opt()
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
+        let probe = chrono::TimeZone::from_local_datetime(&chrono::Local, &after_today)
+            .earliest()
+            .unwrap();
+        let stored = store.get_task_ref("master").unwrap();
+        assert!(
+            RecurrenceEngine::next_occurrence_after(stored, probe).is_none(),
+            "series must not project past UNTIL"
+        );
+
+        // Idempotent on the done master, and a no-op for non-recurring tasks.
+        assert!(store.end_recurrence("master").is_none());
+        let plain = make_task("plain", None, TaskStatus::NeedsAction, false);
+        store.insert_many(vec![("local://default".to_string(), vec![plain])]);
+        assert!(store.end_recurrence("plain").is_none());
+    }
+
+    #[test]
+    fn end_recurrence_never_extends_existing_until() {
+        let ctx = std::sync::Arc::new(crate::context::StandardContext::new(Some(
+            std::env::temp_dir().join(format!("cfait-store-test-{}", uuid::Uuid::new_v4())),
+        )));
+        let mut store = TaskStore::new(ctx);
+
+        let mut master = make_task("master", None, TaskStatus::NeedsAction, false);
+        master.rrule = Some("FREQ=DAILY;UNTIL=20200101".to_string());
+        store.insert_many(vec![("local://default".to_string(), vec![master])]);
+
+        let updated = store.end_recurrence("master").expect("recurring task");
+        assert_eq!(
+            updated.rrule.as_deref(),
+            Some("FREQ=DAILY;UNTIL=20200101"),
+            "an earlier UNTIL must be kept, not extended"
+        );
     }
 
     #[test]

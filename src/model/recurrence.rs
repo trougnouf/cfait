@@ -43,6 +43,34 @@ fn fixed_step_secs(rule_part: &str) -> Option<i64> {
 }
 
 impl RecurrenceEngine {
+    /// Cap an RRULE string at `until`: sets `UNTIL=YYYYMMDD` (date-only, like
+    /// the smart-syntax parser writes it; the engine pads date-only UNTILs to
+    /// end-of-day, so the series keeps its occurrence on `until` itself).
+    /// An existing earlier UNTIL is kept — ending a series must never extend
+    /// it. Used by the "end recurrence" action to stop a series in place.
+    pub fn cap_rrule_until(rrule: &str, until: NaiveDate) -> String {
+        let mut parts: Vec<String> = Vec::new();
+        let mut existing_until: Option<NaiveDate> = None;
+        for part in rrule.trim().split(';') {
+            let part = part.trim();
+            if part.is_empty() {
+                continue;
+            }
+            if let Some(v) = part.strip_prefix("UNTIL=") {
+                let date_part = v.split('T').next().unwrap_or(v);
+                existing_until = NaiveDate::parse_from_str(date_part, "%Y%m%d").ok();
+                continue;
+            }
+            parts.push(part.to_string());
+        }
+        let effective = match existing_until {
+            Some(existing) if existing <= until => existing,
+            _ => until,
+        };
+        parts.push(format!("UNTIL={}", effective.format("%Y%m%d")));
+        parts.join(";")
+    }
+
     /// Calculates the next occurrence of a task based on its RRULE.
     /// Returns a new Task instance for the next occurrence, or None if finished.
     pub fn next_occurrence(task: &Task) -> Option<Task> {
@@ -437,5 +465,38 @@ impl RecurrenceEngine {
             return true;
         }
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cap_rrule_until_sets_date_only_until() {
+        let today = NaiveDate::from_ymd_opt(2026, 11, 22).unwrap();
+        assert_eq!(
+            RecurrenceEngine::cap_rrule_until("FREQ=DAILY;INTERVAL=1", today),
+            "FREQ=DAILY;INTERVAL=1;UNTIL=20261122"
+        );
+    }
+
+    #[test]
+    fn cap_rrule_until_never_extends_an_earlier_until() {
+        let today = NaiveDate::from_ymd_opt(2026, 11, 22).unwrap();
+        assert_eq!(
+            RecurrenceEngine::cap_rrule_until("FREQ=DAILY;UNTIL=20200101", today),
+            "FREQ=DAILY;UNTIL=20200101"
+        );
+        // A later existing UNTIL is tightened to today.
+        assert_eq!(
+            RecurrenceEngine::cap_rrule_until("FREQ=DAILY;UNTIL=20301231", today),
+            "FREQ=DAILY;UNTIL=20261122"
+        );
+        // UTC-suffixed UNTIL (as written by some servers) is compared by date.
+        assert_eq!(
+            RecurrenceEngine::cap_rrule_until("FREQ=DAILY;UNTIL=20301231T235959Z", today),
+            "FREQ=DAILY;UNTIL=20261122"
+        );
     }
 }

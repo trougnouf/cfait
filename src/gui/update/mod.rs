@@ -134,6 +134,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::DeleteTask(_)
         | Message::ChangePriority(_, _)
         | Message::CancelTask(_)
+        | Message::EndRecurrence(_)
         | Message::YankTask(_)
         | Message::CopyToClipboard(_)
         | Message::CopyTaskUrl(_)
