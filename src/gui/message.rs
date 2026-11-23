@@ -229,6 +229,8 @@ pub enum Message {
 
     // --- Navigation & Actions ---
     CopyToClipboard(String),
+    CopyVersionToClipboard(String),
+    VersionHoverExited,
     TogglePin(String),
     YankTask(String),
     StartCreateChild(String),

@@ -217,7 +217,16 @@ fun AboutTabContent(api: CfaitMobile) {
         }
         item {
             Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(stringResource(R.string.about_version, versionInfo.version, versionInfo.commit) + " • GPL3", color = Color.Gray)
+                Text(
+                    stringResource(R.string.about_version, versionInfo.version, versionInfo.commit) + " • GPL3",
+                    color = Color.Gray,
+                    modifier = Modifier.clickable {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        val clip = ClipData.newPlainText("version", "${versionInfo.version} (${versionInfo.commit})")
+                        clipboard.setPrimaryClip(clip)
+                        showToast(context, context.getString(R.string.copied_to_clipboard), Toast.LENGTH_SHORT)
+                    }
+                )
                 Text("Trougnouf (Benoit Brummer)", color = Color.Gray)
                 Text(
                     "https://git.disroot.org/trougnouf/cfait",

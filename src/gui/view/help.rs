@@ -235,31 +235,34 @@ pub fn view_help<'a>(tab: HelpTab, app: &'a GuiApp) -> Element<'a, Message> {
                 env!("GIT_COMMIT_HASH")
             );
 
-            let version_btn = button(
-                row![
-                    text(
-                        rust_i18n::t!(
-                            "about_version",
-                            version = env!("CARGO_PKG_VERSION"),
-                            commit = env!("GIT_COMMIT_HASH")
+            let version_btn = MouseArea::new(
+                button(
+                    row![
+                        text(
+                            rust_i18n::t!(
+                                "about_version",
+                                version = env!("CARGO_PKG_VERSION"),
+                                commit = env!("GIT_COMMIT_HASH")
+                            )
+                            .to_string()
                         )
-                        .to_string()
-                    )
-                    .size(14)
-                    .style(muted_text_style),
-                    Space::new().width(8),
-                    crate::gui::icon::icon(crate::gui::icon::COPY)
                         .size(14)
-                        .style(|_: &Theme| text::Style {
-                            color: Some(COL_ACCENT)
-                        })
-                ]
-                .spacing(4)
-                .align_y(iced::Alignment::Center),
+                        .style(muted_text_style),
+                        Space::new().width(8),
+                        crate::gui::icon::icon(crate::gui::icon::COPY)
+                            .size(14)
+                            .style(|_: &Theme| text::Style {
+                                color: Some(COL_ACCENT)
+                            })
+                    ]
+                    .spacing(4)
+                    .align_y(iced::Alignment::Center),
+                )
+                .padding(0)
+                .style(iced::widget::button::text)
+                .on_press(Message::CopyVersionToClipboard(version_info)),
             )
-            .padding(0)
-            .style(iced::widget::button::text)
-            .on_press(Message::CopyToClipboard(version_info));
+            .on_exit(Message::VersionHoverExited);
 
             let footer_links = column![
                 text(rust_i18n::t!("about_title").to_string())
@@ -270,7 +273,12 @@ pub fn view_help<'a>(tab: HelpTab, app: &'a GuiApp) -> Element<'a, Message> {
                     .style(muted_text_style),
                 tooltip(
                     version_btn,
-                    text(rust_i18n::t!("click_to_copy").to_string()).size(12),
+                    text(if app.version_copied {
+                        rust_i18n::t!("copied_to_clipboard").to_string()
+                    } else {
+                        rust_i18n::t!("click_to_copy").to_string()
+                    })
+                    .size(12),
                     tooltip::Position::Top,
                 )
                 .style(crate::gui::view::tooltip_style),

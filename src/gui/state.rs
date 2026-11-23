@@ -262,6 +262,9 @@ pub struct GuiApp {
     pub error_msg: Option<String>,
     pub info_msg: Option<String>,
     pub info_msg_version: usize,
+    /// True after the app version was copied from the About tab; the version
+    /// tooltip shows "copied" until the cursor leaves the version text.
+    pub version_copied: bool,
     /// Monotonically incremented on every user-initiated store mutation.
     /// Used to detect if edits happened during an async refresh load.
     pub edit_generation: u64,
@@ -842,6 +845,7 @@ impl Default for GuiApp {
             error_msg: None,
             info_msg: None,
             info_msg_version: 0,
+            version_copied: false,
             edit_generation: 0,
             pending_refresh_generation: 0,
             pending_external_reload: false,

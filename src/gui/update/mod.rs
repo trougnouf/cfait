@@ -137,6 +137,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::EndRecurrence(_)
         | Message::YankTask(_)
         | Message::CopyToClipboard(_)
+        | Message::CopyVersionToClipboard(_)
+        | Message::VersionHoverExited
         | Message::CopyTaskUrl(_)
         | Message::EscapePressed
         | Message::EscCaptured

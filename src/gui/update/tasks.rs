@@ -1265,6 +1265,21 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::batch(tasks)
         }
 
+        Message::CopyVersionToClipboard(text) => {
+            app.version_copied = true;
+            let mut tasks = vec![iced::clipboard::write(text)];
+            tasks.push(common::flash_info_message(
+                app,
+                rust_i18n::t!("copied_to_clipboard").to_string(),
+            ));
+            Task::batch(tasks)
+        }
+
+        Message::VersionHoverExited => {
+            app.version_copied = false;
+            Task::none()
+        }
+
         Message::CopyTaskUrl(uid) => {
             let url = app.store.get_task_ref(&uid).and_then(|t| t.first_url());
             match url {
