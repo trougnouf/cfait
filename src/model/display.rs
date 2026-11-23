@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/model/display.rs
-use crate::model::item::{Task, TaskStatus};
+use crate::model::item::{LocationEvent, Task, TaskStatus};
 use chrono::Utc; // Import Utc for live calculation
 
 /// Generate a random example string for the session-logging syntax, used by the
@@ -375,7 +375,7 @@ impl TaskDisplay for Task {
             if alarm.is_snooze() || alarm.acknowledged.is_some() {
                 continue;
             }
-            match alarm.trigger {
+            match &alarm.trigger {
                 AlarmTrigger::Relative(offset) => {
                     let mins = -offset;
                     if mins > 0 {
@@ -411,6 +411,25 @@ impl TaskDisplay for Task {
                         s.push_str(&format!(" rem:tomorrow {}", local.format("%H:%M")));
                     } else {
                         s.push_str(&format!(" rem:{}", local.format("%Y-%m-%d %H:%M")));
+                    }
+                }
+                AlarmTrigger::Location {
+                    locations,
+                    radius_m,
+                    event,
+                } => {
+                    // Canonical English tokens, re-parseable by the dual-input parser.
+                    let locs = locations
+                        .iter()
+                        .map(|l| crate::model::parser::quote_value(l))
+                        .collect::<Vec<_>>()
+                        .join("|");
+                    s.push_str(&format!(" rem:@@{}", locs));
+                    if matches!(event, LocationEvent::Leave) {
+                        s.push_str(":leave");
+                    }
+                    if let Some(r) = radius_m {
+                        s.push_str(&format!(":{}m", r));
                     }
                 }
             }

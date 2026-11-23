@@ -182,9 +182,9 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          echo "Building AAB for Google Play..."
-          ./gradlew bundleRelease --no-daemon
-          echo "Building APK for F-Droid & direct download..."
+          echo "Building AAB for Google Play (background location stripped: -PcfaitPlayStore=true)..."
+          ./gradlew bundleRelease --no-daemon -PcfaitPlayStore=true
+          echo "Building APK for F-Droid & direct download (full location reminders)..."
           ./gradlew assembleRelease --no-daemon
 
       - name: Prepare Artifacts for Upload

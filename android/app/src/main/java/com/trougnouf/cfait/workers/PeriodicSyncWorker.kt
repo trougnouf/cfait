@@ -9,6 +9,8 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.trougnouf.cfait.CfaitApplication
 import com.trougnouf.cfait.util.AlarmScheduler
+import com.trougnouf.cfait.util.GeofenceRegistrar
+import com.trougnouf.cfait.util.LocationReminderChecker
 import com.trougnouf.cfait.util.NotificationHelper
 import com.trougnouf.cfait.widget.TaskListWidget
 import kotlinx.coroutines.CancellationException
@@ -41,6 +43,13 @@ class PeriodicSyncWorker(
             AlarmScheduler.scheduleNextAlarm(context, api)
             AlarmScheduler.cleanupObsoleteNotifications(context, api)
             NotificationHelper.updateOngoingNotifications(context, api)
+
+            // Re-register geofences (reminders/coords may have changed remotely)
+            // and evaluate location reminders (rem:@@loc) after the sync, so a
+            // task completed on another device is not reminded about. No-op
+            // when no location reminders exist.
+            GeofenceRegistrar.register(context, api)
+            LocationReminderChecker.check(context, api)
 
             // Update widgets with fresh data after sync
             updateAllTaskListWidgets(context)

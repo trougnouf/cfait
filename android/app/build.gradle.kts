@@ -45,6 +45,14 @@ val (appVersionName, appVersionCode) = getCargoVersionInfo()
 
 println("Cfait Android Build: v$appVersionName (Code: $appVersionCode)")
 
+// Google Play policy does not (yet) grant ACCESS_BACKGROUND_LOCATION, so Play
+// builds are compiled with -PcfaitPlayStore=true: the permission is removed
+// from the merged manifest (src/play/AndroidManifest.xml) and background
+// location-reminder evaluation is disabled at runtime (BuildConfig flag).
+// F-Droid / direct-download builds (no property) keep the full feature.
+val playStoreBuild = project.findProperty("cfaitPlayStore") == "true"
+if (playStoreBuild) println("Cfait Android Build: PLAY STORE build (background location stripped)")
+
 android {
     namespace = "com.trougnouf.cfait"
     compileSdk = 37
@@ -75,11 +83,16 @@ android {
         targetSdk = 36
         versionCode = appVersionCode
         versionName = appVersionName
+        buildConfigField("boolean", "PLAY_STORE_BUILD", playStoreBuild.toString())
     }
 
     sourceSets {
         getByName("main") {
             jniLibs.srcDir("src/main/jniLibs")
+            if (playStoreBuild) {
+                // Merges in <uses-permission ... ACCESS_BACKGROUND_LOCATION tools:node="remove"/>
+                manifest.srcFile("src/play/AndroidManifest.xml")
+            }
         }
     }
 

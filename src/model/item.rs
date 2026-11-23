@@ -318,10 +318,26 @@ impl PartialOrd for DateType {
     }
 }
 
+/// Whether a location-based reminder fires on entering or leaving the area.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+pub enum LocationEvent {
+    Enter,
+    Leave,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum AlarmTrigger {
     Relative(i32),           // relative minutes offset (negative for before)
     Absolute(DateTime<Utc>), // explicit timestamp
+    /// Location-based reminder (`rem:@@loc[:leave][:Nm]`). Resolved against the
+    /// coordinates configured for each location name; not stored as a VALARM
+    /// trigger (RFC 5545 has no geo trigger) but as an X-CFAIT-LOC-ALARM
+    /// property on the VTODO.
+    Location {
+        locations: Vec<String>,
+        radius_m: Option<u32>,
+        event: LocationEvent,
+    },
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -361,8 +377,40 @@ impl Alarm {
         }
     }
 
+    pub fn new_location(
+        locations: Vec<String>,
+        radius_m: Option<u32>,
+        event: LocationEvent,
+    ) -> Self {
+        Self {
+            uid: default_uid(),
+            action: "DISPLAY".to_string(),
+            trigger: AlarmTrigger::Location {
+                locations,
+                radius_m,
+                event,
+            },
+            description: None,
+            acknowledged: None,
+            related_to_uid: None,
+            relation_type: None,
+        }
+    }
+
     pub fn is_snooze(&self) -> bool {
         self.relation_type.as_deref() == Some("SNOOZE")
+    }
+
+    /// Location names targeted by a location-based reminder, if any.
+    pub fn location_trigger(&self) -> Option<(&[String], Option<u32>, LocationEvent)> {
+        match &self.trigger {
+            AlarmTrigger::Location {
+                locations,
+                radius_m,
+                event,
+            } => Some((locations, *radius_m, *event)),
+            _ => None,
+        }
     }
 }
 
@@ -1487,6 +1535,8 @@ impl Task {
                     };
                     anchor + chrono::Duration::minutes(mins as i64)
                 }
+                // Location alarms have no wall-clock trigger.
+                AlarmTrigger::Location { .. } => continue,
             };
 
             if trigger_dt > now || (now - trigger_dt).num_hours() < 24 {
@@ -1511,6 +1561,7 @@ impl Task {
                 AlarmTrigger::Relative(mins) => self
                     .relative_alarm_anchor(default_time)
                     .map(|anchor| anchor + chrono::Duration::minutes(mins as i64)),
+                AlarmTrigger::Location { .. } => None,
             };
             trigger == Some(dt)
         })
@@ -1538,6 +1589,7 @@ impl Task {
                         };
                         anchor + chrono::Duration::minutes(mins as i64)
                     }
+                    AlarmTrigger::Location { .. } => return false,
                 };
                 trigger_dt <= now && (now - trigger_dt).num_days() < 3
             }

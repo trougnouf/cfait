@@ -6,6 +6,9 @@
     <!-- Location Permissions -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Needed to evaluate location reminders (rem:@@loc) from the periodic
+         background worker while the app is not in the foreground. -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
     <!-- Notification and Alarm Permissions -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -56,6 +59,12 @@
         <!-- Handles Snooze/Dismiss clicks -->
         <receiver
             android:name=".receivers.NotificationActionReceiver"
+            android:exported="false"
+        />
+
+        <!-- System geofence transitions for location reminders (rem:@@loc) -->
+        <receiver
+            android:name=".receivers.ProximityAlertReceiver"
             android:exported="false"
         />
 

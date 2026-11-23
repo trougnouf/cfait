@@ -2,25 +2,14 @@
 // Background worker for processing firing alarms.
 package com.trougnouf.cfait.workers
 
-import android.Manifest
-import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Bundle
 import android.util.Log
-import androidx.core.app.ActivityCompat
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
-import androidx.core.app.RemoteInput
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.trougnouf.cfait.CfaitApplication
-import com.trougnouf.cfait.MainActivity
-import com.trougnouf.cfait.R
-import com.trougnouf.cfait.receivers.NotificationActionReceiver
 import com.trougnouf.cfait.util.AlarmScheduler
-import com.trougnouf.cfait.widget.EXTRA_FOCUS_TASK_UID
+import com.trougnouf.cfait.util.NotificationHelper
 import com.trougnouf.cfait.widget.updateAllTaskListWidgets
 import kotlinx.coroutines.CancellationException
 
@@ -66,7 +55,7 @@ class AlarmWorker(
                     newFired.add(alarm.alarmUid)
                     val isNew = !recentlyFired.contains(alarm.alarmUid)
 
-                    showNotification(
+                    NotificationHelper.showAlarmNotification(
                         context,
                         alarm.title,
                         alarm.body,
@@ -95,119 +84,5 @@ class AlarmWorker(
             Log.e("CfaitAlarmWorker", "Error", e)
             Result.retry()
         }
-    }
-
-    private fun showNotification(
-        context: Context,
-        title: String,
-        body: String,
-        taskUid: String,
-        alarmUid: String,
-        isNew: Boolean
-    ) {
-        if (ActivityCompat.checkSelfPermission(
-                context,
-                Manifest.permission.POST_NOTIFICATIONS
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            return
-        }
-
-        val tapIntent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            putExtra(EXTRA_FOCUS_TASK_UID, taskUid)
-        }
-        val tapPending = PendingIntent.getActivity(
-            context,
-            taskUid.hashCode(),
-            tapIntent,
-            PendingIntent.FLAG_IMMUTABLE
-        )
-
-        // 1. Snooze Custom (Inline Reply) - Primary snooze action
-        val remoteInput = RemoteInput.Builder(NotificationActionWorker.EXTRA_SNOOZE_INPUT)
-            .setLabel(context.getString(R.string.snooze_hint))
-            .build()
-
-        val snoozeCustomIntent = Intent(context, NotificationActionReceiver::class.java).apply {
-            action = NotificationActionWorker.ACTION_SNOOZE_CUSTOM
-            putExtra(NotificationActionWorker.EXTRA_TASK_UID, taskUid)
-            putExtra(NotificationActionWorker.EXTRA_ALARM_UID, alarmUid)
-        }
-        val snoozeCustomPending = PendingIntent.getBroadcast(
-            context,
-            (taskUid + "SC").hashCode(),
-            snoozeCustomIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-        )
-
-        val customSnoozeAction = NotificationCompat.Action.Builder(
-            R.drawable.ic_launcher_foreground,
-            context.getString(R.string.snooze),
-            snoozeCustomPending
-        ).addRemoteInput(remoteInput).build()
-
-        // 2. Start Action (Replaces preset snooze)
-        val startIntent = Intent(context, NotificationActionReceiver::class.java).apply {
-            action = NotificationActionWorker.ACTION_START
-            putExtra(NotificationActionWorker.EXTRA_TASK_UID, taskUid)
-            putExtra(NotificationActionWorker.EXTRA_ALARM_UID, alarmUid)
-        }
-        val startPending = PendingIntent.getBroadcast(
-            context,
-            (taskUid + "START").hashCode(),
-            startIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        // 3. Done Action
-        val doneIntent = Intent(context, NotificationActionReceiver::class.java).apply {
-            action = NotificationActionWorker.ACTION_DONE
-            putExtra(NotificationActionWorker.EXTRA_TASK_UID, taskUid)
-            putExtra(NotificationActionWorker.EXTRA_ALARM_UID, alarmUid)
-        }
-        val donePending = PendingIntent.getBroadcast(
-            context,
-            (taskUid + "DONE").hashCode(),
-            doneIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        // Dismiss action (swiping away)
-        val deleteIntent = Intent(context, NotificationActionReceiver::class.java).apply {
-            action = NotificationActionWorker.ACTION_DISMISS
-            putExtra(NotificationActionWorker.EXTRA_TASK_UID, taskUid)
-            putExtra(NotificationActionWorker.EXTRA_ALARM_UID, alarmUid)
-        }
-        val deletePending = PendingIntent.getBroadcast(
-            context,
-            (taskUid + "DEL").hashCode(),
-            deleteIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val notification = NotificationCompat.Builder(context, NotificationActionWorker.CHANNEL_ALARMS)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle(title)
-            .setContentText(body)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setContentIntent(tapPending)
-            .setDeleteIntent(deletePending) // Swipe = Dismiss
-            .setAutoCancel(true)
-            .setOnlyAlertOnce(!isNew)
-            // ACTION ORDER: Snooze..., Start, Done
-            .addAction(customSnoozeAction)
-            .addAction(R.drawable.ic_launcher_foreground, context.getString(R.string.start), startPending)
-            .addAction(R.drawable.ic_launcher_foreground, context.getString(R.string.done), donePending)
-            .addExtras(Bundle().apply {
-                putString("cfait_task_uid", taskUid)
-                putString("cfait_alarm_uid", alarmUid)
-                putString("cfait_notif_type", "alarm")
-            })
-            .build()
-
-        // Derive notification ID from taskUid so that new events (like Due) overwrite old ones (like Start)
-        val notificationId = (taskUid + "_alarm").hashCode()
-        NotificationManagerCompat.from(context).notify(notificationId, notification)
     }
 }

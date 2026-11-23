@@ -8,6 +8,8 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.trougnouf.cfait.CfaitApplication
 import com.trougnouf.cfait.util.AlarmScheduler
+import com.trougnouf.cfait.util.GeofenceRegistrar
+import com.trougnouf.cfait.util.LocationReminderChecker
 import com.trougnouf.cfait.util.NotificationHelper
 import kotlinx.coroutines.CancellationException
 
@@ -28,6 +30,10 @@ class BootWorker(
 
             AlarmScheduler.scheduleNextAlarm(context, api)
             NotificationHelper.updateOngoingNotifications(context, api)
+            // Proximity alerts do not survive a reboot: re-register, then also
+            // run a polling evaluation in case the device moved while off.
+            GeofenceRegistrar.register(context, api)
+            LocationReminderChecker.check(context, api)
             Result.success()
         } catch (e: Exception) {
             if (e is CancellationException) throw e

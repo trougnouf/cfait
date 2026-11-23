@@ -33,6 +33,22 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 
+/// A location-based reminder entry: a task whose alarm triggers on entering
+/// (or leaving) the area around one of its named locations. Resolved against
+/// the coordinates configured per location name (see `Config::location_coords`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LocationAlarmEntry {
+    pub alarm_uid: String,
+    pub task_uid: String,
+    pub task_title: String,
+    pub calendar_href: String,
+    pub locations: Vec<String>,
+    pub radius_m: Option<u32>,
+    /// "enter" or "leave"
+    pub event: String,
+    pub description: Option<String>,
+}
+
 /// A single entry in the alarm index.
 /// Contains only the minimal information needed to fire an alarm.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -70,14 +86,20 @@ pub struct AlarmIndex {
 
     /// Sorted list of alarm entries (sorted by trigger_ms for fast lookup)
     pub alarms: Vec<AlarmIndexEntry>,
+
+    /// Location-based reminders (no wall-clock trigger; evaluated against the
+    /// device's position). Added in version 5.
+    #[serde(default)]
+    pub location_alarms: Vec<LocationAlarmEntry>,
 }
 
 impl Default for AlarmIndex {
     fn default() -> Self {
         Self {
-            version: 4,
+            version: 5,
             last_updated: Utc::now().timestamp(),
             alarms: Vec::new(),
+            location_alarms: Vec::new(),
         }
     }
 }
@@ -103,7 +125,7 @@ impl AlarmIndex {
         LocalStorage::with_lock(&path, || {
             let content = fs::read_to_string(&path)?;
             let index: AlarmIndex = serde_json::from_str(&content)?;
-            if index.version != 4 {
+            if index.version != 5 {
                 return Ok(Self::default());
             }
             Ok(index)
@@ -138,6 +160,7 @@ impl AlarmIndex {
         use chrono::NaiveTime;
 
         let mut alarms = Vec::new();
+        let mut location_alarms = Vec::new();
         let now = Utc::now();
 
         // Parse default reminder time
@@ -170,12 +193,38 @@ impl AlarmIndex {
                         continue;
                     }
 
+                    // Location reminders have no wall-clock trigger; index them
+                    // separately so they can be evaluated against the device
+                    // position (Android geofence-style polling).
+                    if let AlarmTrigger::Location {
+                        locations,
+                        radius_m,
+                        event,
+                    } = &alarm.trigger
+                    {
+                        location_alarms.push(LocationAlarmEntry {
+                            alarm_uid: alarm.uid.clone(),
+                            task_uid: task.uid.clone(),
+                            task_title: task.summary.clone(),
+                            calendar_href: calendar_href.clone(),
+                            locations: locations.clone(),
+                            radius_m: *radius_m,
+                            event: match event {
+                                crate::model::item::LocationEvent::Enter => "enter".to_string(),
+                                crate::model::item::LocationEvent::Leave => "leave".to_string(),
+                            },
+                            description: alarm.description.clone(),
+                        });
+                        continue;
+                    }
+
                     // Calculate trigger time
                     let trigger_dt = match alarm.trigger {
                         AlarmTrigger::Absolute(dt) => Some(dt),
                         AlarmTrigger::Relative(mins) => task
                             .relative_alarm_anchor(default_time)
                             .map(|a| a + chrono::Duration::minutes(mins as i64)),
+                        AlarmTrigger::Location { .. } => None,
                     };
 
                     if let Some(trigger) = trigger_dt {
@@ -268,11 +317,13 @@ impl AlarmIndex {
 
         // Remove duplicates (shouldn't happen, but be safe)
         alarms.dedup_by(|a, b| a.alarm_uid == b.alarm_uid);
+        location_alarms.dedup_by(|a, b| a.alarm_uid == b.alarm_uid);
 
         Self {
-            version: 4,
+            version: 5,
             last_updated: now.timestamp(),
             alarms,
+            location_alarms,
         }
     }
 
@@ -344,6 +395,203 @@ impl AlarmIndex {
         self.alarms
             .retain(|alarm| now_ms - alarm.trigger_ms < grace_period_ms);
     }
+
+    /// Location-based reminder entries (no wall-clock trigger).
+    pub fn get_location_alarms(&self) -> &[LocationAlarmEntry] {
+        &self.location_alarms
+    }
+
+    pub fn has_location_alarms(&self) -> bool {
+        !self.location_alarms.is_empty()
+    }
+}
+
+/// Persisted per-alarm inside/outside state for location reminders, so an
+/// "enter" fires only on the transition into the area (and "leave" only on
+/// the transition out) instead of on every position fix while inside.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct LocationAlarmState {
+    pub inside: bool,
+    pub last_fired: Option<i64>,
+}
+
+const LOCATION_STATE_FILE: &str = "location_alarm_state.json";
+
+pub fn load_location_state(ctx: &dyn AppContext) -> HashMap<String, LocationAlarmState> {
+    let Some(path) = ctx.get_data_dir().ok().map(|d| d.join(LOCATION_STATE_FILE)) else {
+        return HashMap::new();
+    };
+    let Ok(content) = std::fs::read_to_string(&path) else {
+        return HashMap::new();
+    };
+    serde_json::from_str(&content).unwrap_or_default()
+}
+
+pub fn save_location_state(ctx: &dyn AppContext, state: &HashMap<String, LocationAlarmState>) {
+    let Ok(dir) = ctx.get_data_dir() else {
+        return;
+    };
+    let path = dir.join(LOCATION_STATE_FILE);
+    if let Ok(json) = serde_json::to_string(state)
+        && let Err(e) = LocalStorage::atomic_write(&path, json)
+    {
+        log::warn!("Failed to persist location alarm state: {}", e);
+    }
+}
+
+/// Great-circle distance in meters (haversine).
+pub fn haversine_m(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
+    const R: f64 = 6_371_000.0;
+    let dlat = (lat2 - lat1).to_radians();
+    let dlon = (lon2 - lon1).to_radians();
+    let a = (dlat / 2.0).sin().powi(2)
+        + lat1.to_radians().cos() * lat2.to_radians().cos() * (dlon / 2.0).sin().powi(2);
+    2.0 * R * a.sqrt().asin()
+}
+
+/// How long a fired location reminder stays suppressed before it may fire
+/// again (mirrors the 24h alarm fire-history window).
+const LOCATION_REFIRE_WINDOW_SECS: i64 = 86400;
+
+/// Pure evaluation of location reminders against a device position.
+/// `coords` maps location name -> (lat, lon, per-location radius override).
+/// Radius precedence: per-reminder `radius_m` > per-location radius > global
+/// default. Fires on the enter/leave *transition* only, and at most once per
+/// 24h window per alarm. Returns the entries that should notify now; `state`
+/// is updated in place (callers persist it).
+#[allow(clippy::too_many_arguments)]
+pub fn evaluate_location_alarms(
+    entries: &[LocationAlarmEntry],
+    coords: &HashMap<String, (f64, f64, Option<u32>)>,
+    default_radius_m: u32,
+    lat: f64,
+    lon: f64,
+    now: DateTime<Utc>,
+    state: &mut HashMap<String, LocationAlarmState>,
+) -> Vec<LocationAlarmEntry> {
+    let now_ts = now.timestamp();
+    let mut fired = Vec::new();
+
+    for entry in entries {
+        // Resolve the coordinates of every named location; skip the entry
+        // entirely while none of them has coordinates configured.
+        let resolved: Vec<(f64, f64, u32)> = entry
+            .locations
+            .iter()
+            .filter_map(|name| {
+                coords.get(name).map(|(clat, clon, cradius)| {
+                    let radius = entry.radius_m.or(*cradius).unwrap_or(default_radius_m);
+                    (*clat, *clon, radius)
+                })
+            })
+            .collect();
+        if resolved.is_empty() {
+            continue;
+        }
+
+        let inside = resolved
+            .iter()
+            .any(|(clat, clon, radius)| haversine_m(lat, lon, *clat, *clon) <= *radius as f64);
+
+        let prev = state.get(&entry.alarm_uid).cloned().unwrap_or_default();
+        let transition = match entry.event.as_str() {
+            "leave" => prev.inside && !inside,
+            // "enter" (default): unknown previous state counts as outside, so
+            // the first fix inside the area fires once.
+            _ => inside && !prev.inside,
+        };
+        let within_refire_window = prev
+            .last_fired
+            .is_some_and(|ts| (now_ts - ts).abs() < LOCATION_REFIRE_WINDOW_SECS);
+
+        if transition && !within_refire_window {
+            fired.push(entry.clone());
+            state.insert(
+                entry.alarm_uid.clone(),
+                LocationAlarmState {
+                    inside,
+                    last_fired: Some(now_ts),
+                },
+            );
+        } else {
+            state.insert(
+                entry.alarm_uid.clone(),
+                LocationAlarmState {
+                    inside,
+                    last_fired: prev.last_fired,
+                },
+            );
+        }
+    }
+
+    fired
+}
+
+/// Evaluation driven by a system proximity alert (Android
+/// `LocationManager.addProximityAlert`): the system already did the distance
+/// math at `alert_radius_m` around `location`, so `entering` is authoritative.
+/// Only entries whose resolved radius for that location equals the alert
+/// radius fire, so several reminders around the same place with different
+/// radii stay exact. Same transition + re-fire-window rules as
+/// [`evaluate_location_alarms`].
+pub fn evaluate_location_alert(
+    entries: &[LocationAlarmEntry],
+    coords: &HashMap<String, (f64, f64, Option<u32>)>,
+    default_radius_m: u32,
+    location: &str,
+    alert_radius_m: u32,
+    entering: bool,
+    now: DateTime<Utc>,
+    state: &mut HashMap<String, LocationAlarmState>,
+) -> Vec<LocationAlarmEntry> {
+    let now_ts = now.timestamp();
+    let mut fired = Vec::new();
+
+    for entry in entries
+        .iter()
+        .filter(|e| e.locations.iter().any(|l| l == location))
+    {
+        // Resolve this entry's radius for the alerted location; only exact
+        // matches fire (the alert was registered per radius).
+        let Some((_, _, loc_radius)) = coords.get(location) else {
+            continue;
+        };
+        let resolved = entry.radius_m.or(*loc_radius).unwrap_or(default_radius_m);
+        if resolved != alert_radius_m {
+            continue;
+        }
+
+        let prev = state.get(&entry.alarm_uid).cloned().unwrap_or_default();
+        let inside = entering;
+        let transition = match entry.event.as_str() {
+            "leave" => prev.inside && !inside,
+            _ => inside && !prev.inside,
+        };
+        let within_refire_window = prev
+            .last_fired
+            .is_some_and(|ts| (now_ts - ts).abs() < LOCATION_REFIRE_WINDOW_SECS);
+
+        if transition && !within_refire_window {
+            fired.push(entry.clone());
+            state.insert(
+                entry.alarm_uid.clone(),
+                LocationAlarmState {
+                    inside,
+                    last_fired: Some(now_ts),
+                },
+            );
+        } else {
+            state.insert(
+                entry.alarm_uid.clone(),
+                LocationAlarmState {
+                    inside,
+                    last_fired: prev.last_fired,
+                },
+            );
+        }
+    }
+
+    fired
 }
 
 #[cfg(test)]
@@ -364,6 +612,7 @@ mod tests {
                 is_implicit: false,
                 description: Some("Don't forget!".to_string()),
             }],
+            location_alarms: Vec::new(),
         };
 
         let json = serde_json::to_string(&index).unwrap();
@@ -413,6 +662,7 @@ mod tests {
                     description: None,
                 },
             ],
+            location_alarms: Vec::new(),
         };
 
         let firing = index.get_firing_alarms();
@@ -449,6 +699,7 @@ mod tests {
                     description: None,
                 },
             ],
+            location_alarms: Vec::new(),
         };
 
         index.prune_old_alarms();

@@ -2,6 +2,7 @@
 // File: ./src/model/parser.rs
 // Logic for parsing smart input strings into task properties.
 
+use crate::model::item::LocationEvent;
 use crate::model::{Alarm, DateType, Task};
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime, Utc};
 use std::collections::{HashMap, HashSet};
@@ -63,6 +64,7 @@ pub enum ExactToken {
     IsFlat,
     IsArchived,
     SortManual,
+    Leave,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -278,6 +280,7 @@ impl ParserLexicon {
         add_exact("parser_now", "now", ExactToken::Now);
         add_exact("parser_next", "next", ExactToken::Next);
         add_exact("parser_in", "in", ExactToken::In);
+        add_exact("parser_leave", "leave", ExactToken::Leave);
         add_exact("parser_every", "every", ExactToken::Every);
         add_exact("parser_after", "after", ExactToken::After);
         add_exact("parser_until", "until", ExactToken::Until);
@@ -3075,6 +3078,96 @@ fn assign_start_due(
     }
 }
 
+/// Splits on `:` while ignoring colons inside double quotes (so quoted
+/// location names like `@@"a:b"` survive).
+fn split_colon_respecting_quotes(s: &str) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut cur = String::new();
+    let mut in_quote = false;
+    let mut escaped = false;
+    for c in s.chars() {
+        if escaped {
+            cur.push(c);
+            escaped = false;
+            continue;
+        }
+        if c == '\\' {
+            cur.push(c);
+            escaped = true;
+            continue;
+        }
+        if c == '"' {
+            in_quote = !in_quote;
+            cur.push(c);
+            continue;
+        }
+        if c == ':' && !in_quote {
+            parts.push(std::mem::take(&mut cur));
+            continue;
+        }
+        cur.push(c);
+    }
+    parts.push(cur);
+    parts
+}
+
+/// Parses a bare meter count with an optional `m` suffix (`500`, `500m`).
+fn parse_meters(s: &str) -> Option<u32> {
+    let t = s.trim().trim_end_matches(['m', 'M']).trim_end();
+    if t.is_empty() || !t.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    t.parse::<u32>().ok()
+}
+
+/// Parses the value of a location-based reminder: `@@loc1|loc2[:leave][:500m]`
+/// (a leading `loc:` is also accepted). The first `:`-separated segment holds
+/// the location list; later segments are modifiers in any order — the
+/// localized `leave` keyword or a meter radius. Returns None when `val` is
+/// not a location reminder or carries an unrecognized modifier.
+fn parse_location_reminder_value(
+    val: &str,
+    lex: &ParserLexicon,
+) -> Option<(Vec<String>, Option<u32>, LocationEvent)> {
+    let lower = val.to_lowercase();
+    let rest_lower = lower
+        .strip_prefix("@@")
+        .or_else(|| lower.strip_prefix("loc:"))?;
+    if rest_lower.is_empty() {
+        return None;
+    }
+    // Both prefixes are ASCII, so slicing the original at this byte length is safe.
+    let rest_orig = &val[val.len() - rest_lower.len()..];
+    let segments = split_colon_respecting_quotes(rest_orig);
+    let loc_part = segments.first()?.trim();
+    if loc_part.is_empty() {
+        return None;
+    }
+    let mut locations = Vec::new();
+    for l in loc_part.split('|') {
+        let l = strip_quotes(l.trim());
+        if l.is_empty() {
+            return None;
+        }
+        locations.push(l);
+    }
+    let mut radius_m = None;
+    let mut event = LocationEvent::Enter;
+    for seg in &segments[1..] {
+        let s = seg.trim();
+        if s.is_empty() {
+            return None;
+        }
+        if lex.exact.get(&s.to_lowercase()) == Some(&ExactToken::Leave) {
+            event = LocationEvent::Leave;
+        } else {
+            let m = parse_meters(s)?;
+            radius_m = Some(m);
+        }
+    }
+    Some((locations, radius_m, event))
+}
+
 pub fn apply_smart_input(
     task: &mut Task,
     input: &str,
@@ -3123,6 +3216,11 @@ pub fn apply_smart_input(
         Relative(u32),
         TimeOnly(NaiveTime),
         Absolute(DateTime<Utc>),
+        Location {
+            locations: Vec<String>,
+            radius_m: Option<u32>,
+            event: crate::model::item::LocationEvent,
+        },
     }
     let mut pending_alarms = Vec::new();
 
@@ -3334,12 +3432,17 @@ pub fn apply_smart_input(
                 summary_words.push(unescape(token));
             }
         } else if pref == Some(PrefixToken::Reminder) {
-            let clean_val = if rem.is_empty() && i + 1 < stream.len() {
+            let took_next = rem.is_empty() && i + 1 < stream.len();
+            let clean_val = if took_next {
                 consumed += 1;
                 &stream[i + 1]
             } else {
                 rem
             };
+            // Location names are case-sensitive; keep the original-case value.
+            let clean_val_orig = if took_next { clean_val } else { rem_original };
+
+            let loc_rem = parse_location_reminder_value(clean_val_orig, lex);
 
             let clean_val_lower = clean_val.to_lowercase();
             let is_in = lex.exact.get(&clean_val_lower) == Some(&ExactToken::In)
@@ -3347,7 +3450,13 @@ pub fn apply_smart_input(
             let is_next = lex.exact.get(&clean_val_lower) == Some(&ExactToken::Next)
                 || clean_val.eq_ignore_ascii_case("next");
 
-            if is_in && i + consumed < stream.len() {
+            if let Some((locations, radius_m, event)) = loc_rem {
+                pending_alarms.push(PendingAlarm::Location {
+                    locations,
+                    radius_m,
+                    event,
+                });
+            } else if is_in && i + consumed < stream.len() {
                 // Greedily consume consecutive duration tokens so compound
                 // reminders like `rem:in 2h 20m` sum instead of leaking the
                 // tail into the summary.
@@ -4045,6 +4154,13 @@ pub fn apply_smart_input(
                 }
             }
             PendingAlarm::Absolute(dt) => task.alarms.push(Alarm::new_absolute(dt)),
+            PendingAlarm::Location {
+                locations,
+                radius_m,
+                event,
+            } => task
+                .alarms
+                .push(Alarm::new_location(locations, radius_m, event)),
             PendingAlarm::TimeOnly(t) => {
                 let anchor_date = task
                     .due

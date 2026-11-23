@@ -17,6 +17,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.snapshots.SnapshotStateMap
@@ -56,6 +57,8 @@ import com.trougnouf.cfait.ui.AdvancedSettingsScreen
 import com.trougnouf.cfait.ui.TaskDetailScreen
 import com.trougnouf.cfait.util.AlarmScheduler
 import com.trougnouf.cfait.util.showToast
+import com.trougnouf.cfait.util.GeofenceRegistrar
+import com.trougnouf.cfait.util.LocationReminderChecker
 import com.trougnouf.cfait.util.NotificationHelper
 import com.trougnouf.cfait.widget.EXTRA_CALENDAR_HREF
 import com.trougnouf.cfait.widget.EXTRA_FOCUS_TASK_UID
@@ -69,6 +72,8 @@ import com.trougnouf.cfait.workers.CalendarSyncWorker
 import com.trougnouf.cfait.workers.NotificationActionWorker
 import com.trougnouf.cfait.widget.updateAllTaskListWidgets
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import android.content.res.Configuration
 import android.util.Log
@@ -102,6 +107,18 @@ class MainActivity : ComponentActivity() {
             super.attachBaseContext(newBase.createConfigurationContext(config))
         } else {
             super.attachBaseContext(newBase)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Evaluate location reminders (rem:@@loc) whenever the app comes to the
+        // foreground; a no-op when none exist. Uses the cached last-known fix.
+        val app = application as CfaitApplication
+        CoroutineScope(Dispatchers.Main + SupervisorJob()).launch {
+            app.dataLoaded.await()
+            GeofenceRegistrar.register(this@MainActivity, app.api)
+            LocationReminderChecker.check(this@MainActivity, app.api)
         }
     }
 

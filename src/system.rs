@@ -635,6 +635,9 @@ pub fn spawn_alarm_actor(
                                 };
                                 anchor + chrono::Duration::minutes(mins as i64)
                             }
+                            // Location reminders are evaluated against the device
+                            // position (mobile), not by the desktop alarm actor.
+                            AlarmTrigger::Location { .. } => continue,
                         };
 
                         let timestamp = trigger_dt.timestamp();

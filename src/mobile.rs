@@ -483,6 +483,29 @@ pub struct MobileAlarmInfo {
     pub body: String,
 }
 
+/// Coordinates (and optional radius override) for a named location, exposed
+/// to the Android settings UI.
+#[derive(uniffi::Record)]
+pub struct MobileLocationCoords {
+    pub lat: f64,
+    pub lon: f64,
+    pub radius_m: Option<u32>,
+}
+
+/// A location-based reminder (`rem:@@loc`) pending on some task.
+#[derive(uniffi::Record)]
+pub struct MobileLocationReminder {
+    pub alarm_uid: String,
+    pub task_uid: String,
+    pub title: String,
+    pub locations: Vec<String>,
+    pub radius_m: Option<u32>,
+    /// "enter" or "leave"
+    pub event: String,
+    /// Whether at least one of the locations has coordinates configured.
+    pub has_coords: bool,
+}
+
 #[derive(uniffi::Enum)]
 pub enum MobileGoalType {
     Count,
@@ -568,6 +591,9 @@ pub struct MobileConfig {
     pub quick_filter_icon: String,
     pub sync_settings: bool,
     pub goals: HashMap<String, MobileGoal>,
+    pub location_coords: HashMap<String, MobileLocationCoords>,
+    pub default_location_radius_m: u32,
+    pub location_reminders_enabled: bool,
     pub default_duration_goal_mins: u32,
     pub sessions_count_as_completions: bool,
     pub show_calendars_tab: bool,
@@ -1701,6 +1727,22 @@ impl CfaitMobile {
                 .collect(),
             default_duration_goal_mins: c.default_duration_goal_mins,
             sessions_count_as_completions: c.sessions_count_as_completions,
+            location_coords: c
+                .location_coords
+                .into_iter()
+                .map(|(k, v)| {
+                    (
+                        k,
+                        MobileLocationCoords {
+                            lat: v.lat,
+                            lon: v.lon,
+                            radius_m: v.radius_m,
+                        },
+                    )
+                })
+                .collect(),
+            default_location_radius_m: c.default_location_radius_m,
+            location_reminders_enabled: c.location_reminders_enabled,
             show_calendars_tab: c.show_calendars_tab,
             show_tags_tab: c.show_tags_tab,
             show_locations_tab: c.show_locations_tab,
@@ -1890,6 +1932,22 @@ impl CfaitMobile {
             .collect();
         c.default_duration_goal_mins = config.default_duration_goal_mins;
         c.sessions_count_as_completions = config.sessions_count_as_completions;
+        c.location_coords = config
+            .location_coords
+            .into_iter()
+            .map(|(k, v)| {
+                (
+                    k,
+                    crate::config::LocationCoords {
+                        lat: v.lat,
+                        lon: v.lon,
+                        radius_m: v.radius_m,
+                    },
+                )
+            })
+            .collect();
+        c.default_location_radius_m = config.default_location_radius_m;
+        c.location_reminders_enabled = config.location_reminders_enabled;
         c.show_calendars_tab = config.show_calendars_tab;
         c.show_tags_tab = config.show_tags_tab;
         c.show_locations_tab = config.show_locations_tab;
@@ -2283,6 +2341,8 @@ impl CfaitMobile {
                             };
                             anchor + chrono::Duration::minutes(mins as i64)
                         }
+                        // Location reminders are evaluated via evaluate_location_reminders.
+                        AlarmTrigger::Location { .. } => continue,
                     };
                     if trigger_dt <= now && (now - trigger_dt).num_minutes() < 120 {
                         results.push(MobileAlarmInfo {
@@ -2337,6 +2397,158 @@ impl CfaitMobile {
             }
         }
         results
+    }
+
+    /// Whether any task currently carries a location-based reminder. Cheap
+    /// gate so the Android worker skips all location work (no permission
+    /// check, no location lookup) when none exist.
+    pub fn has_location_reminders(&self) -> bool {
+        self.location_alarm_index().has_location_alarms()
+    }
+
+    /// All location-based reminders currently pending (for the settings UI
+    /// and badges), with a flag telling whether their locations have
+    /// coordinates configured.
+    pub fn get_location_reminders(&self) -> Vec<MobileLocationReminder> {
+        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
+        self.location_alarm_index()
+            .get_location_alarms()
+            .iter()
+            .map(|e| MobileLocationReminder {
+                alarm_uid: e.alarm_uid.clone(),
+                task_uid: e.task_uid.clone(),
+                title: e.task_title.clone(),
+                locations: e.locations.clone(),
+                radius_m: e.radius_m,
+                event: e.event.clone(),
+                has_coords: e
+                    .locations
+                    .iter()
+                    .any(|l| config.location_coords.contains_key(l)),
+            })
+            .collect()
+    }
+
+    /// Evaluates all pending location reminders against the device position
+    /// (haversine, enter/leave transitions, 24h re-fire suppression) and
+    /// returns the ones that should notify now. Persists the inside/outside
+    /// state so reminders do not re-fire while the user stays in the area.
+    pub fn evaluate_location_reminders(&self, lat: f64, lon: f64) -> Vec<MobileAlarmInfo> {
+        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
+        if !config.location_reminders_enabled {
+            return Vec::new();
+        }
+        let index = self.location_alarm_index();
+        if !index.has_location_alarms() {
+            return Vec::new();
+        }
+        let coords: HashMap<String, (f64, f64, Option<u32>)> = config
+            .location_coords
+            .iter()
+            .map(|(k, v)| (k.clone(), (v.lat, v.lon, v.radius_m)))
+            .collect();
+        let mut state = crate::alarm_index::load_location_state(self.ctx.as_ref());
+        let now = Utc::now();
+        let fired = crate::alarm_index::evaluate_location_alarms(
+            index.get_location_alarms(),
+            &coords,
+            config.default_location_radius_m,
+            lat,
+            lon,
+            now,
+            &mut state,
+        );
+        crate::alarm_index::save_location_state(self.ctx.as_ref(), &state);
+        self.fired_location_to_mobile(fired)
+    }
+
+    /// Evaluation driven by an Android proximity alert (system geofence): the
+    /// system reports entering/leaving `location` at `radius_m`. Only entries
+    /// whose resolved radius matches the alert radius fire. Same state file as
+    /// the polling path.
+    pub fn evaluate_location_alert(
+        &self,
+        location: String,
+        radius_m: u32,
+        entering: bool,
+    ) -> Vec<MobileAlarmInfo> {
+        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
+        if !config.location_reminders_enabled {
+            return Vec::new();
+        }
+        let index = self.location_alarm_index();
+        if !index.has_location_alarms() {
+            return Vec::new();
+        }
+        let coords: HashMap<String, (f64, f64, Option<u32>)> = config
+            .location_coords
+            .iter()
+            .map(|(k, v)| (k.clone(), (v.lat, v.lon, v.radius_m)))
+            .collect();
+        let mut state = crate::alarm_index::load_location_state(self.ctx.as_ref());
+        let fired = crate::alarm_index::evaluate_location_alert(
+            index.get_location_alarms(),
+            &coords,
+            config.default_location_radius_m,
+            &location,
+            radius_m,
+            entering,
+            Utc::now(),
+            &mut state,
+        );
+        crate::alarm_index::save_location_state(self.ctx.as_ref(), &state);
+        self.fired_location_to_mobile(fired)
+    }
+
+    /// All location names in use (union of task `@@locations` and configured
+    /// coordinates), for the settings editor.
+    pub fn get_all_location_names(&self) -> Vec<String> {
+        let mut names: HashSet<String> = HashSet::new();
+        let store = self.controller.store.blocking_lock();
+        for tasks_map in store.calendars.values() {
+            for task in tasks_map.values() {
+                for l in &task.locations {
+                    names.insert(l.clone());
+                }
+            }
+        }
+        drop(store);
+        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
+        for k in config.location_coords.keys() {
+            names.insert(k.clone());
+        }
+        let mut v: Vec<String> = names.into_iter().collect();
+        v.sort();
+        v
+    }
+
+    /// Sets or updates the coordinates of a named location and re-syncs settings.
+    pub fn set_location_coords(
+        &self,
+        name: String,
+        lat: f64,
+        lon: f64,
+        radius_m: Option<u32>,
+    ) -> Result<(), MobileError> {
+        let old = load_mobile_config_with_credentials(self.ctx.as_ref());
+        let mut c = old.clone();
+        c.location_coords
+            .insert(name, crate::config::LocationCoords { lat, lon, radius_m });
+        c.update_sync_timestamp_if_changed(&old);
+        c.save_with_credentials(self.ctx.as_ref())
+            .map(|_| ())
+            .map_err(MobileError::from)
+    }
+
+    /// Removes the coordinates of a named location.
+    pub fn remove_location_coords(&self, name: String) -> Result<(), MobileError> {
+        let old = load_mobile_config_with_credentials(self.ctx.as_ref());
+        let mut c = old.clone();
+        c.location_coords.remove(&name);
+        c.update_sync_timestamp_if_changed(&old);
+        c.save_with_credentials(self.ctx.as_ref())
+            .map(|_| ())
+            .map_err(MobileError::from)
     }
 }
 
@@ -3898,6 +4110,7 @@ impl CfaitMobile {
                         };
                         anchor + chrono::Duration::minutes(mins as i64)
                     }
+                    crate::model::AlarmTrigger::Location { .. } => return false,
                 };
                 if trigger_dt > now + chrono::Duration::minutes(5) {
                     return false;
@@ -4042,6 +4255,67 @@ impl CfaitMobile {
 }
 
 impl CfaitMobile {
+    /// Maps fired location-reminder entries to notification payloads, skipping
+    /// tasks that no longer exist or were completed on another device.
+    fn fired_location_to_mobile(
+        &self,
+        fired: Vec<crate::alarm_index::LocationAlarmEntry>,
+    ) -> Vec<MobileAlarmInfo> {
+        let store = self.controller.store.blocking_lock();
+        fired
+            .into_iter()
+            .filter(|e| {
+                store.get_task_ref(&e.task_uid).is_some_and(|task| {
+                    !task.status.is_done()
+                        && !crate::storage::is_system_calendar(&task.calendar_href)
+                })
+            })
+            .map(|e| {
+                let locs = e.locations.join(", ");
+                let body = if e.event == "leave" {
+                    rust_i18n::t!("alarm_leaving_location", location = locs).to_string()
+                } else {
+                    rust_i18n::t!("alarm_at_location", location = locs).to_string()
+                };
+                MobileAlarmInfo {
+                    task_uid: e.task_uid,
+                    alarm_uid: e.alarm_uid,
+                    title: e.task_title,
+                    body,
+                }
+            })
+            .collect()
+    }
+
+    /// Loads the alarm index (from the in-memory cache, disk, or a fresh
+    /// rebuild) the same way the time-alarm path does.
+    fn location_alarm_index(&self) -> AlarmIndex {
+        {
+            let cached = self.alarm_index_cache.blocking_lock();
+            if let Some(ref index) = *cached {
+                return index.clone();
+            }
+        }
+        let index = AlarmIndex::load(self.ctx.as_ref());
+        if !index.is_empty() || index.has_location_alarms() {
+            *self.alarm_index_cache.blocking_lock() = Some(index.clone());
+            return index;
+        }
+        // Empty index on disk: rebuild from the store once.
+        let store = self.controller.store.blocking_lock();
+        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
+        let index = AlarmIndex::rebuild_from_tasks(
+            &store.calendars,
+            &config.disabled_calendars,
+            config.auto_reminders,
+            &config.default_reminder_time,
+        );
+        drop(store);
+        let _ = index.save(self.ctx.as_ref());
+        *self.alarm_index_cache.blocking_lock() = Some(index.clone());
+        index
+    }
+
     async fn apply_store_mutation<F>(&self, uid: &str, mutator: F) -> Result<(), MobileError>
     where
         F: FnOnce(&mut TaskStore, &str) -> Option<Task>,

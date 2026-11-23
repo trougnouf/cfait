@@ -208,6 +208,17 @@ impl Interval {
     }
 }
 
+/// Coordinates (and optional per-location radius override) for a named
+/// location (`@@home`), used to resolve location-based reminders
+/// (`rem:@@home`). Synced across devices with the other settings.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LocationCoords {
+    pub lat: f64,
+    pub lon: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub radius_m: Option<u32>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Goal {
     pub goal_type: GoalType,
@@ -708,6 +719,10 @@ fn default_priority() -> u8 {
 fn default_auto_remind() -> bool {
     true
 }
+
+fn default_location_radius_m() -> u32 {
+    300
+}
 fn default_remind_time() -> String {
     "08:00".to_string()
 }
@@ -986,6 +1001,11 @@ pub struct Config {
     pub collection_order: Vec<String>,
     pub tag_aliases: HashMap<String, Vec<String>>,
     pub goals: HashMap<String, Goal>,
+    pub location_coords: HashMap<String, LocationCoords>,
+    /// Default radius (meters) for location reminders without an explicit one.
+    pub default_location_radius_m: u32,
+    /// Master switch for location-based reminder evaluation (mobile).
+    pub location_reminders_enabled: bool,
 
     // UI State
     pub expanded_tags: Vec<String>,
@@ -1057,6 +1077,12 @@ pub struct SyncableConfig {
     pub default_duration_goal_mins: u32,
     #[serde(default)]
     pub sessions_count_as_completions: bool,
+    #[serde(default)]
+    pub location_coords: HashMap<String, LocationCoords>,
+    #[serde(default = "default_location_radius_m")]
+    pub default_location_radius_m: u32,
+    #[serde(default = "default_true")]
+    pub location_reminders_enabled: bool,
     #[serde(default = "default_max_done_roots")]
     pub max_done_roots: usize,
     #[serde(default = "default_max_done_subtasks")]
@@ -1185,6 +1211,9 @@ impl Default for Config {
             sync_settings: true,
             settings_updated_at: 0,
             goals: HashMap::new(),
+            location_coords: HashMap::new(),
+            default_location_radius_m: 300,
+            location_reminders_enabled: true,
             window_width: 1024.0,
             window_height: 768.0,
             window_maximized: false,
@@ -1244,6 +1273,9 @@ impl Config {
             trash_retention_days: self.trash_retention_days,
             default_duration_goal_mins: self.default_duration_goal_mins,
             sessions_count_as_completions: self.sessions_count_as_completions,
+            location_coords: self.location_coords.clone(),
+            default_location_radius_m: self.default_location_radius_m,
+            location_reminders_enabled: self.location_reminders_enabled,
             max_done_roots: self.max_done_roots,
             max_done_subtasks: self.max_done_subtasks,
             show_ongoing_notifications: self.show_ongoing_notifications,
@@ -1298,6 +1330,9 @@ impl Config {
         self.trash_retention_days = sync.trash_retention_days;
         self.default_duration_goal_mins = sync.default_duration_goal_mins;
         self.sessions_count_as_completions = sync.sessions_count_as_completions;
+        self.location_coords = sync.location_coords;
+        self.default_location_radius_m = sync.default_location_radius_m;
+        self.location_reminders_enabled = sync.location_reminders_enabled;
         self.max_done_roots = sync.max_done_roots;
         self.max_done_subtasks = sync.max_done_subtasks;
         self.show_ongoing_notifications = sync.show_ongoing_notifications;

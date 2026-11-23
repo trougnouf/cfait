@@ -109,6 +109,7 @@ const HANDLED_KEYS: &[&str] = &[
     "X-CFAIT-ARCHIVED",
     "X-CFAIT-MANUAL-SORT",
     "X-CFAIT-SORT-POSITION",
+    "X-CFAIT-LOC-ALARM",
 ];
 
 /// Return the description to serialize into ICS, re-injecting original `data:`
@@ -746,8 +747,24 @@ impl IcsAdapter {
 
         if !task.alarms.is_empty() {
             let mut alarm_lines = String::new();
+            let mut loc_alarm_lines = String::new();
 
             for alarm in &task.alarms {
+                // Location reminders have no RFC 5545 VALARM trigger; they are
+                // stored as X-CFAIT-LOC-ALARM properties on the VTODO instead,
+                // so third-party clients never misfire them.
+                if matches!(alarm.trigger, AlarmTrigger::Location { .. }) {
+                    if let Ok(json) = serde_json::to_string(alarm) {
+                        let escaped = json
+                            .replace('\\', "\\\\")
+                            .replace(',', "\\,")
+                            .replace(';', "\\;")
+                            .replace('\n', "\\n")
+                            .replace('\r', "");
+                        loc_alarm_lines.push_str(&format!("X-CFAIT-LOC-ALARM:{}\r\n", escaped));
+                    }
+                    continue;
+                }
                 alarm_lines.push_str("BEGIN:VALARM\r\n");
 
                 let safe_uid = alarm.uid.replace(['\n', '\r'], "");
@@ -779,6 +796,8 @@ impl IcsAdapter {
                             dt.format("%Y%m%dT%H%M%SZ")
                         ));
                     }
+                    // Handled above as X-CFAIT-LOC-ALARM; never emitted as VALARM.
+                    AlarmTrigger::Location { .. } => {}
                 }
 
                 if let Some(ack) = alarm.acknowledged {
@@ -802,6 +821,9 @@ impl IcsAdapter {
                 alarm_lines.push_str("END:VALARM\r\n");
             }
             ics = insert_before(&ics, "END:VTODO", &alarm_lines);
+            if !loc_alarm_lines.is_empty() {
+                ics = insert_before(&ics, "END:VTODO", &loc_alarm_lines);
+            }
         }
 
         if !task.raw_components.is_empty() {
@@ -1622,6 +1644,8 @@ impl IcsAdapter {
         // Manually parse sessions from unfolded text to ensure we catch all of them
         // regardless of how icalendar crate groups X- properties.
         let mut manual_sessions = Vec::new();
+        // Location reminders (X-CFAIT-LOC-ALARM, one JSON-encoded Alarm per line).
+        let mut loc_alarm_raw: Vec<String> = Vec::new();
 
         let mut in_vtodo = false;
         let mut in_valarm = false;
@@ -1687,6 +1711,12 @@ impl IcsAdapter {
                     {
                         manual_sessions.push(crate::model::item::WorkSession { start, end });
                     }
+                }
+
+                if line_upper.starts_with("X-CFAIT-LOC-ALARM:")
+                    && let Some((_, val)) = line.split_once(':')
+                {
+                    loc_alarm_raw.push(val.to_string());
                 }
             }
         }
@@ -1822,6 +1852,13 @@ impl IcsAdapter {
             }
             if in_alarm {
                 current_alarm_lines.push(line.to_string());
+            }
+        }
+
+        // Location reminders: one JSON-encoded Alarm per X-CFAIT-LOC-ALARM line.
+        for raw in loc_alarm_raw {
+            if let Ok(alarm) = serde_json::from_str::<Alarm>(&unescape_ics(&raw)) {
+                alarms.push(alarm);
             }
         }
 

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Play-store builds only (built with -PcfaitPlayStore=true).
+     Google Play's background-location policy is not declared for cfait, so the
+     Play artifact must not request ACCESS_BACKGROUND_LOCATION: removing it here
+     makes location reminders (rem:@@loc) foreground-only on Play (evaluated when
+     the app opens). F-Droid / direct-download builds keep the full feature. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission
+        android:name="android.permission.ACCESS_BACKGROUND_LOCATION"
+        tools:node="remove" />
+</manifest>

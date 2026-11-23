@@ -178,10 +178,30 @@ fn suggest_impl(
     }
 
     // 2. Locations
+    // `rem:@@...` (location reminder) suggests locations too, keeping the prefix.
+    // Uses the lexicon so localized `rem:` prefixes work as well.
+    let rem_loc_prefix: Option<(String, usize)> = lex
+        .match_prefix(&word)
+        .filter(|(_, kind, _)| *kind == PrefixToken::Reminder)
+        .and_then(|(p, _, rem)| {
+            let rem_lower = rem.to_lowercase();
+            if rem_lower.starts_with("@@") {
+                Some((format!("{}@@", p), p.len() + 2))
+            } else if let Some(rest) = rem_lower.strip_prefix("loc:") {
+                let _ = rest;
+                Some((format!("{}{}", p, &rem[..4]), p.len() + 4))
+            } else {
+                None
+            }
+        });
     let is_loc = word.starts_with("@@")
+        || rem_loc_prefix.is_some()
         || lex.match_prefix(&lower).map(|(_, k, _)| k) == Some(PrefixToken::Loc);
     if is_loc {
-        let (prefix_str, query) = if let Some(stripped) = word.strip_prefix("@@") {
+        let (prefix_str, query) = if let Some((rem_prefix, prefix_len)) = &rem_loc_prefix {
+            let q = &word[*prefix_len..];
+            (rem_prefix.as_str(), q)
+        } else if let Some(stripped) = word.strip_prefix("@@") {
             ("@@", stripped)
         } else {
             let prefix_str = lex.match_prefix(&lower).map(|(p, _, _)| p).unwrap();
@@ -219,7 +239,7 @@ fn suggest_impl(
             .take(10)
             .map(|(l, _)| Suggestion {
                 replacement: format!("{}{}", prefix_str, quote_value(&l)),
-                display: format!("@@{}", l),
+                display: format!("{}{}", prefix_str, l),
                 description: String::new(),
             })
             .collect();
