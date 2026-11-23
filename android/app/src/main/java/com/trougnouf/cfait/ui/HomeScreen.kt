@@ -1680,12 +1680,8 @@ fun HomeScreen(
                                 TextButton(
                                     onClick = {
                                         scope.launch(Dispatchers.IO) {
-                                            calendars.forEach {
-                                                if (it.href != "local://trash" || defaultCalHref == "local://trash") api.setCalendarVisibility(
-                                                    it.href,
-                                                    true
-                                                )
-                                            }
+                                            // Show all, but keep Trash hidden unless it is the default (matches the GUI and CLI)
+                                            api.toggleAllCalendars(true)
                                             onDataChanged()
                                             updateTaskList()
                                             pendingTabId = "ALL"
