@@ -453,23 +453,71 @@ pub fn haversine_m(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
 /// again (mirrors the 24h alarm fire-history window).
 const LOCATION_REFIRE_WINDOW_SECS: i64 = 86400;
 
+/// Shared inputs for location-reminder evaluation: configured coordinates
+/// (name -> lat, lon, per-location radius override), the global default radius,
+/// and the evaluation time.
+pub struct LocationEval<'a> {
+    pub coords: &'a HashMap<String, (f64, f64, Option<u32>)>,
+    pub default_radius_m: u32,
+    pub now: DateTime<Utc>,
+}
+
+impl LocationEval<'_> {
+    /// Resolved radius for `entry` at `location`, or None when the location
+    /// has no coordinates. Precedence: per-reminder > per-location > default.
+    fn radius_for(&self, entry: &LocationAlarmEntry, location: &str) -> Option<u32> {
+        let (_, _, loc_radius) = self.coords.get(location)?;
+        Some(
+            entry
+                .radius_m
+                .or(*loc_radius)
+                .unwrap_or(self.default_radius_m),
+        )
+    }
+
+    /// Shared transition/re-fire bookkeeping: fires on the enter/leave
+    /// *transition* only, at most once per 24h window per alarm. Updates
+    /// `state` in place; returns the entry when it should notify.
+    fn record(
+        &self,
+        entry: &LocationAlarmEntry,
+        inside: bool,
+        state: &mut HashMap<String, LocationAlarmState>,
+    ) -> Option<LocationAlarmEntry> {
+        let now_ts = self.now.timestamp();
+        let prev = state.get(&entry.alarm_uid).cloned().unwrap_or_default();
+        let transition = match entry.event.as_str() {
+            "leave" => prev.inside && !inside,
+            // "enter" (default): unknown previous state counts as outside, so
+            // the first fix inside the area fires once.
+            _ => inside && !prev.inside,
+        };
+        let within_refire_window = prev
+            .last_fired
+            .is_some_and(|ts| (now_ts - ts).abs() < LOCATION_REFIRE_WINDOW_SECS);
+        let fired = transition && !within_refire_window;
+        state.insert(
+            entry.alarm_uid.clone(),
+            LocationAlarmState {
+                inside,
+                last_fired: if fired { Some(now_ts) } else { prev.last_fired },
+            },
+        );
+        fired.then(|| entry.clone())
+    }
+}
+
 /// Pure evaluation of location reminders against a device position.
-/// `coords` maps location name -> (lat, lon, per-location radius override).
-/// Radius precedence: per-reminder `radius_m` > per-location radius > global
-/// default. Fires on the enter/leave *transition* only, and at most once per
-/// 24h window per alarm. Returns the entries that should notify now; `state`
-/// is updated in place (callers persist it).
-#[allow(clippy::too_many_arguments)]
+/// Fires on the enter/leave transition only (see [`LocationEval::record`]).
+/// Returns the entries that should notify now; `state` is updated in place
+/// (callers persist it).
 pub fn evaluate_location_alarms(
     entries: &[LocationAlarmEntry],
-    coords: &HashMap<String, (f64, f64, Option<u32>)>,
-    default_radius_m: u32,
+    eval: &LocationEval,
     lat: f64,
     lon: f64,
-    now: DateTime<Utc>,
     state: &mut HashMap<String, LocationAlarmState>,
 ) -> Vec<LocationAlarmEntry> {
-    let now_ts = now.timestamp();
     let mut fired = Vec::new();
 
     for entry in entries {
@@ -479,8 +527,8 @@ pub fn evaluate_location_alarms(
             .locations
             .iter()
             .filter_map(|name| {
-                coords.get(name).map(|(clat, clon, cradius)| {
-                    let radius = entry.radius_m.or(*cradius).unwrap_or(default_radius_m);
+                eval.coords.get(name).map(|(clat, clon, cradius)| {
+                    let radius = entry.radius_m.or(*cradius).unwrap_or(eval.default_radius_m);
                     (*clat, *clon, radius)
                 })
             })
@@ -493,34 +541,8 @@ pub fn evaluate_location_alarms(
             .iter()
             .any(|(clat, clon, radius)| haversine_m(lat, lon, *clat, *clon) <= *radius as f64);
 
-        let prev = state.get(&entry.alarm_uid).cloned().unwrap_or_default();
-        let transition = match entry.event.as_str() {
-            "leave" => prev.inside && !inside,
-            // "enter" (default): unknown previous state counts as outside, so
-            // the first fix inside the area fires once.
-            _ => inside && !prev.inside,
-        };
-        let within_refire_window = prev
-            .last_fired
-            .is_some_and(|ts| (now_ts - ts).abs() < LOCATION_REFIRE_WINDOW_SECS);
-
-        if transition && !within_refire_window {
-            fired.push(entry.clone());
-            state.insert(
-                entry.alarm_uid.clone(),
-                LocationAlarmState {
-                    inside,
-                    last_fired: Some(now_ts),
-                },
-            );
-        } else {
-            state.insert(
-                entry.alarm_uid.clone(),
-                LocationAlarmState {
-                    inside,
-                    last_fired: prev.last_fired,
-                },
-            );
+        if let Some(e) = eval.record(entry, inside, state) {
+            fired.push(e);
         }
     }
 
@@ -536,58 +558,24 @@ pub fn evaluate_location_alarms(
 /// [`evaluate_location_alarms`].
 pub fn evaluate_location_alert(
     entries: &[LocationAlarmEntry],
-    coords: &HashMap<String, (f64, f64, Option<u32>)>,
-    default_radius_m: u32,
+    eval: &LocationEval,
     location: &str,
     alert_radius_m: u32,
     entering: bool,
-    now: DateTime<Utc>,
     state: &mut HashMap<String, LocationAlarmState>,
 ) -> Vec<LocationAlarmEntry> {
-    let now_ts = now.timestamp();
     let mut fired = Vec::new();
 
     for entry in entries
         .iter()
         .filter(|e| e.locations.iter().any(|l| l == location))
     {
-        // Resolve this entry's radius for the alerted location; only exact
-        // matches fire (the alert was registered per radius).
-        let Some((_, _, loc_radius)) = coords.get(location) else {
-            continue;
-        };
-        let resolved = entry.radius_m.or(*loc_radius).unwrap_or(default_radius_m);
-        if resolved != alert_radius_m {
+        // Only exact radius matches fire (the alert was registered per radius).
+        if eval.radius_for(entry, location) != Some(alert_radius_m) {
             continue;
         }
-
-        let prev = state.get(&entry.alarm_uid).cloned().unwrap_or_default();
-        let inside = entering;
-        let transition = match entry.event.as_str() {
-            "leave" => prev.inside && !inside,
-            _ => inside && !prev.inside,
-        };
-        let within_refire_window = prev
-            .last_fired
-            .is_some_and(|ts| (now_ts - ts).abs() < LOCATION_REFIRE_WINDOW_SECS);
-
-        if transition && !within_refire_window {
-            fired.push(entry.clone());
-            state.insert(
-                entry.alarm_uid.clone(),
-                LocationAlarmState {
-                    inside,
-                    last_fired: Some(now_ts),
-                },
-            );
-        } else {
-            state.insert(
-                entry.alarm_uid.clone(),
-                LocationAlarmState {
-                    inside,
-                    last_fired: prev.last_fired,
-                },
-            );
+        if let Some(e) = eval.record(entry, entering, state) {
+            fired.push(e);
         }
     }
 

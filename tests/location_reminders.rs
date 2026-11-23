@@ -2,7 +2,8 @@
 //! Tests for location-based reminders (`rem:@@loc[:leave][:Nm]`):
 //! parsing, canonical round-trip, ICS storage, and geofence evaluation.
 use cfait::alarm_index::{
-    AlarmIndex, LocationAlarmEntry, LocationAlarmState, evaluate_location_alarms, haversine_m,
+    AlarmIndex, LocationAlarmEntry, LocationAlarmState, LocationEval, evaluate_location_alarms,
+    haversine_m,
 };
 use cfait::model::Task;
 use cfait::model::item::{AlarmTrigger, LocationEvent};
@@ -159,6 +160,20 @@ fn ics_roundtrip_location_alarm() {
     t.alarms.clear();
 }
 
+type Coords = HashMap<String, (f64, f64, Option<u32>)>;
+
+fn eval<'a>(
+    coords: &'a Coords,
+    default_radius_m: u32,
+    now: chrono::DateTime<Utc>,
+) -> LocationEval<'a> {
+    LocationEval {
+        coords,
+        default_radius_m,
+        now,
+    }
+}
+
 fn entry(uid: &str, locations: &[&str], radius_m: Option<u32>, event: &str) -> LocationAlarmEntry {
     LocationAlarmEntry {
         alarm_uid: uid.to_string(),
@@ -188,26 +203,31 @@ fn evaluate_fires_on_enter_transition_only() {
     let now = Utc::now();
 
     // Outside: no fire, state recorded as outside.
-    let fired = evaluate_location_alarms(&entries, &coords, 300, 50.01, 4.0, now, &mut state);
+    let fired =
+        evaluate_location_alarms(&entries, &eval(&coords, 300, now), 50.01, 4.0, &mut state);
     assert!(fired.is_empty());
     assert!(!state["a1"].inside);
 
     // Entering: fires once.
-    let fired = evaluate_location_alarms(&entries, &coords, 300, 50.0001, 4.0, now, &mut state);
+    let fired =
+        evaluate_location_alarms(&entries, &eval(&coords, 300, now), 50.0001, 4.0, &mut state);
     assert_eq!(fired.len(), 1);
     assert!(state["a1"].inside);
 
     // Still inside: does not re-fire.
-    let fired = evaluate_location_alarms(&entries, &coords, 300, 50.0002, 4.0, now, &mut state);
+    let fired =
+        evaluate_location_alarms(&entries, &eval(&coords, 300, now), 50.0002, 4.0, &mut state);
     assert!(fired.is_empty());
 
     // Leaving: enter reminder does not fire; state flips to outside.
-    let fired = evaluate_location_alarms(&entries, &coords, 300, 50.01, 4.0, now, &mut state);
+    let fired =
+        evaluate_location_alarms(&entries, &eval(&coords, 300, now), 50.01, 4.0, &mut state);
     assert!(fired.is_empty());
     assert!(!state["a1"].inside);
 
     // Re-entering within the 24h window: suppressed by the re-fire window.
-    let fired = evaluate_location_alarms(&entries, &coords, 300, 50.0001, 4.0, now, &mut state);
+    let fired =
+        evaluate_location_alarms(&entries, &eval(&coords, 300, now), 50.0001, 4.0, &mut state);
     assert!(fired.is_empty(), "re-fire window should suppress");
 }
 
@@ -219,18 +239,22 @@ fn evaluate_leave_fires_on_exit() {
     let now = Utc::now();
 
     // Unknown previous state: a leave alarm must not fire before we know we were inside.
-    let fired = evaluate_location_alarms(&entries, &coords, 300, 50.01, 4.0, now, &mut state);
+    let fired =
+        evaluate_location_alarms(&entries, &eval(&coords, 300, now), 50.01, 4.0, &mut state);
     assert!(fired.is_empty());
 
     // Move inside (no fire for a leave alarm), then outside: fires once.
-    let fired = evaluate_location_alarms(&entries, &coords, 300, 50.0001, 4.0, now, &mut state);
+    let fired =
+        evaluate_location_alarms(&entries, &eval(&coords, 300, now), 50.0001, 4.0, &mut state);
     assert!(fired.is_empty());
     assert!(state["a1"].inside);
-    let fired = evaluate_location_alarms(&entries, &coords, 300, 50.01, 4.0, now, &mut state);
+    let fired =
+        evaluate_location_alarms(&entries, &eval(&coords, 300, now), 50.01, 4.0, &mut state);
     assert_eq!(fired.len(), 1);
     assert!(!state["a1"].inside);
     // Staying outside: no re-fire.
-    let fired = evaluate_location_alarms(&entries, &coords, 300, 50.02, 4.0, now, &mut state);
+    let fired =
+        evaluate_location_alarms(&entries, &eval(&coords, 300, now), 50.02, 4.0, &mut state);
     assert!(fired.is_empty());
 }
 
@@ -244,13 +268,15 @@ fn evaluate_radius_precedence() {
     // 400m away: outside a 300m default, inside the 500m location radius.
     let d = haversine_m(50.0, 4.0, 50.0036, 4.0);
     assert!(d > 300.0 && d < 500.0, "distance setup: {}", d);
-    let fired = evaluate_location_alarms(&entries, &coords, 300, 50.0036, 4.0, now, &mut state);
+    let fired =
+        evaluate_location_alarms(&entries, &eval(&coords, 300, now), 50.0036, 4.0, &mut state);
     assert_eq!(fired.len(), 1, "per-location radius should apply");
 
     // ...but an explicit per-reminder radius (100m) beats both.
     let entries = vec![entry("a2", &["home"], Some(100), "enter")];
     let mut state: HashMap<String, LocationAlarmState> = HashMap::new();
-    let fired = evaluate_location_alarms(&entries, &coords, 300, 50.0036, 4.0, now, &mut state);
+    let fired =
+        evaluate_location_alarms(&entries, &eval(&coords, 300, now), 50.0036, 4.0, &mut state);
     assert!(fired.is_empty(), "per-reminder radius should win");
 }
 
@@ -259,7 +285,13 @@ fn evaluate_skips_locations_without_coords() {
     let coords: HashMap<String, (f64, f64, Option<u32>)> = HashMap::new();
     let entries = vec![entry("a1", &["nowhere"], None, "enter")];
     let mut state: HashMap<String, LocationAlarmState> = HashMap::new();
-    let fired = evaluate_location_alarms(&entries, &coords, 300, 50.0, 4.0, Utc::now(), &mut state);
+    let fired = evaluate_location_alarms(
+        &entries,
+        &eval(&coords, 300, Utc::now()),
+        50.0,
+        4.0,
+        &mut state,
+    );
     assert!(fired.is_empty());
     assert!(state.is_empty(), "no state change without coordinates");
 }
@@ -274,7 +306,8 @@ fn evaluate_multi_location_any_inside() {
     let mut state: HashMap<String, LocationAlarmState> = HashMap::new();
     let now = Utc::now();
     // Near auchan only: fires.
-    let fired = evaluate_location_alarms(&entries, &coords, 300, 51.0001, 5.0, now, &mut state);
+    let fired =
+        evaluate_location_alarms(&entries, &eval(&coords, 300, now), 51.0001, 5.0, &mut state);
     assert_eq!(fired.len(), 1);
 }
 
@@ -290,19 +323,46 @@ fn evaluate_location_alert_uses_system_transition() {
     let now = Utc::now();
 
     // Alert at default radius 300, entering: fires a1 only (a2 resolved 100).
-    let fired = evaluate_location_alert(&entries, &coords, 300, "home", 300, true, now, &mut state);
+    let fired = evaluate_location_alert(
+        &entries,
+        &eval(&coords, 300, now),
+        "home",
+        300,
+        true,
+        &mut state,
+    );
     assert_eq!(fired.len(), 1);
     assert_eq!(fired[0].alarm_uid, "a1");
     // Repeated entering (no exit): suppressed by transition rule.
-    let fired = evaluate_location_alert(&entries, &coords, 300, "home", 300, true, now, &mut state);
+    let fired = evaluate_location_alert(
+        &entries,
+        &eval(&coords, 300, now),
+        "home",
+        300,
+        true,
+        &mut state,
+    );
     assert!(fired.is_empty());
     // Leaving at radius 300: enter-alarm does not fire.
-    let fired =
-        evaluate_location_alert(&entries, &coords, 300, "home", 300, false, now, &mut state);
+    let fired = evaluate_location_alert(
+        &entries,
+        &eval(&coords, 300, now),
+        "home",
+        300,
+        false,
+        &mut state,
+    );
     assert!(fired.is_empty());
     assert!(!state["a1"].inside);
     // Alert at radius 100, entering: fires a2 now.
-    let fired = evaluate_location_alert(&entries, &coords, 300, "home", 100, true, now, &mut state);
+    let fired = evaluate_location_alert(
+        &entries,
+        &eval(&coords, 300, now),
+        "home",
+        100,
+        true,
+        &mut state,
+    );
     assert_eq!(fired.len(), 1);
     assert_eq!(fired[0].alarm_uid, "a2");
 }

@@ -2448,14 +2448,16 @@ impl CfaitMobile {
             .map(|(k, v)| (k.clone(), (v.lat, v.lon, v.radius_m)))
             .collect();
         let mut state = crate::alarm_index::load_location_state(self.ctx.as_ref());
-        let now = Utc::now();
+        let eval = crate::alarm_index::LocationEval {
+            coords: &coords,
+            default_radius_m: config.default_location_radius_m,
+            now: Utc::now(),
+        };
         let fired = crate::alarm_index::evaluate_location_alarms(
             index.get_location_alarms(),
-            &coords,
-            config.default_location_radius_m,
+            &eval,
             lat,
             lon,
-            now,
             &mut state,
         );
         crate::alarm_index::save_location_state(self.ctx.as_ref(), &state);
@@ -2486,14 +2488,17 @@ impl CfaitMobile {
             .map(|(k, v)| (k.clone(), (v.lat, v.lon, v.radius_m)))
             .collect();
         let mut state = crate::alarm_index::load_location_state(self.ctx.as_ref());
+        let eval = crate::alarm_index::LocationEval {
+            coords: &coords,
+            default_radius_m: config.default_location_radius_m,
+            now: Utc::now(),
+        };
         let fired = crate::alarm_index::evaluate_location_alert(
             index.get_location_alarms(),
-            &coords,
-            config.default_location_radius_m,
+            &eval,
             &location,
             radius_m,
             entering,
-            Utc::now(),
             &mut state,
         );
         crate::alarm_index::save_location_state(self.ctx.as_ref(), &state);
