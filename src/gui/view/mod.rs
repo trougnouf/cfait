@@ -128,6 +128,7 @@ pub fn context_menu_actions(
             TaskAction::Promote,
             TaskAction::Move,
             TaskAction::Cancel,
+            TaskAction::EndRecurrence,
             TaskAction::Delete,
             TaskAction::DeleteTree,
             TaskAction::Focus,
