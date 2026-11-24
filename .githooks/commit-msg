@@ -1,0 +1,19 @@
+#!/bin/sh
+# Repo-local commit-msg hook enforcing one-line commit messages (subject only).
+# A body is allowed only when genuinely needed and justified; opt in with:
+#   COMMIT_BODY=1 git commit ...
+#
+# To enable this hook:
+#   git config core.hooksPath .githooks
+
+msg_file="$1"
+
+# Count non-empty, non-comment lines (git strips comments during cleanup,
+# but the hook still sees them).
+lines=$(grep -v '^#' "$msg_file" | grep -cve '^[[:space:]]*$')
+
+if [ "$lines" -gt 1 ] && [ "$COMMIT_BODY" != "1" ]; then
+  echo "error: commit message must be one line (subject only)." >&2
+  echo "If a body is genuinely needed, justify it and retry with: COMMIT_BODY=1 git commit ..." >&2
+  exit 1
+fi
