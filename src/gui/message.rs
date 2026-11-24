@@ -384,3 +384,50 @@ pub enum Message {
     CancelColorPicker,
     SubmitColorPicker(iced::Color),
 }
+
+impl Message {
+    /// Messages that can arrive on their own, without any user interaction:
+    /// timers, async load/sync results, file-watcher events, alarms and window
+    /// events. An open context menu must stay open across these — while a
+    /// refresh is in flight, for example, `SpinnerTick` fires every 150 ms.
+    pub fn is_background(&self) -> bool {
+        matches!(
+            self,
+            Message::Refresh
+                | Message::ConfigLoaded(_)
+                | Message::ConfigUpdated(_)
+                | Message::ExternalChangeDetected
+                | Message::ExternalReloaded(..)
+                | Message::ThemeChanged(_)
+                | Message::Loaded(_)
+                | Message::LocalLoaded(_)
+                | Message::TasksRefreshed(_)
+                | Message::RefreshedAll(_)
+                | Message::MigrationComplete(_)
+                | Message::EmptyTrashResult(_)
+                | Message::FontLoaded(_)
+                | Message::Tick
+                | Message::SpinnerTick
+                | Message::ConfettiTick
+                | Message::InitBackgroundWorker(_)
+                | Message::BackgroundSyncComplete(_)
+                | Message::BackgroundSyncFailed
+                | Message::JournalSaved
+                | Message::WindowDragged
+                | Message::MinimizeWindow
+                | Message::CloseWindow
+                | Message::WindowResized(_)
+                | Message::WindowMaximized(_)
+                | Message::WindowFocused(_)
+                | Message::ApplyWindowResize(_)
+                | Message::ResizeStart(_)
+                | Message::InitAlarmActor(_)
+                | Message::AlarmSignalReceived(_)
+                | Message::BackfillEventsComplete(_)
+                | Message::ExportSaved(_)
+                | Message::ImportCompleted(_)
+                | Message::IcsFileLoaded(_)
+                | Message::SnapToSelected { .. }
+        )
+    }
+}

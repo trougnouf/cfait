@@ -12,28 +12,31 @@ use crate::gui::state::GuiApp;
 use crate::system::{AlarmMessage, SystemEvent};
 use iced::Task;
 
+/// Whether an incoming message should dismiss an open context menu: anything
+/// except the menu's own messages, its keyboard navigation, and background
+/// (non-interaction) messages, which can arrive at any time.
+fn closes_context_menu(message: &Message) -> bool {
+    !message.is_background()
+        && !matches!(
+            message,
+            Message::OpenContextMenu(..)
+                | Message::CloseContextMenu
+                // Keyboard navigation of the open menu itself
+                | Message::SelectNext
+                | Message::SelectPrev
+                | Message::EnterPressed
+        )
+}
+
 pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
-    // Automatically close the context menu on any interaction, unless it's the
-    // message explicitly keeping it open or safe background ticks.
-    if app.active_context_menu.is_some() {
-        match &message {
-            Message::OpenContextMenu(_, _)
-            | Message::CloseContextMenu
-            | Message::Tick
-            | Message::ConfettiTick
-            | Message::WindowResized(_)
-            | Message::WindowMaximized(_)
-            | Message::WindowFocused(_)
-            | Message::ApplyWindowResize(_)
-            // Keyboard navigation of the open menu itself
-            | Message::SelectNext
-            | Message::SelectPrev
-            | Message::EnterPressed => {}
-            _ => {
-                app.active_context_menu = None;
-                app.context_menu_cursor = None;
-            }
-        }
+    // Automatically close the context menu on any user interaction. Background
+    // messages (timers, sync results, window events, ...) must not dismiss it:
+    // at startup and while a refresh is in flight they arrive constantly (the
+    // spinner ticks every 150 ms), which used to close the menu as soon as it
+    // was opened.
+    if app.active_context_menu.is_some() && closes_context_menu(&message) {
+        app.active_context_menu = None;
+        app.context_menu_cursor = None;
     }
 
     let task = match message {
@@ -404,6 +407,17 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
     app.ringing_tasks
         .retain(|(t, alarm)| is_ringing_valid(&app.store, &app.default_reminder_time, t, alarm));
 
+    // A background update (e.g. a sync) may have removed the task the context
+    // menu acts on; the menu can no longer render, so clear it.
+    let menu_task_gone = app
+        .active_context_menu
+        .as_ref()
+        .is_some_and(|(uid, _, _)| app.find_task_index_by_uid(uid).is_none());
+    if menu_task_gone {
+        app.active_context_menu = None;
+        app.context_menu_cursor = None;
+    }
+
     update_placeholders(app);
 
     task
@@ -525,4 +539,78 @@ fn update_placeholders(app: &mut GuiApp) {
     // Persist search/notes placeholder translations
     app.search_placeholder = rust_i18n::t!("search_placeholder").to_string();
     app.notes_placeholder = rust_i18n::t!("notes_placeholder").to_string();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::Task;
+    use crate::store::TaskListItem;
+    use std::collections::HashMap;
+
+    fn app_with_open_menu() -> GuiApp {
+        let mut app = GuiApp::default();
+        let task = Task::new("Water the tomatoes", &HashMap::new(), None);
+        let uid = task.uid.clone();
+        app.tasks.push(TaskListItem::Task(Box::new(task)));
+        app.active_context_menu = Some((uid, true, iced::Point::new(10.0, 10.0)));
+        app.context_menu_cursor = Some(2);
+        app
+    }
+
+    #[test]
+    fn context_menu_stays_open_across_background_messages() {
+        // While the app starts up or a refresh is in flight, these arrive on
+        // their own (the spinner ticks every 150 ms while syncing) and must
+        // not dismiss an open context menu.
+        let background = [
+            Message::Refresh,
+            Message::SpinnerTick,
+            Message::Tick,
+            Message::ConfettiTick,
+            Message::WindowResized(iced::Size::new(800.0, 600.0)),
+            Message::WindowFocused(true),
+            Message::BackgroundSyncFailed,
+        ];
+        for msg in background {
+            let mut app = app_with_open_menu();
+            let _ = update(&mut app, msg.clone());
+            assert!(
+                app.active_context_menu.is_some(),
+                "context menu was closed by background message {msg:?}"
+            );
+            assert_eq!(app.context_menu_cursor, Some(2));
+        }
+    }
+
+    #[test]
+    fn context_menu_closes_on_user_interaction() {
+        let mut app = app_with_open_menu();
+        let _ = update(&mut app, Message::ZoomIn);
+        assert!(app.active_context_menu.is_none());
+        assert!(app.context_menu_cursor.is_none());
+    }
+
+    #[test]
+    fn context_menu_keyboard_navigation_keeps_it_open() {
+        for msg in [Message::SelectNext, Message::SelectPrev] {
+            let mut app = app_with_open_menu();
+            let _ = update(&mut app, msg.clone());
+            assert!(
+                app.active_context_menu.is_some(),
+                "context menu was closed by {msg:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn context_menu_cleared_when_its_task_disappears() {
+        // A sync may remove the task the menu acts on; the menu can no longer
+        // render, so it must be cleared even though the message is background.
+        let mut app = app_with_open_menu();
+        app.tasks.clear();
+        let _ = update(&mut app, Message::SpinnerTick);
+        assert!(app.active_context_menu.is_none());
+        assert!(app.context_menu_cursor.is_none());
+    }
 }
