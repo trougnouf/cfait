@@ -1029,11 +1029,12 @@ pub fn validate_alias_integrity(
     Ok(())
 }
 
-/// Returns the alias values that will not be applied as tags, locations, or
-/// geo references. A value is only meaningful when it starts with `#` (tag),
-/// `@@` or `loc:` (location), or `geo:` (coordinates) and has a non-empty
-/// payload; anything else is injected verbatim into the task summary, which is
-/// almost always a typo (e.g. a missing `#`).
+/// Returns the alias values that will not be applied as tags, locations,
+/// geo references, colors, or reminders. A value is only meaningful when it
+/// starts with `#` (tag), `@@` or `loc:` (location), `geo:` (coordinates),
+/// `col:` (collection color), or `rem:@@`/`rem:loc:`/`rem:geo:` (reminder)
+/// and has a non-empty payload; anything else is injected verbatim into the
+/// task summary, which is almost always a typo (e.g. a missing `#`).
 pub fn find_useless_alias_values(values: &[String]) -> Vec<String> {
     values
         .iter()
@@ -1056,7 +1057,37 @@ fn is_meaningful_alias_value(v: &str) -> bool {
     if let Some(rest) = lower.strip_prefix("geo:") {
         return !rest.trim().is_empty();
     }
+    if let Some(rest) = lower.strip_prefix("col:") {
+        return !rest.trim().is_empty();
+    }
+    if let Some(rest) = lower.strip_prefix("rem:") {
+        return rest.starts_with("@@") || rest.starts_with("loc:") || rest.starts_with("geo:");
+    }
     false
+}
+
+/// Parses `geo:lat,lon` (or a bare `lat,lon`) into coordinates. Only plain
+/// signed decimals are accepted (no spaces or hemisphere letters) so the
+/// value survives tokenization inside `rem:geo:lat,lon:500m` and alias
+/// values. Returns None when malformed or out of range.
+pub fn parse_geo_coords(val: &str) -> Option<(f64, f64)> {
+    let s = strip_quotes(val);
+    let s = s.trim();
+    let lower = s.to_lowercase();
+    // "geo:" is ASCII, so slicing the original at this byte length is safe.
+    let s = lower.strip_prefix("geo:").map(|_| &s[4..]).unwrap_or(s);
+    let (lat_s, lon_s) = s.split_once(',')?;
+    let lat: f64 = lat_s.trim().parse().ok()?;
+    let lon: f64 = lon_s.trim().parse().ok()?;
+    if lat.is_finite()
+        && lon.is_finite()
+        && (-90.0..=90.0).contains(&lat)
+        && (-180.0..=180.0).contains(&lon)
+    {
+        Some((lat, lon))
+    } else {
+        None
+    }
 }
 
 fn parse_time_string(s: &str) -> Option<NaiveTime> {
@@ -1920,6 +1951,41 @@ fn collect_alias_expansions(
         }
     }
     results
+}
+
+/// Builds the location-name -> coordinates map used to resolve location-based
+/// reminders (`rem:@@name`), from the `geo:lat,lon` values found in location
+/// aliases (`@@name := #tag, geo:50.19,4.53, rem:@@name:500m`). Alias chains
+/// are followed, so `@@a := @@b` together with `@@b := geo:...` resolves `a`.
+pub fn location_coords_from_aliases(
+    aliases: &HashMap<String, Vec<String>>,
+) -> HashMap<String, (f64, f64)> {
+    let mut out = HashMap::new();
+    for key in aliases.keys() {
+        let lower = key.to_lowercase();
+        // "loc:" is ASCII, so slicing the original at this byte length is safe.
+        let name = if let Some(n) = key.strip_prefix("@@") {
+            n
+        } else if lower.starts_with("loc:") {
+            &key[4..]
+        } else {
+            continue;
+        };
+        let name = strip_quotes(name);
+        if name.is_empty() || out.contains_key(&name) {
+            continue;
+        }
+        let mut visited = HashSet::new();
+        let mut values = aliases.get(key).cloned().unwrap_or_default();
+        values.extend(collect_alias_expansions(key, aliases, &mut visited, 0));
+        for v in values {
+            if let Some((lat, lon)) = parse_geo_coords(&v) {
+                out.insert(name.clone(), (lat, lon));
+                break;
+            }
+        }
+    }
+    out
 }
 
 pub fn parse_amount_and_unit(
@@ -3130,13 +3196,13 @@ fn parse_location_reminder_value(
     lex: &ParserLexicon,
 ) -> Option<(Vec<String>, Option<u32>, LocationEvent)> {
     let lower = val.to_lowercase();
-    let rest_lower = lower
-        .strip_prefix("@@")
-        .or_else(|| lower.strip_prefix("loc:"))?;
+    let (rest_lower, is_geo) = [("@@", false), ("loc:", false), ("geo:", true)]
+        .into_iter()
+        .find_map(|(p, geo)| lower.strip_prefix(p).map(|r| (r, geo)))?;
     if rest_lower.is_empty() {
         return None;
     }
-    // Both prefixes are ASCII, so slicing the original at this byte length is safe.
+    // All prefixes are ASCII, so slicing the original at this byte length is safe.
     let rest_orig = &val[val.len() - rest_lower.len()..];
     let segments = split_colon_respecting_quotes(rest_orig);
     let loc_part = segments.first()?.trim();
@@ -3149,7 +3215,20 @@ fn parse_location_reminder_value(
         if l.is_empty() {
             return None;
         }
-        locations.push(l);
+        if is_geo {
+            // Inline coordinates: each alternative must be a `lat,lon` pair
+            // (with an optional `geo:` prefix); stored back with the `geo:`
+            // prefix so resolution and display can recognize it.
+            let piece = if l.to_lowercase().starts_with("geo:") {
+                &l[4..]
+            } else {
+                l.as_str()
+            };
+            parse_geo_coords(piece)?;
+            locations.push(format!("geo:{}", piece.trim()));
+        } else {
+            locations.push(l);
+        }
     }
     let mut radius_m = None;
     let mut event = LocationEvent::Enter;

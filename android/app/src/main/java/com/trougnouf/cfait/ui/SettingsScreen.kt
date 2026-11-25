@@ -61,7 +61,6 @@ import com.trougnouf.cfait.core.MobileIntervalUnit
 import com.trougnouf.cfait.core.MobileGoal
 import com.trougnouf.cfait.core.MobileInterval
 import com.trougnouf.cfait.BuildConfig
-import com.trougnouf.cfait.core.MobileLocationCoords
 import com.trougnouf.cfait.util.GeofenceRegistrar
 import com.trougnouf.cfait.util.LocationReminderChecker
 import kotlinx.coroutines.CancellationException
@@ -124,12 +123,10 @@ fun SettingsScreen(
     val goalInputKeyState = remember { TextFieldState() }
     val goalInputTargetState = remember { TextFieldState() }
 
-    // Location reminders (rem:@@loc): per-location coordinates + global defaults
+    // Location reminders (rem:@@loc / rem:geo:lat,lon): global defaults.
+    // Per-location coordinates live in the aliases (geo: values), not here.
     var locationRemindersEnabled by remember { mutableStateOf(true) }
     val defaultRadiusState = remember { TextFieldState("300") }
-    var locationCoords by remember { mutableStateOf<Map<String, MobileLocationCoords>>(emptyMap()) }
-    var locationNames by remember { mutableStateOf<List<String>>(emptyList()) }
-    var editingLocation by remember { mutableStateOf<String?>(null) }
     var showLocationRationale by remember { mutableStateOf(false) }
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -265,8 +262,6 @@ fun SettingsScreen(
         goals = cfg.goals
         locationRemindersEnabled = cfg.locationRemindersEnabled
         defaultRadiusState.setTextAndPlaceCursorAtEnd(cfg.defaultLocationRadiusM.toString())
-        locationCoords = cfg.locationCoords
-        locationNames = withContext(Dispatchers.IO) { api.getAllLocationNames() }
         sortCollectionsBySize = cfg.sortCollectionsBySize
         firstDayOfWeek = cfg.firstDayOfWeek
 
@@ -346,58 +341,6 @@ fun SettingsScreen(
         )
     }
 
-    // Location editor dialog (per-location coordinates for rem:@@loc)
-    editingLocation?.let { name ->
-        LocationEditDialog(
-            name = name,
-            initial = locationCoords[name],
-            onDismiss = { editingLocation = null },
-            onUseCurrentLocation = {
-                if (!LocationReminderChecker.hasLocationPermission(context)) {
-                    locationPermissionLauncher.launch(
-                        arrayOf(
-                            Manifest.permission.ACCESS_FINE_LOCATION,
-                            Manifest.permission.ACCESS_COARSE_LOCATION
-                        )
-                    )
-                    null
-                } else {
-                    fetchCurrentLocation(context)?.let { it.latitude to it.longitude }
-                }
-            },
-            onSave = { lat, lon, radius ->
-                scope.launch(Dispatchers.IO) {
-                    try {
-                        api.setLocationCoords(name, lat, lon, radius)
-                        withContext(Dispatchers.Main) {
-                            setStatus(context.getString(R.string.location_saved))
-                        }
-                    } catch (e: Exception) {
-                        if (e is CancellationException) throw e
-                        withContext(Dispatchers.Main) { setStatus(e.message ?: "", true) }
-                    }
-                    reload()
-                    GeofenceRegistrar.register(context, api)
-                    editingLocation = null
-                }
-            },
-            onRemove = {
-                scope.launch(Dispatchers.IO) {
-                    try {
-                        api.removeLocationCoords(name)
-                        withContext(Dispatchers.Main) {
-                            setStatus(context.getString(R.string.location_removed))
-                        }
-                    } catch (e: Exception) {
-                        if (e is CancellationException) throw e
-                    }
-                    reload()
-                    GeofenceRegistrar.register(context, api)
-                    editingLocation = null
-                }
-            }
-        )
-    }
 
     // getConfig/saveConfig do disk IO, so keep them off the main thread:
     // checkboxes call this directly on every toggle.
@@ -431,7 +374,6 @@ fun SettingsScreen(
                 autoRefreshInterval = aRefresh,
                 tagAliases = aliases,
                 goals = goals,
-                locationCoords = locationCoords,
                 defaultLocationRadiusM = defaultRadiusState.text.toString().toUIntOrNull()
                     ?: cfg.defaultLocationRadiusM,
                 locationRemindersEnabled = locationRemindersEnabled,
@@ -912,27 +854,12 @@ fun SettingsScreen(
                         modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
                     )
                 }
-                locationNames.forEach { name ->
-                    val coords = locationCoords[name]
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { editingLocation = name }
-                            .padding(vertical = 8.dp)
-                    ) {
-                        Text("@@$name", modifier = Modifier.weight(1f))
-                        Text(
-                            if (coords != null) {
-                                "%.5f, %.5f".format(coords.lat, coords.lon)
-                            } else {
-                                stringResource(R.string.location_no_coordinates)
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+                Text(
+                    stringResource(R.string.location_coords_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 48.dp, top = 4.dp, bottom = 8.dp)
+                )
             }
 
             // 5. Background Sync
@@ -1285,7 +1212,8 @@ fun SettingsScreen(
                     )
                     IconButton(onClick = {
                         if (newAliasKeyState.text.isNotBlank() && newAliasTagsState.text.isNotBlank()) {
-                            val tags = newAliasTagsState.text.toString().split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                            // Geo-aware split: the comma inside geo:lat,lon stays intact.
+                            val tags = api.parseAliasValues(newAliasTagsState.text.toString())
                             val aliasKey = newAliasKeyState.text.toString().trimStart('#')
                             scope.launch(Dispatchers.IO) {
                                 try {
@@ -1308,6 +1236,12 @@ fun SettingsScreen(
                         }
                     }) { NfIcon(NfIcons.ADD) }
                 }
+                Text(
+                    stringResource(R.string.alias_example),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
                 if (status.isNotEmpty()) {
                     Text(
                         status,
@@ -1676,88 +1610,3 @@ fun ColorPickerRow(
     }
 }
 
-/// Editor for a named location's coordinates (used by rem:@@loc reminders).
-@Composable
-fun LocationEditDialog(
-    name: String,
-    initial: MobileLocationCoords?,
-    onDismiss: () -> Unit,
-    onUseCurrentLocation: suspend () -> Pair<Double, Double>?,
-    onSave: (lat: Double, lon: Double, radiusM: UInt?) -> Unit,
-    onRemove: () -> Unit,
-) {
-    val latState = remember(name) { TextFieldState(initial?.lat?.toString() ?: "") }
-    val lonState = remember(name) { TextFieldState(initial?.lon?.toString() ?: "") }
-    val radiusState = remember(name) { TextFieldState(initial?.radiusM?.toString() ?: "") }
-    var error by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("@@$name") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    state = latState,
-                    label = { Text(stringResource(R.string.latitude)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    lineLimits = TextFieldLineLimits.SingleLine,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    state = lonState,
-                    label = { Text(stringResource(R.string.longitude)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    lineLimits = TextFieldLineLimits.SingleLine,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    state = radiusState,
-                    label = { Text(stringResource(R.string.radius_optional_label)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    lineLimits = TextFieldLineLimits.SingleLine,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                TextButton(onClick = {
-                    scope.launch {
-                        onUseCurrentLocation()?.let { (lat, lon) ->
-                            latState.setTextAndPlaceCursorAtEnd(lat.toString())
-                            lonState.setTextAndPlaceCursorAtEnd(lon.toString())
-                        }
-                    }
-                }) {
-                    Text(stringResource(R.string.use_current_location))
-                }
-                if (error) {
-                    Text(
-                        stringResource(R.string.invalid_coordinates),
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                val lat = latState.text.toString().toDoubleOrNull()
-                val lon = lonState.text.toString().toDoubleOrNull()
-                val radius = radiusState.text.toString().toUIntOrNull()
-                if (lat == null || lon == null || lat !in -90.0..90.0 || lon !in -180.0..180.0) {
-                    error = true
-                } else {
-                    onSave(lat, lon, radius)
-                }
-            }) {
-                Text(stringResource(R.string.save))
-            }
-        },
-        dismissButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (initial != null) {
-                    TextButton(onClick = onRemove) { Text(stringResource(R.string.delete)) }
-                }
-                TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
-            }
-        }
-    )
-}

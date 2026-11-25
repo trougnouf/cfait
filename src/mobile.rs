@@ -483,16 +483,14 @@ pub struct MobileAlarmInfo {
     pub body: String,
 }
 
-/// Coordinates (and optional radius override) for a named location, exposed
-/// to the Android settings UI.
+/// Coordinates for a location, exposed to Android (geofence registration).
 #[derive(uniffi::Record)]
-pub struct MobileLocationCoords {
+pub struct MobileLatLon {
     pub lat: f64,
     pub lon: f64,
-    pub radius_m: Option<u32>,
 }
 
-/// A location-based reminder (`rem:@@loc`) pending on some task.
+/// A location-based reminder (`rem:@@loc` / `rem:geo:lat,lon`) pending on some task.
 #[derive(uniffi::Record)]
 pub struct MobileLocationReminder {
     pub alarm_uid: String,
@@ -591,7 +589,6 @@ pub struct MobileConfig {
     pub quick_filter_icon: String,
     pub sync_settings: bool,
     pub goals: HashMap<String, MobileGoal>,
-    pub location_coords: HashMap<String, MobileLocationCoords>,
     pub default_location_radius_m: u32,
     pub location_reminders_enabled: bool,
     pub default_duration_goal_mins: u32,
@@ -1727,20 +1724,6 @@ impl CfaitMobile {
                 .collect(),
             default_duration_goal_mins: c.default_duration_goal_mins,
             sessions_count_as_completions: c.sessions_count_as_completions,
-            location_coords: c
-                .location_coords
-                .into_iter()
-                .map(|(k, v)| {
-                    (
-                        k,
-                        MobileLocationCoords {
-                            lat: v.lat,
-                            lon: v.lon,
-                            radius_m: v.radius_m,
-                        },
-                    )
-                })
-                .collect(),
             default_location_radius_m: c.default_location_radius_m,
             location_reminders_enabled: c.location_reminders_enabled,
             show_calendars_tab: c.show_calendars_tab,
@@ -1932,20 +1915,6 @@ impl CfaitMobile {
             .collect();
         c.default_duration_goal_mins = config.default_duration_goal_mins;
         c.sessions_count_as_completions = config.sessions_count_as_completions;
-        c.location_coords = config
-            .location_coords
-            .into_iter()
-            .map(|(k, v)| {
-                (
-                    k,
-                    crate::config::LocationCoords {
-                        lat: v.lat,
-                        lon: v.lon,
-                        radius_m: v.radius_m,
-                    },
-                )
-            })
-            .collect();
         c.default_location_radius_m = config.default_location_radius_m;
         c.location_reminders_enabled = config.location_reminders_enabled;
         c.show_calendars_tab = config.show_calendars_tab;
@@ -2406,11 +2375,10 @@ impl CfaitMobile {
         self.location_alarm_index().has_location_alarms()
     }
 
-    /// All location-based reminders currently pending (for the settings UI
-    /// and badges), with a flag telling whether their locations have
-    /// coordinates configured.
+    /// All location-based reminders currently pending (for geofence
+    /// registration), with a flag telling whether their locations resolve
+    /// to coordinates (alias `geo:` values or inline `rem:geo:lat,lon`).
     pub fn get_location_reminders(&self) -> Vec<MobileLocationReminder> {
-        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         self.location_alarm_index()
             .get_location_alarms()
             .iter()
@@ -2424,9 +2392,42 @@ impl CfaitMobile {
                 has_coords: e
                     .locations
                     .iter()
-                    .any(|l| config.location_coords.contains_key(l)),
+                    .any(|l| self.resolve_location_coords(l.clone()).is_some()),
             })
             .collect()
+    }
+
+    /// Location names -> coordinates, derived from the `geo:lat,lon` values of
+    /// location aliases (`@@home := geo:50.19,4.53, ...`). Synced with the
+    /// aliases themselves, so no separate settings entry is needed.
+    pub fn get_location_coords(&self) -> HashMap<String, MobileLatLon> {
+        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
+        crate::model::parser::location_coords_from_aliases(&config.tag_aliases)
+            .into_iter()
+            .map(|(k, (lat, lon))| (k, MobileLatLon { lat, lon }))
+            .collect()
+    }
+
+    /// Resolves one location reference to coordinates: an inline
+    /// `geo:lat,lon` (from `rem:geo:...`) or a named location with
+    /// alias-defined coordinates.
+    pub fn resolve_location_coords(&self, name: String) -> Option<MobileLatLon> {
+        if let Some((lat, lon)) = crate::model::parser::parse_geo_coords(&name) {
+            return Some(MobileLatLon { lat, lon });
+        }
+        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
+        crate::model::parser::location_coords_from_aliases(&config.tag_aliases)
+            .get(&name)
+            .map(|(lat, lon)| MobileLatLon {
+                lat: *lat,
+                lon: *lon,
+            })
+    }
+
+    /// Splits an alias value list on commas, protecting the comma inside
+    /// `geo:lat,lon` (and quotes). Used by the Android alias editor.
+    pub fn parse_alias_values(&self, input: String) -> Vec<String> {
+        crate::model::parser::parse_alias_values(&input)
     }
 
     /// Evaluates all pending location reminders against the device position
@@ -2442,11 +2443,8 @@ impl CfaitMobile {
         if !index.has_location_alarms() {
             return Vec::new();
         }
-        let coords: HashMap<String, (f64, f64, Option<u32>)> = config
-            .location_coords
-            .iter()
-            .map(|(k, v)| (k.clone(), (v.lat, v.lon, v.radius_m)))
-            .collect();
+        let coords: HashMap<String, (f64, f64)> =
+            crate::model::parser::location_coords_from_aliases(&config.tag_aliases);
         let mut state = crate::alarm_index::load_location_state(self.ctx.as_ref());
         let eval = crate::alarm_index::LocationEval {
             coords: &coords,
@@ -2482,11 +2480,8 @@ impl CfaitMobile {
         if !index.has_location_alarms() {
             return Vec::new();
         }
-        let coords: HashMap<String, (f64, f64, Option<u32>)> = config
-            .location_coords
-            .iter()
-            .map(|(k, v)| (k.clone(), (v.lat, v.lon, v.radius_m)))
-            .collect();
+        let coords: HashMap<String, (f64, f64)> =
+            crate::model::parser::location_coords_from_aliases(&config.tag_aliases);
         let mut state = crate::alarm_index::load_location_state(self.ctx.as_ref());
         let eval = crate::alarm_index::LocationEval {
             coords: &coords,
@@ -2503,57 +2498,6 @@ impl CfaitMobile {
         );
         crate::alarm_index::save_location_state(self.ctx.as_ref(), &state);
         self.fired_location_to_mobile(fired)
-    }
-
-    /// All location names in use (union of task `@@locations` and configured
-    /// coordinates), for the settings editor.
-    pub fn get_all_location_names(&self) -> Vec<String> {
-        let mut names: HashSet<String> = HashSet::new();
-        let store = self.controller.store.blocking_lock();
-        for tasks_map in store.calendars.values() {
-            for task in tasks_map.values() {
-                for l in &task.locations {
-                    names.insert(l.clone());
-                }
-            }
-        }
-        drop(store);
-        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
-        for k in config.location_coords.keys() {
-            names.insert(k.clone());
-        }
-        let mut v: Vec<String> = names.into_iter().collect();
-        v.sort();
-        v
-    }
-
-    /// Sets or updates the coordinates of a named location and re-syncs settings.
-    pub fn set_location_coords(
-        &self,
-        name: String,
-        lat: f64,
-        lon: f64,
-        radius_m: Option<u32>,
-    ) -> Result<(), MobileError> {
-        let old = load_mobile_config_with_credentials(self.ctx.as_ref());
-        let mut c = old.clone();
-        c.location_coords
-            .insert(name, crate::config::LocationCoords { lat, lon, radius_m });
-        c.update_sync_timestamp_if_changed(&old);
-        c.save_with_credentials(self.ctx.as_ref())
-            .map(|_| ())
-            .map_err(MobileError::from)
-    }
-
-    /// Removes the coordinates of a named location.
-    pub fn remove_location_coords(&self, name: String) -> Result<(), MobileError> {
-        let old = load_mobile_config_with_credentials(self.ctx.as_ref());
-        let mut c = old.clone();
-        c.location_coords.remove(&name);
-        c.update_sync_timestamp_if_changed(&old);
-        c.save_with_credentials(self.ctx.as_ref())
-            .map(|_| ())
-            .map_err(MobileError::from)
     }
 }
 
@@ -4276,7 +4220,13 @@ impl CfaitMobile {
                 })
             })
             .map(|e| {
-                let locs = e.locations.join(", ");
+                // Inline `geo:lat,lon` pseudo-locations display as bare coordinates.
+                let locs = e
+                    .locations
+                    .iter()
+                    .map(|l| l.strip_prefix("geo:").unwrap_or(l))
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 let body = if e.event == "leave" {
                     rust_i18n::t!("alarm_leaving_location", location = locs).to_string()
                 } else {

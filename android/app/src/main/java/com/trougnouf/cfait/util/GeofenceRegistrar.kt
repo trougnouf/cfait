@@ -6,7 +6,8 @@
 // hardware where available): they fire near-instantly and cost ~no battery,
 // unlike polling. They need ACCESS_BACKGROUND_LOCATION to fire while the app
 // is closed, and they do not survive a reboot, so re-register on boot, after
-// every sync, on app foreground, and whenever reminders/coords change.
+// every sync (which also delivers alias `geo:` coordinate changes), on app
+// foreground, and whenever settings change.
 //
 // Google Play builds ship without ACCESS_BACKGROUND_LOCATION (policy), so
 // registration is skipped there; reminders are evaluated on app open only.
@@ -49,13 +50,13 @@ object GeofenceRegistrar {
             removeAll(context)
             return
         }
-        val coords = config.locationCoords
         // One alert per (location, resolved radius) pair so per-reminder radii stay exact.
+        // Coordinates come from alias `geo:` values or inline `rem:geo:lat,lon`.
         val wanted = mutableMapOf<String, Triple<Double, Double, Float>>()
         for (rem in api.getLocationReminders()) {
             for (name in rem.locations) {
-                val c = coords[name] ?: continue
-                val radius = rem.radiusM ?: c.radiusM ?: config.defaultLocationRadiusM
+                val c = api.resolveLocationCoords(name) ?: continue
+                val radius = rem.radiusM ?: config.defaultLocationRadiusM
                 val key = keyFor(name, c.lat, c.lon, radius)
                 wanted[key] = Triple(c.lat, c.lon, radius.toFloat())
             }

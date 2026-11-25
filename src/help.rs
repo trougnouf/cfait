@@ -266,6 +266,13 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                     desc: rust_i18n::t!("help_metadata_absolute_reminder").to_string(),
                     example: format!("{p_rem}2025-01-20 9am, {p_rem}friday"),
                 },
+                HelpItem {
+                    keys: format!("{p_rem}@@loc"),
+                    desc: rust_i18n::t!("help_reminder_location_desc").to_string(),
+                    example: format!(
+                        "{p_rem}@@home, {p_rem}@@store:500m:leave, {p_rem}geo:50.1953,4.5353:200m"
+                    ),
+                },
             ],
         },
         HelpSection {

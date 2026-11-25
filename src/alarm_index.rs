@@ -34,8 +34,9 @@ use std::collections::HashMap;
 use std::fs;
 
 /// A location-based reminder entry: a task whose alarm triggers on entering
-/// (or leaving) the area around one of its named locations. Resolved against
-/// the coordinates configured per location name (see `Config::location_coords`).
+/// (or leaving) the area around one of its named locations. Named locations
+/// resolve through the `geo:` values of location aliases; `rem:geo:lat,lon`
+/// carries inline coordinates instead.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LocationAlarmEntry {
     pub alarm_uid: String,
@@ -453,26 +454,28 @@ pub fn haversine_m(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
 /// again (mirrors the 24h alarm fire-history window).
 const LOCATION_REFIRE_WINDOW_SECS: i64 = 86400;
 
-/// Shared inputs for location-reminder evaluation: configured coordinates
-/// (name -> lat, lon, per-location radius override), the global default radius,
-/// and the evaluation time.
+/// Shared inputs for location-reminder evaluation: coordinates per location
+/// name (name -> lat, lon, derived from the `geo:` values of location aliases),
+/// the global default radius, and the evaluation time.
 pub struct LocationEval<'a> {
-    pub coords: &'a HashMap<String, (f64, f64, Option<u32>)>,
+    pub coords: &'a HashMap<String, (f64, f64)>,
     pub default_radius_m: u32,
     pub now: DateTime<Utc>,
 }
 
 impl LocationEval<'_> {
+    /// Resolves a location reference to coordinates: an inline `geo:lat,lon`
+    /// (from `rem:geo:...`) or a named location with alias-defined coordinates.
+    fn resolve(&self, location: &str) -> Option<(f64, f64)> {
+        crate::model::parser::parse_geo_coords(location)
+            .or_else(|| self.coords.get(location).copied())
+    }
+
     /// Resolved radius for `entry` at `location`, or None when the location
-    /// has no coordinates. Precedence: per-reminder > per-location > default.
+    /// has no coordinates. Precedence: per-reminder > default.
     fn radius_for(&self, entry: &LocationAlarmEntry, location: &str) -> Option<u32> {
-        let (_, _, loc_radius) = self.coords.get(location)?;
-        Some(
-            entry
-                .radius_m
-                .or(*loc_radius)
-                .unwrap_or(self.default_radius_m),
-        )
+        self.resolve(location)?;
+        Some(entry.radius_m.unwrap_or(self.default_radius_m))
     }
 
     /// Shared transition/re-fire bookkeeping: fires on the enter/leave
@@ -527,9 +530,8 @@ pub fn evaluate_location_alarms(
             .locations
             .iter()
             .filter_map(|name| {
-                eval.coords.get(name).map(|(clat, clon, cradius)| {
-                    let radius = entry.radius_m.or(*cradius).unwrap_or(eval.default_radius_m);
-                    (*clat, *clon, radius)
+                eval.resolve(name).map(|(clat, clon)| {
+                    (clat, clon, entry.radius_m.unwrap_or(eval.default_radius_m))
                 })
             })
             .collect();

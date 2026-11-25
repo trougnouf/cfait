@@ -867,8 +867,6 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_finish_oidc_login(): Int
 
-    external fun uniffi_cfait_checksum_method_cfaitmobile_get_all_location_names(): Int
-
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_available_locales(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_calendars(): Int
@@ -882,6 +880,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_firing_alarms(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_help_data(): Int
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_get_location_coords(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_location_reminders(): Int
 
@@ -935,6 +935,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_open_wiki_link(): Int
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_parse_alias_values(): Int
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_parse_duration_string(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_parse_smart_string(): Int
@@ -949,9 +951,9 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_remove_dependency(): Int
 
-    external fun uniffi_cfait_checksum_method_cfaitmobile_remove_location_coords(): Int
-
     external fun uniffi_cfait_checksum_method_cfaitmobile_remove_related_to(): Int
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_resolve_location_coords(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_resolve_selection_aliases(): Int
 
@@ -968,8 +970,6 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_cfait_checksum_method_cfaitmobile_set_journal_date(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_set_locale(): Int
-
-    external fun uniffi_cfait_checksum_method_cfaitmobile_set_location_coords(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_set_parent(): Int
 
@@ -1212,11 +1212,6 @@ internal object UniffiLib {
         `login`: RustBuffer.ByValue,
     ): Long
 
-    external fun uniffi_cfait_fn_method_cfaitmobile_get_all_location_names(
-        `ptr`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
     external fun uniffi_cfait_fn_method_cfaitmobile_get_available_locales(
         `ptr`: Long,
         uniffi_out_err: UniffiRustCallStatus,
@@ -1250,6 +1245,11 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
 
     external fun uniffi_cfait_fn_method_cfaitmobile_get_help_data(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_get_location_coords(
         `ptr`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
@@ -1404,6 +1404,12 @@ internal object UniffiLib {
         `calendarHref`: RustBuffer.ByValue,
     ): Long
 
+    external fun uniffi_cfait_fn_method_cfaitmobile_parse_alias_values(
+        `ptr`: Long,
+        `input`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
     external fun uniffi_cfait_fn_method_cfaitmobile_parse_duration_string(
         `ptr`: Long,
         `val`: RustBuffer.ByValue,
@@ -1445,17 +1451,17 @@ internal object UniffiLib {
         `blockerUid`: RustBuffer.ByValue,
     ): Long
 
-    external fun uniffi_cfait_fn_method_cfaitmobile_remove_location_coords(
-        `ptr`: Long,
-        `name`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
-
     external fun uniffi_cfait_fn_method_cfaitmobile_remove_related_to(
         `ptr`: Long,
         `taskUid`: RustBuffer.ByValue,
         `relatedUid`: RustBuffer.ByValue,
     ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_resolve_location_coords(
+        `ptr`: Long,
+        `name`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
 
     external fun uniffi_cfait_fn_method_cfaitmobile_resolve_selection_aliases(
         `ptr`: Long,
@@ -1501,15 +1507,6 @@ internal object UniffiLib {
     external fun uniffi_cfait_fn_method_cfaitmobile_set_locale(
         `ptr`: Long,
         `locale`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
-
-    external fun uniffi_cfait_fn_method_cfaitmobile_set_location_coords(
-        `ptr`: Long,
-        `name`: RustBuffer.ByValue,
-        `lat`: Double,
-        `lon`: Double,
-        `radiusM`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
@@ -1947,9 +1944,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_cfait_checksum_method_cfaitmobile_finish_oidc_login() and 0xFFFF) != 36129) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_cfait_checksum_method_cfaitmobile_get_all_location_names() and 0xFFFF) != 55806) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
     if ((lib.uniffi_cfait_checksum_method_cfaitmobile_get_available_locales() and 0xFFFF) != 45059) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1971,7 +1965,10 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_cfait_checksum_method_cfaitmobile_get_help_data() and 0xFFFF) != 8542) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_cfait_checksum_method_cfaitmobile_get_location_reminders() and 0xFFFF) != 13548) {
+    if ((lib.uniffi_cfait_checksum_method_cfaitmobile_get_location_coords() and 0xFFFF) != 47409) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_cfait_checksum_method_cfaitmobile_get_location_reminders() and 0xFFFF) != 57895) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cfait_checksum_method_cfaitmobile_get_next_alarm_timestamp() and 0xFFFF) != 39485) {
@@ -2049,6 +2046,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_cfait_checksum_method_cfaitmobile_open_wiki_link() and 0xFFFF) != 61662) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if ((lib.uniffi_cfait_checksum_method_cfaitmobile_parse_alias_values() and 0xFFFF) != 65185) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_cfait_checksum_method_cfaitmobile_parse_duration_string() and 0xFFFF) != 50754) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -2070,10 +2070,10 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_cfait_checksum_method_cfaitmobile_remove_dependency() and 0xFFFF) != 58867) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_cfait_checksum_method_cfaitmobile_remove_location_coords() and 0xFFFF) != 44271) {
+    if ((lib.uniffi_cfait_checksum_method_cfaitmobile_remove_related_to() and 0xFFFF) != 592) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_cfait_checksum_method_cfaitmobile_remove_related_to() and 0xFFFF) != 592) {
+    if ((lib.uniffi_cfait_checksum_method_cfaitmobile_resolve_location_coords() and 0xFFFF) != 7991) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cfait_checksum_method_cfaitmobile_resolve_selection_aliases() and 0xFFFF) != 37748) {
@@ -2098,9 +2098,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cfait_checksum_method_cfaitmobile_set_locale() and 0xFFFF) != 3255) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if ((lib.uniffi_cfait_checksum_method_cfaitmobile_set_location_coords() and 0xFFFF) != 35063) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cfait_checksum_method_cfaitmobile_set_parent() and 0xFFFF) != 47671) {
@@ -2851,12 +2848,6 @@ public interface CfaitMobileInterface {
      */
     suspend fun `finishOidcLogin`(`login`: MobileOidcLogin)
 
-    /**
-     * All location names in use (union of task `@@locations` and configured
-     * coordinates), for the settings editor.
-     */
-    fun `getAllLocationNames`(): List<kotlin.String>
-
     fun `getAvailableLocales`(): List<kotlin.String>
 
     fun `getCalendars`(): List<MobileCalendar>
@@ -2875,9 +2866,16 @@ public interface CfaitMobileInterface {
     fun `getHelpData`(): List<MobileHelpCategoryData>
 
     /**
-     * All location-based reminders currently pending (for the settings UI
-     * and badges), with a flag telling whether their locations have
-     * coordinates configured.
+     * Location names -> coordinates, derived from the `geo:lat,lon` values of
+     * location aliases (`@@home := geo:50.19,4.53, ...`). Synced with the
+     * aliases themselves, so no separate settings entry is needed.
+     */
+    fun `getLocationCoords`(): Map<kotlin.String, MobileLatLon>
+
+    /**
+     * All location-based reminders currently pending (for geofence
+     * registration), with a flag telling whether their locations resolve
+     * to coordinates (alias `geo:` values or inline `rem:geo:lat,lon`).
      */
     fun `getLocationReminders`(): List<MobileLocationReminder>
 
@@ -2982,6 +2980,12 @@ public interface CfaitMobileInterface {
         `calendarHref`: kotlin.String?,
     ): kotlin.String
 
+    /**
+     * Splits an alias value list on commas, protecting the comma inside
+     * `geo:lat,lon` (and quotes). Used by the Android alias editor.
+     */
+    fun `parseAliasValues`(`input`: kotlin.String): List<kotlin.String>
+
     fun `parseDurationString`(`val`: kotlin.String): kotlin.UInt?
 
     fun `parseSmartString`(
@@ -3002,15 +3006,17 @@ public interface CfaitMobileInterface {
         `blockerUid`: kotlin.String,
     )
 
-    /**
-     * Removes the coordinates of a named location.
-     */
-    fun `removeLocationCoords`(`name`: kotlin.String)
-
     suspend fun `removeRelatedTo`(
         `taskUid`: kotlin.String,
         `relatedUid`: kotlin.String,
     )
+
+    /**
+     * Resolves one location reference to coordinates: an inline
+     * `geo:lat,lon` (from `rem:geo:...`) or a named location with
+     * alias-defined coordinates.
+     */
+    fun `resolveLocationCoords`(`name`: kotlin.String): MobileLatLon?
 
     fun `resolveSelectionAliases`(
         `selection`: kotlin.String,
@@ -3033,16 +3039,6 @@ public interface CfaitMobileInterface {
     suspend fun `setJournalDate`(`date`: kotlin.String)
 
     fun `setLocale`(`locale`: kotlin.String)
-
-    /**
-     * Sets or updates the coordinates of a named location and re-syncs settings.
-     */
-    fun `setLocationCoords`(
-        `name`: kotlin.String,
-        `lat`: kotlin.Double,
-        `lon`: kotlin.Double,
-        `radiusM`: kotlin.UInt?,
-    )
 
     suspend fun `setParent`(
         `childUid`: kotlin.String,
@@ -3850,22 +3846,6 @@ open class CfaitMobile :
             MobileException.ErrorHandler,
         )
 
-    /**
-     * All location names in use (union of task `@@locations` and configured
-     * coordinates), for the settings editor.
-     */
-    override fun `getAllLocationNames`(): List<kotlin.String> =
-        FfiConverterSequenceString.lift(
-            callWithHandle {
-                uniffiRustCall { _status ->
-                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_all_location_names(
-                        it,
-                        _status,
-                    )
-                }
-            },
-        )
-
     override fun `getAvailableLocales`(): List<kotlin.String> =
         FfiConverterSequenceString.lift(
             callWithHandle {
@@ -3957,9 +3937,26 @@ open class CfaitMobile :
         )
 
     /**
-     * All location-based reminders currently pending (for the settings UI
-     * and badges), with a flag telling whether their locations have
-     * coordinates configured.
+     * Location names -> coordinates, derived from the `geo:lat,lon` values of
+     * location aliases (`@@home := geo:50.19,4.53, ...`). Synced with the
+     * aliases themselves, so no separate settings entry is needed.
+     */
+    override fun `getLocationCoords`(): Map<kotlin.String, MobileLatLon> =
+        FfiConverterMapStringTypeMobileLatLon.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_location_coords(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * All location-based reminders currently pending (for geofence
+     * registration), with a flag telling whether their locations resolve
+     * to coordinates (alias `geo:` values or inline `rem:geo:lat,lon`).
      */
     override fun `getLocationReminders`(): List<MobileLocationReminder> =
         FfiConverterSequenceTypeMobileLocationReminder.lift(
@@ -4395,6 +4392,23 @@ open class CfaitMobile :
             MobileException.ErrorHandler,
         )
 
+    /**
+     * Splits an alias value list on commas, protecting the comma inside
+     * `geo:lat,lon` (and quotes). Used by the Android alias editor.
+     */
+    override fun `parseAliasValues`(`input`: kotlin.String): List<kotlin.String> =
+        FfiConverterSequenceString.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_parse_alias_values(
+                        it,
+                        FfiConverterString.lower(`input`),
+                        _status,
+                    )
+                }
+            },
+        )
+
     override fun `parseDurationString`(`val`: kotlin.String): kotlin.UInt? =
         FfiConverterOptionalUInt.lift(
             callWithHandle {
@@ -4504,21 +4518,6 @@ open class CfaitMobile :
         MobileException.ErrorHandler,
     )
 
-    /**
-     * Removes the coordinates of a named location.
-     */
-    @Throws(MobileException::class)
-    override fun `removeLocationCoords`(`name`: kotlin.String) =
-        callWithHandle {
-            uniffiRustCallWithError(MobileException) { _status ->
-                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_remove_location_coords(
-                    it,
-                    FfiConverterString.lower(`name`),
-                    _status,
-                )
-            }
-        }
-
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `removeRelatedTo`(
@@ -4540,6 +4539,24 @@ open class CfaitMobile :
         // Error FFI converter
         MobileException.ErrorHandler,
     )
+
+    /**
+     * Resolves one location reference to coordinates: an inline
+     * `geo:lat,lon` (from `rem:geo:...`) or a named location with
+     * alias-defined coordinates.
+     */
+    override fun `resolveLocationCoords`(`name`: kotlin.String): MobileLatLon? =
+        FfiConverterOptionalTypeMobileLatLon.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_resolve_location_coords(
+                        it,
+                        FfiConverterString.lower(`name`),
+                        _status,
+                    )
+                }
+            },
+        )
 
     override fun `resolveSelectionAliases`(
         `selection`: kotlin.String,
@@ -4664,28 +4681,6 @@ open class CfaitMobile :
                 )
             }
         }
-
-    /**
-     * Sets or updates the coordinates of a named location and re-syncs settings.
-     */
-    @Throws(MobileException::class)
-    override fun `setLocationCoords`(
-        `name`: kotlin.String,
-        `lat`: kotlin.Double,
-        `lon`: kotlin.Double,
-        `radiusM`: kotlin.UInt?,
-    ) = callWithHandle {
-        uniffiRustCallWithError(MobileException) { _status ->
-            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_set_location_coords(
-                it,
-                FfiConverterString.lower(`name`),
-                FfiConverterDouble.lower(`lat`),
-                FfiConverterDouble.lower(`lon`),
-                FfiConverterOptionalUInt.lower(`radiusM`),
-                _status,
-            )
-        }
-    }
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
@@ -5278,7 +5273,6 @@ data class MobileConfig(
     var `quickFilterIcon`: kotlin.String,
     var `syncSettings`: kotlin.Boolean,
     var `goals`: Map<kotlin.String, MobileGoal>,
-    var `locationCoords`: Map<kotlin.String, MobileLocationCoords>,
     var `defaultLocationRadiusM`: kotlin.UInt,
     var `locationRemindersEnabled`: kotlin.Boolean,
     var `defaultDurationGoalMins`: kotlin.UInt,
@@ -5351,7 +5345,6 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
             FfiConverterString.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterMapStringTypeMobileGoal.read(buf),
-            FfiConverterMapStringTypeMobileLocationCoords.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterUInt.read(buf),
@@ -5418,7 +5411,6 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
                 FfiConverterString.allocationSize(value.`quickFilterIcon`) +
                 FfiConverterBoolean.allocationSize(value.`syncSettings`) +
                 FfiConverterMapStringTypeMobileGoal.allocationSize(value.`goals`) +
-                FfiConverterMapStringTypeMobileLocationCoords.allocationSize(value.`locationCoords`) +
                 FfiConverterUInt.allocationSize(value.`defaultLocationRadiusM`) +
                 FfiConverterBoolean.allocationSize(value.`locationRemindersEnabled`) +
                 FfiConverterUInt.allocationSize(value.`defaultDurationGoalMins`) +
@@ -5487,7 +5479,6 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
         FfiConverterString.write(value.`quickFilterIcon`, buf)
         FfiConverterBoolean.write(value.`syncSettings`, buf)
         FfiConverterMapStringTypeMobileGoal.write(value.`goals`, buf)
-        FfiConverterMapStringTypeMobileLocationCoords.write(value.`locationCoords`, buf)
         FfiConverterUInt.write(value.`defaultLocationRadiusM`, buf)
         FfiConverterBoolean.write(value.`locationRemindersEnabled`, buf)
         FfiConverterUInt.write(value.`defaultDurationGoalMins`, buf)
@@ -5945,6 +5936,41 @@ public object FfiConverterTypeMobileJournalPage : FfiConverterRustBuffer<MobileJ
     }
 }
 
+/**
+ * Coordinates for a location, exposed to Android (geofence registration).
+ */
+data class MobileLatLon(
+    var `lat`: kotlin.Double,
+    var `lon`: kotlin.Double,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMobileLatLon : FfiConverterRustBuffer<MobileLatLon> {
+    override fun read(buf: ByteBuffer): MobileLatLon =
+        MobileLatLon(
+            FfiConverterDouble.read(buf),
+            FfiConverterDouble.read(buf),
+        )
+
+    override fun allocationSize(value: MobileLatLon) =
+        (
+            FfiConverterDouble.allocationSize(value.`lat`) +
+                FfiConverterDouble.allocationSize(value.`lon`)
+        )
+
+    override fun write(
+        value: MobileLatLon,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterDouble.write(value.`lat`, buf)
+        FfiConverterDouble.write(value.`lon`, buf)
+    }
+}
+
 data class MobileLocation(
     var `name`: kotlin.String,
     var `displayName`: kotlin.String,
@@ -5994,47 +6020,7 @@ public object FfiConverterTypeMobileLocation : FfiConverterRustBuffer<MobileLoca
 }
 
 /**
- * Coordinates (and optional radius override) for a named location, exposed
- * to the Android settings UI.
- */
-data class MobileLocationCoords(
-    var `lat`: kotlin.Double,
-    var `lon`: kotlin.Double,
-    var `radiusM`: kotlin.UInt?,
-) {
-    companion object
-}
-
-/**
- * @suppress
- */
-public object FfiConverterTypeMobileLocationCoords : FfiConverterRustBuffer<MobileLocationCoords> {
-    override fun read(buf: ByteBuffer): MobileLocationCoords =
-        MobileLocationCoords(
-            FfiConverterDouble.read(buf),
-            FfiConverterDouble.read(buf),
-            FfiConverterOptionalUInt.read(buf),
-        )
-
-    override fun allocationSize(value: MobileLocationCoords) =
-        (
-            FfiConverterDouble.allocationSize(value.`lat`) +
-                FfiConverterDouble.allocationSize(value.`lon`) +
-                FfiConverterOptionalUInt.allocationSize(value.`radiusM`)
-        )
-
-    override fun write(
-        value: MobileLocationCoords,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterDouble.write(value.`lat`, buf)
-        FfiConverterDouble.write(value.`lon`, buf)
-        FfiConverterOptionalUInt.write(value.`radiusM`, buf)
-    }
-}
-
-/**
- * A location-based reminder (`rem:@@loc`) pending on some task.
+ * A location-based reminder (`rem:@@loc` / `rem:geo:lat,lon`) pending on some task.
  */
 data class MobileLocationReminder(
     var `alarmUid`: kotlin.String,
@@ -8543,6 +8529,38 @@ public object FfiConverterOptionalString : FfiConverterRustBuffer<kotlin.String?
 /**
  * @suppress
  */
+public object FfiConverterOptionalTypeMobileLatLon : FfiConverterRustBuffer<MobileLatLon?> {
+    override fun read(buf: ByteBuffer): MobileLatLon? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeMobileLatLon.read(buf)
+    }
+
+    override fun allocationSize(value: MobileLatLon?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeMobileLatLon.allocationSize(value)
+        }
+    }
+
+    override fun write(
+        value: MobileLatLon?,
+        buf: ByteBuffer,
+    ) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeMobileLatLon.write(value, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
 public object FfiConverterOptionalTypeMobileResolvedDependency : FfiConverterRustBuffer<MobileResolvedDependency?> {
     override fun read(buf: ByteBuffer): MobileResolvedDependency? {
         if (buf.get().toInt() == 0) {
@@ -9180,31 +9198,31 @@ public object FfiConverterMapStringTypeMobileGoal : FfiConverterRustBuffer<Map<k
 /**
  * @suppress
  */
-public object FfiConverterMapStringTypeMobileLocationCoords : FfiConverterRustBuffer<Map<kotlin.String, MobileLocationCoords>> {
-    override fun read(buf: ByteBuffer): Map<kotlin.String, MobileLocationCoords> {
+public object FfiConverterMapStringTypeMobileLatLon : FfiConverterRustBuffer<Map<kotlin.String, MobileLatLon>> {
+    override fun read(buf: ByteBuffer): Map<kotlin.String, MobileLatLon> {
         val len = buf.getInt()
-        return buildMap<kotlin.String, MobileLocationCoords>(len) {
+        return buildMap<kotlin.String, MobileLatLon>(len) {
             repeat(len) {
                 val k = FfiConverterString.read(buf)
-                val v = FfiConverterTypeMobileLocationCoords.read(buf)
+                val v = FfiConverterTypeMobileLatLon.read(buf)
                 this[k] = v
             }
         }
     }
 
-    override fun allocationSize(value: Map<kotlin.String, MobileLocationCoords>): ULong {
+    override fun allocationSize(value: Map<kotlin.String, MobileLatLon>): ULong {
         val spaceForMapSize = 4UL
         val spaceForChildren =
             value
                 .map { (k, v) ->
                     FfiConverterString.allocationSize(k) +
-                        FfiConverterTypeMobileLocationCoords.allocationSize(v)
+                        FfiConverterTypeMobileLatLon.allocationSize(v)
                 }.sum()
         return spaceForMapSize + spaceForChildren
     }
 
     override fun write(
-        value: Map<kotlin.String, MobileLocationCoords>,
+        value: Map<kotlin.String, MobileLatLon>,
         buf: ByteBuffer,
     ) {
         buf.putInt(value.size)
@@ -9213,7 +9231,7 @@ public object FfiConverterMapStringTypeMobileLocationCoords : FfiConverterRustBu
         // Ref https://blog.danlew.net/2017/03/16/kotlin-puzzler-whose-line-is-it-anyways/
         value.forEach { (k, v) ->
             FfiConverterString.write(k, buf)
-            FfiConverterTypeMobileLocationCoords.write(v, buf)
+            FfiConverterTypeMobileLatLon.write(v, buf)
         }
     }
 }

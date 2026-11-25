@@ -1038,6 +1038,9 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         let mut list_col = column![
             text(rust_i18n::t!("tag_aliases")).size(20),
             input_row,
+            text(rust_i18n::t!("alias_example"))
+                .size(12)
+                .style(super::help::muted_text_style),
             iced::widget::rule::horizontal(1)
         ]
         .spacing(10);

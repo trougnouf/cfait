@@ -13,7 +13,7 @@ const COL_ACCENT: Color = Color::from_rgb(0.4, 0.7, 1.0);
 const COL_SYNTAX: Color = Color::from_rgb(1.0, 0.85, 0.4);
 const COL_MUTED: Color = Color::from_rgb(0.6, 0.6, 0.6);
 
-fn muted_text_style(_theme: &Theme) -> text::Style {
+pub(crate) fn muted_text_style(_theme: &Theme) -> text::Style {
     text::Style {
         color: Some(COL_MUTED),
     }

@@ -419,12 +419,19 @@ impl TaskDisplay for Task {
                     event,
                 } => {
                     // Canonical English tokens, re-parseable by the dual-input parser.
+                    // The `@@` prefix applies to the whole `|`-separated list; inline
+                    // `geo:lat,lon` locations carry their own prefix instead.
                     let locs = locations
                         .iter()
                         .map(|l| crate::model::parser::quote_value(l))
                         .collect::<Vec<_>>()
                         .join("|");
-                    s.push_str(&format!(" rem:@@{}", locs));
+                    let at_prefix = if locations.first().is_some_and(|l| l.starts_with("geo:")) {
+                        ""
+                    } else {
+                        "@@"
+                    };
+                    s.push_str(&format!(" rem:{}{}", at_prefix, locs));
                     if matches!(event, LocationEvent::Leave) {
                         s.push_str(":leave");
                     }

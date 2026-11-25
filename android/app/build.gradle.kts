@@ -89,8 +89,12 @@ android {
     sourceSets {
         getByName("main") {
             jniLibs.srcDir("src/main/jniLibs")
-            if (playStoreBuild) {
-                // Merges in <uses-permission ... ACCESS_BACKGROUND_LOCATION tools:node="remove"/>
+        }
+        if (playStoreBuild) {
+            // The per-buildType source set's manifest merges OVER src/main (setting it on the
+            // "main" source set would replace the main manifest): strips
+            // ACCESS_BACKGROUND_LOCATION via tools:node="remove" in src/play/AndroidManifest.xml.
+            getByName("release") {
                 manifest.srcFile("src/play/AndroidManifest.xml")
             }
         }
