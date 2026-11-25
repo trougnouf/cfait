@@ -650,7 +650,7 @@
     "location_no_coordinates": "Sin coordenadas",
     "location_permission_rationale": "Cfait necesita la ubicación en segundo plano para que los avisos de ubicación (rem:@@lieu) se activen cuando la aplicación esté cerrada. Tu ubicación se utiliza únicamente para detectar tu llegada o salida de los lugares guardados.",
     "location_permission_rationale_title": "Ubicación en segundo plano necesaria",
-    "location_reminders_explain": "Avísame al llegar a un lugar o al salir de él (rem:@@loc). Se comprueba en segundo plano utilizando tu posición; no hace nada si no hay recordatorios de ubicación.",
+    "location_reminders_explain": "Recuérdame al llegar a o salir de un lugar (rem:@@loc o rem:geo:lat,lon). Las coordenadas de un lugar provienen del valor geo: de su alias de ubicación (ver Aliases de etiquetas más abajo). Se comprueba en segundo plano usando tu ubicación; no hace nada si no hay recordatorios de ubicación.",
     "location_reminders_label": "Avisos de ubicación",
     "location_removed": "Eiminadas las coordenadas de la ubicación",
     "location_saved": "Ubicación guardada",
