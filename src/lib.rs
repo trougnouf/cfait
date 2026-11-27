@@ -85,6 +85,52 @@ mod i18n_tests {
         );
     }
 
+    /// Every locale file must only contain keys that exist in the fallback
+    /// locale (en.json). Translated files are maintained via Weblate, which can
+    /// leave stale keys behind when a key is removed from en.json; extra keys
+    /// break the Android release build (lintVitalRelease fails on
+    /// ExtraTranslation for strings missing from the default locale).
+    #[test]
+    fn locale_files_have_no_stale_keys() {
+        let locales_dir =
+            std::path::Path::new(&std::env::var("CARGO_MANIFEST_DIR").unwrap()).join("locales");
+        let en: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(locales_dir.join("en.json")).unwrap())
+                .unwrap();
+        let en_keys: std::collections::BTreeSet<&str> =
+            en.as_object().unwrap().keys().map(String::as_str).collect();
+        assert!(en_keys.len() > 100, "en.json suspiciously small");
+
+        let mut checked = 0;
+        for entry in std::fs::read_dir(&locales_dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.extension().and_then(|e| e.to_str()) != Some("json")
+                || path.file_name().unwrap() == "en.json"
+            {
+                continue;
+            }
+            checked += 1;
+            let locale: serde_json::Value =
+                serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+            let stale: Vec<&str> = locale
+                .as_object()
+                .unwrap()
+                .keys()
+                .filter(|k| !en_keys.contains(k.as_str()))
+                .map(String::as_str)
+                .collect();
+            assert!(
+                stale.is_empty(),
+                "{} has stale keys not in en.json (remove them; they break the Android build): {stale:?}",
+                path.display()
+            );
+        }
+        assert!(
+            checked > 5,
+            "scanner found only {checked} locale files, likely broken"
+        );
+    }
+
     fn collect_missing_t_keys(dir: &std::path::Path, missing: &mut Vec<String>, found: &mut usize) {
         for entry in std::fs::read_dir(dir).unwrap() {
             let path = entry.unwrap().path();

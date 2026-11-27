@@ -200,6 +200,18 @@ tasks.register<Copy>("copyFonts") {
              return@doLast
          }
 
+         // Keys of the default locale (en). Locale files maintained via Weblate can
+         // contain stale keys that no longer exist in en.json; emitting those as
+         // Android resources fails lintVitalRelease with ExtraTranslation errors,
+         // so only strings present in the default locale are generated.
+         val enFile = File(localesDir, "en.json")
+         val defaultKeys: Set<String> = if (enFile.exists()) {
+             @Suppress("UNCHECKED_CAST")
+             (groovy.json.JsonSlurper().parse(enFile) as Map<String, Any>).keys.toSet()
+         } else {
+             emptySet()
+         }
+
          // Iterate each JSON locale file in the locales directory
          localesDir.listFiles { file -> file.extension == "json" }?.forEach { jsonFile ->
              val lang = jsonFile.nameWithoutExtension
@@ -234,6 +246,10 @@ tasks.register<Copy>("copyFonts") {
                  writer.write("<resources>\n")
 
                  json.forEach { (key, rawValue) ->
+                     if (defaultKeys.isNotEmpty() && key !in defaultKeys) {
+                         println("Skipping stale string '$key' in ${jsonFile.name} (not in default locale)")
+                         return@forEach
+                     }
                      val value = rawValue.toString()
 
                      // 1. Android XML Escaping
